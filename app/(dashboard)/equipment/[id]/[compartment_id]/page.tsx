@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { setCompartmentQrCode } from '@/app/actions/compartments'
 
 function fmt(dateStr: string | null) {
   if (!dateStr) return '—'
@@ -40,6 +41,7 @@ export default async function CompartmentPage({
   if (!myDept) redirect('/dashboard')
 
   const department_id = myDept.department_id
+  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
 
   // Fetch apparatus
   const { data: appList } = await adminClient
@@ -52,7 +54,7 @@ export default async function CompartmentPage({
   // Fetch compartment link + name
   const { data: compLinkList } = await adminClient
     .from('apparatus_compartments')
-    .select('id, compartment_name_id, apparatus_id')
+    .select('id, compartment_name_id, apparatus_id, qr_code')
     .eq('id', compartment_id)
   const compLink = compLinkList?.[0]
   if (!compLink || compLink.apparatus_id !== apparatus_id) redirect(`/equipment/${apparatus_id}`)
@@ -151,6 +153,12 @@ export default async function CompartmentPage({
   })
 
   const hasInspectable = compartmentItems.some(i => i.requires_inspection)
+  const currentQrCode = compLink.qr_code ?? null
+
+  async function handleSetQrCode(formData: FormData): Promise<void> {
+    'use server'
+    await setCompartmentQrCode(compartment_id, apparatus_id, formData)
+  }
   const compartmentLabel = compName
     ? `${compName.compartment_code}${compName.compartment_name ? ' — ' + compName.compartment_name : ''}`
     : '—'
@@ -197,6 +205,36 @@ export default async function CompartmentPage({
           </Link>
         )}
       </div>
+
+      {/* QR Code — admin only */}
+      {isAdmin && (
+        <div className="mb-6 rounded-xl bg-white border border-zinc-200 overflow-hidden">
+          <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">QR Code</p>
+          </div>
+          <div className="px-4 py-4">
+            <form action={handleSetQrCode} className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Compartment Code</label>
+                <input
+                  name="qr_code"
+                  type="text"
+                  defaultValue={currentQrCode ?? ''}
+                  placeholder="e.g. ENGINE-32-D1"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+                <p className="mt-1 text-xs text-zinc-400">Unique code for this compartment's QR label. Uppercased automatically.</p>
+              </div>
+              <button
+                type="submit"
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 transition-colors shrink-0"
+              >
+                Save
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Item list */}
       <div className="mb-6">

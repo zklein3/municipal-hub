@@ -153,3 +153,18 @@ export async function removeCompartmentFromApparatus(compartment_id: string, app
   revalidatePath(`/apparatus/${apparatus_id}`)
   return { success: true }
 }
+
+// ─── Set Compartment QR Code ──────────────────────────────────────────────────
+export async function setCompartmentQrCode(compartment_id: string, apparatus_id: string, formData: FormData) {
+  const ctx = await verifyAdmin()
+  if (!ctx) return { error: 'Only admins can set QR codes.' }
+  const adminClient = createAdminClient()
+  const qr_code = (formData.get('qr_code') as string)?.toUpperCase().trim() || null
+  const { error } = await adminClient
+    .from('apparatus_compartments')
+    .update({ qr_code })
+    .eq('id', compartment_id)
+  if (error) { await logError(error, `/equipment/${apparatus_id}/${compartment_id}`); return { error: error.message } }
+  revalidatePath(`/equipment/${apparatus_id}/${compartment_id}`)
+  return { success: true }
+}

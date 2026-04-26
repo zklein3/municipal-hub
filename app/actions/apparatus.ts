@@ -95,6 +95,8 @@ export async function updateApparatus(formData: FormData) {
   const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
   const active = isAdmin ? formData.get('active') === 'true' : undefined
 
+  const qr_code = (formData.get('qr_code') as string)?.toUpperCase().trim() || null
+
   const updateData: Record<string, any> = {
     apparatus_name: apparatus_name || null,
     apparatus_type_id: apparatus_type_id || null,
@@ -105,6 +107,7 @@ export async function updateApparatus(formData: FormData) {
     vin: vin || null,
     license_plate: license_plate || null,
     in_service_date: in_service_date || null,
+    qr_code,
   }
 
   if (active !== undefined) updateData.active = active

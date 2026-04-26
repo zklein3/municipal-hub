@@ -57,6 +57,7 @@ interface Apparatus {
   notes: string | null
   apparatus_type_id: string | null
   station_id: string | null
+  qr_code: string | null
   apparatus_type: { id: string; name: string } | null
   station: { id: string; station_name: string; station_number: string | null } | null
 }
@@ -224,6 +225,13 @@ export default function ApparatusDetailClient({
                 </div>
               )}
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">QR Code</label>
+              <input name="qr_code" type="text" defaultValue={apparatus.qr_code ?? ''}
+                placeholder="e.g. ENGINE-32"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              <p className="mt-1 text-xs text-zinc-400">Unique code printed on the QR label for this apparatus. Will be uppercased automatically.</p>
+            </div>
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
               {loading ? 'Saving...' : 'Save Changes'}
@@ -240,6 +248,7 @@ export default function ApparatusDetailClient({
             <ReadField label="VIN" value={apparatus.vin} />
             <ReadField label="License Plate" value={apparatus.license_plate} />
             <ReadField label="In Service" value={apparatus.in_service_date} />
+            <ReadField label="QR Code" value={apparatus.qr_code} />
           </div>
         )}
       </div>
