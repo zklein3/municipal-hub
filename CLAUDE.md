@@ -71,8 +71,11 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - `/apparatus`, `/apparatus/[id]` — apparatus list + detail
 - `/stations`, `/stations/[id]` — stations list + detail
 - `/equipment`, `/equipment/[id]` — equipment by apparatus
+- `/equipment/assets` — dept-wide asset roster with status/type filters + inline apparatus assignment (admin)
+- `/equipment/[id]/[compartment_id]` — compartment detail: item list, asset status, action buttons (Verify Present / Start Inspection), recent activity, QR code admin form
 - `/inspections` — select apparatus + compartment to inspect
 - `/inspections/run` — run inspection checklist
+- `/scan` — QR code lookup + redirect (`?type=apparatus|compartment|asset&code=...`)
 - `/events`, `/events/new` — events + attendance
 - `/training` — enrollments, certifications, training events
 - `/reports/inspections` — inspection report: filters, flat table, asset drill-in, print (officer/admin only)
@@ -82,15 +85,15 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - `/admin/dept/[id]` — sys admin dept drill-in (tabbed)
 - `/dept-admin/personnel`, `/dept-admin/compartments`, `/dept-admin/items` — dept admin
 - `/dept-admin/attendance`, `/dept-admin/training` — dept admin settings
-- `/scan` — QR scan landing/redirect (to build)
+- `/scan` — QR scan landing/redirect ✓ built
 
 ### Key Action Files
 - `app/actions/auth.ts` — signIn, changePassword, signOut
 - `app/actions/personnel.ts` — updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword
 - `app/actions/apparatus.ts` — createApparatus, updateApparatus
 - `app/actions/stations.ts` — createStation, updateStation
-- `app/actions/compartments.ts` — createCompartmentName, assignCompartmentToApparatus, removeCompartmentFromApparatus
-- `app/actions/equipment.ts` — createItemCategory, createItem, updateItem, createAsset, updateAsset, assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment
+- `app/actions/compartments.ts` — createCompartmentName, assignCompartmentToApparatus, removeCompartmentFromApparatus, setCompartmentQrCode
+- `app/actions/equipment.ts` — createItemCategory, createItem, updateItem, createAsset, updateAsset, assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, assignAssetApparatus
 - `app/actions/inspections.ts` — createInspectionTemplate, addTemplateStep, updateTemplateStep, deleteTemplateStep, submitInspection
 - `app/actions/attendance.ts` — createEventSeries, updateEventInstance, logAttendance, verifyAttendance, requestExcuse, closeEventInstance, cancelEventInstance, createExcuseType, saveParticipationRequirement
 - `app/actions/incidents.ts` — createIncident, updateIncident, setIncidentStatus, addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus, addIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel
@@ -141,6 +144,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 ### Asset Statuses (DB values — must match exactly)
 - `IN SERVICE` | `OUT OF SERVICE` | `RETIRED`
 
+### Asset Location Tracking
+- `item_assets.apparatus_id` — nullable FK to `apparatus`; records which apparatus an individual asset lives on (e.g. SCBA 1 → Engine 32). Set by admin via Asset Roster inline "Manage" button. Independent of inspection flow.
+- `apparatus.qr_code` — unique text; human-readable QR code (e.g. `ENGINE-32`). Set on apparatus edit form.
+- `apparatus_compartments.qr_code` — unique text; human-readable QR code (e.g. `ENGINE-32-D1`). Set on compartment detail page (admin). `/scan?type=compartment&code=ENGINE-32-D1` routes to the compartment page.
+
 ### Inspection Design — Two Check Modes
 - **Daily Check** — presence-only (`?mode=presence`), available from `/inspections` → "Daily Check" button. Shows present/missing + qty for every item, no asset picking or checklist. Logs to `compartment_presence_check_logs`. When QR system is built, scanning a compartment lands here.
 - **Full Inspection** — full checklist per individual asset. Each item type (airpack, bottle, chainsaw) is inspected independently in its own slot.
@@ -165,15 +173,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. Asset Roster View ← START HERE
-Dept-wide view of all assets, filterable by item type and status (IN SERVICE / OUT OF SERVICE / RETIRED).
+### 1. QR Label Printing ← START HERE
+Install `qrcode.react`, build a printable label component (QR image + code text + name), add "Print QR Label" button on apparatus detail and compartment page. Uses `window.print()` same as inventory report. Codes are already stored in DB.
+
+### 2. QRScanner Component
+Extract camera scanner from Fire School into a reusable `QRScanner` component. Add scan buttons to apparatus/compartment/asset roster pages. Reads QR → navigates to `/scan?type=...&code=...` internally (no redirect needed when already logged in).
+
+### 3. Weekly Inspection Session (`/inspections/apparatus/[id]`)
+Shows all compartments for apparatus as a checklist. User taps compartment → inspection run → returns → compartment marked complete. All submissions share an `inspection_session_id`. "Start Weekly Inspection" button on apparatus detail page. Needs DB migration: add `inspection_session_id` UUID to `item_asset_inspection_logs`.
 
 ### Priority Order After That
-2. QR + Compartment page + Inspection Session — see REFERENCE.md for full design
-3. ISO Audit sections (future) — hose logs, apparatus specs, hydrant flows, mutual aid
-4. Flow & Presentation Polish
+4. ISO Audit sections (future) — hose logs, apparatus specs, hydrant flows, mutual aid
+5. Flow & Presentation Polish
 
-### Completed This Session (2026-04-26)
+### Completed This Session (2026-04-27)
+- **Asset Roster** (`/equipment/assets`) — dept-wide asset list with status summary cards (clickable filters), item type dropdown, search by tag/serial/item. Admin inline "Manage" button per row opens apparatus dropdown to assign/move asset location (`item_assets.apparatus_id`). Mobile card layout. `?search=` URL param pre-fills search (used by `/scan` asset redirect).
+- **Asset apparatus assignment** — `item_assets.apparatus_id` FK added to DB. `assignAssetApparatus` server action. Location column shows actual assigned apparatus, not inferred from item type standards.
+- **Compartment detail page** (`/equipment/[id]/[compartment_id]`) — item list with expected qty + asset status badges, Verify Present + Start Inspection action buttons (pre-filled links to existing inspection run), recent full inspection and presence check history. "View →" link added to each compartment header in equipment detail.
+- **QR code infrastructure** — `apparatus.qr_code` and `apparatus_compartments.qr_code` unique text columns added to DB. Admin UI: qr_code field on apparatus edit form + compartment detail page form. `/scan` route looks up code across all types, redirects to correct page, shows error screen if not found.
 - **Incident attendance — member self-log + officer verification** — members log onto active incidents via "Log Attendance" (role select + confirm/cancel, 7-day window). Officer sees pending queue per incident → Approve → `present` / Reject → `absent`. Incident list shows "My Attendance" column for members with "Log →" link on open incidents. `incident_personnel.status` constraint updated to `pending | present | absent`.
 - **Incident apparatus times pre-populate** — clicking "+ Add" apparatus pre-fills paged/on-scene/leaving/in-service from the incident's saved times (both on new incident form and detail page). `first_enroute_at` removed from manual entry — auto-computed as min `enroute_at` across apparatus and synced to DB on every apparatus add/update/remove.
 - **Attendance status fix** — `verifyAttendance` was writing `verified`/`rejected`; changed to `present`/`absent` to match both reports. DB check constraint updated, 7 existing records backfilled.

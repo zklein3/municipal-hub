@@ -168,13 +168,13 @@
 - Print layout: QR image + code text + apparatus/compartment name — uses `window.print()` (same as inventory reports)
 
 ### Build Order (when starting this)
-1. DB migration: `qr_code` fields on apparatus, apparatus_compartments, item_assets; `inspection_session_id` on item_asset_inspection_logs
-2. Compartment page (`/equipment/[apparatus_id]/[compartment_id]`) with item list + Verify Present + Start Inspection
-3. Weekly inspection session (`/inspections/apparatus/[id]`)
-4. `/scan` route with type+code lookup and auth redirect logic
+1. ✅ DB migration: `qr_code` on apparatus + apparatus_compartments (item_assets uses asset_tag); `inspection_session_id` on item_asset_inspection_logs — STILL NEEDED for weekly session
+2. ✅ Compartment page (`/equipment/[apparatus_id]/[compartment_id]`) — built with item list, asset status badges, Verify Present + Start Inspection buttons, recent activity, QR code admin form
+3. Weekly inspection session (`/inspections/apparatus/[id]`) — NEXT after printing
+4. ✅ `/scan` route — built with type+code lookup, redirects to apparatus/compartment/asset roster
 5. `QRScanner` component (extract from fire school page), add scan buttons to relevant pages
-6. QR label print layout + "Print QR Label" buttons
-7. Admin UI: qr_code field on apparatus/compartment/asset edit forms
+6. ✅ QR label print layout + "Print QR Label" buttons — NEXT (start here next session)
+7. ✅ Admin UI: qr_code field on apparatus edit form + compartment detail page
 
 ## Training Module Detail
 
