@@ -1,0 +1,328 @@
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+
+function fmt(dateStr: string | null) {
+  if (!dateStr) return '—'
+  return new Date(dateStr).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+function assetStatusBadge(status: string) {
+  const s = status?.toUpperCase()
+  if (s === 'IN SERVICE') return 'bg-green-100 text-green-700'
+  if (s === 'OUT OF SERVICE') return 'bg-yellow-100 text-yellow-700'
+  return 'bg-zinc-100 text-zinc-500'
+}
+
+export default async function CompartmentPage({
+  params,
+}: {
+  params: Promise<{ id: string; compartment_id: string }>
+}) {
+  const { id: apparatus_id, compartment_id } = await params
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) redirect('/login')
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel')
+    .select('department_id, system_role')
+    .eq('personnel_id', me.id)
+    .eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept) redirect('/dashboard')
+
+  const department_id = myDept.department_id
+
+  // Fetch apparatus
+  const { data: appList } = await adminClient
+    .from('apparatus')
+    .select('id, unit_number, apparatus_name')
+    .eq('id', apparatus_id)
+  const apparatus = appList?.[0]
+  if (!apparatus) redirect('/equipment')
+
+  // Fetch compartment link + name
+  const { data: compLinkList } = await adminClient
+    .from('apparatus_compartments')
+    .select('id, compartment_name_id, apparatus_id')
+    .eq('id', compartment_id)
+  const compLink = compLinkList?.[0]
+  if (!compLink || compLink.apparatus_id !== apparatus_id) redirect(`/equipment/${apparatus_id}`)
+
+  const { data: compNameList } = await adminClient
+    .from('compartment_names')
+    .select('id, compartment_code, compartment_name')
+    .eq('id', compLink.compartment_name_id)
+  const compName = compNameList?.[0]
+
+  // Items in this compartment
+  const { data: locationStandards } = await adminClient
+    .from('item_location_standards')
+    .select('id, item_id, expected_quantity, minimum_quantity, notes')
+    .eq('apparatus_compartment_id', compartment_id)
+    .eq('active', true)
+
+  const itemIds = (locationStandards ?? []).map(ls => ls.item_id).filter(Boolean) as string[]
+
+  const { data: items } = itemIds.length > 0
+    ? await adminClient
+        .from('items')
+        .select('id, item_name, category_id, tracks_assets, requires_inspection')
+        .in('id', itemIds)
+    : { data: [] }
+
+  const categoryIds = [...new Set((items ?? []).map(i => i.category_id).filter(Boolean) as string[])]
+  const { data: categories } = categoryIds.length > 0
+    ? await adminClient.from('item_categories').select('id, category_name').in('id', categoryIds)
+    : { data: [] }
+
+  // Assets for asset-tracked items
+  const assetItemIds = (items ?? []).filter(i => i.tracks_assets).map(i => i.id)
+  const { data: assets } = assetItemIds.length > 0
+    ? await adminClient
+        .from('item_assets')
+        .select('id, item_id, asset_tag, status')
+        .eq('department_id', department_id)
+        .in('item_id', assetItemIds)
+        .eq('active', true)
+        .order('asset_tag')
+    : { data: [] }
+
+  // Recent full inspections for this compartment
+  const { data: recentInspections } = await adminClient
+    .from('item_asset_inspection_logs')
+    .select('id, inspected_at, overall_result, inspected_by_name, asset_id')
+    .eq('compartment_id', compartment_id)
+    .order('inspected_at', { ascending: false })
+    .limit(6)
+
+  // Recent presence checks for this compartment
+  const { data: recentPresence } = await adminClient
+    .from('compartment_presence_check_logs')
+    .select('id, inspected_at, inspected_by_name, present, item_id')
+    .eq('compartment_id', compartment_id)
+    .order('inspected_at', { ascending: false })
+    .limit(6)
+
+  // Asset tags for inspection log display
+  const logAssetIds = [...new Set((recentInspections ?? []).map(l => l.asset_id).filter(Boolean) as string[])]
+  const { data: logAssets } = logAssetIds.length > 0
+    ? await adminClient.from('item_assets').select('id, asset_tag').in('id', logAssetIds)
+    : { data: [] }
+
+  // Item names for presence check display
+  const presenceItemIds = [...new Set((recentPresence ?? []).map(l => l.item_id).filter(Boolean) as string[])]
+  const { data: presenceItems } = presenceItemIds.length > 0
+    ? await adminClient.from('items').select('id, item_name').in('id', presenceItemIds)
+    : { data: [] }
+
+  // Build maps
+  const itemMap = Object.fromEntries((items ?? []).map(i => [i.id, i]))
+  const categoryMap = Object.fromEntries((categories ?? []).map(c => [c.id, c.category_name]))
+  const logAssetMap = Object.fromEntries((logAssets ?? []).map(a => [a.id, a.asset_tag ?? '—']))
+  const presenceItemMap = Object.fromEntries((presenceItems ?? []).map(i => [i.id, i.item_name]))
+
+  const assetsByItem: Record<string, { id: string; asset_tag: string | null; status: string }[]> = {}
+  for (const a of assets ?? []) {
+    if (!assetsByItem[a.item_id]) assetsByItem[a.item_id] = []
+    assetsByItem[a.item_id].push({ id: a.id, asset_tag: a.asset_tag, status: a.status ?? 'IN SERVICE' })
+  }
+
+  const compartmentItems = (locationStandards ?? []).map(ls => {
+    const item = itemMap[ls.item_id]
+    return {
+      id: ls.id,
+      item_id: ls.item_id,
+      item_name: item?.item_name ?? '—',
+      category_name: item?.category_id ? (categoryMap[item.category_id] ?? '') : '',
+      tracks_assets: item?.tracks_assets ?? false,
+      requires_inspection: item?.requires_inspection ?? false,
+      expected_quantity: ls.expected_quantity,
+      assets: assetsByItem[ls.item_id] ?? [],
+    }
+  })
+
+  const hasInspectable = compartmentItems.some(i => i.requires_inspection)
+  const compartmentLabel = compName
+    ? `${compName.compartment_code}${compName.compartment_name ? ' — ' + compName.compartment_name : ''}`
+    : '—'
+  const apparatusLabel = apparatus.unit_number + (apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : '')
+
+  const inspectUrl = `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${compartment_id}`
+
+  return (
+    <div className="max-w-2xl">
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-6">
+        <Link href={`/equipment/${apparatus_id}`} className="mt-1 text-sm text-zinc-500 hover:text-zinc-700 shrink-0">
+          ← Back
+        </Link>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-zinc-500">{apparatusLabel}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-lg font-mono font-bold text-red-700">
+              {compName?.compartment_code ?? '—'}
+            </span>
+            {compName?.compartment_name && (
+              <span>{compName.compartment_name}</span>
+            )}
+          </h1>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Link
+          href={`${inspectUrl}&mode=presence`}
+          className="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm flex-1 text-center"
+        >
+          <span className="block text-base mb-0.5">✓</span>
+          Verify Present
+        </Link>
+        {hasInspectable && (
+          <Link
+            href={inspectUrl}
+            className="rounded-lg bg-red-700 px-4 py-3 text-sm font-medium text-white hover:bg-red-800 transition-colors shadow-sm flex-1 text-center"
+          >
+            <span className="block text-base mb-0.5">📋</span>
+            Start Inspection
+          </Link>
+        )}
+      </div>
+
+      {/* Item list */}
+      <div className="mb-6">
+        <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
+          Items in Compartment ({compartmentItems.length})
+        </h2>
+        {compartmentItems.length === 0 ? (
+          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-10 text-center text-sm text-zinc-400">
+            No items assigned to this compartment.
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+            {compartmentItems.map(item => (
+              <div key={item.id} className="px-4 py-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-medium text-zinc-900">{item.item_name}</p>
+                    {item.category_name && (
+                      <p className="text-xs text-zinc-400">{item.category_name}</p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-zinc-700">×{item.expected_quantity}</p>
+                    <p className="text-xs text-zinc-400">expected</p>
+                  </div>
+                </div>
+
+                {/* Asset badges */}
+                {item.tracks_assets && item.assets.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.assets.map(a => (
+                      <span
+                        key={a.id}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${assetStatusBadge(a.status)}`}
+                      >
+                        {a.asset_tag ?? 'Unknown'}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {item.tracks_assets && item.assets.length === 0 && (
+                  <p className="text-xs text-zinc-400 italic">No assets assigned</p>
+                )}
+
+                {/* Badges */}
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {item.requires_inspection && (
+                    <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs text-blue-700">
+                      Inspectable
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent activity */}
+      {(recentInspections ?? []).length > 0 || (recentPresence ?? []).length > 0 ? (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Recent Activity</h2>
+          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+
+            {/* Full inspections */}
+            {(recentInspections ?? []).length > 0 && (
+              <div className="px-4 py-3">
+                <p className="text-xs font-semibold text-zinc-500 mb-2">Full Inspections</p>
+                <div className="space-y-2">
+                  {(recentInspections ?? []).map(log => (
+                    <div key={log.id} className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            log.overall_result === 'PASS'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {log.overall_result}
+                        </span>
+                        <span className="text-zinc-700 truncate font-medium">
+                          {log.asset_id ? logAssetMap[log.asset_id] : '—'}
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-zinc-500">{log.inspected_by_name ?? '—'}</p>
+                        <p className="text-xs text-zinc-400">{fmt(log.inspected_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Presence checks */}
+            {(recentPresence ?? []).length > 0 && (
+              <div className="px-4 py-3">
+                <p className="text-xs font-semibold text-zinc-500 mb-2">Presence Checks</p>
+                <div className="space-y-2">
+                  {(recentPresence ?? []).map(log => (
+                    <div key={log.id} className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            log.present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {log.present ? 'Present' : 'Missing'}
+                        </span>
+                        <span className="text-zinc-700 truncate">
+                          {log.item_id ? presenceItemMap[log.item_id] : '—'}
+                        </span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-zinc-500">{log.inspected_by_name ?? '—'}</p>
+                        <p className="text-xs text-zinc-400">{fmt(log.inspected_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}

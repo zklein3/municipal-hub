@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, updateItemQuantity } from '@/app/actions/equipment'
 
 interface Apparatus {
@@ -218,19 +219,27 @@ export default function EquipmentDetailClient({
                     <span className="text-sm text-zinc-600">{c.compartment_name}</span>
                   )}
                 </div>
-                {isOfficerOrAbove && (
-                  <button
-                    onClick={() => {
-                      setAssigningTo(assigningTo === c.id ? null : c.id)
-                      setSelectedItem('')
-                      setQuantity('1')
-                      setError(null)
-                    }}
-                    className="text-xs font-semibold text-red-600 hover:text-red-800"
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/equipment/${apparatus.id}/${c.id}`}
+                    className="text-xs font-semibold text-zinc-500 hover:text-red-700"
                   >
-                    {assigningTo === c.id ? 'Cancel' : '+ Add Item'}
-                  </button>
-                )}
+                    View →
+                  </Link>
+                  {isOfficerOrAbove && (
+                    <button
+                      onClick={() => {
+                        setAssigningTo(assigningTo === c.id ? null : c.id)
+                        setSelectedItem('')
+                        setQuantity('1')
+                        setError(null)
+                      }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-800"
+                    >
+                      {assigningTo === c.id ? 'Cancel' : '+ Add Item'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Add Item Form */}
