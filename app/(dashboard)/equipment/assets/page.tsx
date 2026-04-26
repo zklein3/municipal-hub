@@ -3,7 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import AssetRosterClient from './AssetRosterClient'
 
-export default async function AssetRosterPage() {
+export default async function AssetRosterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string }>
+}) {
+  const { search: initialSearch } = await searchParams
   const supabase = await createClient()
   const adminClient = createAdminClient()
 
@@ -101,6 +106,7 @@ export default async function AssetRosterPage() {
       itemOptions={itemOptions}
       apparatusOptions={apparatusOptions}
       isAdmin={isAdmin}
+      initialSearch={initialSearch ?? ''}
     />
   )
 }

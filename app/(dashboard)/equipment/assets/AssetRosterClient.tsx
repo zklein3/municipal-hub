@@ -47,13 +47,15 @@ export default function AssetRosterClient({
   itemOptions,
   apparatusOptions,
   isAdmin,
+  initialSearch = '',
 }: {
   assets: AssetRow[]
   itemOptions: ItemOption[]
   apparatusOptions: ApparatusOption[]
   isAdmin: boolean
+  initialSearch?: string
 }) {
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch)
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [itemFilter, setItemFilter] = useState('ALL')
 
