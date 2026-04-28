@@ -15,17 +15,10 @@ export default function QRScanButton({
   buttonClassName?: string
 }) {
   const router = useRouter()
-  const [supported, setSupported] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-    setSupported(
-      typeof navigator !== 'undefined' &&
-      !!navigator.mediaDevices?.getUserMedia
-    )
-  }, [])
+  useEffect(() => { setMounted(true) }, [])
 
   function handleScan(raw: string) {
     setScanning(false)
@@ -37,7 +30,7 @@ export default function QRScanButton({
     router.push(`/scan?code=${encodeURIComponent(raw)}`)
   }
 
-  if (!mounted || !supported) return null
+  if (!mounted) return null
 
   return (
     <>
