@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { updateApparatus } from '@/app/actions/apparatus'
 import { assignCompartmentToApparatus, removeCompartmentFromApparatus } from '@/app/actions/compartments'
+import QrPrintLabel from '@/components/QrPrintLabel'
 
 interface Station {
   id: string
@@ -145,6 +146,13 @@ export default function ApparatusDetailClient({
           >
             View Reports
           </Link>
+        )}
+        {apparatus.qr_code && (
+          <QrPrintLabel
+            code={apparatus.qr_code}
+            title={`Unit ${apparatus.unit_number}${apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}`}
+            buttonClassName="shrink-0 text-xs font-medium text-red-700 hover:underline print:hidden"
+          />
         )}
       </div>
 

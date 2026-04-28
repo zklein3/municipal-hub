@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { setCompartmentQrCode } from '@/app/actions/compartments'
+import QrPrintLabel from '@/components/QrPrintLabel'
 
 function fmt(dateStr: string | null) {
   if (!dateStr) return '—'
@@ -203,6 +204,14 @@ export default async function CompartmentPage({
             <span className="block text-base mb-0.5">📋</span>
             Start Inspection
           </Link>
+        )}
+        {currentQrCode && (
+          <QrPrintLabel
+            code={currentQrCode}
+            title={compartmentLabel}
+            subtitle={apparatusLabel}
+            buttonClassName="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm text-center print:hidden"
+          />
         )}
       </div>
 
