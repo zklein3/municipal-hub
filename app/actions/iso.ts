@@ -1,0 +1,275 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { logError } from '@/lib/logger'
+import { revalidatePath } from 'next/cache'
+
+async function getContext() {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return null
+  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  return {
+    me,
+    department_id: myDept?.department_id ?? null,
+    system_role: myDept?.system_role ?? null,
+    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
+  }
+}
+
+// ─── Apparatus ISO specs ──────────────────────────────────────────────────────
+
+export async function upsertApparatusIsoSpecs(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const apparatus_id = formData.get('apparatus_id') as string
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('apparatus_iso_specs')
+    .upsert({
+      apparatus_id,
+      department_id: ctx.department_id,
+      pump_rating_gpm: formData.get('pump_rating_gpm') ? parseInt(formData.get('pump_rating_gpm') as string) : null,
+      tank_capacity_gal: formData.get('tank_capacity_gal') ? parseInt(formData.get('tank_capacity_gal') as string) : null,
+      foam_capacity_gal: formData.get('foam_capacity_gal') ? parseInt(formData.get('foam_capacity_gal') as string) : null,
+      aerial_length_ft: formData.get('aerial_length_ft') ? parseInt(formData.get('aerial_length_ft') as string) : null,
+      hose_load_notes: (formData.get('hose_load_notes') as string)?.trim() || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'apparatus_id' })
+
+  if (dbErr) {
+    await logError('upsertApparatusIsoSpecs', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/apparatus/${apparatus_id}`)
+  return { success: true }
+}
+
+// ─── Hoses ────────────────────────────────────────────────────────────────────
+
+export async function createHose(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hoses').insert({
+    department_id: ctx.department_id,
+    apparatus_id: (formData.get('apparatus_id') as string) || null,
+    hose_identifier: (formData.get('hose_identifier') as string)?.trim(),
+    hose_type: formData.get('hose_type') as string,
+    diameter_in: parseFloat(formData.get('diameter_in') as string),
+    length_ft: parseInt(formData.get('length_ft') as string),
+    manufacturer: (formData.get('manufacturer') as string)?.trim() || null,
+    serial_number: (formData.get('serial_number') as string)?.trim() || null,
+    year_placed_in_service: formData.get('year_placed_in_service') ? parseInt(formData.get('year_placed_in_service') as string) : null,
+    status: 'in_service',
+    notes: (formData.get('notes') as string)?.trim() || null,
+  })
+
+  if (dbErr) {
+    await logError('createHose', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
+export async function updateHose(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const hose_id = formData.get('hose_id') as string
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hoses').update({
+    apparatus_id: (formData.get('apparatus_id') as string) || null,
+    hose_identifier: (formData.get('hose_identifier') as string)?.trim(),
+    hose_type: formData.get('hose_type') as string,
+    diameter_in: parseFloat(formData.get('diameter_in') as string),
+    length_ft: parseInt(formData.get('length_ft') as string),
+    manufacturer: (formData.get('manufacturer') as string)?.trim() || null,
+    serial_number: (formData.get('serial_number') as string)?.trim() || null,
+    year_placed_in_service: formData.get('year_placed_in_service') ? parseInt(formData.get('year_placed_in_service') as string) : null,
+    status: formData.get('status') as string,
+    notes: (formData.get('notes') as string)?.trim() || null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', hose_id).eq('department_id', ctx.department_id)
+
+  if (dbErr) {
+    await logError('updateHose', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
+export async function addHoseTest(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hose_tests').insert({
+    hose_id: formData.get('hose_id') as string,
+    department_id: ctx.department_id,
+    test_date: formData.get('test_date') as string,
+    tested_by: ctx.me.id,
+    test_pressure_psi: parseInt(formData.get('test_pressure_psi') as string),
+    duration_min: parseInt(formData.get('duration_min') as string) || 3,
+    passed: formData.get('passed') === 'true',
+    failure_reason: (formData.get('failure_reason') as string)?.trim() || null,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  })
+
+  if (dbErr) {
+    await logError('addHoseTest', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
+// ─── Hydrants ─────────────────────────────────────────────────────────────────
+
+export async function createHydrant(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hydrants').insert({
+    department_id: ctx.department_id,
+    hydrant_number: (formData.get('hydrant_number') as string)?.trim(),
+    location_description: (formData.get('location_description') as string)?.trim(),
+    street_address: (formData.get('street_address') as string)?.trim() || null,
+    lat: formData.get('lat') ? parseFloat(formData.get('lat') as string) : null,
+    lng: formData.get('lng') ? parseFloat(formData.get('lng') as string) : null,
+    owner: (formData.get('owner') as string)?.trim() || null,
+    hydrant_type: (formData.get('hydrant_type') as string) || null,
+    main_size_in: formData.get('main_size_in') ? parseFloat(formData.get('main_size_in') as string) : null,
+    out_of_service: false,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  })
+
+  if (dbErr) {
+    await logError('createHydrant', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hydrants')
+  return { success: true }
+}
+
+export async function updateHydrant(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const hydrant_id = formData.get('hydrant_id') as string
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hydrants').update({
+    hydrant_number: (formData.get('hydrant_number') as string)?.trim(),
+    location_description: (formData.get('location_description') as string)?.trim(),
+    street_address: (formData.get('street_address') as string)?.trim() || null,
+    lat: formData.get('lat') ? parseFloat(formData.get('lat') as string) : null,
+    lng: formData.get('lng') ? parseFloat(formData.get('lng') as string) : null,
+    owner: (formData.get('owner') as string)?.trim() || null,
+    hydrant_type: (formData.get('hydrant_type') as string) || null,
+    main_size_in: formData.get('main_size_in') ? parseFloat(formData.get('main_size_in') as string) : null,
+    out_of_service: formData.get('out_of_service') === 'true',
+    notes: (formData.get('notes') as string)?.trim() || null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', hydrant_id).eq('department_id', ctx.department_id)
+
+  if (dbErr) {
+    await logError('updateHydrant', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hydrants')
+  return { success: true }
+}
+
+export async function addHydrantFlowTest(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('hydrant_flow_tests').insert({
+    hydrant_id: formData.get('hydrant_id') as string,
+    department_id: ctx.department_id,
+    test_date: formData.get('test_date') as string,
+    tested_by: ctx.me.id,
+    static_pressure_psi: parseInt(formData.get('static_pressure_psi') as string),
+    residual_pressure_psi: parseInt(formData.get('residual_pressure_psi') as string),
+    flow_gpm: parseInt(formData.get('flow_gpm') as string),
+    pitot_reading_psi: formData.get('pitot_reading_psi') ? parseFloat(formData.get('pitot_reading_psi') as string) : null,
+    nozzle_diameter_in: formData.get('nozzle_diameter_in') ? parseFloat(formData.get('nozzle_diameter_in') as string) : null,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  })
+
+  if (dbErr) {
+    await logError('addHydrantFlowTest', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hydrants')
+  return { success: true }
+}
+
+// ─── Mutual Aid ───────────────────────────────────────────────────────────────
+
+export async function addMutualAid(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const incident_id = formData.get('incident_id') as string
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('incident_mutual_aid').insert({
+    incident_id,
+    department_id: ctx.department_id,
+    external_department_name: (formData.get('external_department_name') as string)?.trim(),
+    role: formData.get('role') as string,
+    apparatus_description: (formData.get('apparatus_description') as string)?.trim() || null,
+    personnel_count: formData.get('personnel_count') ? parseInt(formData.get('personnel_count') as string) : null,
+    arrival_time: (formData.get('arrival_time') as string) || null,
+    departure_time: (formData.get('departure_time') as string) || null,
+    notes: (formData.get('notes') as string)?.trim() || null,
+  })
+
+  if (dbErr) {
+    await logError('addMutualAid', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/incidents/${incident_id}`)
+  return { success: true }
+}
+
+export async function removeMutualAid(mutualAidId: string, incidentId: string) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('incident_mutual_aid')
+    .delete()
+    .eq('id', mutualAidId)
+    .eq('department_id', ctx.department_id)
+
+  if (dbErr) {
+    await logError('removeMutualAid', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/incidents/${incidentId}`)
+  return { success: true }
+}

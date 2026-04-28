@@ -119,6 +119,13 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .eq('active', true)
     .order('sort_order')
 
+  // Fetch ISO specs
+  const { data: isoSpecsList } = await adminClient
+    .from('apparatus_iso_specs')
+    .select('pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_load_notes')
+    .eq('apparatus_id', id)
+  const isoSpecs = isoSpecsList?.[0] ?? null
+
   // Build clean apparatus object
   const apparatusWithRefs = {
     ...apparatus,
@@ -136,6 +143,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
       departmentId={myDept.department_id}
+      isoSpecs={isoSpecs}
     />
   )
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { updateApparatus } from '@/app/actions/apparatus'
 import { assignCompartmentToApparatus, removeCompartmentFromApparatus } from '@/app/actions/compartments'
+import { upsertApparatusIsoSpecs } from '@/app/actions/iso'
 import QrPrintLabel from '@/components/QrPrintLabel'
 
 interface Station {
@@ -63,6 +64,14 @@ interface Apparatus {
   station: { id: string; station_name: string; station_number: string | null } | null
 }
 
+type IsoSpecs = {
+  pump_rating_gpm: number | null
+  tank_capacity_gal: number | null
+  foam_capacity_gal: number | null
+  aerial_length_ft: number | null
+  hose_load_notes: string | null
+} | null
+
 export default function ApparatusDetailClient({
   apparatus,
   stations,
@@ -72,6 +81,7 @@ export default function ApparatusDetailClient({
   isAdmin,
   isOfficerOrAbove,
   departmentId,
+  isoSpecs,
 }: {
   apparatus: Apparatus
   stations: Station[]
@@ -81,6 +91,7 @@ export default function ApparatusDetailClient({
   isAdmin: boolean
   isOfficerOrAbove: boolean
   departmentId: string
+  isoSpecs: IsoSpecs
 }) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -88,6 +99,9 @@ export default function ApparatusDetailClient({
   const [compError, setCompError] = useState<string | null>(null)
   const [compLoading, setCompLoading] = useState(false)
   const [selectedCompartmentId, setSelectedCompartmentId] = useState('')
+  const [isoError, setIsoError] = useState<string | null>(null)
+  const [isoSuccess, setIsoSuccess] = useState<string | null>(null)
+  const [isoLoading, setIsoLoading] = useState(false)
 
   async function handleSubmit(formData: FormData) {
     setError(null); setSuccess(null); setLoading(true)
@@ -106,6 +120,15 @@ export default function ApparatusDetailClient({
     if (result?.error) setCompError(result.error)
     else setSelectedCompartmentId('')
     setCompLoading(false)
+  }
+
+  async function handleIsoSubmit(formData: FormData) {
+    setIsoError(null); setIsoSuccess(null); setIsoLoading(true)
+    formData.set('apparatus_id', apparatus.id)
+    const result = await upsertApparatusIsoSpecs(formData)
+    if (result?.error) setIsoError(result.error)
+    else setIsoSuccess('ISO specs saved.')
+    setIsoLoading(false)
   }
 
   async function handleRemoveCompartment(compartmentId: string) {
@@ -354,6 +377,49 @@ export default function ApparatusDetailClient({
           </div>
         )}
       </div>
+
+      {/* ISO Specs */}
+      {isOfficerOrAbove && (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mt-5">
+          <h2 className="text-base font-semibold text-zinc-900 mb-4">ISO Specifications</h2>
+          {isoSuccess && <Alert type="success" message={isoSuccess} />}
+          {isoError && <Alert type="error" message={isoError} />}
+          <form action={handleIsoSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Pump Rating (GPM)</label>
+                <input name="pump_rating_gpm" type="number" min="0" defaultValue={isoSpecs?.pump_rating_gpm ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Tank Capacity (gal)</label>
+                <input name="tank_capacity_gal" type="number" min="0" defaultValue={isoSpecs?.tank_capacity_gal ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Foam Capacity (gal)</label>
+                <input name="foam_capacity_gal" type="number" min="0" defaultValue={isoSpecs?.foam_capacity_gal ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="sm:w-32">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Aerial Length (ft)</label>
+                <input name="aerial_length_ft" type="number" min="0" defaultValue={isoSpecs?.aerial_length_ft ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">Hose Load Notes</label>
+              <textarea name="hose_load_notes" rows={2} defaultValue={isoSpecs?.hose_load_notes ?? ''}
+                placeholder="e.g. 200ft 1.75in preconnect, 400ft 2.5in supply line..."
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+            </div>
+            <button type="submit" disabled={isoLoading}
+              className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+              {isoLoading ? 'Saving...' : 'Save ISO Specs'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

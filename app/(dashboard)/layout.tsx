@@ -58,6 +58,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
+      label: 'ISO',
+      items: [
+        { href: '/iso/hoses', label: 'Hose Inventory' },
+        { href: '/iso/hydrants', label: 'Hydrants' },
+        { href: '/iso/report', label: 'ISO Report' },
+      ],
+    },
+    {
       label: 'Reports',
       items: [
         { href: '/reports/my-activity', label: 'My Activity' },

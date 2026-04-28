@@ -7,6 +7,7 @@ import {
   addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus,
   addIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
 } from '@/app/actions/incidents'
+import { addMutualAid, removeMutualAid } from '@/app/actions/iso'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
@@ -40,6 +41,7 @@ function toDatetimeLocal(dt: string | null) {
 
 type ApparatusRow = { id: string; apparatus_id: string; unit_number: string; role: string; paged_at: string | null; enroute_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }
 type PersonnelRow = { id: string; personnel_id: string; apparatus_id: string | null; role: string; status: string; rejection_reason: string | null; name: string; apparatus_unit: string | null; submitted_by_name: string | null }
+type MutualAidRow = { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null; arrival_time: string | null; departure_time: string | null; notes: string | null }
 
 export default function IncidentDetailClient({
   incident,
@@ -51,6 +53,7 @@ export default function IncidentDetailClient({
   deptPersonnel,
   isOfficerOrAbove,
   myPersonnelId,
+  mutualAid,
 }: {
   incident: any
   incidentApparatus: ApparatusRow[]
@@ -61,6 +64,7 @@ export default function IncidentDetailClient({
   deptPersonnel: { id: string; name: string }[]
   isOfficerOrAbove: boolean
   myPersonnelId: string
+  mutualAid: MutualAidRow[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -84,6 +88,10 @@ export default function IncidentDetailClient({
   const [confirmingLog, setConfirmingLog] = useState(false)
   const [selfLogRole, setSelfLogRole] = useState('crew')
   const [selfLogError, setSelfLogError] = useState<string | null>(null)
+
+  // Mutual aid
+  const [showAddMutualAid, setShowAddMutualAid] = useState(false)
+  const [mutualAidError, setMutualAidError] = useState<string | null>(null)
 
   const isFinalized = incident.status === 'finalized'
   const canEdit = !isFinalized || isOfficerOrAbove
@@ -173,6 +181,26 @@ export default function IncidentDetailClient({
   async function handleRemovePersonnel(logId: string) {
     startTransition(async () => {
       await removeIncidentPersonnel(logId, incident.id)
+      router.refresh()
+    })
+  }
+
+  async function handleAddMutualAid(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setMutualAidError(null)
+    const fd = new FormData(e.currentTarget)
+    fd.set('incident_id', incident.id)
+    startTransition(async () => {
+      const result = await addMutualAid(fd)
+      if (result?.error) { setMutualAidError(result.error); return }
+      setShowAddMutualAid(false)
+      router.refresh()
+    })
+  }
+
+  async function handleRemoveMutualAid(mutualAidId: string) {
+    startTransition(async () => {
+      await removeMutualAid(mutualAidId, incident.id)
       router.refresh()
     })
   }
@@ -533,6 +561,94 @@ export default function IncidentDetailClient({
           </div>
         )}
       </section>
+
+      {/* Mutual Aid section */}
+      {isOfficerOrAbove && (
+        <section className="rounded-xl bg-white border border-zinc-200 p-5 mt-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
+            {canEdit && (
+              <button onClick={() => { setShowAddMutualAid(true); setMutualAidError(null) }} className="text-xs font-semibold text-red-700 hover:underline">+ Add</button>
+            )}
+          </div>
+
+          {mutualAid.length === 0 && !showAddMutualAid && (
+            <p className="text-sm text-zinc-400">No mutual aid logged.</p>
+          )}
+
+          <div className="space-y-2 mb-2">
+            {mutualAid.map(m => (
+              <div key={m.id} className="rounded-lg border border-zinc-200 px-4 py-3 bg-zinc-50 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
+                    </span>
+                    <span className="font-medium text-zinc-800">{m.external_department_name}</span>
+                  </div>
+                  {canEdit && (
+                    <button onClick={() => handleRemoveMutualAid(m.id)} disabled={isPending} className="text-xs text-red-600 hover:underline disabled:opacity-50">Remove</button>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                  {m.apparatus_description && <span>Apparatus: {m.apparatus_description}</span>}
+                  {m.personnel_count != null && <span>Personnel: {m.personnel_count}</span>}
+                  {m.arrival_time && <span>Arrived: {formatDT(m.arrival_time)}</span>}
+                  {m.departure_time && <span>Departed: {formatDT(m.departure_time)}</span>}
+                  {m.notes && <span className="col-span-2">{m.notes}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {showAddMutualAid && canEdit && (
+            <form onSubmit={handleAddMutualAid} className="rounded-lg border border-zinc-200 p-4 space-y-3 bg-zinc-50">
+              {mutualAidError && <p className="text-xs text-red-600">{mutualAidError}</p>}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Department Name <span className="text-red-600">*</span></label>
+                  <input name="external_department_name" required placeholder="e.g. Flagstaff Fire" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Role <span className="text-red-600">*</span></label>
+                  <select name="role" className={inputCls}>
+                    <option value="gave_aid">We Gave Aid</option>
+                    <option value="received_aid">We Received Aid</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Apparatus Sent/Received</label>
+                  <input name="apparatus_description" placeholder="e.g. Engine 1, Tanker 2" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Personnel Count</label>
+                  <input name="personnel_count" type="number" min="0" className={inputCls} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Arrival Time</label>
+                  <input name="arrival_time" type="datetime-local" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Departure Time</label>
+                  <input name="departure_time" type="datetime-local" className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Notes</label>
+                <input name="notes" className={inputCls} />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={isPending} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">Add</button>
+                <button type="button" onClick={() => setShowAddMutualAid(false)} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100">Cancel</button>
+              </div>
+            </form>
+          )}
+        </section>
+      )}
 
       {/* Personnel section */}
       <section className="rounded-xl bg-white border border-zinc-200 p-5 mt-5 mb-8">

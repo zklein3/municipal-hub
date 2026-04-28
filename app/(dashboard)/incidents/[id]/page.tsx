@@ -100,6 +100,13 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  // Mutual aid entries
+  const { data: mutualAid } = await adminClient
+    .from('incident_mutual_aid')
+    .select('id, external_department_name, role, apparatus_description, personnel_count, arrival_time, departure_time, notes')
+    .eq('incident_id', id)
+    .order('created_at')
+
   return (
     <IncidentDetailClient
       incident={incident}
@@ -119,6 +126,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       deptPersonnel={deptPersonnel}
       isOfficerOrAbove={isOfficerOrAbove}
       myPersonnelId={me.id}
+      mutualAid={mutualAid ?? []}
     />
   )
 }
