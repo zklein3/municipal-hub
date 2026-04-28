@@ -45,6 +45,8 @@ export default function FireSchoolBottlesClient({
   const [showForm, setShowForm] = useState(!!prefillBottleId)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [addedBottleId, setAddedBottleId] = useState<string | null>(null)
+  const [addedDeptName, setAddedDeptName] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [requiresServiceLife, setRequiresServiceLife] = useState(true)
 
@@ -56,6 +58,10 @@ export default function FireSchoolBottlesClient({
     if (result?.error) {
       setError(result.error)
     } else {
+      const bottleId = (formData.get('bottle_id') as string)?.trim().toUpperCase()
+      const deptName = (formData.get('department_name') as string)?.trim() || null
+      setAddedBottleId(bottleId)
+      setAddedDeptName(deptName)
       setSuccess('Bottle added successfully.')
       setShowForm(false)
     }
@@ -97,8 +103,17 @@ export default function FireSchoolBottlesClient({
         </button>
       </div>
 
-      {success && (
-        <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>
+      {success && addedBottleId && (
+        <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200 flex items-center justify-between gap-4">
+          <span>{success}</span>
+          <QrPrintLabel
+            code={addedBottleId}
+            type="bottle"
+            title={addedBottleId}
+            subtitle={addedDeptName ?? undefined}
+            buttonClassName="shrink-0 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800 print:hidden"
+          />
+        </div>
       )}
 
       {/* Add Bottle Form */}
