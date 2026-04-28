@@ -18,19 +18,6 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* QR label print isolation — hide all page content, show only the label */
-@media print {
-  body.qr-printing > * {
-    display: none !important;
-  }
-  body.qr-printing > .qr-print-label {
-    display: flex !important;
-    min-height: 100vh;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-  }
-}
 
 /* Force light styling on all form elements regardless of OS dark mode */
 @layer base {
