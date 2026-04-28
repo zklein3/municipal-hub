@@ -23,8 +23,7 @@ export default function QRScanButton({
     setMounted(true)
     setSupported(
       typeof navigator !== 'undefined' &&
-      !!navigator.mediaDevices?.getUserMedia &&
-      typeof window.BarcodeDetector !== 'undefined'
+      !!navigator.mediaDevices?.getUserMedia
     )
   }, [])
 

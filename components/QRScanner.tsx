@@ -1,16 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-declare global {
-  interface Window {
-    BarcodeDetector?: {
-      new(options?: { formats?: string[] }): {
-        detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>
-      }
-    }
-  }
-}
+import jsQR from 'jsqr'
 
 export default function QRScanner({
   onScan,
@@ -43,12 +34,8 @@ export default function QRScanner({
 
   useEffect(() => {
     async function start() {
-      if (
-        typeof window === 'undefined' ||
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof window.BarcodeDetector === 'undefined'
-      ) {
-        setError('Camera QR scanning is not supported on this browser. Try Chrome on Android or desktop.')
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        setError('Camera access is not available on this browser.')
         return
       }
 
@@ -64,7 +51,6 @@ export default function QRScanner({
       }
 
       streamRef.current = stream
-      const detector = new window.BarcodeDetector!({ formats: ['qr_code'] })
       const video = videoRef.current
       const canvas = canvasRef.current
       if (!video || !canvas) return
@@ -78,7 +64,7 @@ export default function QRScanner({
         return
       }
 
-      const loop = async () => {
+      const loop = () => {
         if (detectedRef.current) return
         if (video.readyState >= 2) {
           const ctx = canvas.getContext('2d')
@@ -86,16 +72,14 @@ export default function QRScanner({
             canvas.width = video.videoWidth
             canvas.height = video.videoHeight
             ctx.drawImage(video, 0, 0)
-            try {
-              const codes = await detector.detect(canvas)
-              const raw = codes?.[0]?.rawValue?.trim()
-              if (raw) {
-                detectedRef.current = true
-                stop()
-                onScanRef.current(raw)
-                return
-              }
-            } catch { /* keep scanning */ }
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            const code = jsQR(imageData.data, imageData.width, imageData.height)
+            if (code?.data?.trim()) {
+              detectedRef.current = true
+              stop()
+              onScanRef.current(code.data.trim())
+              return
+            }
           }
         }
         frameRef.current = requestAnimationFrame(loop)
