@@ -174,6 +174,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 ## IMMEDIATE NEXT — Resume Here Next Session
 
 ### 1. Flow & Presentation Polish ← START HERE
+
+### Completed This Session (2026-04-28) — Fire School QR Printing
+- **`/print/qr` page** — dedicated minimal print page (`app/print/qr/page.tsx`). Reads `type`, `code`, `title`, `subtitle` from searchParams, renders QR label, auto-calls `window.print()` after 600ms. Works on mobile (iOS share→print, Android print dialog) and desktop.
+- **QrPrintLabel** — simplified to just open `/print/qr?...` in a new tab. Portal + `@media print` CSS approach removed entirely. Now supports `type: 'apparatus' | 'compartment' | 'bottle'`.
+- **Bottle QR labels** — `type='bottle'` encodes `fireops7.com/fire-school?scan=<id>`. Print QR button added to each row in the bottles table. Print QR button also appears immediately in the success banner after adding a new bottle.
+- **Fill station auto-check** — `/fire-school` reads `?scan=` URL param on mount and auto-triggers `handleCheck()`. Scanning a printed bottle label with any phone camera opens the fill station and immediately pulls up the bottle result.
+- **`bottles/page.tsx`** — fixed searchParams not being awaited (Next.js 16 pattern).
+- **Hydrants numeric overflow fix** — `lat`/`lng` changed from `numeric(10,7)` to `double precision`, `main_size_in` from `numeric(4,2)` to `numeric(6,2)`.
 When an inspection session is abandoned and expires, notify the department admin/officer. Requires a cron (similar to `auto-close-events`) to sweep expired sessions and trigger Resend email via Edge Function. Design already discussed — lazy expiry is live, active cron + notification is the next step.
 
 ### 3. Flow & Presentation Polish
