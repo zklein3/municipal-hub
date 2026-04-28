@@ -6,9 +6,9 @@ import InspectionRunClient from './InspectionRunClient'
 export default async function InspectionRunPage({
   searchParams,
 }: {
-  searchParams: Promise<{ apparatus_id?: string; compartment_id?: string; mode?: string }>
+  searchParams: Promise<{ apparatus_id?: string; compartment_id?: string; mode?: string; session_id?: string; session_compartment_id?: string }>
 }) {
-  const { apparatus_id, compartment_id, mode } = await searchParams
+  const { apparatus_id, compartment_id, mode, session_id, session_compartment_id } = await searchParams
   if (!apparatus_id || !compartment_id) redirect('/inspections')
   const presenceOnly = mode === 'presence'
 
@@ -151,6 +151,8 @@ export default async function InspectionRunPage({
       personnelId={me.id}
       departmentId={myDept.department_id}
       presenceOnly={presenceOnly}
+      inspectionSessionId={session_id}
+      sessionCompartmentId={session_compartment_id}
     />
   )
 }

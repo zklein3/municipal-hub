@@ -173,18 +173,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. QRScanner Component ← START HERE
-Extract camera scanner from Fire School into a reusable `QRScanner` component. Add scan buttons to apparatus/compartment/asset roster pages. Reads QR → navigates to `/scan?type=...&code=...` internally (no redirect needed when already logged in).
-Also: encode full URL in QR value at print time (`https://www.fireops7.com/scan?type=apparatus|compartment&code=...`) so printed labels work with any phone camera, not just the in-app scanner.
+### 1. ISO Audit sections ← START HERE
+Hose logs, apparatus specs, hydrant flows, mutual aid tracking. TBD scope.
 
-### 2. Weekly Inspection Session (`/inspections/apparatus/[id]`)
-Shows all compartments for apparatus as a checklist. User taps compartment → inspection run → returns → compartment marked complete. All submissions share an `inspection_session_id`. "Start Weekly Inspection" button on apparatus detail page. Needs DB migration: add `inspection_session_id` UUID to `item_asset_inspection_logs`.
+### 2. Notifications for session expiry
+When an inspection session is abandoned and expires, notify the department admin/officer. Requires a cron (similar to `auto-close-events`) to sweep expired sessions and trigger Resend email via Edge Function. Design already discussed — lazy expiry is live, active cron + notification is the next step.
 
-### Priority Order After That
-3. ISO Audit sections (future) — hose logs, apparatus specs, hydrant flows, mutual aid
-4. Flow & Presentation Polish
+### 3. Flow & Presentation Polish
 
-### Completed This Session (2026-04-27)
+### Completed This Session (2026-04-28)
+- **Inspection Session** (`/inspections/apparatus/[id]`) — session grouping layer on top of existing inspection flow. `inspection_sessions` + `inspection_session_compartments` tables added to DB. `inspection_session_id` added to `item_asset_inspection_logs`. Sessions expire after 12 hours (lazy expiry on page open). One person per compartment — compartment is claimed (`in_progress`) when user clicks Inspect, released by officer/admin. Auto-completes session when all compartments done. Officer/admin "Close Session" force-closes regardless of compartment state.
+- **Session server actions** — `getOrCreateInspectionSession`, `claimCompartment`, `completeCompartmentInSession`, `releaseCompartment`, `closeInspectionSession` in `app/actions/inspections.ts`. `submitInspection` updated to accept + store `inspection_session_id` and `session_compartment_id`, auto-marks compartment complete on submit.
+- **Session UI** — progress bar (done/total), compartment list with status badges and claimed-by/completed-by names, Inspect → claim → run flow, Release button for officers, Close Session button for officers. Success screen on `/inspections/run` shows "Back to Session" when session context is present.
+- **"Start Inspection Session" button** — added to Compartments section header on apparatus detail page, links to `/inspections/apparatus/[id]`. Visible to all roles, only shown when apparatus has active compartments.
+
+### Completed Previous Session (2026-04-27)
 - **QR label printing** — `qrcode.react` installed. `QrPrintLabel` client component portals an SVG QR label into body, uses `body.qr-printing` CSS class to isolate the label during `window.print()`. "Print QR Label" button on apparatus detail header + compartment action buttons (only when qr_code is set). Compartment QR code input auto-suggests `{apparatus.qr_code}-{compartment_code}` (e.g. `ENGINE-32-D1`) when no code saved yet; falls back to `{unit_number}-{compartment_code}`.
 
 ### Completed Previous Session (2026-04-27)

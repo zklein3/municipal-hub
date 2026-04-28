@@ -163,6 +163,8 @@ export async function submitInspection(payload: {
   personnel_id: string
   department_id: string
   inspector_name: string
+  inspection_session_id?: string
+  session_compartment_id?: string
   asset_inspections: {
     asset_id: string
     template_id: string
@@ -215,6 +217,7 @@ export async function submitInspection(payload: {
           inspected_by_name: payload.inspector_name,
           apparatus_id: payload.apparatus_id || null,
           compartment_id: payload.compartment_id || null,
+          inspection_session_id: payload.inspection_session_id || null,
         })
         .select('id')
         .single()
@@ -268,10 +271,225 @@ export async function submitInspection(payload: {
       }
     }
 
+    if (payload.session_compartment_id) {
+      await completeCompartmentInSession(payload.session_compartment_id)
+    }
+
     revalidatePath('/inspections')
     return { success: true }
   } catch (e: any) {
     await logError(e?.message ?? 'Unknown error', '/inspections/run')
     return { error: e?.message ?? 'Submission failed.' }
   }
+}
+
+// ─── Get or Create Inspection Session ─────────────────────────────────────────
+export async function getOrCreateInspectionSession(apparatus_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Department not found.' }
+
+  const now = new Date().toISOString()
+
+  const { data: existing } = await adminClient
+    .from('inspection_sessions')
+    .select('*')
+    .eq('apparatus_id', apparatus_id)
+    .eq('department_id', ctx.department_id)
+    .eq('status', 'in_progress')
+    .order('started_at', { ascending: false })
+    .limit(1)
+
+  let session = existing?.[0] ?? null
+
+  if (session && session.expires_at < now) {
+    await adminClient.from('inspection_sessions').update({ status: 'expired' }).eq('id', session.id)
+    session = null
+  }
+
+  if (!session) {
+    const { data: newSession, error: sessionErr } = await adminClient
+      .from('inspection_sessions')
+      .insert({ apparatus_id, department_id: ctx.department_id, started_by: user.id })
+      .select('*')
+      .single()
+    if (sessionErr) { await logError(sessionErr.message, '/inspections/apparatus'); return { error: sessionErr.message } }
+    session = newSession
+
+    const { data: compartments } = await adminClient
+      .from('apparatus_compartments')
+      .select('id')
+      .eq('apparatus_id', apparatus_id)
+
+    if (compartments && compartments.length > 0) {
+      const { error: compErr } = await adminClient
+        .from('inspection_session_compartments')
+        .insert(compartments.map(c => ({ session_id: session.id, compartment_id: c.id })))
+      if (compErr) { await logError(compErr.message, '/inspections/apparatus'); return { error: compErr.message } }
+    }
+  }
+
+  return { session, ...(await fetchSessionCompartments(session.id, adminClient)) }
+}
+
+async function fetchSessionCompartments(session_id: string, adminClient: ReturnType<typeof createAdminClient>) {
+  const { data: rows } = await adminClient
+    .from('inspection_session_compartments')
+    .select('*')
+    .eq('session_id', session_id)
+
+  const compartmentIds = (rows ?? []).map(r => r.compartment_id)
+  const { data: compLinks } = compartmentIds.length > 0
+    ? await adminClient.from('apparatus_compartments').select('id, compartment_name_id').in('id', compartmentIds)
+    : { data: [] }
+
+  const nameIds = [...new Set((compLinks ?? []).map(c => c.compartment_name_id).filter(Boolean))]
+  const { data: names } = nameIds.length > 0
+    ? await adminClient.from('compartment_names').select('id, compartment_name').in('id', nameIds)
+    : { data: [] }
+
+  const nameMap = new Map((names ?? []).map(n => [n.id, n.compartment_name]))
+  const linkMap = new Map((compLinks ?? []).map(c => [c.id, c]))
+
+  const userIds = [...new Set((rows ?? []).flatMap(r => [r.claimed_by, r.completed_by, r.released_by]).filter(Boolean))]
+  let personnelMap = new Map<string, string>()
+  if (userIds.length > 0) {
+    const { data: personnel } = await adminClient
+      .from('personnel')
+      .select('auth_user_id, first_name, last_name')
+      .in('auth_user_id', userIds)
+    personnelMap = new Map((personnel ?? []).map(p => [p.auth_user_id, `${p.first_name} ${p.last_name}`]))
+  }
+
+  const compartments = (rows ?? []).map(r => {
+    const link = linkMap.get(r.compartment_id)
+    return {
+      ...r,
+      compartment_name: link ? (nameMap.get(link.compartment_name_id) ?? 'Unknown') : 'Unknown',
+      claimed_by_name: r.claimed_by ? (personnelMap.get(r.claimed_by) ?? 'Unknown') : null,
+      completed_by_name: r.completed_by ? (personnelMap.get(r.completed_by) ?? 'Unknown') : null,
+    }
+  })
+
+  return { compartments }
+}
+
+// ─── Claim Compartment ─────────────────────────────────────────────────────────
+export async function claimCompartment(session_compartment_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const { data: existing } = await adminClient
+    .from('inspection_session_compartments')
+    .select('status')
+    .eq('id', session_compartment_id)
+    .single()
+
+  if (existing?.status === 'in_progress') return { error: 'Compartment is already claimed.' }
+  if (existing?.status === 'completed') return { error: 'Compartment is already completed.' }
+
+  const { error: dbErr } = await adminClient
+    .from('inspection_session_compartments')
+    .update({ status: 'in_progress', claimed_by: user.id, claimed_at: new Date().toISOString() })
+    .eq('id', session_compartment_id)
+
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  return { success: true }
+}
+
+// ─── Complete Compartment ──────────────────────────────────────────────────────
+export async function completeCompartmentInSession(session_compartment_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const now = new Date().toISOString()
+
+  const { data: row, error: fetchErr } = await adminClient
+    .from('inspection_session_compartments')
+    .update({ status: 'completed', completed_by: user.id, completed_at: now })
+    .eq('id', session_compartment_id)
+    .select('session_id')
+    .single()
+
+  if (fetchErr) { await logError(fetchErr.message, '/inspections/apparatus'); return { error: fetchErr.message } }
+
+  const { data: remaining } = await adminClient
+    .from('inspection_session_compartments')
+    .select('id')
+    .eq('session_id', row.session_id)
+    .neq('status', 'completed')
+
+  if (!remaining || remaining.length === 0) {
+    await adminClient
+      .from('inspection_sessions')
+      .update({ status: 'completed', completed_at: now })
+      .eq('id', row.session_id)
+  }
+
+  revalidatePath('/inspections/apparatus')
+  return { success: true }
+}
+
+// ─── Release Compartment (officer/admin) ──────────────────────────────────────
+export async function releaseCompartment(session_compartment_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const ctx = await getContext()
+  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
+  const role = meList?.[0]?.system_role
+  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+    return { error: 'Only officers and admins can release compartments.' }
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('inspection_session_compartments')
+    .update({
+      status: 'pending',
+      claimed_by: null,
+      claimed_at: null,
+      released_by: user.id,
+      released_at: new Date().toISOString(),
+    })
+    .eq('id', session_compartment_id)
+    .eq('status', 'in_progress')
+
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/inspections/apparatus')
+  return { success: true }
+}
+
+// ─── Close Session (officer/admin) ────────────────────────────────────────────
+export async function closeInspectionSession(session_id: string) {
+  const ctx = await getContext()
+  const adminClient = createAdminClient()
+
+  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
+  const role = meList?.[0]?.system_role
+  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+    return { error: 'Only officers and admins can close sessions.' }
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('inspection_sessions')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', session_id)
+
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/inspections/apparatus')
+  return { success: true }
 }

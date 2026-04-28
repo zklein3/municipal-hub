@@ -264,9 +264,19 @@ export default function ApparatusDetailClient({
 
       {/* Compartments */}
       <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
-        <h2 className="text-base font-semibold text-zinc-900 mb-4">
-          Compartments ({compartments.filter(c => c.active).length} active)
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-zinc-900">
+            Compartments ({compartments.filter(c => c.active).length} active)
+          </h2>
+          {compartments.filter(c => c.active).length > 0 && (
+            <Link
+              href={`/inspections/apparatus/${apparatus.id}`}
+              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+            >
+              Start Inspection Session
+            </Link>
+          )}
+        </div>
         {compError && <Alert type="error" message={compError} />}
 
         {compartments.length === 0 ? (

@@ -149,12 +149,15 @@
   - **View History** — recent inspection logs for this compartment
 - Accessible via QR scan or manual nav from apparatus detail page
 
-### Weekly Inspection Session (`/inspections/apparatus/[id]`)
-- Shows all compartments for the apparatus as a checklist (incomplete by default)
-- User taps a compartment → existing inspection run flow → submits → returns to session view → compartment marked complete
-- All submissions in the session share an `inspection_session_id` UUID — reports can group by session
-- Progress persists if user leaves and returns (session tracked by session ID in URL or DB)
-- "Start Weekly Inspection" button lives on the apparatus detail page
+### Inspection Session (`/inspections/apparatus/[id]`) ✅ BUILT
+- `inspection_sessions` table: apparatus_id, department_id, status (`in_progress`|`completed`|`expired`), started_by, started_at, expires_at (12h), completed_at
+- `inspection_session_compartments` table: session_id, compartment_id, status (`pending`|`in_progress`|`completed`), claimed_by, claimed_at, completed_at, completed_by, released_by, released_at
+- `item_asset_inspection_logs.inspection_session_id` FK — groups all submissions from one session
+- **Lazy expiry** — on page open, if `expires_at` is past, session marked `expired` and a fresh one is created. No cron yet (planned).
+- **One person per compartment** — compartment claimed (`in_progress`) when user clicks Inspect. Others see it as locked. Officer/admin can release a stuck compartment back to `pending`.
+- **Auto-join** — navigating to apparatus session page auto-joins the open session; no invite needed.
+- **Auto-complete** — session marked `completed` when all compartments done. Officer/admin "Close Session" force-closes regardless.
+- **"Start Inspection Session"** button on apparatus detail Compartments section (all roles, only shown when active compartments exist).
 
 ### Use Case Mapping
 - **Daily check (career dept shift change):** Scan compartment → compartment page → Verify Present → done
@@ -168,12 +171,12 @@
 - Print layout: QR image + code text + apparatus/compartment name — uses `window.print()` (same as inventory reports)
 
 ### Build Order (when starting this)
-1. ✅ DB migration: `qr_code` on apparatus + apparatus_compartments (item_assets uses asset_tag); `inspection_session_id` on item_asset_inspection_logs — STILL NEEDED for weekly session
-2. ✅ Compartment page (`/equipment/[apparatus_id]/[compartment_id]`) — built with item list, asset status badges, Verify Present + Start Inspection buttons, recent activity, QR code admin form
-3. Weekly inspection session (`/inspections/apparatus/[id]`) — NEXT after printing
-4. ✅ `/scan` route — built with type+code lookup, redirects to apparatus/compartment/asset roster
-5. `QRScanner` component (extract from fire school page), add scan buttons to relevant pages
-6. ✅ QR label print layout + "Print QR Label" buttons — NEXT (start here next session)
+1. ✅ DB migration: `qr_code` on apparatus + apparatus_compartments; `inspection_session_id` on item_asset_inspection_logs; `inspection_sessions` + `inspection_session_compartments` tables
+2. ✅ Compartment page (`/equipment/[apparatus_id]/[compartment_id]`) — item list, asset status badges, Verify Present + Start Inspection buttons, recent activity, QR code admin form
+3. ✅ Inspection session (`/inspections/apparatus/[id]`) — compartment checklist, claim/release, auto-complete, officer close
+4. ✅ `/scan` route — type+code lookup, redirects to apparatus/compartment/asset roster
+5. ✅ `QRScanner` component — extracted from fire school, `QRScanButton` wrapper, scan buttons on apparatus/compartment/asset pages
+6. ✅ QR label print layout + "Print QR Label" buttons on apparatus detail + compartment page
 7. ✅ Admin UI: qr_code field on apparatus edit form + compartment detail page
 
 ## Training Module Detail

@@ -61,6 +61,7 @@ function hasInspection(item: ChecklistItem): boolean {
 
 export default function InspectionRunClient({
   apparatus, compartment, compartmentId, checklistItems, inspectorName, personnelId, departmentId, presenceOnly,
+  inspectionSessionId, sessionCompartmentId,
 }: {
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
   compartment: { code: string; name: string | null }
@@ -70,6 +71,8 @@ export default function InspectionRunClient({
   personnelId: string
   departmentId: string
   presenceOnly: boolean
+  inspectionSessionId?: string
+  sessionCompartmentId?: string
 }) {
   const router = useRouter()
 
@@ -174,6 +177,8 @@ export default function InspectionRunClient({
         personnel_id: personnelId,
         department_id: departmentId,
         inspector_name: inspectorName,
+        inspection_session_id: inspectionSessionId,
+        session_compartment_id: sessionCompartmentId,
         asset_inspections: assetInspections,
         presence_checks: presenceChecks,
       })
@@ -195,10 +200,17 @@ export default function InspectionRunClient({
             Compartment {compartment.code} on Unit {apparatus.unit_number} has been inspected.
           </p>
           <div className="flex gap-3">
-            <button onClick={() => router.push('/inspections')}
-              className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
-              Inspect Another
-            </button>
+            {inspectionSessionId ? (
+              <button onClick={() => router.push(`/inspections/apparatus/${apparatus.id}`)}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
+                Back to Session
+              </button>
+            ) : (
+              <button onClick={() => router.push('/inspections')}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
+                Inspect Another
+              </button>
+            )}
             <button onClick={() => router.push('/dashboard')}
               className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
               Dashboard
