@@ -14,7 +14,7 @@ export default function QrPrintLabel({
   buttonClassName,
 }: {
   code: string
-  type: 'apparatus' | 'compartment'
+  type: 'apparatus' | 'compartment' | 'bottle'
   title: string
   subtitle?: string
   buttonClassName?: string
@@ -59,7 +59,13 @@ export default function QrPrintLabel({
             borderRadius: '12px',
             background: '#fff',
           }}>
-            <QRCodeSVG value={`${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`} size={200} level="M" />
+            <QRCodeSVG
+              value={type === 'bottle'
+                ? `${BASE_URL}/fire-school?scan=${encodeURIComponent(code)}`
+                : `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`}
+              size={200}
+              level="M"
+            />
             <p style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.1em', color: '#18181b', margin: 0 }}>
               {code}
             </p>

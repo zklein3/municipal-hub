@@ -4,9 +4,9 @@ import FireSchoolBottlesClient from './FireSchoolBottlesClient'
 export default async function FireSchoolBottlesPage({
   searchParams,
 }: {
-  searchParams: { add?: string; scan?: string }
+  searchParams: Promise<{ add?: string; scan?: string }>
 }) {
-  const { add, scan } = searchParams
+  const { add, scan } = await searchParams
   const adminClient = createAdminClient()
 
   const { data: bottles } = await adminClient

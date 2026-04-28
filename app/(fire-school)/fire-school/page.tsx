@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { checkBottle, logFill } from '@/app/actions/fire-school'
 import QRScanner from '@/components/QRScanner'
 
@@ -33,7 +33,12 @@ interface CheckBottleResult {
 }
 
 export default function FillStationPage() {
+  return <Suspense><FillStationContent /></Suspense>
+}
+
+function FillStationContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [bottleInput, setBottleInput] = useState('')
   const [checking, setChecking] = useState(false)
@@ -59,6 +64,11 @@ export default function FillStationPage() {
       try { return decodeURIComponent(match[1]).trim().toUpperCase() } catch { return match[1].trim().toUpperCase() }
     }
     return trimmed.toUpperCase()
+  }, [])
+
+  useEffect(() => {
+    const scan = searchParams.get('scan')
+    if (scan?.trim()) handleCheck(scan.trim().toUpperCase())
   }, [])
 
   async function handleCheck(overrideBottleId?: string) {

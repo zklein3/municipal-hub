@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { addFireSchoolBottle } from '@/app/actions/fire-school'
+import QrPrintLabel from '@/components/QrPrintLabel'
 
 const CYLINDER_TYPES = [
   { value: 'composite_15', label: 'Composite (15yr service life)' },
@@ -192,6 +193,7 @@ export default function FireSchoolBottlesClient({
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Last Requal</th>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Fills</th>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Status</th>
+              <th className="px-4 py-3 text-left font-semibold text-zinc-600">QR</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -208,6 +210,15 @@ export default function FireSchoolBottlesClient({
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${status.color}`}>
                       {status.label}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <QrPrintLabel
+                      code={bottle.bottle_id}
+                      type="bottle"
+                      title={bottle.bottle_id}
+                      subtitle={bottle.department_name ?? undefined}
+                      buttonClassName="text-xs font-medium text-orange-600 hover:underline print:hidden"
+                    />
                   </td>
                 </tr>
               )
