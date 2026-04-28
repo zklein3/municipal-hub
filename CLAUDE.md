@@ -173,20 +173,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. QR Label Printing ← START HERE
-Install `qrcode.react`, build a printable label component (QR image + code text + name), add "Print QR Label" button on apparatus detail and compartment page. Uses `window.print()` same as inventory report. Codes are already stored in DB.
-
-### 2. QRScanner Component
+### 1. QRScanner Component ← START HERE
 Extract camera scanner from Fire School into a reusable `QRScanner` component. Add scan buttons to apparatus/compartment/asset roster pages. Reads QR → navigates to `/scan?type=...&code=...` internally (no redirect needed when already logged in).
+Also: encode full URL in QR value at print time (`https://www.fireops7.com/scan?type=apparatus|compartment&code=...`) so printed labels work with any phone camera, not just the in-app scanner.
 
-### 3. Weekly Inspection Session (`/inspections/apparatus/[id]`)
+### 2. Weekly Inspection Session (`/inspections/apparatus/[id]`)
 Shows all compartments for apparatus as a checklist. User taps compartment → inspection run → returns → compartment marked complete. All submissions share an `inspection_session_id`. "Start Weekly Inspection" button on apparatus detail page. Needs DB migration: add `inspection_session_id` UUID to `item_asset_inspection_logs`.
 
 ### Priority Order After That
-4. ISO Audit sections (future) — hose logs, apparatus specs, hydrant flows, mutual aid
-5. Flow & Presentation Polish
+3. ISO Audit sections (future) — hose logs, apparatus specs, hydrant flows, mutual aid
+4. Flow & Presentation Polish
 
 ### Completed This Session (2026-04-27)
+- **QR label printing** — `qrcode.react` installed. `QrPrintLabel` client component portals an SVG QR label into body, uses `body.qr-printing` CSS class to isolate the label during `window.print()`. "Print QR Label" button on apparatus detail header + compartment action buttons (only when qr_code is set). Compartment QR code input auto-suggests `{apparatus.qr_code}-{compartment_code}` (e.g. `ENGINE-32-D1`) when no code saved yet; falls back to `{unit_number}-{compartment_code}`.
+
+### Completed Previous Session (2026-04-27)
 - **Asset Roster** (`/equipment/assets`) — dept-wide asset list with status summary cards (clickable filters), item type dropdown, search by tag/serial/item. Admin inline "Manage" button per row opens apparatus dropdown to assign/move asset location (`item_assets.apparatus_id`). Mobile card layout. `?search=` URL param pre-fills search (used by `/scan` asset redirect).
 - **Asset apparatus assignment** — `item_assets.apparatus_id` FK added to DB. `assignAssetApparatus` server action. Location column shows actual assigned apparatus, not inferred from item type standards.
 - **Compartment detail page** (`/equipment/[id]/[compartment_id]`) — item list with expected qty + asset status badges, Verify Present + Start Inspection action buttons (pre-filled links to existing inspection run), recent full inspection and presence check history. "View →" link added to each compartment header in equipment detail.
