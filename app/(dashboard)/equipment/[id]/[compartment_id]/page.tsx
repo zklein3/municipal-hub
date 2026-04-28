@@ -47,7 +47,7 @@ export default async function CompartmentPage({
   // Fetch apparatus
   const { data: appList } = await adminClient
     .from('apparatus')
-    .select('id, unit_number, apparatus_name')
+    .select('id, unit_number, apparatus_name, qr_code')
     .eq('id', apparatus_id)
   const apparatus = appList?.[0]
   if (!apparatus) redirect('/equipment')
@@ -156,6 +156,11 @@ export default async function CompartmentPage({
   const hasInspectable = compartmentItems.some(i => i.requires_inspection)
   const currentQrCode = compLink.qr_code ?? null
 
+  const apparatusBase = apparatus.qr_code ?? apparatus.unit_number
+  const suggestedQrCode = compName?.compartment_code
+    ? `${apparatusBase}-${compName.compartment_code}`.toUpperCase()
+    : null
+
   async function handleSetQrCode(formData: FormData): Promise<void> {
     'use server'
     await setCompartmentQrCode(compartment_id, apparatus_id, formData)
@@ -228,11 +233,13 @@ export default async function CompartmentPage({
                 <input
                   name="qr_code"
                   type="text"
-                  defaultValue={currentQrCode ?? ''}
+                  defaultValue={currentQrCode ?? suggestedQrCode ?? ''}
                   placeholder="e.g. ENGINE-32-D1"
                   className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />
-                <p className="mt-1 text-xs text-zinc-400">Unique code for this compartment's QR label. Uppercased automatically.</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {currentQrCode ? 'Unique code for this compartment\'s QR label.' : 'Auto-suggested from apparatus + compartment code. Edit if needed, then Save.'}
+                </p>
               </div>
               <button
                 type="submit"
