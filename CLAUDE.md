@@ -173,15 +173,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. ISO Audit sections ← START HERE
-Hose logs, apparatus specs, hydrant flows, mutual aid tracking. TBD scope.
-
-### 2. Notifications for session expiry
+### 1. Notifications for session expiry ← START HERE
 When an inspection session is abandoned and expires, notify the department admin/officer. Requires a cron (similar to `auto-close-events`) to sweep expired sessions and trigger Resend email via Edge Function. Design already discussed — lazy expiry is live, active cron + notification is the next step.
 
 ### 3. Flow & Presentation Polish
 
-### Completed This Session (2026-04-28)
+### Completed This Session (2026-04-28) — ISO Audit Baseline
+- **ISO DB tables** — `apparatus_iso_specs`, `hoses`, `hose_tests`, `hydrants`, `hydrant_flow_tests`, `incident_mutual_aid` (all with RLS enabled)
+- **`/iso/hoses`** — Hose inventory with NFPA 1962 service test log per hose (date, pressure, duration, pass/fail). Compliance header shows % tested in past 12 months. Officers can add/edit hoses and log tests inline.
+- **`/iso/hydrants`** — Hydrant list with flow test history per hydrant (static/residual PSI, GPM, pitot, nozzle). Officers can add/edit hydrants and log flow tests inline.
+- **`/iso/report`** — Consolidated ISO audit summary: apparatus specs coverage table, per-hose test compliance (Tested/Overdue/Failed), per-hydrant flow test compliance, recent mutual aid log.
+- **Apparatus detail ISO Specs card** — Officer-editable section on apparatus detail page: pump GPM, tank/foam capacity, aerial length, hose load notes. Upsert on save.
+- **Incident Mutual Aid section** — Officer-only section on incident detail: log which departments gave/received aid with apparatus description, personnel count, arrival/departure times.
+- **`app/actions/iso.ts`** — All ISO server actions: `upsertApparatusIsoSpecs`, `createHose`, `updateHose`, `addHoseTest`, `createHydrant`, `updateHydrant`, `addHydrantFlowTest`, `addMutualAid`, `removeMutualAid`.
+- **Design decision** — ISO hose test is a simple log entry (who/when/pressure/pass-fail), not a guided checklist. This matches what ISO auditors historically look for. Can expand to a full checklist workflow later if needed.
+
+### Completed Previous Session (2026-04-28)
 - **Inspection Session** (`/inspections/apparatus/[id]`) — session grouping layer on top of existing inspection flow. `inspection_sessions` + `inspection_session_compartments` tables added to DB. `inspection_session_id` added to `item_asset_inspection_logs`. Sessions expire after 12 hours (lazy expiry on page open). One person per compartment — compartment is claimed (`in_progress`) when user clicks Inspect, released by officer/admin. Auto-completes session when all compartments done. Officer/admin "Close Session" force-closes regardless of compartment state.
 - **Session server actions** — `getOrCreateInspectionSession`, `claimCompartment`, `completeCompartmentInSession`, `releaseCompartment`, `closeInspectionSession` in `app/actions/inspections.ts`. `submitInspection` updated to accept + store `inspection_session_id` and `session_compartment_id`, auto-marks compartment complete on submit.
 - **Session UI** — progress bar (done/total), compartment list with status badges and claimed-by/completed-by names, Inspect → claim → run flow, Release button for officers, Close Session button for officers. Success screen on `/inspections/run` shows "Back to Session" when session context is present.
