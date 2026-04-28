@@ -213,6 +213,7 @@ export default async function CompartmentPage({
         {currentQrCode && (
           <QrPrintLabel
             code={currentQrCode}
+            type="compartment"
             title={compartmentLabel}
             subtitle={apparatusLabel}
             buttonClassName="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm text-center print:hidden"

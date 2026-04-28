@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition } from 'react'
 import Link from 'next/link'
 import { assignAssetApparatus } from '@/app/actions/equipment'
+import QRScanButton from '@/components/QRScanButton'
 
 type AssetRow = {
   id: string
@@ -178,14 +179,17 @@ export default function AssetRosterClient({
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Asset Roster</h1>
           <p className="text-sm text-zinc-500 mt-0.5">All tracked assets across your department</p>
         </div>
-        {isAdmin && (
-          <Link
-            href="/dept-admin/items?tab=assets"
-            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 transition-colors"
-          >
-            Manage Assets
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <QRScanButton hint="Scan an apparatus or compartment QR label" />
+          {isAdmin && (
+            <Link
+              href="/dept-admin/items?tab=assets"
+              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 transition-colors"
+            >
+              Manage Assets
+            </Link>
+          )}
+        </div>
       </div>
 
       {saveError && (

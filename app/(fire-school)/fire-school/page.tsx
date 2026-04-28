@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { checkBottle, logFill } from '@/app/actions/fire-school'
+import QRScanner from '@/components/QRScanner'
 
 const CYLINDER_TYPE_LABELS: Record<string, string> = {
   composite_15: 'Composite (15yr)',
@@ -31,16 +32,6 @@ interface CheckBottleResult {
   reason?: string | null
 }
 
-declare global {
-  interface Window {
-    BarcodeDetector?: {
-      new (options?: { formats?: string[] }): {
-        detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>
-      }
-    }
-  }
-}
-
 export default function FillStationPage() {
   const router = useRouter()
 
@@ -50,68 +41,23 @@ export default function FillStationPage() {
   const [logging, setLogging] = useState(false)
   const [logged, setLogged] = useState(false)
   const [notes, setNotes] = useState('')
-
   const [scannerOpen, setScannerOpen] = useState(false)
-  const [scannerError, setScannerError] = useState('')
-  const [scannerSupported, setScannerSupported] = useState(false)
-  const [scanDetected, setScanDetected] = useState(false)
-
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const frameRef = useRef<number | null>(null)
-  const detectorRef = useRef<{
-    detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>
-  } | null>(null)
-
-  const stopScanner = useCallback(() => {
-    if (frameRef.current) {
-      cancelAnimationFrame(frameRef.current)
-      frameRef.current = null
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-
-    detectorRef.current = null
-    setScannerOpen(false)
-  }, [])
 
   const extractBottleIdFromScan = useCallback((raw: string): string => {
     const trimmed = raw.trim()
-
-    if (!trimmed.includes('://') && !trimmed.includes('scan=')) {
-      return trimmed.toUpperCase()
-    }
-
+    if (!trimmed.includes('://') && !trimmed.includes('scan=')) return trimmed.toUpperCase()
     try {
       const url = new URL(trimmed)
       const scanParam = url.searchParams.get('scan')
-
-      if (scanParam && scanParam.trim()) {
-        return scanParam.trim().toUpperCase()
-      }
-
+      if (scanParam?.trim()) return scanParam.trim().toUpperCase()
       const pathParts = url.pathname.split('/').filter(Boolean)
-      const lastPart = pathParts[pathParts.length - 1]
-      if (lastPart) {
-        return lastPart.trim().toUpperCase()
-      }
-    } catch {
-      // fall through
-    }
-
+      const last = pathParts[pathParts.length - 1]
+      if (last) return last.trim().toUpperCase()
+    } catch { /* fall through */ }
     const match = trimmed.match(/[?&]scan=([^&]+)/i)
     if (match?.[1]) {
-      try {
-        return decodeURIComponent(match[1]).trim().toUpperCase()
-      } catch {
-        return match[1].trim().toUpperCase()
-      }
+      try { return decodeURIComponent(match[1]).trim().toUpperCase() } catch { return match[1].trim().toUpperCase() }
     }
-
     return trimmed.toUpperCase()
   }, [])
 
@@ -155,9 +101,7 @@ export default function FillStationPage() {
     setResult(null)
     setLogged(false)
     setNotes('')
-    setScannerError('')
-    setScanDetected(false)
-    stopScanner()
+    setScannerOpen(false)
     router.replace('/fire-school')
   }
 
@@ -175,113 +119,12 @@ export default function FillStationPage() {
     return d
   }
 
-  useEffect(() => {
-    setScannerSupported(
-      typeof window !== 'undefined' &&
-        typeof navigator !== 'undefined' &&
-        !!navigator.mediaDevices?.getUserMedia &&
-        typeof window.BarcodeDetector !== 'undefined'
-    )
-  }, [])
-
-  const startScanner = useCallback(async () => {
-    setScannerError('')
-    setScanDetected(false)
-
-    if (
-      typeof window === 'undefined' ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof window.BarcodeDetector === 'undefined'
-    ) {
-      setScannerError('Camera QR scanning is not supported on this device/browser.')
-      return
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      })
-
-      streamRef.current = stream
-
-      detectorRef.current = new window.BarcodeDetector({
-        formats: ['qr_code'],
-      })
-
-      setScannerOpen(true)
-    } catch {
-      setScannerError('Unable to access camera.')
-      stopScanner()
-    }
-  }, [stopScanner])
-
-  useEffect(() => {
-    if (!scannerOpen) return
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const detector = detectorRef.current
-
-    if (!video || !canvas || !streamRef.current || !detector) {
-      setScannerError('Scanner video element not ready.')
-      stopScanner()
-      return
-    }
-
-    const start = async () => {
-      try {
-        video.srcObject = streamRef.current
-        await video.play()
-
-        const scanLoop = async () => {
-          if (scanDetected) return
-
-          if (video.readyState >= 2) {
-            const ctx = canvas.getContext('2d')
-
-            if (ctx) {
-              canvas.width = video.videoWidth
-              canvas.height = video.videoHeight
-              ctx.drawImage(video, 0, 0)
-
-              try {
-                const codes = await detector.detect(canvas)
-                const raw = codes?.[0]?.rawValue?.trim()
-
-                if (raw) {
-                  const bottleId = extractBottleIdFromScan(raw)
-
-                  setScanDetected(true)
-                  stopScanner()
-                  setBottleInput(bottleId)
-                  await handleCheck(bottleId)
-                  return
-                }
-              } catch {
-                // keep scanning
-              }
-            }
-          }
-
-          frameRef.current = requestAnimationFrame(scanLoop)
-        }
-
-        frameRef.current = requestAnimationFrame(scanLoop)
-      } catch {
-        setScannerError('Unable to start scanner.')
-        stopScanner()
-      }
-    }
-
-    start()
-  }, [scannerOpen, scanDetected, stopScanner, extractBottleIdFromScan])
-
-  useEffect(() => {
-    return () => {
-      stopScanner()
-    }
-  }, [stopScanner])
+  async function handleScan(raw: string) {
+    setScannerOpen(false)
+    const bottleId = extractBottleIdFromScan(raw)
+    setBottleInput(bottleId)
+    await handleCheck(bottleId)
+  }
 
   return (
     <div className="max-w-lg mx-auto">
@@ -318,7 +161,7 @@ export default function FillStationPage() {
           <div className="mt-3">
             <button
               type="button"
-              onClick={startScanner}
+              onClick={() => setScannerOpen(true)}
               disabled={checking || scannerOpen}
               className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
             >
@@ -330,43 +173,13 @@ export default function FillStationPage() {
             Press Enter, tap Check, or scan a QR code
           </p>
 
-          {!scannerSupported && (
-            <p className="mt-2 text-xs text-amber-600">
-              In-page camera scanning may not work on every browser. QR links with
-              <span className="font-mono"> ?scan=</span> can still be read by the scanner.
-            </p>
-          )}
-
-          {scannerError && (
-            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {scannerError}
-            </div>
-          )}
-
           {scannerOpen && (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-950 p-3">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full rounded-lg"
+            <div className="mt-4">
+              <QRScanner
+                onScan={handleScan}
+                onClose={() => setScannerOpen(false)}
+                hint="Point the camera at the bottle QR code"
               />
-              <canvas ref={canvasRef} className="hidden" />
-
-              <div className="mt-3 flex gap-3">
-                <button
-                  type="button"
-                  onClick={stopScanner}
-                  className="flex-1 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
-                >
-                  Cancel Scan
-                </button>
-              </div>
-
-              <p className="mt-2 text-center text-xs text-zinc-300">
-                Point the camera at the bottle QR code
-              </p>
             </div>
           )}
         </div>

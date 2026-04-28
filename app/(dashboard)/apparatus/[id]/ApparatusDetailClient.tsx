@@ -150,6 +150,7 @@ export default function ApparatusDetailClient({
         {apparatus.qr_code && (
           <QrPrintLabel
             code={apparatus.qr_code}
+            type="apparatus"
             title={`Unit ${apparatus.unit_number}${apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}`}
             buttonClassName="shrink-0 text-xs font-medium text-red-700 hover:underline print:hidden"
           />

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createApparatus } from '@/app/actions/apparatus'
+import QRScanButton from '@/components/QRScanButton'
 
 interface Station {
   id: string
@@ -86,14 +87,17 @@ export default function ApparatusListClient({
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Apparatus</h1>
           <p className="text-sm text-zinc-500 mt-0.5">{filtered.length} unit{filtered.length !== 1 ? 's' : ''}</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => { setShowForm(!showForm); setError(null) }}
-            className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
-          >
-            {showForm ? 'Cancel' : '+ Add'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <QRScanButton hint="Scan an apparatus or compartment QR label" />
+          {isAdmin && (
+            <button
+              onClick={() => { setShowForm(!showForm); setError(null) }}
+              className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
+            >
+              {showForm ? 'Cancel' : '+ Add'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Station Filter */}

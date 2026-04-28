@@ -4,13 +4,17 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { QRCodeSVG } from 'qrcode.react'
 
+const BASE_URL = 'https://www.fireops7.com'
+
 export default function QrPrintLabel({
   code,
+  type,
   title,
   subtitle,
   buttonClassName,
 }: {
   code: string
+  type: 'apparatus' | 'compartment'
   title: string
   subtitle?: string
   buttonClassName?: string
@@ -55,7 +59,7 @@ export default function QrPrintLabel({
             borderRadius: '12px',
             background: '#fff',
           }}>
-            <QRCodeSVG value={code} size={200} level="M" />
+            <QRCodeSVG value={`${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`} size={200} level="M" />
             <p style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.1em', color: '#18181b', margin: 0 }}>
               {code}
             </p>
