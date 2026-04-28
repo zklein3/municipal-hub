@@ -173,10 +173,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. Notifications for session expiry ← START HERE
+### 1. Flow & Presentation Polish ← START HERE
 When an inspection session is abandoned and expires, notify the department admin/officer. Requires a cron (similar to `auto-close-events`) to sweep expired sessions and trigger Resend email via Edge Function. Design already discussed — lazy expiry is live, active cron + notification is the next step.
 
 ### 3. Flow & Presentation Polish
+
+### Completed This Session (2026-04-28) — Session Expiry Notifications + ISO Audit Baseline
+- **`notify-expired-sessions` Edge Function** — hourly cron (`0 * * * *`) sweeps for inspection sessions where `expires_at < now()` and `notified_at IS NULL` (catches both lazily-marked expired and sessions nobody re-opened). Marks `status = expired, notified_at = now()` immediately to prevent double-send, then emails all active officers/admins in the department: apparatus name, who started it, when, and compartment completion progress. Uses Resend via RESEND_API_KEY secret. `notified_at timestamptz` column added to `inspection_sessions`.
 
 ### Completed This Session (2026-04-28) — ISO Audit Baseline
 - **ISO DB tables** — `apparatus_iso_specs`, `hoses`, `hose_tests`, `hydrants`, `hydrant_flow_tests`, `incident_mutual_aid` (all with RLS enabled)
