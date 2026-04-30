@@ -11,11 +11,10 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const next7 = new Date(); next7.setDate(next7.getDate() + 7)
   const next7str = next7.toISOString().split('T')[0]
 
-  const [personnel, stations, apparatus, scba, pendingSetup, instances, trainingEvents] = await Promise.all([
+  const [personnel, stations, apparatus, pendingSetup, instances, trainingEvents] = await Promise.all([
     adminClient.from('department_personnel').select('id, system_role').eq('department_id', departmentId).eq('active', true).eq('signup_status', 'active'),
     adminClient.from('stations').select('id').eq('department_id', departmentId).eq('active', true),
     adminClient.from('apparatus').select('id').eq('department_id', departmentId).eq('active', true),
-    adminClient.from('scba_bottles').select('id').eq('department_id', departmentId).eq('active', true).eq('retired', false),
     adminClient.from('department_personnel').select('id').eq('department_id', departmentId).in('signup_status', ['temp_password', 'profile_setup']),
     // Upcoming event instances (next 7 days)
     adminClient.from('event_instances')
@@ -68,7 +67,6 @@ async function getDashboardData(departmentId: string, personnelId: string) {
     memberCount: personnelList.filter(p => p.system_role === 'member').length,
     stationCount: (stations.data ?? []).length,
     apparatusCount: (apparatus.data ?? []).length,
-    scbaCount: (scba.data ?? []).length,
     pendingSetup: pendingSetup.data ?? [],
     upcomingEvents: deptInstances.map(i => ({
       id: i.id,
@@ -179,12 +177,11 @@ export default async function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 mb-6 sm:grid-cols-3">
         <StatCard label="Active Personnel" value={data.personnelTotal} href="/personnel"
           sub={`${data.adminCount} admin · ${data.officerCount} officer · ${data.memberCount} member`} />
         <StatCard label="Stations" value={data.stationCount} href="/stations" />
         <StatCard label="Apparatus" value={data.apparatusCount} href="/apparatus" />
-        <StatCard label="SCBA Bottles" value={data.scbaCount} href="/scba" />
       </div>
 
       {/* Upcoming Events — next 7 days */}

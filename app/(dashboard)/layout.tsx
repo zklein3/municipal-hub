@@ -52,9 +52,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       items: [
         { href: '/apparatus', label: 'Apparatus' },
         { href: '/stations', label: 'Stations' },
+        { href: '/inspections', label: 'Inspections' },
+      ],
+    },
+    {
+      label: 'Equipment',
+      items: [
         { href: '/equipment', label: 'Equipment' },
         { href: '/equipment/assets', label: 'Asset Roster' },
-        { href: '/inspections', label: 'Inspections' },
       ],
     },
     {
