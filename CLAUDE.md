@@ -173,41 +173,25 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. Flow & Presentation Polish ← START HERE
-
-#### Dashboard
-- Remove SCBA bottles stat card — legacy holdover, no link, no data value
-- Quick links — leave as-is for now; future consideration: editable per-dept or auto-surfaced by usage
-- Scheduled events section — keep, working well
-
-#### Personnel Page
-- Switch from table to card layout — no horizontal scroll, action buttons visible inline
-- Cards show name, role, status, and actions without scrolling right
-
-#### Training vs Certifications naming
-- "Training" in nav = cert tracking/enrollments. Training-type events in Events = attendance-based drills.
-- Consider renaming nav "Training" → "Certifications" to reduce confusion. No action yet — watch for real user confusion first.
-
-#### Apparatus / Equipment — Navigation & Discoverability
-- Split Equipment off into its own top-level nav section separate from Apparatus
-  - Apparatus section: apparatus list, stations, compartments (physical units)
-  - Equipment section: Items, Assets, Assignment, Inspection Templates (what's on the truck)
-- Asset Roster already exists as a link — anchor point for the Equipment section
-- The full setup order of operations is invisible to a new admin:
-  create item type → create item → create asset → assign to compartment → build inspection template
-- No onboarding or guided flow exists — new dept admins have no "start here" path
-
-#### Admin Setup Flow — Core UX Problem
+### Admin Setup Flow — Core UX Problem ← START HERE (decision needed)
 - Nav is organized by data type, not by task. No mental model for what to do first.
 - **Two flows need to be made obvious:**
   - *Setup flow (one-time, admin):* apparatus + stations → compartment names → item types + items → assets → assign items to compartments → build inspection templates → add personnel + roles
   - *Operational flow (ongoing):* run inspections → log incidents/events → verify attendance → reports
 - Split between Dept Admin menu and main menu makes this worse — setup is scattered across both
-- **Options to build:**
+- **Options to build (pick one before coding):**
   - Dedicated "Setup" section or guided checklist for new dept admins
   - Reorganize nav around tasks not data types
   - "Getting Started" page that walks the order of operations with deep links
-- Decision needed on approach before building
+
+### Completed This Session (2026-04-30) — Flow & Presentation Polish
+- **Dashboard** — removed SCBA Bottles stat card (legacy holdover, no data value). Stats row now 3 cards: Personnel, Stations, Apparatus.
+- **Personnel** — replaced horizontally-scrolling table with responsive card grid (1→2→3 cols). Cards show name, role badge, title, phone, emp#, View Profile link inline. No horizontal scroll on mobile.
+- **Nav** — split "Apparatus" group into two: **Apparatus** (Apparatus, Stations, Inspections) and **Equipment** (Equipment, Asset Roster). Clearer separation of physical units vs. what's on the truck.
+
+### Remaining Polish Notes (no decision needed, build when ready)
+- Training vs Certifications naming — consider renaming nav "Training" → "Certifications" to reduce confusion with training-type events. No action yet — watch for real user confusion first.
+- Quick links on dashboard — leave as-is; future: editable per-dept or auto-surfaced by usage.
 
 ### Completed This Session (2026-04-28) — Fire School QR Printing
 - **`/print/qr` page** — dedicated minimal print page (`app/print/qr/page.tsx`). Reads `type`, `code`, `title`, `subtitle` from searchParams, renders QR label, auto-calls `window.print()` after 600ms. Works on mobile (iOS share→print, Android print dialog) and desktop.
