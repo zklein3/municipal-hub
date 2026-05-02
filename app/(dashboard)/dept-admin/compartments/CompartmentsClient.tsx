@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createCompartmentName, updateCompartmentName } from '@/app/actions/compartments'
+import { createCompartmentName, updateCompartmentName, bulkSetCompartmentApparatus } from '@/app/actions/compartments'
 
 interface Compartment {
   id: string
@@ -11,25 +11,37 @@ interface Compartment {
   active: boolean
 }
 
+interface Apparatus {
+  id: string
+  unit_number: string
+  apparatus_name: string | null
+}
+
 export default function CompartmentsClient({
   compartments,
   usageMap,
+  assignmentMap,
+  apparatus,
   departmentName,
+  departmentId,
 }: {
   compartments: Compartment[]
   usageMap: Record<string, number>
+  assignmentMap: Record<string, string[]>
+  apparatus: Apparatus[]
   departmentName: string
+  departmentId: string
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
+  const [assignChecked, setAssignChecked] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleCreate(formData: FormData) {
-    setError(null)
-    setSuccess(null)
-    setLoading(true)
+    setError(null); setSuccess(null); setLoading(true)
     const result = await createCompartmentName(formData)
     if (result?.error) setError(result.error)
     else { setSuccess('Compartment added.'); setShowForm(false) }
@@ -37,12 +49,45 @@ export default function CompartmentsClient({
   }
 
   async function handleUpdate(formData: FormData) {
-    setError(null)
-    setSuccess(null)
-    setLoading(true)
+    setError(null); setSuccess(null); setLoading(true)
     const result = await updateCompartmentName(formData)
     if (result?.error) setError(result.error)
     else { setSuccess('Compartment updated.'); setEditingId(null) }
+    setLoading(false)
+  }
+
+  function openAssign(compartmentId: string) {
+    setAssigningId(compartmentId)
+    setAssignChecked(new Set(assignmentMap[compartmentId] ?? []))
+    setError(null)
+    setSuccess(null)
+    setEditingId(null)
+  }
+
+  function closeAssign() {
+    setAssigningId(null)
+    setAssignChecked(new Set())
+  }
+
+  function toggleApparatus(apparatusId: string) {
+    setAssignChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(apparatusId)) next.delete(apparatusId)
+      else next.add(apparatusId)
+      return next
+    })
+  }
+
+  async function handleSaveAssignments() {
+    if (!assigningId) return
+    setError(null); setSuccess(null); setLoading(true)
+    const result = await bulkSetCompartmentApparatus(
+      assigningId,
+      Array.from(assignChecked),
+      departmentId
+    )
+    if (result?.error) setError(result.error)
+    else { setSuccess('Apparatus assignments saved.'); closeAssign() }
     setLoading(false)
   }
 
@@ -62,7 +107,7 @@ export default function CompartmentsClient({
           <p className="text-sm text-zinc-500 mt-0.5">{departmentName} — {compartments.length} compartment{compartments.length !== 1 ? 's' : ''} defined</p>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); setError(null); setSuccess(null) }}
+          onClick={() => { setShowForm(!showForm); setError(null); setSuccess(null); closeAssign(); setEditingId(null) }}
           className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
         >
           {showForm ? 'Cancel' : '+ Add'}
@@ -126,7 +171,6 @@ export default function CompartmentsClient({
             {sorted.map(c => (
               <div key={c.id}>
                 {editingId === c.id ? (
-                  // Edit form inline
                   <div className="p-4">
                     <form action={handleUpdate} className="flex flex-col gap-3">
                       <input type="hidden" name="id" value={c.id} />
@@ -155,20 +199,61 @@ export default function CompartmentsClient({
                           </select>
                         </div>
                       </div>
+                      {error && (
+                        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>
+                      )}
                       <div className="flex gap-2">
                         <button type="submit" disabled={loading}
                           className="flex-1 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
                           {loading ? 'Saving...' : 'Save'}
                         </button>
-                        <button type="button" onClick={() => setEditingId(null)}
+                        <button type="button" onClick={() => { setEditingId(null); setError(null) }}
                           className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
                           Cancel
                         </button>
                       </div>
                     </form>
                   </div>
+                ) : assigningId === c.id ? (
+                  /* Assign to Apparatus panel */
+                  <div className="p-4 bg-zinc-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-semibold text-zinc-800">
+                        Assign <span className="font-mono text-red-700">{c.compartment_code}</span> to apparatus
+                      </p>
+                      <button onClick={closeAssign} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
+                    </div>
+                    {apparatus.length === 0 ? (
+                      <p className="text-sm text-zinc-400">No active apparatus in this department.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2 mb-4">
+                        {apparatus.map(a => (
+                          <label key={a.id} className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={assignChecked.has(a.id)}
+                              onChange={() => toggleApparatus(a.id)}
+                              className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                            />
+                            <span className="text-sm text-zinc-700 group-hover:text-zinc-900">
+                              Unit {a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {error && (
+                      <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200">{error}</div>
+                    )}
+                    {apparatus.length > 0 && (
+                      <button onClick={handleSaveAssignments} disabled={loading}
+                        className="w-full rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                        {loading ? 'Saving...' : 'Save Assignments'}
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  // Display row
+                  /* Display row */
                   <div className="flex items-center px-5 py-4 hover:bg-zinc-50">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3">
@@ -187,12 +272,20 @@ export default function CompartmentsClient({
                         {c.sort_order !== null && ` · Sort: ${c.sort_order}`}
                       </p>
                     </div>
-                    <button
-                      onClick={() => { setEditingId(c.id); setError(null); setSuccess(null) }}
-                      className="ml-4 text-xs font-semibold text-red-600 hover:text-red-800"
-                    >
-                      Edit
-                    </button>
+                    <div className="ml-4 flex items-center gap-3">
+                      <button
+                        onClick={() => openAssign(c.id)}
+                        className="text-xs font-semibold text-zinc-500 hover:text-zinc-700"
+                      >
+                        Assign
+                      </button>
+                      <button
+                        onClick={() => { setEditingId(c.id); setError(null); setSuccess(null); closeAssign() }}
+                        className="text-xs font-semibold text-red-600 hover:text-red-800"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

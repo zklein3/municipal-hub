@@ -154,6 +154,51 @@ export async function removeCompartmentFromApparatus(compartment_id: string, app
   return { success: true }
 }
 
+// ─── Bulk Set Compartment Apparatus Assignments ───────────────────────────────
+export async function bulkSetCompartmentApparatus(
+  compartment_name_id: string,
+  apparatus_ids: string[],
+  department_id?: string
+) {
+  const ctx = await verifyAdmin(department_id)
+  if (!ctx) return { error: 'Only admins can assign compartments.' }
+
+  const adminClient = createAdminClient()
+
+  const { data: existing } = await adminClient
+    .from('apparatus_compartments')
+    .select('id, apparatus_id')
+    .eq('compartment_name_id', compartment_name_id)
+
+  const existingMap = new Map((existing ?? []).map(e => [e.apparatus_id, e.id]))
+  const newSet = new Set(apparatus_ids)
+
+  const toAdd = apparatus_ids.filter(id => !existingMap.has(id))
+  const toRemove = (existing ?? []).filter(e => !newSet.has(e.apparatus_id))
+
+  if (toAdd.length > 0) {
+    const { error } = await adminClient.from('apparatus_compartments').insert(
+      toAdd.map(apparatus_id => ({ apparatus_id, compartment_name_id, active: true }))
+    )
+    if (error) { await logError(error, '/dept-admin/compartments'); return { error: error.message } }
+  }
+
+  if (toRemove.length > 0) {
+    const { error } = await adminClient
+      .from('apparatus_compartments')
+      .delete()
+      .in('id', toRemove.map(r => r.id))
+    if (error) { await logError(error, '/dept-admin/compartments'); return { error: error.message } }
+  }
+
+  revalidatePath('/dept-admin/compartments')
+  revalidatePath('/apparatus')
+  const allAffected = new Set([...toAdd, ...toRemove.map(r => r.apparatus_id)])
+  for (const id of allAffected) revalidatePath(`/apparatus/${id}`)
+
+  return { success: true }
+}
+
 // ─── Set Compartment QR Code ──────────────────────────────────────────────────
 export async function setCompartmentQrCode(compartment_id: string, apparatus_id: string, formData: FormData) {
   const ctx = await verifyAdmin()

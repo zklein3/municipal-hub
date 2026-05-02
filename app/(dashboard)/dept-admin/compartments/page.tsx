@@ -28,22 +28,35 @@ export default async function CompartmentsPage() {
     .eq('department_id', department_id)
     .order('sort_order', { ascending: true, nullsFirst: false })
 
-  // Count how many apparatus use each compartment
+  const { data: apparatusList } = await adminClient
+    .from('apparatus')
+    .select('id, unit_number, apparatus_name')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .order('unit_number', { ascending: true })
+
+  // Full assignments: compartment_name_id → apparatus_id[]
   const { data: assignments } = await adminClient
     .from('apparatus_compartments')
-    .select('compartment_name_id')
+    .select('compartment_name_id, apparatus_id')
     .eq('active', true)
 
   const usageMap: Record<string, number> = {}
+  const assignmentMap: Record<string, string[]> = {}
   for (const a of assignments ?? []) {
     usageMap[a.compartment_name_id] = (usageMap[a.compartment_name_id] ?? 0) + 1
+    if (!assignmentMap[a.compartment_name_id]) assignmentMap[a.compartment_name_id] = []
+    assignmentMap[a.compartment_name_id].push(a.apparatus_id)
   }
 
   return (
     <CompartmentsClient
       compartments={compartments ?? []}
       usageMap={usageMap}
+      assignmentMap={assignmentMap}
+      apparatus={apparatusList ?? []}
       departmentName={department_name}
+      departmentId={department_id}
     />
   )
 }
