@@ -40,6 +40,7 @@ export async function createInspectionTemplate(formData: FormData) {
   }).select('id').single()
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true, template_id: data?.id }
 }
 
@@ -65,6 +66,7 @@ export async function updateInspectionTemplate(formData: FormData) {
   const { error } = await adminClient.from('item_inspection_templates').update(updateData).eq('id', id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -98,6 +100,7 @@ export async function addTemplateStep(formData: FormData) {
   })
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -123,6 +126,7 @@ export async function updateTemplateStep(formData: FormData) {
   }).eq('id', id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -153,6 +157,7 @@ export async function deleteTemplateStep(step_id: string) {
   const { error } = await adminClient.from('item_inspection_template_steps').update({ active: false }).eq('id', step_id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 

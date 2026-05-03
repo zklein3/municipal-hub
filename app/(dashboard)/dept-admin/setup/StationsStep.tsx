@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createStation, updateStation } from '@/app/actions/stations'
+import HelpPrompt from './HelpPrompt'
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -71,9 +72,13 @@ function AddressFields({ prefix, defaults }: { prefix?: string; defaults?: Parti
 export default function StationsStep({
   stations,
   departmentId,
+  showHelp,
+  helpResetKey,
 }: {
   stations: Station[]
   departmentId: string
+  showHelp: boolean
+  helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -98,6 +103,9 @@ export default function StationsStep({
 
   return (
     <div>
+      <HelpPrompt id="stations" showHelp={showHelp} helpResetKey={helpResetKey}>
+        Add each physical station location first. Apparatus gets assigned to a station, so stations need to exist first.
+      </HelpPrompt>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-900">Stations</h2>

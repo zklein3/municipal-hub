@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import StationsStep from './StationsStep'
 import ApparatusStep from './ApparatusStep'
 import PersonnelStep from './PersonnelStep'
 import CompartmentsStep from './CompartmentsStep'
 import ItemsStep from './ItemsStep'
+import HelpPrompt from './HelpPrompt'
 
 const STEPS = [
   { id: 'stations',     label: 'Stations',      description: 'Physical station locations' },
@@ -29,6 +30,8 @@ export default function SetupFlowClient({
   categories,
   items,
   assets,
+  templates,
+  steps,
   departmentId,
 }: {
   department: { id: string; name: string }
@@ -44,9 +47,34 @@ export default function SetupFlowClient({
   categories: any[]
   items: any[]
   assets: any[]
+  templates: any[]
+  steps: any[]
   departmentId: string
 }) {
   const [activeStep, setActiveStep] = useState('stations')
+  const [showHelp, setShowHelp] = useState(true)
+  const [helpResetKey, setHelpResetKey] = useState(0)
+  const [helpMounted, setHelpMounted] = useState(false)
+
+  // Load persisted help preference on mount
+  useEffect(() => {
+    setHelpMounted(true)
+    const saved = localStorage.getItem('setup_show_help')
+    if (saved === 'false') setShowHelp(false)
+  }, [])
+
+  function toggleHelp() {
+    const next = !showHelp
+    setShowHelp(next)
+    localStorage.setItem('setup_show_help', next ? 'true' : 'false')
+    if (next) {
+      // Re-enabling help — clear all individual dismissals so prompts reappear
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('setup_help_dismissed_'))
+        .forEach(k => localStorage.removeItem(k))
+      setHelpResetKey(k => k + 1)
+    }
+  }
 
   const counts: Record<string, number> = {
     stations:     stations.filter(s => s.active).length,
@@ -56,13 +84,33 @@ export default function SetupFlowClient({
     items:        items.filter(i => i.active).length,
   }
 
+  const helpProps = { showHelp: helpMounted && showHelp, helpResetKey }
+
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">{department.name}</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Department Setup</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900">{department.name}</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Department Setup</p>
+        </div>
+        <button
+          onClick={toggleHelp}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            helpMounted && showHelp
+              ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50'
+          }`}
+        >
+          <span>?</span>
+          <span>{helpMounted && showHelp ? 'Hide Help' : 'Show Help'}</span>
+        </button>
       </div>
+
+      {/* Page-level help prompt */}
+      <HelpPrompt id="page-intro" {...helpProps}>
+        Work through each step in order — Stations → Apparatus → Personnel → Compartments → Items. Each step builds on the one before it.
+      </HelpPrompt>
 
       {/* Mobile tabs */}
       <div className="md:hidden flex gap-2 overflow-x-auto pb-2 mb-4">
@@ -122,7 +170,7 @@ export default function SetupFlowClient({
         {/* Step content */}
         <div className="flex-1 min-w-0">
           {activeStep === 'stations' && (
-            <StationsStep stations={stations} departmentId={departmentId} />
+            <StationsStep stations={stations} departmentId={departmentId} {...helpProps} />
           )}
           {activeStep === 'apparatus' && (
             <ApparatusStep
@@ -130,10 +178,11 @@ export default function SetupFlowClient({
               stations={stations}
               apparatusTypes={apparatusTypes}
               departmentId={departmentId}
+              {...helpProps}
             />
           )}
           {activeStep === 'personnel' && (
-            <PersonnelStep personnel={personnel} roles={roles} departmentId={departmentId} />
+            <PersonnelStep personnel={personnel} roles={roles} departmentId={departmentId} {...helpProps} />
           )}
           {activeStep === 'compartments' && (
             <CompartmentsStep
@@ -142,6 +191,7 @@ export default function SetupFlowClient({
               assignmentMap={assignmentMap}
               apparatus={apparatusForCompartments}
               departmentId={departmentId}
+              {...helpProps}
             />
           )}
           {activeStep === 'items' && (
@@ -149,7 +199,10 @@ export default function SetupFlowClient({
               categories={categories}
               items={items}
               assets={assets}
+              templates={templates}
+              steps={steps}
               departmentId={departmentId}
+              {...helpProps}
             />
           )}
         </div>

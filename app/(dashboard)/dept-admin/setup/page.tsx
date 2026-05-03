@@ -138,6 +138,27 @@ export default async function SetupPage() {
         .order('asset_tag')
     : { data: [] }
 
+  // Fetch inspection templates + steps for inspectable items
+  const inspectionItemIds = (items ?? []).filter(i => i.requires_inspection).map(i => i.id)
+  const { data: templates } = inspectionItemIds.length > 0
+    ? await adminClient
+        .from('item_inspection_templates')
+        .select('id, item_id, template_name, template_description, active')
+        .eq('department_id', department_id)
+        .in('item_id', inspectionItemIds)
+        .order('template_name')
+    : { data: [] }
+
+  const templateIds = (templates ?? []).map(t => t.id)
+  const { data: steps } = templateIds.length > 0
+    ? await adminClient
+        .from('item_inspection_template_steps')
+        .select('id, template_id, step_text, step_type, required, fail_if_negative, sort_order, active')
+        .in('template_id', templateIds)
+        .eq('active', true)
+        .order('sort_order')
+    : { data: [] }
+
   return (
     <SetupFlowClient
       department={department}
@@ -153,6 +174,8 @@ export default async function SetupPage() {
       categories={categories ?? []}
       items={items ?? []}
       assets={assets ?? []}
+      templates={templates ?? []}
+      steps={steps ?? []}
       departmentId={department_id}
     />
   )

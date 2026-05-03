@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createDeptMember } from '@/app/actions/users'
 import { updateDeptPersonnel } from '@/app/actions/personnel'
+import HelpPrompt from './HelpPrompt'
 
 interface Role { id: string; name: string; is_officer: boolean; sort_order: number }
 interface PersonnelRecord {
@@ -44,10 +45,14 @@ export default function PersonnelStep({
   personnel,
   roles,
   departmentId,
+  showHelp,
+  helpResetKey,
 }: {
   personnel: PersonnelRecord[]
   roles: Role[]
   departmentId: string
+  showHelp: boolean
+  helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -76,6 +81,9 @@ export default function PersonnelStep({
 
   return (
     <div>
+      <HelpPrompt id="personnel" showHelp={showHelp} helpResetKey={helpResetKey}>
+        Add members here. New accounts are created with a temporary password — the member must change it on first login.
+      </HelpPrompt>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-900">Personnel</h2>

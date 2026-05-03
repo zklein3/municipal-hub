@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createApparatus, updateApparatus } from '@/app/actions/apparatus'
+import HelpPrompt from './HelpPrompt'
 
 interface Station { id: string; station_number: string | null; station_name: string }
 interface ApparatusType { id: string; name: string; sort_order: number }
@@ -137,11 +138,15 @@ export default function ApparatusStep({
   stations,
   apparatusTypes,
   departmentId,
+  showHelp,
+  helpResetKey,
 }: {
   apparatus: Apparatus[]
   stations: Station[]
   apparatusTypes: ApparatusType[]
   departmentId: string
+  showHelp: boolean
+  helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -166,6 +171,9 @@ export default function ApparatusStep({
 
   return (
     <div>
+      <HelpPrompt id="apparatus" showHelp={showHelp} helpResetKey={helpResetKey}>
+        Add each vehicle or unit and assign it to a station. You'll add compartments to each apparatus separately.
+      </HelpPrompt>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-900">Apparatus</h2>

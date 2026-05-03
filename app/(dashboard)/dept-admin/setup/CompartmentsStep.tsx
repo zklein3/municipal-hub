@@ -6,6 +6,7 @@ import {
   updateCompartmentName,
   bulkSetCompartmentApparatus,
 } from '@/app/actions/compartments'
+import HelpPrompt from './HelpPrompt'
 
 interface Compartment {
   id: string
@@ -27,12 +28,16 @@ export default function CompartmentsStep({
   assignmentMap,
   apparatus,
   departmentId,
+  showHelp,
+  helpResetKey,
 }: {
   compartments: Compartment[]
   usageMap: Record<string, number>
   assignmentMap: Record<string, string[]>
   apparatus: Apparatus[]
   departmentId: string
+  showHelp: boolean
+  helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -100,9 +105,9 @@ export default function CompartmentsStep({
         </button>
       </div>
 
-      <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-700">
-        Compartment templates define the layout shared across apparatus — e.g. D1, Officer Side, Hose Bay. After creating templates, assign them to each apparatus.
-      </div>
+      <HelpPrompt id="compartments" showHelp={showHelp} helpResetKey={helpResetKey}>
+        Compartment templates define named storage locations (D1, Officer Side, Hose Bay). Create the templates first, then assign them to each apparatus using the Assign button.
+      </HelpPrompt>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
