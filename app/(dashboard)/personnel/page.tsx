@@ -4,6 +4,11 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PersonnelAddForm from './PersonnelAddForm'
 
+function formatDate(d: string | null) {
+  if (!d) return null
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
 export default async function PersonnelPage() {
   const supabase = await createClient()
   const adminClient = createAdminClient()
@@ -28,12 +33,11 @@ export default async function PersonnelPage() {
 
   const systemRole = myDept.system_role
   const isOfficerOrAbove = systemRole === 'admin' || systemRole === 'officer' || me.is_sys_admin
-  const canOpenAll = isOfficerOrAbove
 
-  // Fetch roster — flat, no nested joins
+  // Fetch roster — flat, no nested joins, include hire_date for my card
   const { data: rosterRaw } = await adminClient
     .from('department_personnel')
-    .select('id, system_role, active, employee_number, personnel_id, role_id')
+    .select('id, system_role, active, employee_number, hire_date, personnel_id, role_id')
     .eq('department_id', myDept.department_id)
     .eq('active', true)
     .order('system_role')
@@ -66,14 +70,21 @@ export default async function PersonnelPage() {
     .map(record => {
       const p = personnelMap[record.personnel_id]
       const isMe = record.personnel_id === me.id
-      const canOpen = canOpenAll || isMe
       const personnelId = p?.id ?? record.personnel_id
       const name = p ? [p.first_name, p.last_name].filter(Boolean).join(' ') : '—'
-      const title = record.role_id ? (roleMap[record.role_id]?.name ?? '—') : '—'
+      const initials = p
+        ? [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join('').toUpperCase()
+        : '?'
+      const title = record.role_id ? (roleMap[record.role_id]?.name ?? null) : null
       const phone = p?.phone ?? null
+      const email = p?.email ?? null
       const empNum = record.employee_number ?? null
-      return { record, isMe, canOpen, personnelId, name, title, phone, empNum }
+      const hireDate = record.hire_date ?? null
+      return { record, isMe, personnelId, name, initials, title, phone, email, empNum, hireDate }
     })
+
+  const myRow = rows.find(r => r.isMe)
+  const otherRows = rows.filter(r => !r.isMe)
 
   return (
     <div>
@@ -89,24 +100,74 @@ export default async function PersonnelPage() {
         {rows.length} active member{rows.length !== 1 ? 's' : ''}
       </p>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map(({ record, isMe, canOpen, personnelId, name, title, phone, empNum }) => (
-          <div key={record.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-semibold text-zinc-900 truncate">
-                  {name}
-                  {isMe && <span className="ml-2 text-xs font-normal text-zinc-400">(you)</span>}
-                </p>
-                {title !== '—' && <p className="text-sm text-zinc-500 truncate mt-0.5">{title}</p>}
+      {/* Current user — full-width card */}
+      {myRow && (
+        <div className="mb-6 rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 w-14 h-14 rounded-full bg-red-700 flex items-center justify-center text-white text-xl font-bold">
+              {myRow.initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <p className="text-xl font-bold text-zinc-900 leading-tight">
+                    {myRow.name}
+                    <span className="ml-2 text-sm font-normal text-zinc-400">(you)</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      myRow.record.system_role === 'admin'   ? 'bg-red-100 text-red-700' :
+                      myRow.record.system_role === 'officer' ? 'bg-blue-100 text-blue-700' :
+                                                               'bg-zinc-100 text-zinc-600'
+                    }`}>
+                      {myRow.record.system_role.charAt(0).toUpperCase() + myRow.record.system_role.slice(1)}
+                    </span>
+                    {myRow.title && <span className="text-sm text-zinc-500">{myRow.title}</span>}
+                  </div>
+                </div>
+                <Link
+                  href={`/personnel/${myRow.personnelId}`}
+                  className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                >
+                  Edit Profile →
+                </Link>
               </div>
-              <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                record.system_role === 'admin'   ? 'bg-red-100 text-red-700' :
-                record.system_role === 'officer' ? 'bg-blue-100 text-blue-700' :
-                                                   'bg-zinc-100 text-zinc-600'
-              }`}>
-                {record.system_role.charAt(0).toUpperCase() + record.system_role.slice(1)}
-              </span>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-zinc-500">
+                {myRow.empNum && (
+                  <span><span className="text-zinc-400 text-xs">Emp #</span> {myRow.empNum}</span>
+                )}
+                {myRow.hireDate && (
+                  <span><span className="text-zinc-400 text-xs">Hired</span> {formatDate(myRow.hireDate)}</span>
+                )}
+                {myRow.phone && <span>{myRow.phone}</span>}
+                {myRow.email && <span className="truncate max-w-xs">{myRow.email}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rest of the roster */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {otherRows.map(({ record, personnelId, name, initials, title, phone, empNum }) => (
+          <div key={record.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600 text-sm font-bold">
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-zinc-900 truncate">{name}</p>
+                  <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    record.system_role === 'admin'   ? 'bg-red-100 text-red-700' :
+                    record.system_role === 'officer' ? 'bg-blue-100 text-blue-700' :
+                                                       'bg-zinc-100 text-zinc-600'
+                  }`}>
+                    {record.system_role.charAt(0).toUpperCase() + record.system_role.slice(1)}
+                  </span>
+                </div>
+                {title && <p className="text-sm text-zinc-500 truncate mt-0.5">{title}</p>}
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
@@ -114,14 +175,12 @@ export default async function PersonnelPage() {
               {empNum && <span className="text-zinc-400">#{empNum}</span>}
             </div>
 
-            {canOpen && (
-              <Link
-                href={`/personnel/${personnelId}`}
-                className="mt-auto text-xs font-semibold text-red-600 hover:text-red-800"
-              >
-                View Profile →
-              </Link>
-            )}
+            <Link
+              href={`/personnel/${personnelId}`}
+              className="mt-auto text-xs font-semibold text-red-600 hover:text-red-800"
+            >
+              View Profile →
+            </Link>
           </div>
         ))}
       </div>
