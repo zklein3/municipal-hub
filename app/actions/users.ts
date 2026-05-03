@@ -327,5 +327,6 @@ export async function createDeptMember(formData: FormData) {
   }
 
   revalidatePath('/dept-admin/personnel')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }

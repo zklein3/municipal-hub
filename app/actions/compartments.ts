@@ -67,6 +67,7 @@ export async function createCompartmentName(formData: FormData) {
   }
 
   revalidatePath('/dept-admin/compartments')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -100,6 +101,7 @@ export async function updateCompartmentName(formData: FormData) {
 
   revalidatePath('/dept-admin/compartments')
   revalidatePath('/apparatus')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -193,6 +195,7 @@ export async function bulkSetCompartmentApparatus(
 
   revalidatePath('/dept-admin/compartments')
   revalidatePath('/apparatus')
+  revalidatePath('/dept-admin/setup')
   const allAffected = new Set([...toAdd, ...toRemove.map(r => r.apparatus_id)])
   for (const id of allAffected) revalidatePath(`/apparatus/${id}`)
 

@@ -119,6 +119,7 @@ export async function updateDeptPersonnel(formData: FormData) {
 
   revalidatePath(`/personnel/${personnel_id}`)
   revalidatePath('/personnel')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 

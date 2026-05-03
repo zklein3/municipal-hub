@@ -48,6 +48,7 @@ export async function createItemCategory(formData: FormData) {
   })
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -68,6 +69,7 @@ export async function updateItemCategory(formData: FormData) {
   }).eq('id', id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -97,6 +99,7 @@ export async function createItem(formData: FormData) {
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
   revalidatePath('/equipment')
+  revalidatePath('/dept-admin/setup')
   return { success: true, item_id: newItem?.id, requires_inspection }
 }
 
@@ -124,6 +127,7 @@ export async function updateItem(formData: FormData) {
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
   revalidatePath('/equipment')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -157,6 +161,7 @@ export async function createAsset(formData: FormData) {
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
   revalidatePath('/equipment')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -193,6 +198,7 @@ export async function updateAsset(formData: FormData) {
   }).eq('id', id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 

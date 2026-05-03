@@ -57,6 +57,7 @@ export async function createApparatus(formData: FormData) {
   }
 
   revalidatePath('/apparatus')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -121,5 +122,6 @@ export async function updateApparatus(formData: FormData) {
 
   revalidatePath('/apparatus')
   revalidatePath(`/apparatus/${apparatus_id}`)
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }

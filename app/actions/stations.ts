@@ -53,6 +53,7 @@ export async function createStation(formData: FormData) {
   }
 
   revalidatePath('/stations')
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
 
@@ -106,5 +107,6 @@ export async function updateStation(formData: FormData) {
 
   revalidatePath('/stations')
   revalidatePath(`/stations/${station_id}`)
+  revalidatePath('/dept-admin/setup')
   return { success: true }
 }
