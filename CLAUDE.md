@@ -189,7 +189,32 @@ A broadcast messaging system for department-wide communication. Not DM/chat — 
 
 **Scope decision made:** Start with announcements, not DM. DM can be added later if users ask for it.
 
-#### 2. Personnel page — officer edit controls (lower priority)
+#### 2. Training Attendance — Digital Signature Capture (DHHS compliance)
+DHHS requires physical signatures verifying member presence at training. Build a signature capture flow on the training event attendance page. Officer stays logged in on a single device (phone/tablet), passes it to each member to sign at end of class.
+
+**UX flow:**
+1. Officer opens training event → attendance list
+2. Taps "Collect Signatures" → signature mode activates
+3. Each attended member row shows "Get Signature" button
+4. Tap → full-screen signature pad opens with header: **"Signing for: [Member Name] — [Event Topic]"**
+5. Officer hands device to member → member signs with finger → hands back
+6. Officer taps Confirm → signature saved, row shows ✓ Signed + timestamp
+7. Repeat for each member
+
+**Technical design:**
+- Install `signature_pad` npm package (industry standard, ~6kb, handles touch smoothing)
+- DB migration: add `signature_url text` and `signed_at timestamptz` to `training_event_attendance`
+- Supabase Storage bucket: `signatures` (path: `training/{event_id}/{personnel_id}.png`)
+- `SignaturePad` client component: full-screen modal, "Signing for" header, canvas, Clear + Confirm buttons
+- Upload: canvas → PNG blob → Supabase Storage → save URL on attendance record
+- Training event UI: "Collect Signatures" toggle button, per-member status badge (✓ Signed / Unsigned)
+- Printable sign-in sheet: `/print/training-signin?event_id=xxx` — event details + member rows with embedded signature images, instructor signature line at bottom. Same pattern as `/print/qr`.
+
+**Audit trail per signature:** personnel_id + event_id + officer's authenticated session + timestamp + image URL.
+
+**Future extension:** same SignaturePad component can be reused for event attendance if needed.
+
+#### 3. Personnel page — officer edit controls (lower priority)
 Officers currently see an Add button on `/personnel` but no inline edit controls per card. Role/status edits are only accessible via `/personnel/[id]` or setup flow. Consider surfacing a quick role/status edit inline on the roster card for officer+admin. Not urgent — the detail page works.
 
 #### 3. Equipment/Apparatus nav observation (no action yet)
