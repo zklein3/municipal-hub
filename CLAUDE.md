@@ -174,16 +174,26 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Build Next List — Start by reviewing with user ← START HERE
+### Build Next List ← START HERE
 
-All items from the previous list are complete. The session ended with a member-profile view check in progress — confirm any follow-up items from that before starting new work.
+#### 1. Department Announcements (priority — admin/officer → all members)
+A broadcast messaging system for department-wide communication. Not DM/chat — that's complex and fire departments already use phones/GroupMe for 1:1. Announcements fill the real gap: admins/officers need a channel to push operational notices to all members inside the app.
 
-**Likely next candidates (discuss with user to prioritize):**
-- **Role-adaptive `/personnel` page** — officers currently see an Add button but no edit controls per member card. Consider surfacing role/status edits inline for officer+admin (currently only accessible via `/personnel/[id]` or setup flow).
-- **Member profile page (`/personnel/[id]`)** — confirm it renders cleanly for a member viewing their own profile, and for an officer viewing someone else's. May need polish after the member-view check this session.
-- **Operations group expansion** — Incidents is now standalone. Consider whether Mutual Aid log or other operational items belong here long-term.
-- **Nav polish for member view** — member sees: Dashboard, Personnel (Personnel/Events/Certifications), Operations (Incidents), Apparatus (Apparatus/Stations/Inspections), Equipment (Equipment/Asset Roster), ISO, Reports. Verify this is the right set for a member — no admin items visible.
-- **`/dept-admin/personnel` and `/dept-admin/compartments`** — pages still exist but are not in the nav. Consider whether to add a redirect to `/dept-admin/setup` or leave them as-is.
+**Design:**
+- DB table: `announcements` (id, department_id, author_personnel_id, title, body, created_at, pinned bool)
+- DB table: `announcement_reads` (announcement_id, personnel_id, read_at) — tracks who acknowledged
+- **Dashboard** — show unread announcement count badge + latest unread announcement inline (above quick links). Members see a "Mark as Read" button.
+- **`/announcements` page** — full list, newest first. Pinned announcements float to top. Officers/admins see "+ New Announcement" form (title + body). All roles can read. Admin can pin/unpin/delete.
+- **Nav** — add "Announcements" to Personnel group with unread badge count (requires client component for the badge)
+- **Unread badge** — show count next to "Announcements" in nav for members with unread items
+
+**Scope decision made:** Start with announcements, not DM. DM can be added later if users ask for it.
+
+#### 2. Personnel page — officer edit controls (lower priority)
+Officers currently see an Add button on `/personnel` but no inline edit controls per card. Role/status edits are only accessible via `/personnel/[id]` or setup flow. Consider surfacing a quick role/status edit inline on the roster card for officer+admin. Not urgent — the detail page works.
+
+#### 3. Equipment/Apparatus nav observation (no action yet)
+Both `/equipment` and `/apparatus` lead to the same compartment detail pages — two paths to the same destination. `/equipment/assets` (Asset Roster) IS distinct. Option: drop Equipment from nav, keep only Asset Roster. User confirmed they understand the overlap but does not want to remove yet. Revisit when real users give feedback.
 
 ### Completed This Session (2026-05-03, session 2) — Setup Flow Completion + UX Polish
 
