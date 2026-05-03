@@ -272,7 +272,7 @@ export async function createDeptMember(formData: FormData) {
   const myDept = myDeptList?.[0]
   if (!myDept) return { error: 'Could not verify your department.' }
 
-  if (myDept.system_role !== 'admin' && !me.is_sys_admin) {
+  if (myDept.system_role !== 'admin' && myDept.system_role !== 'officer' && !me.is_sys_admin) {
     return { error: 'You do not have permission to add personnel.' }
   }
 
