@@ -210,7 +210,7 @@ export default async function DashboardPage() {
         <div className="mb-6 rounded-xl bg-yellow-50 border border-yellow-200 px-5 py-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-yellow-800">
-              {data.pendingSetup.length} user{data.pendingSetup.length !== 1 ? 's' : ''} haven&apos;t completed account setup
+              {data.pendingSetup.length} user{data.pendingSetup.length !== 1 ? 's' : ''}{' '}haven&apos;t completed account setup
             </p>
             <p className="text-xs text-yellow-600 mt-0.5">They need to log in and set their password and profile.</p>
           </div>
