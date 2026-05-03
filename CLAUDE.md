@@ -173,16 +173,61 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Admin Setup Flow — Core UX Problem ← START HERE (decision needed)
-- Nav is organized by data type, not by task. No mental model for what to do first.
-- **Two flows need to be made obvious:**
-  - *Setup flow (one-time, admin):* apparatus + stations → compartment names → item types + items → assets → assign items to compartments → build inspection templates → add personnel + roles
-  - *Operational flow (ongoing):* run inspections → log incidents/events → verify attendance → reports
-- Split between Dept Admin menu and main menu makes this worse — setup is scattered across both
-- **Options to build (pick one before coding):**
-  - Dedicated "Setup" section or guided checklist for new dept admins
-  - Reorganize nav around tasks not data types
-  - "Getting Started" page that walks the order of operations with deep links
+### 1. Inspection Templates tab in Setup Flow ← START HERE (design approved, ready to build)
+
+Add a 4th tab "Inspection Templates" to the Items & Assets step in `/dept-admin/setup`.
+
+**What to build:**
+- Tab lists every item where `requires_inspection = true`
+- Each item shows template name + step count, or yellow "No template yet" badge
+- **"+ Add Template"** per item → form: template_name, template_description (name by frequency: Weekly, Daily, Monthly)
+- Expand template → step list with **"+ Add Step"** → step_text, step_type (BOOLEAN/NUMERIC/TEXT/LONG_TEXT), required toggle, fail_if_negative toggle
+- Steps reorderable (▲▼) and soft-deletable
+- Actions needed: `createInspectionTemplate`, `addTemplateStep`, `updateTemplateStep`, `deleteTemplateStep` from `app/actions/inspections.ts` — add `revalidatePath('/dept-admin/setup')` to each
+- Also fetch `templates` and `steps` in `page.tsx` and pass through `SetupFlowClient` → `ItemsStep`
+
+**Data already fetched in page.tsx:** templates + steps are fetched but not currently passed to ItemsStep — wire them through.
+
+### 2. Dismissable Help Prompt System (build alongside #1)
+
+Add contextual help prompts throughout the setup flow. Design approved:
+- **`HelpPrompt` component** (`app/(dashboard)/dept-admin/setup/HelpPrompt.tsx`) — dismissable per-prompt via localStorage key, global "? Help" toggle in SetupFlowClient header also saved to localStorage
+- When help toggled OFF globally: all prompts hidden
+- When toggled back ON: resets individual dismissals so all prompts reappear
+- One prompt per step, one per Items tab. Content approved:
+
+| Location | Prompt text |
+|---|---|
+| Page header (first visit) | "Work through each step in order — Stations → Apparatus → Personnel → Compartments → Items. Each step depends on the one before it." |
+| Stations | "Add each physical station location first. Apparatus gets assigned to a station, so stations need to exist first." |
+| Apparatus | "Add each vehicle or unit and assign it to a station. You'll add compartments to each apparatus separately." |
+| Personnel | "Add members here. New accounts are created with a temporary password — the member must change it on first login." |
+| Compartments | "Compartment templates define named storage locations (D1, Officer Side, Hose Bay). Create the templates first, then assign them to each apparatus." |
+| Items — Categories | "Categories group your equipment types. Create these first so items have somewhere to live." |
+| Items — Items | "Items are equipment types. Checking 'Requires Inspection' enables individual asset tracking and an inspection checklist for that type." |
+| Items — Assets | "Assets are individually tracked units (SCBA-001, SCBA-002). Add one asset per physical piece of equipment for each item that requires inspection." |
+| Items — Inspection Templates | "Each inspectable item needs a template before it can be inspected in the field. Name it by frequency (Weekly, Monthly), then add the checklist steps." |
+
+### 3. Nav cleanup (quick, do after #1 and #2)
+- Remove "Manage Personnel" and "Compartments" from Dept Admin nav — fully covered by setup flow
+- Keep "Items" (inspection template builder is still there), "Attendance Settings", "Training"
+- `/dept-admin/personnel` and `/dept-admin/compartments` pages remain but are no longer surfaced in nav
+
+### 4. Officer — Add Personnel capability
+- `createDeptMember` action currently blocks officers — update to allow `system_role === 'officer'`
+- Add "+ Add Personnel" button to main `/personnel` page, visible to officers and admins
+- Setup flow Personnel step stays admin-only (structural setup); officer add-user lives in main nav
+
+### Completed This Session (2026-05-03) — Dept Setup Flow
+
+- **`/dept-admin/setup`** — new admin-only page in Dept Admin nav ("Dept Setup"). Five-step rail: Stations → Apparatus → Personnel → Compartments → Items & Assets.
+- **Step rail** — desktop left sidebar with step numbers, green checkmarks once data exists, count badges. Mobile: horizontal scrollable tab bar.
+- **Each step** — existing records as cards with inline Edit + inline Add form. All mutations use existing server actions.
+- **Compartments step** — includes apparatus assignment checkbox panel per template (same logic as existing `/dept-admin/compartments`).
+- **Items & Assets step** — tabbed (Categories / Items / Assets) with full inline CRUD. "Full Items Manager →" link to `/dept-admin/items` for inspection templates (not yet in setup flow — next session).
+- **revalidatePath** — all relevant actions (stations, apparatus, users, personnel, compartments, equipment) now also revalidate `/dept-admin/setup`.
+- **Nav** — "Dept Setup" added as first item in Dept Admin nav section.
+- **Permission philosophy decided** — Setup flow = admin only. Main nav pages = role-adaptive. Officers get operational controls in main nav pages; setup/structure stays admin.
 
 ### Completed This Session (2026-04-30) — Flow & Presentation Polish
 - **Dashboard** — removed SCBA Bottles stat card (legacy holdover, no data value). Stats row now 3 cards: Personnel, Stations, Apparatus.
