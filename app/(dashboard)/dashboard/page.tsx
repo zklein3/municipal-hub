@@ -189,7 +189,7 @@ export default async function DashboardPage() {
     { href: '/reports/attendance', label: 'Reports',    desc: 'Attendance & activity' },
   ] : [
     { href: '/events',            label: 'Events',       desc: 'Log attendance' },
-    { href: '/training',          label: 'Training',     desc: 'Courses & certifications' },
+    { href: '/training',          label: 'Certifications', desc: 'Courses & certifications' },
     { href: '/inspections',       label: 'Inspections',  desc: 'Run equipment checks' },
     { href: '/reports/my-activity', label: 'My Activity', desc: 'Your attendance & records' },
     { href: '/personnel',         label: 'Personnel',    desc: 'Department roster' },
