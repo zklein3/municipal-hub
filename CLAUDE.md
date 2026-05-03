@@ -77,7 +77,7 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - `/inspections/run` — run inspection checklist
 - `/scan` — QR code lookup + redirect (`?type=apparatus|compartment|asset&code=...`)
 - `/events`, `/events/new` — events + attendance
-- `/training` — enrollments, certifications, training events
+- `/training` — enrollments, certifications, training events (nav label: "Certifications")
 - `/reports/inspections` — inspection report: filters, flat table, asset drill-in, print (officer/admin only)
 - `/reports/inventory` — inventory inspection reports (officer/admin only)
 - `/reports/my-activity` — member self-view: attendance, inspections, incidents (all roles)
@@ -166,16 +166,45 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 **Key rule:** `presenceOnly || !(requires_inspection && templates.length > 0)` → presence check. Otherwise → full asset inspection.
 
 ### Inspection Template Builder
-- Dept Admin → Items → Items tab → [item] → Manage → Inspections tab
+- **Primary path:** Dept Admin → Dept Setup → Items & Assets → Inspection Templates tab (inline builder, preferred)
+- **Secondary path:** Dept Admin → Items → Items tab → [item] → Manage → Inspections tab (full manager)
 - Step types: BOOLEAN, NUMERIC, TEXT, LONG_TEXT
 - Multiple templates per item type allowed (Daily/Weekly/Monthly)
 - ASSET_LINK step type removed — bottles are now standalone location standard items
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 1. Inspection Templates tab in Setup Flow ← START HERE (design approved, ready to build)
+### Build Next List — Start by reviewing with user ← START HERE
 
-Add a 4th tab "Inspection Templates" to the Items & Assets step in `/dept-admin/setup`.
+All items from the previous list are complete. The session ended with a member-profile view check in progress — confirm any follow-up items from that before starting new work.
+
+**Likely next candidates (discuss with user to prioritize):**
+- **Role-adaptive `/personnel` page** — officers currently see an Add button but no edit controls per member card. Consider surfacing role/status edits inline for officer+admin (currently only accessible via `/personnel/[id]` or setup flow).
+- **Member profile page (`/personnel/[id]`)** — confirm it renders cleanly for a member viewing their own profile, and for an officer viewing someone else's. May need polish after the member-view check this session.
+- **Operations group expansion** — Incidents is now standalone. Consider whether Mutual Aid log or other operational items belong here long-term.
+- **Nav polish for member view** — member sees: Dashboard, Personnel (Personnel/Events/Certifications), Operations (Incidents), Apparatus (Apparatus/Stations/Inspections), Equipment (Equipment/Asset Roster), ISO, Reports. Verify this is the right set for a member — no admin items visible.
+- **`/dept-admin/personnel` and `/dept-admin/compartments`** — pages still exist but are not in the nav. Consider whether to add a redirect to `/dept-admin/setup` or leave them as-is.
+
+### Completed This Session (2026-05-03, session 2) — Setup Flow Completion + UX Polish
+
+- **Inspection Templates tab** — 4th tab in Items & Assets step of `/dept-admin/setup`. Inline template + step builder per inspectable item. Steps: add, edit, reorder (▲▼), soft-delete. Templates auto-expand after creation.
+- **Help prompt system** — `HelpPrompt` component (`app/(dashboard)/dept-admin/setup/HelpPrompt.tsx`). `? Help` / `Hide Help` toggle in setup page header, persisted in localStorage. Each step and items tab has a dismissable blue prompt. Re-enabling help clears all dismissals.
+- **Nav cleanup** — Removed "Manage Personnel" and "Compartments" from Dept Admin nav (covered by Dept Setup). Dept Admin nav now: Dept Setup · Items · Attendance Settings · Training.
+- **Officer add personnel** — `createDeptMember` updated to allow `system_role === 'officer'`. `PersonnelAddForm` client component added to `/personnel` page. Officers and admins see `+ Add Personnel` button; members see read-only roster. Officers can add officers and members (not admins). `/personnel/page.tsx` also fixed to use flat queries (no nested joins).
+- **Dashboard profile card** — Replaced 3 stat cards (Personnel/Stations/Apparatus) with a user profile card: initials avatar, name, role badge, title/rank, department, emp#, hire date, phone, email, Edit Profile link. Removed unused DB queries from `getDashboardData`.
+- **Dashboard quick links** — Now role-adaptive: Admin (Dept Setup/Personnel/Apparatus/Events/Inspections/Reports), Officer (Personnel/Apparatus/Events/Inspections/Incidents/Reports), Member (Events/Certifications/Inspections/My Activity/Personnel/Apparatus).
+- **Pending setup banner** — Fixed link to point to `/dept-admin/setup` instead of old `/dept-admin/personnel`. Fixed JSX whitespace typo ("usershaven't" → "users haven't").
+- **Nav rename** — "Training" → "Certifications" everywhere (nav label, TrainingClient.tsx h1, TrainingAdminClient.tsx h1, dashboard quick links). URL `/training` unchanged.
+- **Incidents → Operations group** — Incidents moved out of Personnel group into its own labeled "Operations" nav group.
+
+### Permission model (decided this session — reference for future work)
+- **Setup flow (`/dept-admin/setup`)** — admin only. Creates department structure.
+- **Main nav pages** — role-adaptive. Officers see operational controls; members see read-only.  
+- **Officers can:** add personnel (officers/members), edit apparatus descriptive fields, assign items to compartments, run inspections, manage events/attendance.
+- **Officers cannot:** create apparatus/stations/compartments/item types, manage roles, access dept-admin setup.
+- **`Training` label** — renamed to "Certifications" site-wide. Route stays `/training`. The page covers cert types, course enrollments, and training event logs — "Training" was a misnomer.
+
+### Completed This Session (2026-05-03, session 1) — Setup Flow Build
 
 **What to build:**
 - Tab lists every item where `requires_inspection = true`
