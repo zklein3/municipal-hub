@@ -191,6 +191,35 @@ A dedicated print page at `/print/member-training?personnel_id=xxx&from=xxx&to=x
 
 #### 2. Department Announcements (done — 2026-05-04)
 #### 3. Training Attendance Digital Signatures (done — 2026-05-04)
+
+### Roadmap (later — not immediate)
+
+#### Public-Facing Department Sites + API Access
+Each department needs a way to interact with the public (burn permits, record requests, event calendar, news). Two integration models to support:
+
+**Option A — White-label subdomains (you own the front end)**
+- Each dept gets `winslow.fireops7.com` running a shared public Next.js site
+- Filtered by `department_id`, department customizes logo/colors/content
+- One Vercel deployment serves all departments
+- Good for departments with no existing web presence
+
+**Option B — API key integration (their developer owns the front end)**
+- Expose public API endpoints scoped per department:
+  - `GET /api/public/events?dept=winslow` — upcoming public events
+  - `GET /api/public/announcements?dept=winslow` — public announcements
+  - `POST /api/public/burn-permit` — submit a permit
+  - `POST /api/public/record-request` — request an incident report
+- Each dept gets an API key (stored in Supabase, scoped to their `department_id`)
+- Their developer includes it in requests; you validate server-side, write to your DB
+- Good for departments with an existing site
+
+**Both options write to the same FireOps7 Supabase DB via anon key (RLS-protected). Officers review submissions inside FireOps7 the same way regardless of which option the dept uses.**
+
+DB additions needed when ready:
+- `burn_permits` table (id, department_id, address, contact_name, contact_email, burn_date, description, status, confirmation_code, created_at)
+- `public_record_requests` table
+- `department_api_keys` table (for Option B)
+- RLS: anon can INSERT permits, SELECT own by confirmation_code; service role sees all
 A broadcast messaging system for department-wide communication. Not DM/chat — that's complex and fire departments already use phones/GroupMe for 1:1. Announcements fill the real gap: admins/officers need a channel to push operational notices to all members inside the app.
 
 **Design:**
