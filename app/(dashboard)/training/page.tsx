@@ -71,12 +71,31 @@ export default async function TrainingPage() {
   const { data: myAttendanceRaw } = allEventIds.length > 0
     ? await adminClient
         .from('training_event_attendance')
-        .select('id, event_id, status, submitted_at')
+        .select('id, event_id, status, submitted_at, signed_at, signature_url')
         .eq('personnel_id', me.id)
         .in('event_id', allEventIds)
     : { data: [] }
 
   const myAttendanceMap = Object.fromEntries((myAttendanceRaw ?? []).map(a => [a.event_id, a]))
+
+  // Officer: all attendance for all events with member names
+  type OfficerAttendanceRecord = { id: string; event_id: string; personnel_id: string; status: string; signed_at: string | null; signature_url: string | null; member_name: string }
+  let officerAttendance: OfficerAttendanceRecord[] = []
+  if (isOfficerOrAbove && allEventIds.length > 0) {
+    const { data: allAttRaw } = await adminClient
+      .from('training_event_attendance')
+      .select('id, event_id, personnel_id, status, signed_at, signature_url')
+      .in('event_id', allEventIds)
+    const pIds = [...new Set((allAttRaw ?? []).map((a: { personnel_id: string }) => a.personnel_id))]
+    const { data: pList } = pIds.length > 0
+      ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', pIds)
+      : { data: [] }
+    const pMap = Object.fromEntries((pList ?? []).map((p: { id: string; first_name: string; last_name: string }) => [p.id, `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()]))
+    officerAttendance = (allAttRaw ?? []).map((a: { id: string; event_id: string; personnel_id: string; status: string; signed_at: string | null; signature_url: string | null }) => ({
+      ...a,
+      member_name: pMap[a.personnel_id] ?? 'Unknown',
+    }))
+  }
 
   return (
     <TrainingClient
@@ -92,6 +111,7 @@ export default async function TrainingPage() {
       myPersonnelId={me.id}
       myName={`${me.first_name} ${me.last_name}`}
       isOfficerOrAbove={isOfficerOrAbove}
+      officerAttendance={officerAttendance}
     />
   )
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitUnitProgress, selfReportTrainingAttendance } from '@/app/actions/training'
+import SignaturePadModal from '@/components/SignaturePadModal'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
@@ -17,7 +18,12 @@ interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
   requires_verification: boolean
-  my_attendance: { id: string; event_id: string; status: string; submitted_at: string } | null
+  my_attendance: { id: string; event_id: string; status: string; submitted_at: string; signed_at: string | null; signature_url: string | null } | null
+}
+
+interface AttendanceRecord {
+  id: string; event_id: string; personnel_id: string; status: string
+  signed_at: string | null; signature_url: string | null; member_name: string
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -50,11 +56,12 @@ function isPast(event_date: string): boolean {
 
 export default function TrainingClient({
   enrollments, certTypes, units, myProgress, myCerts, trainingEvents,
-  myPersonnelId, myName, isOfficerOrAbove,
+  myPersonnelId, myName, isOfficerOrAbove, officerAttendance = [],
 }: {
   enrollments: Enrollment[]; certTypes: CertType[]; units: Unit[]
   myProgress: Progress[]; myCerts: Certification[]; trainingEvents: TrainingEvent[]
   myPersonnelId: string; myName: string; isOfficerOrAbove: boolean
+  officerAttendance?: AttendanceRecord[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('courses')
@@ -62,6 +69,9 @@ export default function TrainingClient({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [submittingUnitId, setSubmittingUnitId] = useState<string | null>(null)
+  const [signingEventId, setSigningEventId] = useState<string | null>(null)
+  const [sigPadTarget, setSigPadTarget] = useState<{ eventId: string; personnelId: string; memberName: string; eventTopic: string } | null>(null)
+  const [localSignatures, setLocalSignatures] = useState<Record<string, string>>({})
 
   function reset() { setError(null); setSuccess(null) }
 
@@ -93,10 +103,17 @@ export default function TrainingClient({
     setLoading(false)
   }
 
+  const attendanceByEvent = officerAttendance.reduce<Record<string, AttendanceRecord[]>>((acc, a) => {
+    if (!acc[a.event_id]) acc[a.event_id] = []
+    acc[a.event_id].push(a)
+    return acc
+  }, {})
+
   const activeEnrollments = enrollments.filter(e => e.status === 'active' || e.status === 'completed')
   const today = new Date().toISOString().split('T')[0]
 
   return (
+    <>
     <div className="max-w-2xl">
       <div className="mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Certifications</h1>
@@ -334,6 +351,58 @@ export default function TrainingClient({
                         )}
                       </div>
                     </div>
+
+                    {/* Officer: Collect Signatures panel */}
+                    {isOfficerOrAbove && past && (
+                      <div className="mt-3 pt-3 border-t border-zinc-100">
+                        {signingEventId !== evt.id ? (
+                          <button
+                            onClick={() => setSigningEventId(evt.id)}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                          >
+                            Collect Signatures
+                          </button>
+                        ) : (
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-semibold text-zinc-700">Attendees</p>
+                              <button onClick={() => setSigningEventId(null)} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">Done</button>
+                            </div>
+                            {(attendanceByEvent[evt.id] ?? []).length === 0 ? (
+                              <p className="text-xs text-zinc-400">No attendance records for this event.</p>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                {(attendanceByEvent[evt.id] ?? []).map(a => {
+                                  const sigKey = `${evt.id}:${a.personnel_id}`
+                                  const isSigned = localSignatures[sigKey] != null || a.signed_at != null
+                                  const signedAt = localSignatures[sigKey] ?? a.signed_at
+                                  return (
+                                    <div key={a.personnel_id} className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 gap-3">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium text-zinc-900 truncate">{a.member_name}</p>
+                                        {isSigned && signedAt && (
+                                          <p className="text-xs text-zinc-400">{new Date(signedAt).toLocaleString()}</p>
+                                        )}
+                                      </div>
+                                      {isSigned ? (
+                                        <span className="text-xs font-semibold text-green-600 shrink-0">✓ Signed</span>
+                                      ) : (
+                                        <button
+                                          onClick={() => setSigPadTarget({ eventId: evt.id, personnelId: a.personnel_id, memberName: a.member_name, eventTopic: evt.topic })}
+                                          className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
+                                        >
+                                          Get Signature
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -342,5 +411,21 @@ export default function TrainingClient({
         </div>
       )}
     </div>
+
+      {/* Signature pad modal */}
+      {sigPadTarget && (
+        <SignaturePadModal
+          memberName={sigPadTarget.memberName}
+          eventTopic={sigPadTarget.eventTopic}
+          eventId={sigPadTarget.eventId}
+          personnelId={sigPadTarget.personnelId}
+          onClose={() => setSigPadTarget(null)}
+          onSaved={(personnelId, signedAt) => {
+            setLocalSignatures(prev => ({ ...prev, [`${sigPadTarget.eventId}:${personnelId}`]: signedAt }))
+            setSigPadTarget(null)
+          }}
+        />
+      )}
+    </>
   )
 }
