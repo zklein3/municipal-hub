@@ -92,9 +92,10 @@ export async function updateApparatus(formData: FormData) {
   // Station assignment — officer + admin
   const station_id = formData.get('station_id') as string
 
-  // Active status — admin only
+  // Active status + ISO exclusion — admin only
   const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
   const active = isAdmin ? formData.get('active') === 'true' : undefined
+  const exclude_from_iso = isAdmin ? formData.get('exclude_from_iso') === 'on' : undefined
 
   const qr_code = (formData.get('qr_code') as string)?.toUpperCase().trim() || null
 
@@ -112,6 +113,7 @@ export async function updateApparatus(formData: FormData) {
   }
 
   if (active !== undefined) updateData.active = active
+  if (exclude_from_iso !== undefined) updateData.exclude_from_iso = exclude_from_iso
 
   const { error } = await adminClient.from('apparatus').update(updateData).eq('id', apparatus_id)
 

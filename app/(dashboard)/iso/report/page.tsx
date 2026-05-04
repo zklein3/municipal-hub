@@ -40,7 +40,7 @@ export default async function IsoReportPage() {
   // Apparatus specs coverage
   const { data: allApparatus } = await adminClient
     .from('apparatus')
-    .select('id, unit_number, make, model, model_year')
+    .select('id, unit_number, make, model, model_year, exclude_from_iso')
     .eq('department_id', department_id)
     .eq('active', true)
     .order('unit_number')
@@ -92,8 +92,10 @@ export default async function IsoReportPage() {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const totalApparatus = (allApparatus ?? []).length
-  const specsComplete = (allApparatus ?? []).filter(a => isoSpecMap[a.id]).length
+  const isoApparatus = (allApparatus ?? []).filter(a => !a.exclude_from_iso)
+  const excludedApparatus = (allApparatus ?? []).filter(a => a.exclude_from_iso)
+  const totalApparatus = isoApparatus.length
+  const specsComplete = isoApparatus.filter(a => isoSpecMap[a.id]).length
 
   const activeHoses = (hoses ?? []).filter(h => h.status === 'in_service')
   const hosesTestedPct = activeHoses.length > 0
@@ -125,7 +127,7 @@ export default async function IsoReportPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-zinc-900">Apparatus Specifications</h2>
         </div>
-        {totalApparatus === 0 ? (
+        {totalApparatus === 0 && excludedApparatus.length === 0 ? (
           <p className="text-sm text-zinc-400">No active apparatus.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -141,7 +143,7 @@ export default async function IsoReportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
-                {(allApparatus ?? []).map(a => {
+                {isoApparatus.map(a => {
                   const spec = isoSpecMap[a.id]
                   return (
                     <tr key={a.id}>
@@ -162,6 +164,24 @@ export default async function IsoReportPage() {
                     </tr>
                   )
                 })}
+                {excludedApparatus.map(a => (
+                  <tr key={a.id} className="opacity-50">
+                    <td className="py-2 pr-4 font-medium text-zinc-500">
+                      <Link href={`/apparatus/${a.id}`} className="hover:underline">{a.unit_number}</Link>
+                    </td>
+                    <td className="py-2 pr-4 text-zinc-400">
+                      {[a.model_year, a.make, a.model].filter(Boolean).join(' ') || '—'}
+                    </td>
+                    <td className="py-2 pr-4 text-zinc-400">—</td>
+                    <td className="py-2 pr-4 text-zinc-400">—</td>
+                    <td className="py-2 pr-4 text-zinc-400">—</td>
+                    <td className="py-2">
+                      <span className="rounded-full px-2 py-0.5 font-medium bg-zinc-100 text-zinc-400">
+                        Excluded
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

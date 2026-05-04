@@ -60,6 +60,7 @@ interface Apparatus {
   apparatus_type_id: string | null
   station_id: string | null
   qr_code: string | null
+  exclude_from_iso: boolean
   apparatus_type: { id: string; name: string } | null
   station: { id: string; station_name: string; station_number: string | null } | null
 }
@@ -264,6 +265,18 @@ export default function ApparatusDetailClient({
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
               <p className="mt-1 text-xs text-zinc-400">Unique code printed on the QR label for this apparatus. Will be uppercased automatically.</p>
             </div>
+            {isAdmin && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  name="exclude_from_iso"
+                  type="checkbox"
+                  defaultChecked={apparatus.exclude_from_iso}
+                  className="h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-500"
+                />
+                <span className="text-sm font-medium text-zinc-700">Exclude from ISO calculations</span>
+                <span className="text-xs text-zinc-400">(ambulances, support vehicles, etc.)</span>
+              </label>
+            )}
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
               {loading ? 'Saving...' : 'Save Changes'}
