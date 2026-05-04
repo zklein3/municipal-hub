@@ -32,6 +32,7 @@ interface Dept {
   public_slug: string | null; public_site_enabled: boolean
   public_phone: string | null; public_email: string | null; public_address: string | null
   public_tagline: string | null; public_about: string | null
+  burn_permit_restrictions: string | null; burn_permit_county_info: string | null
 }
 interface EventSeries { id: string; title: string; event_type: string | null; is_public: boolean; active: boolean }
 interface PersonnelRecord {
@@ -552,6 +553,8 @@ export default function SysAdminDeptClient({
             public_address: dept.public_address,
             public_tagline: dept.public_tagline,
             public_about: dept.public_about,
+            burn_permit_restrictions: dept.burn_permit_restrictions,
+            burn_permit_county_info: dept.burn_permit_county_info,
           }}
           eventSeries={eventSeries}
         />

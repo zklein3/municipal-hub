@@ -23,13 +23,15 @@ export async function savePublicSiteSettings(formData: FormData) {
   const public_email       = (formData.get('public_email') as string)?.trim() || null
   const public_address     = (formData.get('public_address') as string)?.trim() || null
   const public_tagline     = (formData.get('public_tagline') as string)?.trim() || null
-  const public_about       = (formData.get('public_about') as string)?.trim() || null
+  const public_about            = (formData.get('public_about') as string)?.trim() || null
+  const burn_permit_restrictions = (formData.get('burn_permit_restrictions') as string)?.trim() || null
+  const burn_permit_county_info  = (formData.get('burn_permit_county_info') as string)?.trim() || null
 
   if (public_site_enabled && !public_slug) return { error: 'A URL slug is required to enable the public site.' }
 
   const { error: dbErr } = await adminClient
     .from('departments')
-    .update({ public_site_enabled, public_slug, public_phone, public_email, public_address, public_tagline, public_about })
+    .update({ public_site_enabled, public_slug, public_phone, public_email, public_address, public_tagline, public_about, burn_permit_restrictions, burn_permit_county_info })
     .eq('id', department_id)
 
   if (dbErr) {
