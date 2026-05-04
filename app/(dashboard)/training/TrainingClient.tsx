@@ -366,7 +366,17 @@ export default function TrainingClient({
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-xs font-semibold text-zinc-700">Attendees</p>
-                              <button onClick={() => setSigningEventId(null)} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">Done</button>
+                              <div className="flex items-center gap-3">
+                                <a
+                                  href={`/print/training-signin?event_id=${evt.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                                >
+                                  Print Sheet ↗
+                                </a>
+                                <button onClick={() => setSigningEventId(null)} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">Done</button>
+                              </div>
                             </div>
                             {(attendanceByEvent[evt.id] ?? []).length === 0 ? (
                               <p className="text-xs text-zinc-400">No attendance records for this event.</p>
