@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import BurnPermitsTab from './BurnPermitsTab'
+import RecordRequestsTab from './RecordRequestsTab'
 
 type Tab = 'permits' | 'records'
 
@@ -62,12 +63,7 @@ export default function InboxClient({
 
       {tab === 'permits' && <BurnPermitsTab permits={permits} />}
 
-      {tab === 'records' && (
-        <div className="rounded-xl bg-white border border-zinc-200 p-8 text-center">
-          <p className="text-sm text-zinc-400">Records requests UI coming in Step 3</p>
-          <p className="text-xs text-zinc-300 mt-1">{requests.length} total requests in database</p>
-        </div>
-      )}
+      {tab === 'records' && <RecordRequestsTab requests={requests} />}
     </div>
   )
 }
