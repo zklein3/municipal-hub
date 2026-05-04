@@ -35,16 +35,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDeptAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'
 
-  // Unread announcements count for nav badge
+  // Nav badge counts
   let announcementUnreadCount = 0
+  let inboxPendingCount = 0
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
-    const [{ data: allIds }, { data: readIds }] = await Promise.all([
+    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }] = await Promise.all([
       adminClient.from('announcements').select('id').eq('department_id', user.department_id),
       adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
+      isOfficerOrAbove
+        ? adminClient.from('burn_permits').select('id').eq('department_id', user.department_id).eq('status', 'pending')
+        : Promise.resolve({ data: [] }),
+      isOfficerOrAbove
+        ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
+        : Promise.resolve({ data: [] }),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
+    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0)
   }
 
   const navGroups: NavGroup[] = isSysAdmin ? [
@@ -64,6 +72,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       label: 'Operations',
       items: [
         { href: '/incidents', label: 'Incidents' },
+        ...(isOfficerOrAbove ? [{ href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined }] : []),
       ],
     },
     {

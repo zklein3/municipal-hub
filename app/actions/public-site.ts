@@ -102,6 +102,79 @@ export async function submitBurnPermit(formData: FormData) {
   return { confirmationCode: data.confirmation_code }
 }
 
+// ─── Inbox: Update burn permit status ────────────────────────────────────────
+export async function updateBurnPermitStatus(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+
+  const permit_id          = formData.get('permit_id') as string
+  const status             = formData.get('status') as string
+  const reviewer_notes     = (formData.get('reviewer_notes') as string)?.trim() || null
+  const permit_expiry_date = (formData.get('permit_expiry_date') as string) || null
+
+  if (!['approved', 'denied', 'cancelled'].includes(status)) return { error: 'Invalid status.' }
+
+  const updateData: Record<string, unknown> = { status, reviewer_notes, updated_at: new Date().toISOString() }
+  if (status === 'approved') {
+    updateData.issued_date = new Date().toISOString().split('T')[0]
+    updateData.approved_by_personnel_id = me.id
+    if (permit_expiry_date) updateData.permit_expiry_date = permit_expiry_date
+  }
+
+  const { error: dbErr } = await adminClient.from('burn_permits').update(updateData).eq('id', permit_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true }
+}
+
+// ─── Inbox: Update record request status ─────────────────────────────────────
+export async function updateRecordRequestStatus(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+
+  const request_id     = formData.get('request_id') as string
+  const status         = formData.get('status') as string
+  const reviewer_notes = (formData.get('reviewer_notes') as string)?.trim() || null
+
+  if (!['in_review', 'fulfilled', 'denied'].includes(status)) return { error: 'Invalid status.' }
+
+  const { error: dbErr } = await adminClient
+    .from('public_record_requests')
+    .update({ status, reviewer_notes, updated_at: new Date().toISOString() })
+    .eq('id', request_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true }
+}
+
 export async function submitRecordRequest(formData: FormData) {
   const adminClient = createAdminClient()
 
