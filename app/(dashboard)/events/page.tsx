@@ -47,12 +47,20 @@ export default async function EventsPage() {
     .lte('event_date', future60.toISOString().split('T')[0])
     .order('event_date', { ascending: true })
 
+  // Fetch public site status for this department
+  const { data: deptData } = await adminClient
+    .from('departments')
+    .select('public_site_enabled')
+    .eq('id', department_id)
+    .single()
+  const publicSiteEnabled = deptData?.public_site_enabled ?? false
+
   // Fetch series info
   const seriesIds = [...new Set((instances ?? []).map(i => i.series_id))]
   const { data: seriesData } = seriesIds.length > 0
     ? await adminClient
         .from('event_series')
-        .select('id, title, event_type, department_id, recurrence_type, description')
+        .select('id, title, event_type, department_id, recurrence_type, description, is_public')
         .in('id', seriesIds)
         .eq('department_id', department_id)
     : { data: [] }
@@ -126,6 +134,7 @@ export default async function EventsPage() {
     event_type: seriesMap[i.series_id]?.event_type ?? 'training',
     description: seriesMap[i.series_id]?.description ?? null,
     recurrence_type: seriesMap[i.series_id]?.recurrence_type ?? 'one_time',
+    is_public: seriesMap[i.series_id]?.is_public ?? false,
     event_date: i.event_date,
     start_time: i.start_time,
     location: i.location,
@@ -163,6 +172,8 @@ export default async function EventsPage() {
       myName={`${me.first_name} ${me.last_name}`}
       isOfficerOrAbove={isOfficerOrAbove}
       isAdmin={isAdmin}
+      publicSiteEnabled={publicSiteEnabled}
+      departmentId={department_id}
     />
   )
 }

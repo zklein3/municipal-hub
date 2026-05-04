@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse } from '@/app/actions/attendance'
+import { toggleEventSeriesPublic } from '@/app/actions/public-site'
 
 interface AttendanceRecord {
   id: string
@@ -45,6 +46,7 @@ interface Event {
   status: string
   notes: string | null
   requires_verification: boolean
+  is_public: boolean
   my_attendance: AttendanceRecord | null
   pending_count: number
   pending_submissions: PendingSubmission[]
@@ -120,7 +122,7 @@ function isExcuseWindowOpen(event_date: string): boolean {
 }
 
 export default function EventsClient({
-  events, personnelList, excuseTypes, myPersonnelId, myName, isOfficerOrAbove, isAdmin,
+  events, personnelList, excuseTypes, myPersonnelId, myName, isOfficerOrAbove, isAdmin, publicSiteEnabled, departmentId,
 }: {
   events: Event[]
   personnelList: Personnel[]
@@ -129,6 +131,8 @@ export default function EventsClient({
   myName: string
   isOfficerOrAbove: boolean
   isAdmin: boolean
+  publicSiteEnabled: boolean
+  departmentId: string
 }) {
   const router = useRouter()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -149,6 +153,20 @@ export default function EventsClient({
 
   // Log attendance confirmation step
   const [confirmingLogId, setConfirmingLogId] = useState<string | null>(null)
+
+  // Public/private toggle state per series_id
+  const [publicState, setPublicState] = useState<Record<string, boolean>>(
+    Object.fromEntries(events.map(e => [e.series_id, e.is_public]))
+  )
+  const [togglingSeriesId, setTogglingSeriesId] = useState<string | null>(null)
+
+  async function handleTogglePublic(seriesId: string, current: boolean) {
+    setTogglingSeriesId(seriesId)
+    const next = !current
+    const result = await toggleEventSeriesPublic(seriesId, next, departmentId)
+    if (!result.error) setPublicState(prev => ({ ...prev, [seriesId]: next }))
+    setTogglingSeriesId(null)
+  }
 
   function reset() { setError(null); setSuccess(null) }
 
@@ -362,6 +380,9 @@ export default function EventsClient({
                         {event.requires_verification && !cancelled && (
                           <span className="text-xs text-zinc-400">Requires verification</span>
                         )}
+                        {publicSiteEnabled && publicState[event.series_id] && (
+                          <span className="text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5">Public</span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
                         {event.start_time && <span>🕐 {formatTime(event.start_time)}</span>}
@@ -452,6 +473,28 @@ export default function EventsClient({
 
                     {isOfficerOrAbove ? (
                       <>
+                        {/* ── PUBLIC SITE TOGGLE ───────────────────────── */}
+                        {publicSiteEnabled && (
+                          <div className="flex items-center justify-between rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5">
+                            <div>
+                              <p className="text-xs font-semibold text-zinc-700">Show on Public Site</p>
+                              <p className="text-xs text-zinc-400">Visible at fireops7.com/dept/… when on</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={publicState[event.series_id] ?? false}
+                              disabled={togglingSeriesId === event.series_id}
+                              onClick={() => handleTogglePublic(event.series_id, publicState[event.series_id] ?? false)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50 ${
+                                publicState[event.series_id] ? 'bg-blue-600' : 'bg-zinc-300'
+                              }`}
+                            >
+                              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${publicState[event.series_id] ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
+                          </div>
+                        )}
+
                         {/* ── PENDING VERIFICATION QUEUE ───────────────── */}
                         {hasPending && (
                           <div>
