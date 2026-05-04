@@ -190,7 +190,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ### Build Next List ← START HERE
 
-#### 1. Public Permit Status + Print Page (priority)
+#### 1. Permit Approval Email — Direct to Resident (when domain migrated)
+Currently: permit approved → logEvent → notify-on-log Edge Function → email to zklein3@gmail.com → forward to applicant.
+Fix when ready: `fireops7.com` must be verified in Resend (blocked until Wix → new registrar migration, ~1 month out). Once verified, swap the `logEvent` call in `updateBurnPermitStatus` for a call to the `send-permit-approval` Edge Function (already deployed at `kolrhnxozeroaselapzn.supabase.co/functions/v1/send-permit-approval`). One line change.
+
+#### 2. Public Permit Status + Print Page (done — 2026-05-04)
 Residents need to retrieve and print their own approved permit without logging in. Officer approves → resident gets email → clicks link → prints. Nobody has to meet.
 
 **Public lookup page:** `/dept/[slug]/permit-status`
