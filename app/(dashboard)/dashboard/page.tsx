@@ -3,6 +3,24 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import SysAdminDashboard from './SysAdminDashboard'
+import DashboardAnnouncementBanner from './DashboardAnnouncementBanner'
+
+async function getUnreadAnnouncements(departmentId: string, personnelId: string) {
+  const adminClient = createAdminClient()
+  const [{ data: announcements }, { data: reads }] = await Promise.all([
+    adminClient.from('announcements')
+      .select('id, title, body, pinned, created_at, author_personnel_id')
+      .eq('department_id', departmentId)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10),
+    adminClient.from('announcement_reads')
+      .select('announcement_id')
+      .eq('personnel_id', personnelId),
+  ])
+  const readSet = new Set((reads ?? []).map(r => r.announcement_id))
+  return (announcements ?? []).filter(a => !readSet.has(a.id))
+}
 
 async function getDashboardData(departmentId: string, personnelId: string) {
   const adminClient = createAdminClient()
@@ -161,7 +179,10 @@ export default async function DashboardPage() {
     personnelId: me.id,
   }
 
-  const data = await getDashboardData(departmentId, me.id)
+  const [data, unreadAnnouncements] = await Promise.all([
+    getDashboardData(departmentId, me.id),
+    getUnreadAnnouncements(departmentId, me.id),
+  ])
 
   const greeting = () => {
     const hour = new Date().getHours()
@@ -352,6 +373,14 @@ export default async function DashboardPage() {
             <Link href="/training" className="text-xs font-semibold text-red-600 hover:text-red-800">Training →</Link>
           </div>
         </div>
+      )}
+
+      {/* Unread Announcements */}
+      {unreadAnnouncements.length > 0 && (
+        <DashboardAnnouncementBanner
+          announcements={unreadAnnouncements}
+          personnelId={me.id}
+        />
       )}
 
       {/* Quick Links */}

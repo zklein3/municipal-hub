@@ -24,6 +24,7 @@ async function getUserContext() {
     ...me,
     system_role: dept?.system_role ?? null,
     department_name: (dept?.departments as any)?.name ?? null,
+    department_id: dept?.department_id ?? null,
   }
 }
 
@@ -34,6 +35,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDeptAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'
 
+  // Unread announcements count for nav badge
+  let announcementUnreadCount = 0
+  if (!isSysAdmin && user?.department_id && user?.id) {
+    const adminClient = createAdminClient()
+    const [{ data: allIds }, { data: readIds }] = await Promise.all([
+      adminClient.from('announcements').select('id').eq('department_id', user.department_id),
+      adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
+    ])
+    const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
+    announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
+  }
+
   const navGroups: NavGroup[] = isSysAdmin ? [
     { items: [{ href: '/dashboard', label: 'Overview' }] },
   ] : [
@@ -42,6 +55,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       label: 'Personnel',
       items: [
         { href: '/personnel', label: 'Personnel' },
+        { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
         { href: '/events', label: 'Events' },
         { href: '/training', label: 'Certifications' },
       ],

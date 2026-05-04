@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 
-export type NavItem = { href: string; label: string }
+export type NavItem = { href: string; label: string; badge?: number }
 export type NavGroup = { label?: string; items: NavItem[] }
 
 function isActive(pathname: string, href: string) {
@@ -47,13 +47,18 @@ export default function NavGroups({
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                 isActive(pathname, item.href)
                   ? 'bg-red-900 text-white font-medium'
                   : 'text-red-100 hover:bg-red-700 hover:text-white'
               }`}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.badge != null && item.badge > 0 && (
+                <span className="ml-2 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs font-bold text-white leading-none">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
             </Link>
           ))
         }
@@ -84,13 +89,18 @@ export default function NavGroups({
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
-                    className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                       isActive(pathname, item.href)
                         ? 'bg-red-900 text-white font-medium'
                         : 'text-red-100 hover:bg-red-700 hover:text-white'
                     }`}
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.badge != null && item.badge > 0 && (
+                      <span className="ml-2 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs font-bold text-white leading-none">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </div>
