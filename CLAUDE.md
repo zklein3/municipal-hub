@@ -176,7 +176,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ### Build Next List ← START HERE
 
-#### 1. Department Announcements (priority — admin/officer → all members)
+#### 1. Member Training Record print page (priority)
+A dedicated print page at `/print/member-training?personnel_id=xxx&from=xxx&to=xxx` — properly formatted document (same pattern as `/print/training-signin`) showing one member's full training record for a date range.
+
+**Content:**
+- Header: member name, department, role, date range
+- Training Events table: date, topic, hours, location, status, ✓ Signed indicator
+- Certifications table: cert name, issuing body, cert #, issued date, expiry date
+- Footer: printed by / date generated
+
+**Entry point:** On `/reports/training`, when a single member is selected in the filter, show a **"Member Record ↗"** link (opens in new tab) alongside the existing Print button. Link passes `personnel_id`, `from`, and `to` as params.
+
+**Note:** The existing Print button on `/reports/training` just calls `window.print()` and prints the screen — not useful. The new dedicated page is the fix for single-member printing. The full-dept screen view is fine for on-screen review only.
+
+#### 2. Department Announcements (done — 2026-05-04)
+#### 3. Training Attendance Digital Signatures (done — 2026-05-04)
 A broadcast messaging system for department-wide communication. Not DM/chat — that's complex and fire departments already use phones/GroupMe for 1:1. Announcements fill the real gap: admins/officers need a channel to push operational notices to all members inside the app.
 
 **Design:**
