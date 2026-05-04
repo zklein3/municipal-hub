@@ -329,15 +329,20 @@ export async function submitUnitProgress(formData: FormData) {
   return { success: true }
 }
 
-// ─── OFFICER/ADMIN: Save Training Signature ───────────────────────────────────
+// ─── ANY MEMBER: Save Training Signature (own record only; officers can sign any) ──
 export async function saveTrainingSignature(formData: FormData) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  if (!ctx) return { error: 'Not authenticated.' }
 
   const file = formData.get('signature') as File
   const eventId = formData.get('eventId') as string
   const personnelId = formData.get('personnelId') as string
   if (!file || !eventId || !personnelId) return { error: 'Missing required fields.' }
+
+  // Members may only sign their own record
+  if (!ctx.isOfficerOrAbove && ctx.me.id !== personnelId) {
+    return { error: 'You may only sign your own attendance record.' }
+  }
 
   const adminClient = createAdminClient()
   const path = `training/${eventId}/${personnelId}.png`

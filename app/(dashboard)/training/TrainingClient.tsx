@@ -330,6 +330,23 @@ export default function TrainingClient({
                           </span>
                         )}
 
+                        {/* Sign button — verified but not yet signed */}
+                        {evt.my_attendance?.status === 'verified' &&
+                          !evt.my_attendance.signature_url &&
+                          !localSignatures[`${evt.id}:${myPersonnelId}`] && (
+                          <button
+                            onClick={() => setSigPadTarget({ eventId: evt.id, personnelId: myPersonnelId, memberName: myName, eventTopic: evt.topic })}
+                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                          >
+                            Sign
+                          </button>
+                        )}
+
+                        {/* Signed confirmation */}
+                        {(evt.my_attendance?.signature_url || localSignatures[`${evt.id}:${myPersonnelId}`]) && (
+                          <span className="text-xs font-semibold text-green-600">✓ Signed</span>
+                        )}
+
                         {/* Self-log button */}
                         {!attended && canSelfLog && (
                           <button
@@ -360,12 +377,12 @@ export default function TrainingClient({
                             onClick={() => setSigningEventId(evt.id)}
                             className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
                           >
-                            Collect Signatures
+                            Signature Status
                           </button>
                         ) : (
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-semibold text-zinc-700">Attendees</p>
+                              <p className="text-xs font-semibold text-zinc-700">Signature Status</p>
                               <div className="flex items-center gap-3">
                                 <a
                                   href={`/print/training-signin?event_id=${evt.id}`}
@@ -395,14 +412,11 @@ export default function TrainingClient({
                                         )}
                                       </div>
                                       {isSigned ? (
-                                        <span className="text-xs font-semibold text-green-600 shrink-0">✓ Signed</span>
+                                        <span className="text-xs font-semibold text-green-600 shrink-0">✓ Complete</span>
+                                      ) : a.status === 'verified' ? (
+                                        <span className="text-xs text-blue-500 shrink-0">Awaiting signature</span>
                                       ) : (
-                                        <button
-                                          onClick={() => setSigPadTarget({ eventId: evt.id, personnelId: a.personnel_id, memberName: a.member_name, eventTopic: evt.topic })}
-                                          className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
-                                        >
-                                          Get Signature
-                                        </button>
+                                        <span className="text-xs text-zinc-400 shrink-0">Pending verification</span>
                                       )}
                                     </div>
                                   )
