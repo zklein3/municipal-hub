@@ -78,14 +78,24 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - `/scan` — QR code lookup + redirect (`?type=apparatus|compartment|asset&code=...`)
 - `/events`, `/events/new` — events + attendance
 - `/training` — enrollments, certifications, training events (nav label: "Certifications")
+- `/announcements` — department announcements, unread/read tracking, pin/delete controls
 - `/reports/inspections` — inspection report: filters, flat table, asset drill-in, print (officer/admin only)
 - `/reports/inventory` — inventory inspection reports (officer/admin only)
+- `/reports/training` — training/certification report (officer/admin only)
+- `/reports/attendance` — attendance participation report (officer/admin only)
 - `/reports/my-activity` — member self-view: attendance, inspections, incidents (all roles)
+- `/iso/hoses`, `/iso/hydrants`, `/iso/report` — ISO audit logs and summary report
+- `/inbox` — Public Inbox (officers/admins): burn permits + records requests tabs with pending count badge
 - `/admin/departments`, `/admin/users`, `/admin/logs` — sys admin pages
-- `/admin/dept/[id]` — sys admin dept drill-in (tabbed)
-- `/dept-admin/personnel`, `/dept-admin/compartments`, `/dept-admin/items` — dept admin
+- `/admin/dept/[id]` — sys admin dept drill-in (5 tabs: Personnel/Stations/Apparatus/Compartments/Public Site)
+- `/dept-admin/setup`, `/dept-admin/items` — dept admin structure/items
 - `/dept-admin/attendance`, `/dept-admin/training` — dept admin settings
 - `/scan` — QR scan landing/redirect ✓ built
+- `/dept/[slug]` — public department landing page (no auth required)
+- `/dept/[slug]/events` — public upcoming events (is_public=true series only)
+- `/dept/[slug]/burn-permit` — public burn permit request form
+- `/dept/[slug]/records` — public records request form
+- `/print/burn-permit?id=xxx` — printable Nebraska state burn permit (auth required, approved only)
 
 ### Key Action Files
 - `app/actions/auth.ts` — signIn, changePassword, signOut
@@ -97,8 +107,12 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - `app/actions/inspections.ts` — createInspectionTemplate, addTemplateStep, updateTemplateStep, deleteTemplateStep, submitInspection
 - `app/actions/attendance.ts` — createEventSeries, updateEventInstance, logAttendance, verifyAttendance, requestExcuse, closeEventInstance, cancelEventInstance, createExcuseType, saveParticipationRequirement
 - `app/actions/incidents.ts` — createIncident, updateIncident, setIncidentStatus, addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus, addIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel
-- `app/actions/training.ts` — createCertificationType, createCourseUnit, enrollMember, verifyProgress, logDirectCert, createTrainingEvent, logTrainingAttendance
+- `app/actions/training.ts` — createCertificationType, createCourseUnit, enrollMember, verifyProgress, logDirectCert, createTrainingEvent, logTrainingAttendance, saveTrainingSignature
+- `app/actions/announcements.ts` — createAnnouncement, deleteAnnouncement, pinAnnouncement, markAnnouncementRead
+- `app/actions/iso.ts` — apparatus ISO specs, hose tests, hydrant flow tests, mutual aid logging
+- `app/actions/users.ts` — createDeptMember
 - `app/actions/fire-school.ts` — checkBottle, logFill, addFireSchoolBottle
+- `app/actions/public-site.ts` — savePublicSiteSettings, toggleEventSeriesPublic, submitBurnPermit, submitRecordRequest, updateBurnPermitStatus, updateRecordRequestStatus
 
 ## Auth
 - Roles: `is_sys_admin` (personnel table) | `system_role: admin/officer/member` (department_personnel)
@@ -176,92 +190,61 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ### Build Next List ← START HERE
 
-#### 1. Member Training Record print page (priority)
-A dedicated print page at `/print/member-training?personnel_id=xxx&from=xxx&to=xxx` — properly formatted document (same pattern as `/print/training-signin`) showing one member's full training record for a date range.
+#### 1. Burn Permit — Applicant Signature Capture (priority)
+Same pattern as training signatures. Officer approves permit → hands device to applicant → applicant signs → signature saved to Supabase Storage → embedded on printed permit above the "(Signature of Applicant)" line.
+- Add `signature_url text` + `signed_at timestamptz` to `burn_permits` table
+- Reuse `SignaturePadModal` component (already built for training)
+- Add "Collect Signature" button to approved permit card in `/inbox` Burn Permits tab
+- Embed signed image on `/print/burn-permit` above the signature line
 
-**Content:**
-- Header: member name, department, role, date range
-- Training Events table: date, topic, hours, location, status, ✓ Signed indicator
-- Certifications table: cert name, issuing body, cert #, issued date, expiry date
-- Footer: printed by / date generated
+#### 2. Personnel page — officer edit controls (lower priority)
+Officers see Add button on `/personnel` but no inline edit per card. Quick role/status edit inline on roster card for officer+admin. Not urgent — detail page works.
 
-**Entry point:** On `/reports/training`, when a single member is selected in the filter, show a **"Member Record ↗"** link (opens in new tab) alongside the existing Print button. Link passes `personnel_id`, `from`, and `to` as params.
+#### 3. Public Site Option B — API Keys (only when customers ask)
+`department_api_keys` table + public API endpoints for departments with their own site.
 
-**Note:** The existing Print button on `/reports/training` just calls `window.print()` and prints the screen — not useful. The new dedicated page is the fix for single-member printing. The full-dept screen view is fine for on-screen review only.
+### Completed This Session (2026-05-04) — Announcements + Training Signatures
 
-#### 2. Department Announcements (done — 2026-05-04)
-#### 3. Training Attendance Digital Signatures (done — 2026-05-04)
+- **Department announcements** — `/announcements` page with newest-first list, pinned items first, officer/admin creation, admin pin/unpin/delete, and all-role read access.
+- **Unread announcement handling** — dashboard shows unread announcements through `DashboardAnnouncementBanner`; members can mark announcements read. Reads are stored in `announcement_reads`.
+- **Announcement actions** — `app/actions/announcements.ts` contains `createAnnouncement`, `deleteAnnouncement`, `pinAnnouncement`, and `markAnnouncementRead`; all use flat admin-client queries and revalidate `/announcements` + `/dashboard`.
+- **Training attendance signatures** — `signature_pad` installed, `SignaturePadModal` added, signatures saved through `saveTrainingSignature` to Supabase Storage bucket `signatures`, with `signature_url` and `signed_at` stored on `training_event_attendance`.
+- **Signature UI + print** — members can sign their own attended training records; officers/admins can collect and review signature status. `/print/training-signin?event_id=xxx` renders the printable sign-in sheet with embedded signature images.
+
+### Completed This Session (2026-05-04, session 2) — Public Site + Inbox
+
+- **Member Training Record print page** — `/print/member-training?personnel_id=xxx&from=xxx&to=xxx`. Training events (date-filtered) + all active certs. Signed indicator, expired certs flagged red. Entry point: "Member Record ↗" link on `/reports/training` when single member selected.
+- **Equipment/Apparatus nav cleanup** — Dropped `/equipment` picker from nav (redundant). Asset Roster moved into Apparatus group. "View →" links added to each compartment card on apparatus detail so users reach compartment detail directly without the intermediary page.
+- **`apparatus.exclude_from_iso`** — Boolean flag (admin only checkbox on apparatus edit form). ISO report filters excluded apparatus from the specs coverage stat and table; shows them dimmed with "Excluded" badge.
+- **Public-facing department sites** — Path-based routing at `/dept/[slug]`. One merged codebase serves all departments. Per-department on/off via `departments.public_site_enabled` + `public_slug`. Middleware updated to bypass auth for `/dept/*` routes.
+  - Landing page: hero, contact cards (address/phone/email), about, quick-action tiles
+  - Events page: upcoming instances where `event_series.is_public = true`
+  - Burn permit request form with safety advisory, confirmation code on submit
+  - Records request form with type selector (incident/inspection/other), incident fields conditional on type
+  - All forms write to `burn_permits` / `public_record_requests` tables with auto-generated confirmation codes
+- **Sys admin Public Site config** — 5th tab on `/admin/dept/[id]`. Enable toggle, slug field, public profile (tagline/phone/email/address/about), burn permit settings (restrictions text + county/sheriff info textarea), event series public toggles.
+- **Event public/private toggle** — Officers toggle `is_public` directly on individual event series from the `/events` page manage panel. Toggle hidden when dept public site is off. Blue "Public" badge on card when visible.
+- **Dept admin dashboard preview** — "Your Public Site is Live" banner with Preview ↗ link appears when site is enabled and slug is set.
+- **Public Inbox** — `/inbox` route (officers/admins only). Nav badge shows combined pending count.
+  - Burn Permits tab: status filter, approve flow (expiry date + notes → issues permit), deny flow (confirmation + reason), Print ↗ link for approved permits
+  - Record Requests tab: status filter, Mark In Review → Fulfilled/Denied flow with notes
+  - Both tabs use optimistic UI
+- **Printable burn permit** — `/print/burn-permit?id=xxx`. Matches Nebraska state form: issued-to, address, expiry, liability line, NE Statute 81-520.01 legal text, sheriff call-out with county info, signature lines, "VOID IF WIND EXCEEDS 10 MPH". Auto-prints. Auth-gated, approved permits only.
+- **DB additions this session:** `apparatus.exclude_from_iso`, `departments.public_slug/public_site_enabled/public_phone/public_email/public_address/public_tagline/public_about/burn_permit_county_info/burn_permit_restrictions`, `event_series.is_public`, `burn_permits` table (+ `permit_expiry_date/issued_date/approved_by_personnel_id`), `public_record_requests` table
 
 ### Roadmap (later — not immediate)
 
-#### Public-Facing Department Sites + API Access
-Each department needs a way to interact with the public (burn permits, record requests, event calendar, news). Two integration models to support:
+#### Public-Facing Department Sites — Option B (API Keys, future)
+Option A (path-based public site at `/dept/[slug]`) is fully built and live. Option B (API key integration for depts with their own site) is a future addition:
+- `department_api_keys` table — scoped per department
+- Public API endpoints: `GET /api/public/events`, `GET /api/public/announcements`, `POST /api/public/burn-permit`, `POST /api/public/record-request`
+- Only needed when a paying customer has their own web presence and asks for it
 
-**Option A — White-label subdomains (you own the front end)**
-- Each dept gets `winslow.fireops7.com` running a shared public Next.js site
-- Filtered by `department_id`, department customizes logo/colors/content
-- One Vercel deployment serves all departments
-- Good for departments with no existing web presence
+#### Public Site — Subdomain Routing (when Vercel Pro)
+Currently path-based (`fireops7.com/dept/slug`). When upgraded to Vercel Pro, migrate to `slug.fireops7.com` via wildcard DNS + Next.js middleware. Page content and DB unchanged — routing only.
 
-**Option B — API key integration (their developer owns the front end)**
-- Expose public API endpoints scoped per department:
-  - `GET /api/public/events?dept=winslow` — upcoming public events
-  - `GET /api/public/announcements?dept=winslow` — public announcements
-  - `POST /api/public/burn-permit` — submit a permit
-  - `POST /api/public/record-request` — request an incident report
-- Each dept gets an API key (stored in Supabase, scoped to their `department_id`)
-- Their developer includes it in requests; you validate server-side, write to your DB
-- Good for departments with an existing site
-
-**Both options write to the same FireOps7 Supabase DB via anon key (RLS-protected). Officers review submissions inside FireOps7 the same way regardless of which option the dept uses.**
-
-DB additions needed when ready:
-- `burn_permits` table (id, department_id, address, contact_name, contact_email, burn_date, description, status, confirmation_code, created_at)
-- `public_record_requests` table
-- `department_api_keys` table (for Option B)
-- RLS: anon can INSERT permits, SELECT own by confirmation_code; service role sees all
-A broadcast messaging system for department-wide communication. Not DM/chat — that's complex and fire departments already use phones/GroupMe for 1:1. Announcements fill the real gap: admins/officers need a channel to push operational notices to all members inside the app.
-
-**Design:**
-- DB table: `announcements` (id, department_id, author_personnel_id, title, body, created_at, pinned bool)
-- DB table: `announcement_reads` (announcement_id, personnel_id, read_at) — tracks who acknowledged
-- **Dashboard** — show unread announcement count badge + latest unread announcement inline (above quick links). Members see a "Mark as Read" button.
-- **`/announcements` page** — full list, newest first. Pinned announcements float to top. Officers/admins see "+ New Announcement" form (title + body). All roles can read. Admin can pin/unpin/delete.
-- **Nav** — add "Announcements" to Personnel group with unread badge count (requires client component for the badge)
-- **Unread badge** — show count next to "Announcements" in nav for members with unread items
-
-**Scope decision made:** Start with announcements, not DM. DM can be added later if users ask for it.
-
-#### 2. Training Attendance — Digital Signature Capture (DHHS compliance)
-DHHS requires physical signatures verifying member presence at training. Build a signature capture flow on the training event attendance page. Officer stays logged in on a single device (phone/tablet), passes it to each member to sign at end of class.
-
-**UX flow:**
-1. Officer opens training event → attendance list
-2. Taps "Collect Signatures" → signature mode activates
-3. Each attended member row shows "Get Signature" button
-4. Tap → full-screen signature pad opens with header: **"Signing for: [Member Name] — [Event Topic]"**
-5. Officer hands device to member → member signs with finger → hands back
-6. Officer taps Confirm → signature saved, row shows ✓ Signed + timestamp
-7. Repeat for each member
-
-**Technical design:**
-- Install `signature_pad` npm package (industry standard, ~6kb, handles touch smoothing)
-- DB migration: add `signature_url text` and `signed_at timestamptz` to `training_event_attendance`
-- Supabase Storage bucket: `signatures` (path: `training/{event_id}/{personnel_id}.png`)
-- `SignaturePad` client component: full-screen modal, "Signing for" header, canvas, Clear + Confirm buttons
-- Upload: canvas → PNG blob → Supabase Storage → save URL on attendance record
-- Training event UI: "Collect Signatures" toggle button, per-member status badge (✓ Signed / Unsigned)
-- Printable sign-in sheet: `/print/training-signin?event_id=xxx` — event details + member rows with embedded signature images, instructor signature line at bottom. Same pattern as `/print/qr`.
-
-**Audit trail per signature:** personnel_id + event_id + officer's authenticated session + timestamp + image URL.
-
-**Future extension:** same SignaturePad component can be reused for event attendance if needed.
-
-#### 3. Personnel page — officer edit controls (lower priority)
-Officers currently see an Add button on `/personnel` but no inline edit controls per card. Role/status edits are only accessible via `/personnel/[id]` or setup flow. Consider surfacing a quick role/status edit inline on the roster card for officer+admin. Not urgent — the detail page works.
-
-#### 3. Equipment/Apparatus nav observation (no action yet)
-Both `/equipment` and `/apparatus` lead to the same compartment detail pages — two paths to the same destination. `/equipment/assets` (Asset Roster) IS distinct. Option: drop Equipment from nav, keep only Asset Roster. User confirmed they understand the overlap but does not want to remove yet. Revisit when real users give feedback.
+#### Personnel page — officer edit controls (lower priority)
+Officers see Add button on `/personnel` but no inline edit per card. Quick role/status edit inline on roster card. Not urgent — detail page works.
 
 ### Completed This Session (2026-05-03, session 2) — Setup Flow Completion + UX Polish
 
@@ -331,7 +314,7 @@ Add contextual help prompts throughout the setup flow. Design approved:
 - **Step rail** — desktop left sidebar with step numbers, green checkmarks once data exists, count badges. Mobile: horizontal scrollable tab bar.
 - **Each step** — existing records as cards with inline Edit + inline Add form. All mutations use existing server actions.
 - **Compartments step** — includes apparatus assignment checkbox panel per template (same logic as existing `/dept-admin/compartments`).
-- **Items & Assets step** — tabbed (Categories / Items / Assets) with full inline CRUD. "Full Items Manager →" link to `/dept-admin/items` for inspection templates (not yet in setup flow — next session).
+- **Items & Assets step** — tabbed (Categories / Items / Assets) with full inline CRUD. Inspection Templates were added to this setup flow in the follow-up 2026-05-03 session.
 - **revalidatePath** — all relevant actions (stations, apparatus, users, personnel, compartments, equipment) now also revalidate `/dept-admin/setup`.
 - **Nav** — "Dept Setup" added as first item in Dept Admin nav section.
 - **Permission philosophy decided** — Setup flow = admin only. Main nav pages = role-adaptive. Officers get operational controls in main nav pages; setup/structure stays admin.
@@ -342,7 +325,6 @@ Add contextual help prompts throughout the setup flow. Design approved:
 - **Nav** — split "Apparatus" group into two: **Apparatus** (Apparatus, Stations, Inspections) and **Equipment** (Equipment, Asset Roster). Clearer separation of physical units vs. what's on the truck.
 
 ### Remaining Polish Notes (no decision needed, build when ready)
-- Training vs Certifications naming — consider renaming nav "Training" → "Certifications" to reduce confusion with training-type events. No action yet — watch for real user confusion first.
 - Quick links on dashboard — leave as-is; future: editable per-dept or auto-surfaced by usage.
 
 ### Completed This Session (2026-04-28) — Fire School QR Printing
