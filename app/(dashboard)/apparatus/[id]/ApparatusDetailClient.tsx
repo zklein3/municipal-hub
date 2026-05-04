@@ -320,6 +320,12 @@ export default function ApparatusDetailClient({
                       )}
                     </div>
                     <div className="flex items-center gap-3">
+                      <Link
+                        href={`/equipment/${apparatus.id}/${c.id}`}
+                        className="text-xs font-semibold text-red-600 hover:text-red-800"
+                      >
+                        View →
+                      </Link>
                       <span className={`text-xs rounded-full px-2 py-0.5 ${c.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
                         {c.active ? 'Active' : 'Inactive'}
                       </span>
