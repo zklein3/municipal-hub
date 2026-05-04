@@ -139,6 +139,59 @@ export async function updateBurnPermitStatus(formData: FormData) {
   const { error: dbErr } = await adminClient.from('burn_permits').update(updateData).eq('id', permit_id)
   if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
 
+  // Send approval email to applicant
+  if (status === 'approved' && process.env.RESEND_API_KEY) {
+    try {
+      const { data: permit } = await adminClient
+        .from('burn_permits')
+        .select('contact_name, contact_email, burn_address, burn_date, permit_expiry_date, confirmation_code, department_id')
+        .eq('id', permit_id)
+        .single()
+
+      if (permit) {
+        const { data: dept } = await adminClient
+          .from('departments')
+          .select('name, public_slug')
+          .eq('id', permit.department_id)
+          .single()
+
+        const statusUrl = dept?.public_slug
+          ? `https://www.fireops7.com/dept/${dept.public_slug}/permit-status?code=${permit.confirmation_code}`
+          : null
+
+        const deptName = dept?.name ?? 'Fire Department'
+        const expiryLine = permit.permit_expiry_date
+          ? `<p><strong>Permit Expires:</strong> ${new Date(permit.permit_expiry_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>`
+          : ''
+
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'permits@fireops7.com',
+            to: permit.contact_email,
+            subject: `Your Burn Permit Has Been Approved — ${deptName}`,
+            html: `
+              <p>Dear ${permit.contact_name},</p>
+              <p>Your burn permit request has been <strong>approved</strong> by ${deptName}.</p>
+              <p><strong>Burn Address:</strong> ${permit.burn_address}</p>
+              <p><strong>Burn Date:</strong> ${new Date(permit.burn_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              ${expiryLine}
+              <p><strong>Confirmation Code:</strong> ${permit.confirmation_code}</p>
+              ${statusUrl ? `<p><a href="${statusUrl}" style="background:#b91c1c;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;margin-top:8px;">View &amp; Print Your Permit</a></p>` : ''}
+              <p style="margin-top:24px;font-size:12px;color:#666;">
+                Remember to call the sheriff's office and notify them of your location before burning.<br/>
+                This permit is void if wind exceeds 10 MPH.
+              </p>
+            `,
+          }),
+        })
+      }
+    } catch (_) {
+      // Email failure is non-fatal — permit is already approved
+    }
+  }
+
   revalidatePath('/inbox')
   return { success: true }
 }

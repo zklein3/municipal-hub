@@ -46,6 +46,9 @@ export default async function DeptPublicLayout({
               <Link href={`${base}/records`} className="px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">
                 Records Request
               </Link>
+              <Link href={`${base}/permit-status`} className="px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">
+                Permit Status
+              </Link>
             </nav>
 
             <Link
@@ -62,6 +65,7 @@ export default async function DeptPublicLayout({
             <Link href={`${base}/events`} className="shrink-0 px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Events</Link>
             <Link href={`${base}/burn-permit`} className="shrink-0 px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Burn Permit</Link>
             <Link href={`${base}/records`} className="shrink-0 px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Records</Link>
+            <Link href={`${base}/permit-status`} className="shrink-0 px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Permit Status</Link>
           </nav>
         </div>
       </header>
