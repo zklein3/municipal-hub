@@ -328,3 +328,44 @@ export async function submitUnitProgress(formData: FormData) {
   revalidatePath('/training')
   return { success: true }
 }
+
+// ─── OFFICER/ADMIN: Save Training Signature ───────────────────────────────────
+export async function saveTrainingSignature(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+
+  const file = formData.get('signature') as File
+  const eventId = formData.get('eventId') as string
+  const personnelId = formData.get('personnelId') as string
+  if (!file || !eventId || !personnelId) return { error: 'Missing required fields.' }
+
+  const adminClient = createAdminClient()
+  const path = `training/${eventId}/${personnelId}.png`
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+
+  const { error: uploadErr } = await adminClient.storage
+    .from('signatures')
+    .upload(path, buffer, { contentType: 'image/png', upsert: true })
+
+  if (uploadErr) {
+    await logError(uploadErr, 'saveTrainingSignature/upload')
+    return { error: 'Failed to upload signature.' }
+  }
+
+  const signedAt = new Date().toISOString()
+
+  const { error: dbErr } = await adminClient
+    .from('training_event_attendance')
+    .update({ signature_url: path, signed_at: signedAt })
+    .eq('event_id', eventId)
+    .eq('personnel_id', personnelId)
+
+  if (dbErr) {
+    await logError(dbErr, 'saveTrainingSignature/db')
+    return { error: 'Failed to save signature record.' }
+  }
+
+  revalidatePath('/training')
+  return { success: true, signedAt }
+}
