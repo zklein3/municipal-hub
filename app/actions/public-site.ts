@@ -165,7 +165,7 @@ export async function updateBurnPermitStatus(formData: FormData) {
         : null
 
       await logEvent({
-        log_type: 'info',
+        log_type: 'user_report',
         page: '/inbox',
         personnel_id: me.id,
         department_id: permit.department_id,
@@ -190,6 +190,7 @@ export async function updateBurnPermitStatus(formData: FormData) {
           status_url: statusUrl,
           print_url: printUrl,
           email_workflow: 'system_log_forwarding',
+          report_type: 'burn_permit_approval',
         },
       })
     }
