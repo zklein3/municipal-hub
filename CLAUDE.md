@@ -190,17 +190,36 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ### Build Next List ← START HERE
 
-#### 1. Burn Permit — Applicant Signature Capture (priority)
-Same pattern as training signatures. Officer approves permit → hands device to applicant → applicant signs → signature saved to Supabase Storage → embedded on printed permit above the "(Signature of Applicant)" line.
-- Add `signature_url text` + `signed_at timestamptz` to `burn_permits` table
-- Reuse `SignaturePadModal` component (already built for training)
-- Add "Collect Signature" button to approved permit card in `/inbox` Burn Permits tab
-- Embed signed image on `/print/burn-permit` above the signature line
+#### 1. Public Permit Status + Print Page (priority)
+Residents need to retrieve and print their own approved permit without logging in. Officer approves → resident gets email → clicks link → prints. Nobody has to meet.
 
-#### 2. Personnel page — officer edit controls (lower priority)
-Officers see Add button on `/personnel` but no inline edit per card. Quick role/status edit inline on roster card for officer+admin. Not urgent — detail page works.
+**Public lookup page:** `/dept/[slug]/permit-status`
+- Input: confirmation code (the code they got when submitting)
+- Shows current status (pending / approved / denied)
+- If approved: shows permit details + **Print Permit** button
+- Print button opens `/dept/[slug]/permit-print?code=ABC12345` — public, no auth, same formatted permit as `/print/burn-permit` but accessible by confirmation code only
 
-#### 3. Public Site Option B — API Keys (only when customers ask)
+**Approval email via Resend:**
+- Trigger in `updateBurnPermitStatus` when status flips to `approved`
+- Send to `contact_email` via existing Resend/Edge Function pattern
+- Email contains: dept name, applicant name, burn address, burn date, expiry date, and a direct link to `/dept/[slug]/permit-status?code=ABC12345`
+- Subject: "Your Burn Permit Has Been Approved — [Dept Name]"
+
+**DB needed:** `departments.public_slug` already exists — use it to build the link in the email.
+
+**Edge Function or direct Resend call:** Can use the existing `notify-on-log` pattern or add a new `send-permit-approval` Edge Function. Whichever is cleaner.
+
+#### 2. Burn Permit — Applicant Signature Capture (next after #1)
+Officer approves → hands device to applicant → applicant signs → signature saved → embedded on printed permit.
+- Add `signature_url text` + `signed_at timestamptz` to `burn_permits`
+- Reuse `SignaturePadModal` component
+- Add "Collect Signature" button to approved permit card in `/inbox`
+- Embed signed image on permit print page above signature line
+
+#### 3. Personnel page — officer edit controls (lower priority)
+Officers see Add button on `/personnel` but no inline edit per card. Not urgent — detail page works.
+
+#### 4. Public Site Option B — API Keys (only when customers ask)
 `department_api_keys` table + public API endpoints for departments with their own site.
 
 ### Completed This Session (2026-05-04) — Announcements + Training Signatures
