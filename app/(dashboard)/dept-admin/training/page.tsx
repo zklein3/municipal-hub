@@ -75,24 +75,30 @@ export default async function TrainingAdminPage() {
     .lte('event_date', future60.toISOString().split('T')[0])
     .order('event_date', { ascending: false })
 
-  // Attendance for training events
+  // Attendance for training events (include signature fields)
   const eventIds = (trainingEvents ?? []).map(e => e.id)
   const { data: allAttendance } = eventIds.length > 0
-    ? await adminClient.from('training_event_attendance').select('id, event_id, personnel_id, status, submitted_at').in('event_id', eventIds)
+    ? await adminClient.from('training_event_attendance').select('id, event_id, personnel_id, status, submitted_at, signed_at, signature_url').in('event_id', eventIds)
     : { data: [] }
 
-  // Personnel names for pending attendance
-  const attendancePersonnelIds = [...new Set((allAttendance ?? []).filter(a => a.status === 'pending').map(a => a.personnel_id))]
+  // Personnel names for ALL attendance records
+  const attendancePersonnelIds = [...new Set((allAttendance ?? []).map(a => a.personnel_id))]
   const { data: attendancePersonnelRaw } = attendancePersonnelIds.length > 0
     ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', attendancePersonnelIds)
     : { data: [] }
   const attendanceNameMap = Object.fromEntries((attendancePersonnelRaw ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
 
   // Build per-event attendance summary
-  const attendanceByEvent = (allAttendance ?? []).reduce<Record<string, { verified: number; pending: { id: string; personnel_id: string; name: string; submitted_at: string }[] }>>((acc, a) => {
-    if (!acc[a.event_id]) acc[a.event_id] = { verified: 0, pending: [] }
+  const attendanceByEvent = (allAttendance ?? []).reduce<Record<string, {
+    verified: number; signed: number
+    pending: { id: string; personnel_id: string; name: string; submitted_at: string }[]
+    all: { id: string; personnel_id: string; name: string; status: string; signed_at: string | null }[]
+  }>>((acc, a) => {
+    if (!acc[a.event_id]) acc[a.event_id] = { verified: 0, signed: 0, pending: [], all: [] }
     if (a.status === 'verified') acc[a.event_id].verified++
+    if (a.signed_at) acc[a.event_id].signed++
     if (a.status === 'pending') acc[a.event_id].pending.push({ id: a.id, personnel_id: a.personnel_id, name: attendanceNameMap[a.personnel_id] ?? '—', submitted_at: a.submitted_at })
+    acc[a.event_id].all.push({ id: a.id, personnel_id: a.personnel_id, name: attendanceNameMap[a.personnel_id] ?? '—', status: a.status, signed_at: a.signed_at ?? null })
     return acc
   }, {})
 
@@ -106,7 +112,9 @@ export default async function TrainingAdminPage() {
       trainingEvents={(trainingEvents ?? []).map(e => ({
         ...e,
         verified_count: attendanceByEvent[e.id]?.verified ?? 0,
+        signed_count: attendanceByEvent[e.id]?.signed ?? 0,
         pending_attendance: attendanceByEvent[e.id]?.pending ?? [],
+        all_attendance: attendanceByEvent[e.id]?.all ?? [],
       }))}
       departmentId={department_id}
     />

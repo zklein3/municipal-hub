@@ -6,9 +6,9 @@ import PrintButton from './PrintButton'
 export default async function TrainingSignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ event_id?: string }>
+  searchParams: Promise<{ event_id?: string; personnel_id?: string }>
 }) {
-  const { event_id } = await searchParams
+  const { event_id, personnel_id } = await searchParams
   if (!event_id) return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Missing event_id parameter.</p>
 
   const supabase = await createClient()
@@ -32,12 +32,14 @@ export default async function TrainingSignInPage({
     .eq('id', evt.department_id)
     .single()
 
-  // Fetch all attendance for this event
-  const { data: attendanceRaw } = await adminClient
+  // Fetch attendance — all members or single member
+  let attendanceQuery = adminClient
     .from('training_event_attendance')
     .select('id, personnel_id, status, signed_at, signature_url')
     .eq('event_id', event_id)
     .order('personnel_id')
+  if (personnel_id) attendanceQuery = attendanceQuery.eq('personnel_id', personnel_id)
+  const { data: attendanceRaw } = await attendanceQuery
 
   // Fetch personnel names
   const pIds = [...new Set((attendanceRaw ?? []).map(a => a.personnel_id))]
@@ -115,7 +117,7 @@ export default async function TrainingSignInPage({
       <div style={S.page}>
         {/* Header */}
         <div style={S.heading}>
-          <p style={S.title}>Training Sign-In Sheet</p>
+          <p style={S.title}>{personnel_id ? 'Training Attendance Record' : 'Training Sign-In Sheet'}</p>
           <p style={S.subtitle}>{dept?.name ?? 'Fire Department'}</p>
         </div>
         <div style={S.divider} />

@@ -24,8 +24,9 @@ interface PendingAttendance { id: string; personnel_id: string; name: string; su
 interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
-  requires_verification: boolean; verified_count: number
+  requires_verification: boolean; verified_count: number; signed_count: number
   pending_attendance: PendingAttendance[]
+  all_attendance: { id: string; personnel_id: string; name: string; status: string; signed_at: string | null }[]
 }
 
 export default function TrainingAdminClient({
@@ -448,15 +449,28 @@ export default function TrainingAdminClient({
                           {evt.location && <span>📍 {evt.location}</span>}
                           {evt.hours && <span>{evt.hours}h</span>}
                           <span>{evt.verified_count} verified</span>
+                          {evt.signed_count > 0 && (
+                            <span className="text-green-600 font-semibold">✓ {evt.signed_count} signed</span>
+                          )}
                           {evt.pending_attendance.length > 0 && (
                             <span className="text-yellow-600 font-semibold">⏳ {evt.pending_attendance.length} pending</span>
                           )}
                         </div>
                       </div>
-                      <button onClick={() => { setLogAttendanceEventId(logAttendanceEventId === evt.id ? null : evt.id); setAttendanceSelected(new Set()) }}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 shrink-0">
-                        {logAttendanceEventId === evt.id ? 'Hide' : 'Manage'}
-                      </button>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <a
+                          href={`/print/training-signin?event_id=${evt.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                        >
+                          Print ↗
+                        </a>
+                        <button onClick={() => { setLogAttendanceEventId(logAttendanceEventId === evt.id ? null : evt.id); setAttendanceSelected(new Set()) }}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                          {logAttendanceEventId === evt.id ? 'Hide' : 'Manage'}
+                        </button>
+                      </div>
                     </div>
 
                     {logAttendanceEventId === evt.id && (
@@ -522,6 +536,44 @@ export default function TrainingAdminClient({
                             {loading ? 'Logging...' : `Log ${attendanceSelected.size} Members`}
                           </button>
                         </div>
+
+                        {/* Signatures */}
+                        {evt.all_attendance.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
+                              Signatures ({evt.signed_count}/{evt.all_attendance.length})
+                            </p>
+                            <div className="flex flex-col gap-1.5">
+                              {[...evt.all_attendance].sort((a, b) => a.name.localeCompare(b.name)).map(a => (
+                                <div key={a.personnel_id} className="flex items-center justify-between bg-white rounded-lg border border-zinc-200 px-4 py-2.5 gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-zinc-900 truncate">{a.name}</p>
+                                    {a.signed_at && (
+                                      <p className="text-xs text-zinc-400">{new Date(a.signed_at).toLocaleString()}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {a.signed_at ? (
+                                      <span className="text-xs font-semibold text-green-600">✓ Signed</span>
+                                    ) : a.status === 'verified' ? (
+                                      <span className="text-xs text-blue-500">Awaiting signature</span>
+                                    ) : (
+                                      <span className="text-xs text-zinc-400">Pending verification</span>
+                                    )}
+                                    <a
+                                      href={`/print/training-signin?event_id=${evt.id}&personnel_id=${a.personnel_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                                    >
+                                      Print ↗
+                                    </a>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
