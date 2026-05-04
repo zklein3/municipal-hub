@@ -17,7 +17,10 @@ export default async function SysAdminDeptPage({ params }: { params: Promise<{ i
   if (!me?.is_sys_admin) redirect('/dashboard')
 
   // Fetch department
-  const { data: deptList } = await adminClient.from('departments').select('id, name, code, active').eq('id', id)
+  const { data: deptList } = await adminClient
+    .from('departments')
+    .select('id, name, code, active, public_slug, public_site_enabled, public_phone, public_email, public_address, public_tagline, public_about')
+    .eq('id', id)
   const dept = deptList?.[0]
   if (!dept) redirect('/dashboard')
 
@@ -99,6 +102,14 @@ export default async function SysAdminDeptPage({ params }: { params: Promise<{ i
     .eq('department_id', id)
     .order('sort_order')
 
+  // Fetch event series for public site tab
+  const { data: eventSeries } = await adminClient
+    .from('event_series')
+    .select('id, title, event_type, is_public, active')
+    .eq('department_id', id)
+    .eq('active', true)
+    .order('title')
+
   return (
     <SysAdminDeptClient
       dept={dept}
@@ -108,6 +119,7 @@ export default async function SysAdminDeptPage({ params }: { params: Promise<{ i
       roles={roles ?? []}
       compartmentNames={compartmentNames ?? []}
       departmentId={id}
+      eventSeries={eventSeries ?? []}
     />
   )
 }

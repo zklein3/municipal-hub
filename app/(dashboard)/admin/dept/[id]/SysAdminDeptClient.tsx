@@ -6,6 +6,7 @@ import { createDeptMember } from '@/app/actions/users'
 import { createStation } from '@/app/actions/stations'
 import { createApparatus } from '@/app/actions/apparatus'
 import { createCompartmentName, updateCompartmentName } from '@/app/actions/compartments'
+import PublicSiteTab from './PublicSiteTab'
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -24,9 +25,15 @@ const STATUS_LABELS: Record<string, string> = {
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']
 
-type Tab = 'personnel' | 'stations' | 'apparatus' | 'compartments'
+type Tab = 'personnel' | 'stations' | 'apparatus' | 'compartments' | 'public_site'
 
-interface Dept { id: string; name: string; code: string | null; active: boolean }
+interface Dept {
+  id: string; name: string; code: string | null; active: boolean
+  public_slug: string | null; public_site_enabled: boolean
+  public_phone: string | null; public_email: string | null; public_address: string | null
+  public_tagline: string | null; public_about: string | null
+}
+interface EventSeries { id: string; title: string; event_type: string | null; is_public: boolean; active: boolean }
 interface PersonnelRecord {
   id: string; system_role: string; signup_status: string; active: boolean
   employee_number: string | null; role_name: string | null
@@ -38,10 +45,11 @@ interface Role { id: string; name: string; is_officer: boolean; sort_order: numb
 interface CompartmentName { id: string; compartment_code: string; compartment_name: string | null; sort_order: number | null; active: boolean }
 
 export default function SysAdminDeptClient({
-  dept, personnel, stations, apparatus, roles, compartmentNames, departmentId,
+  dept, personnel, stations, apparatus, roles, compartmentNames, departmentId, eventSeries,
 }: {
   dept: Dept; personnel: PersonnelRecord[]; stations: Station[]
-  apparatus: Apparatus[]; roles: Role[]; compartmentNames: CompartmentName[]; departmentId: string
+  apparatus: Apparatus[]; roles: Role[]; compartmentNames: CompartmentName[]
+  departmentId: string; eventSeries: EventSeries[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('personnel')
@@ -95,11 +103,12 @@ export default function SysAdminDeptClient({
     setLoading(false)
   }
 
-  const tabs: { key: Tab; label: string; count: number }[] = [
+  const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'personnel', label: 'Personnel', count: personnel.length },
     { key: 'stations', label: 'Stations', count: stations.length },
     { key: 'apparatus', label: 'Apparatus', count: apparatus.length },
     { key: 'compartments', label: 'Compartments', count: compartmentNames.length },
+    { key: 'public_site', label: 'Public Site' },
   ]
 
   return (
@@ -129,9 +138,7 @@ export default function SysAdminDeptClient({
               tab === t.key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
             }`}>
             {t.label}
-            <span className={`ml-1.5 text-xs ${tab === t.key ? 'text-red-200' : 'text-zinc-400'}`}>
-              {t.count}
-            </span>
+            {t.count != null && <span className={`ml-1.5 text-xs ${tab === t.key ? 'text-red-200' : 'text-zinc-400'}`}>{t.count}</span>}
           </button>
         ))}
       </div>
@@ -532,6 +539,22 @@ export default function SysAdminDeptClient({
             )}
           </div>
         </div>
+      )}
+
+      {tab === 'public_site' && (
+        <PublicSiteTab
+          departmentId={departmentId}
+          publicSite={{
+            public_slug: dept.public_slug,
+            public_site_enabled: dept.public_site_enabled,
+            public_phone: dept.public_phone,
+            public_email: dept.public_email,
+            public_address: dept.public_address,
+            public_tagline: dept.public_tagline,
+            public_about: dept.public_about,
+          }}
+          eventSeries={eventSeries}
+        />
       )}
     </div>
   )
