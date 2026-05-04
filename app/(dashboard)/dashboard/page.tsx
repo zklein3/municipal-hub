@@ -148,10 +148,10 @@ export default async function DashboardPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/login')
 
-  // Fetch dept name separately
+  // Fetch dept info separately
   const { data: deptData } = await adminClient
     .from('departments')
-    .select('name')
+    .select('name, public_slug, public_site_enabled')
     .eq('id', myDept.department_id)
     .single()
 
@@ -162,6 +162,9 @@ export default async function DashboardPage() {
 
   const departmentId = myDept.department_id
   const departmentName = deptData?.name ?? 'Your Department'
+  const publicSiteUrl = deptData?.public_site_enabled && deptData?.public_slug
+    ? `/dept/${deptData.public_slug}`
+    : null
   const systemRole = myDept.system_role
   const isAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
@@ -225,6 +228,24 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-sm text-zinc-500 mt-1">{departmentName}</p>
       </div>
+
+      {/* Admin: public site preview link */}
+      {isAdmin && publicSiteUrl && (
+        <div className="mb-4 rounded-xl bg-white border border-zinc-200 px-5 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-zinc-800">Your Public Site is Live</p>
+            <p className="text-xs text-zinc-400 mt-0.5">fireops7.com{publicSiteUrl}</p>
+          </div>
+          <a
+            href={publicSiteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-800 transition-colors ml-4"
+          >
+            Preview ↗
+          </a>
+        </div>
+      )}
 
       {/* Admin: pending setup banner */}
       {isAdmin && data.pendingSetup.length > 0 && (
