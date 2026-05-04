@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { logError } from '@/lib/logger'
+import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 export async function savePublicSiteSettings(formData: FormData) {
@@ -139,19 +139,59 @@ export async function updateBurnPermitStatus(formData: FormData) {
   const { error: dbErr } = await adminClient.from('burn_permits').update(updateData).eq('id', permit_id)
   if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
 
-  // Send approval email via Edge Function (uses Supabase RESEND_API_KEY secret)
+  // Temporary email path: notify the app owner through the existing system log email flow.
+  // Direct resident email is disabled until the sending domain is verified in Resend.
   if (status === 'approved') {
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-permit-approval`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ permit_id }),
-        }
-      )
-    } catch (_) {
-      // Email failure is non-fatal — permit is already approved
+    const { data: permit } = await adminClient
+      .from('burn_permits')
+      .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, permit_expiry_date, issued_date, department_id')
+      .eq('id', permit_id)
+      .single()
+
+    const { data: dept } = permit?.department_id
+      ? await adminClient
+          .from('departments')
+          .select('name, public_slug')
+          .eq('id', permit.department_id)
+          .single()
+      : { data: null }
+
+    if (permit) {
+      const statusUrl = dept?.public_slug
+        ? `https://www.fireops7.com/dept/${dept.public_slug}/permit-status?code=${permit.confirmation_code}`
+        : null
+      const printUrl = dept?.public_slug
+        ? `https://www.fireops7.com/dept/${dept.public_slug}/permit-print?code=${permit.confirmation_code}`
+        : null
+
+      await logEvent({
+        log_type: 'info',
+        page: '/inbox',
+        personnel_id: me.id,
+        department_id: permit.department_id,
+        message: [
+          `Burn permit approved for ${permit.contact_name}.`,
+          `Resident email: ${permit.contact_email}`,
+          permit.contact_phone ? `Resident phone: ${permit.contact_phone}` : null,
+          `Department: ${dept?.name ?? 'Unknown department'}`,
+          `Confirmation code: ${permit.confirmation_code}`,
+          `Burn address: ${permit.burn_address}`,
+          `Burn date: ${permit.burn_date}`,
+          `Issued date: ${permit.issued_date ?? 'not set'}`,
+          `Expires: ${permit.permit_expiry_date ?? 'not set'}`,
+          statusUrl ? `Resident status link: ${statusUrl}` : null,
+          printUrl ? `Direct print link: ${printUrl}` : null,
+          'Temporary workflow: forward this approval information to the resident until fireops7.com is verified in Resend.',
+        ].filter(Boolean).join('\n'),
+        metadata: {
+          permit_id: permit.id,
+          confirmation_code: permit.confirmation_code,
+          resident_email: permit.contact_email,
+          status_url: statusUrl,
+          print_url: printUrl,
+          email_workflow: 'system_log_forwarding',
+        },
+      })
     }
   }
 
