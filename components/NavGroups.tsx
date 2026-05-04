@@ -65,6 +65,7 @@ export default function NavGroups({
 
         const open = openGroups.has(group.label)
         const hasActive = group.items.some(item => isActive(pathname, item.href))
+        const groupBadge = group.items.reduce((sum, item) => sum + (item.badge ?? 0), 0)
 
         return (
           <div key={group.label}>
@@ -77,8 +78,15 @@ export default function NavGroups({
               }`}
             >
               <span>{group.label}</span>
-              <span className={`text-xs opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''} inline-block`}>
-                ▾
+              <span className="flex items-center gap-1.5">
+                {!open && groupBadge > 0 && (
+                  <span className="rounded-full bg-blue-500 px-1.5 py-0.5 text-xs font-bold text-white leading-none">
+                    {groupBadge > 99 ? '99+' : groupBadge}
+                  </span>
+                )}
+                <span className={`text-xs opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''} inline-block`}>
+                  ▾
+                </span>
               </span>
             </button>
 
