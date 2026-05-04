@@ -134,12 +134,24 @@ export default function TrainingReportClient({
           <h1 className="text-2xl font-bold text-zinc-900">Training &amp; Certification Report</h1>
           <p className="text-sm text-zinc-500 mt-0.5">{dateFrom} — {dateTo}</p>
         </div>
-        <button
-          onClick={handlePrint}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors shrink-0"
-        >
-          Print
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {selectedPersonnelId && (
+            <a
+              href={`/print/member-training?personnel_id=${selectedPersonnelId}&from=${dateFrom}&to=${dateTo}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+            >
+              Member Record ↗
+            </a>
+          )}
+          <button
+            onClick={handlePrint}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors"
+          >
+            Print
+          </button>
+        </div>
       </div>
 
       {/* Print header */}
