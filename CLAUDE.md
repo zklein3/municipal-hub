@@ -213,12 +213,40 @@ Residents need to retrieve and print their own approved permit without logging i
 
 **Edge Function or direct Resend call:** Can use the existing `notify-on-log` pattern or add a new `send-permit-approval` Edge Function. Whichever is cleaner.
 
-#### 2. Burn Permit — Applicant Signature Capture (next after #1)
-Officer approves → hands device to applicant → applicant signs → signature saved → embedded on printed permit.
-- Add `signature_url text` + `signed_at timestamptz` to `burn_permits`
-- Reuse `SignaturePadModal` component
-- Add "Collect Signature" button to approved permit card in `/inbox`
-- Embed signed image on permit print page above signature line
+#### 2. Burn Permit — Full Signature + Config Flow (next build)
+
+**Two blocking config issues to fix first (Step 1):**
+- **Department name on permit** — printed permit header must use the department's full legal name as set in `departments.name`. Currently fetched correctly but no validation exists. Add a check: if `departments.name` is null/empty, block approval with a clear error.
+- **County/sheriff info required** — `burn_permit_county_info` MUST be set before a permit is legally usable (Nebraska statute requires the sheriff notification section). Currently defaults to blank. Fix: in `/inbox` Burn Permits tab, show a yellow warning banner if `burn_permit_county_info` is null for the department. Warn officer before they approve. Also validate in `updateBurnPermitStatus` — if county info is missing and status is 'approved', return an error: "Configure county/sheriff info in Admin → Public Site before approving permits."
+- Same check for `burn_permit_restrictions` — default to "Brush" if null (already done) but warn admin it's not set.
+
+**DB additions (Step 2):**
+- `burn_permits.officer_signature_url text`
+- `burn_permits.officer_signed_at timestamptz`
+- `burn_permits.applicant_signature_url text`
+- `burn_permits.applicant_signed_at timestamptz`
+- `burn_permits.applicant_acknowledged_at timestamptz` — set when resident clicks "I'll Print and Sign"
+
+**Signature flow (Steps 3–5):**
+
+**Step 3 — Officer signature**
+- After approving, a "Collect Officer Signature" button appears on the permit card in `/inbox`
+- Opens SignaturePadModal: "Signing as officer for [Permit #] — [Contact Name]"
+- Saves to Supabase Storage `signatures/permits/officer/{permit_id}.png`
+- Stores URL + timestamp on `burn_permits.officer_signature_url/officer_signed_at`
+- Permit card shows "Officer Signed ✓" badge once done
+
+**Step 4 — Resident signature (on permit-status page)**
+- Once officer has signed, permit-status page shows the signature section
+- Two options:
+  - **Sign Digitally** — SignaturePadModal on their device → saves to `signatures/permits/applicant/{permit_id}.png` → stores on `applicant_signature_url/applicant_signed_at`
+  - **I'll Print and Sign** — acknowledgement button → sets `applicant_acknowledged_at`, blank line on printed copy
+- After either action: "Your permit is complete — you may now print it"
+- Print button only enabled after resident completes their step
+
+**Step 5 — Inbox status + updated print pages**
+- Permit card in `/inbox` shows completion state: Officer Signed ✓ | Applicant Signed ✓ / Acknowledged ✓ / Pending
+- `/dept/[slug]/permit-print` and `/print/burn-permit` — embed officer signature image above "(Fire Department Officer)" line, applicant signature above "(Signature of Applicant)" line (or blank line if print-acknowledged)
 
 #### 3. Personnel page — officer edit controls (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Not urgent — detail page works.
