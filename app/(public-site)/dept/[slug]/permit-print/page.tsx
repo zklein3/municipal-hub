@@ -32,7 +32,7 @@ export default async function PublicPermitPrintPage({
 
   const { data: permit } = await adminClient
     .from('burn_permits')
-    .select('contact_name, contact_phone, burn_address, burn_date, status, permit_expiry_date, issued_date, confirmation_code, approved_by_personnel_id')
+    .select('contact_name, contact_phone, burn_address, burn_date, status, permit_expiry_date, issued_date, confirmation_code, approved_by_personnel_id, officer_signature_url, applicant_signature_url')
     .eq('confirmation_code', code.toUpperCase().trim())
     .eq('department_id', dept.id)
     .single()
@@ -44,6 +44,16 @@ export default async function PublicPermitPrintPage({
     : { data: null }
 
   const officerName = officerData ? `${officerData.first_name} ${officerData.last_name}` : '___________________________'
+
+  const [officerSigUrl, applicantSigUrl] = await Promise.all([
+    permit.officer_signature_url
+      ? adminClient.storage.from('signatures').createSignedUrl(permit.officer_signature_url, 3600).then(r => r.data?.signedUrl ?? null)
+      : Promise.resolve(null),
+    permit.applicant_signature_url
+      ? adminClient.storage.from('signatures').createSignedUrl(permit.applicant_signature_url, 3600).then(r => r.data?.signedUrl ?? null)
+      : Promise.resolve(null),
+  ])
+
   const restrictions = dept.burn_permit_restrictions ?? 'Brush'
   const countyInfo   = dept.burn_permit_county_info ?? ''
 
@@ -120,10 +130,17 @@ export default async function PublicPermitPrintPage({
         <div style={S.divider} />
 
         <div style={S.sigRow}>(Signature of Applicant)</div>
-        <div style={{ borderBottom: '1px solid #000', marginTop: '28px', marginBottom: '12px' }} />
+        {applicantSigUrl
+          ? <img src={applicantSigUrl} alt="Applicant signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '6px 0 12px' }} />
+          : <div style={{ borderBottom: '1px solid #000', marginTop: '28px', marginBottom: '12px' }} />
+        }
         <div style={S.sigRow}>(Phone # of Applicant) <span style={{ fontWeight: 400 }}>{permit.contact_phone ?? ''}</span></div>
         <div style={{ borderBottom: '1px solid #000', marginTop: '28px', marginBottom: '12px' }} />
         <div style={S.sigRow}>(Fire Department Officer) <span style={{ fontStyle: 'italic' }}>{officerName}</span></div>
+        {officerSigUrl
+          ? <img src={officerSigUrl} alt="Officer signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '6px 0 4px' }} />
+          : <div style={{ borderBottom: '1px solid #000', marginTop: '10px', marginBottom: '4px' }} />
+        }
 
         <p style={S.voidBanner}>VOID IF WIND EXCEEDS 10 MPH.</p>
         <p style={S.code}>Confirmation: {permit.confirmation_code}</p>
