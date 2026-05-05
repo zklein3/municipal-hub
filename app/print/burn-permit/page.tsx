@@ -105,10 +105,8 @@ export default async function BurnPermitPrintPage({
         </div>
 
         {/* Liability line */}
-        <div style={{ margin: '16px 0', display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
-          <span>I</span>
-          <span style={{ borderBottom: '1px solid #000', flexGrow: 1, display: 'inline-block', minHeight: '18px' }} />
-          <span>Accept all financial Responsibility for any costs incurred if fire becomes out of control.</span>
+        <div style={{ margin: '16px 0' }}>
+          I <span style={{ fontWeight: 700, borderBottom: '1px solid #000', paddingBottom: '1px' }}>{permit.contact_name}</span> Accept all financial Responsibility for any costs incurred if fire becomes out of control.
         </div>
 
         <div style={S.divider} />
