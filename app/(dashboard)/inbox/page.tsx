@@ -28,6 +28,13 @@ export default async function InboxPage({
 
   const department_id = myDept.department_id
 
+  // Fetch dept burn permit config
+  const { data: deptConfig } = await adminClient
+    .from('departments')
+    .select('name, burn_permit_county_info, burn_permit_restrictions')
+    .eq('id', department_id)
+    .single()
+
   // Fetch burn permits for this department
   const { data: permitsRaw } = await adminClient
     .from('burn_permits')
@@ -61,6 +68,9 @@ export default async function InboxPage({
       permits={permits}
       requests={requestsRaw ?? []}
       initialTab={(tab === 'records' ? 'records' : 'permits')}
+      deptName={deptConfig?.name ?? null}
+      burnPermitCountyInfo={deptConfig?.burn_permit_county_info ?? null}
+      burnPermitRestrictions={deptConfig?.burn_permit_restrictions ?? null}
     />
   )
 }

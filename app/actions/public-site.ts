@@ -129,6 +129,30 @@ export async function updateBurnPermitStatus(formData: FormData) {
 
   if (!['approved', 'denied', 'cancelled'].includes(status)) return { error: 'Invalid status.' }
 
+  // Validate dept config before approving
+  if (status === 'approved') {
+    const { data: permitCheck } = await adminClient
+      .from('burn_permits')
+      .select('department_id')
+      .eq('id', permit_id)
+      .single()
+
+    if (permitCheck) {
+      const { data: deptCheck } = await adminClient
+        .from('departments')
+        .select('name, burn_permit_county_info')
+        .eq('id', permitCheck.department_id)
+        .single()
+
+      if (!deptCheck?.name) {
+        return { error: 'Department name is not set. Configure it in Admin → Department before approving permits.' }
+      }
+      if (!deptCheck?.burn_permit_county_info) {
+        return { error: 'County/sheriff info is required before approving permits. Configure it in Admin → Department → Public Site tab.' }
+      }
+    }
+  }
+
   const updateData: Record<string, unknown> = { status, reviewer_notes, updated_at: new Date().toISOString() }
   if (status === 'approved') {
     updateData.issued_date = new Date().toISOString().split('T')[0]

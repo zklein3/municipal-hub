@@ -38,7 +38,17 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
-export default function BurnPermitsTab({ permits: initialPermits }: { permits: Permit[] }) {
+export default function BurnPermitsTab({
+  permits: initialPermits,
+  deptName,
+  burnPermitCountyInfo,
+  burnPermitRestrictions,
+}: {
+  permits: Permit[]
+  deptName: string | null
+  burnPermitCountyInfo: string | null
+  burnPermitRestrictions: string | null
+}) {
   const [permits, setPermits] = useState(initialPermits)
   const [filter, setFilter] = useState<'all' | Status>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -89,8 +99,37 @@ export default function BurnPermitsTab({ permits: initialPermits }: { permits: P
     setLoading(false)
   }
 
+  const missingConfig: string[] = []
+  if (!deptName) missingConfig.push('department name')
+  if (!burnPermitCountyInfo) missingConfig.push('county / sheriff info')
+
   return (
     <div>
+      {/* Config warning */}
+      {missingConfig.length > 0 && (
+        <div className="mb-4 rounded-xl bg-yellow-50 border border-yellow-200 px-5 py-4">
+          <p className="text-sm font-semibold text-yellow-800 mb-1">
+            Burn permit setup incomplete — permits cannot be approved yet
+          </p>
+          <p className="text-xs text-yellow-700 mb-2">
+            Missing: <span className="font-medium">{missingConfig.join(', ')}</span>
+          </p>
+          <a
+            href="/admin/departments"
+            className="text-xs font-semibold text-yellow-800 hover:underline"
+          >
+            Go to Admin → Department → Public Site tab to configure →
+          </a>
+        </div>
+      )}
+      {!burnPermitRestrictions && (
+        <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-5 py-3">
+          <p className="text-xs text-blue-700">
+            <span className="font-semibold">Note:</span> Burn restrictions not set — permits will print with default &quot;Brush&quot;. Set in Admin → Department → Public Site tab.
+          </p>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {(['all', 'pending', 'approved', 'denied'] as const).map(f => (

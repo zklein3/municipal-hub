@@ -10,10 +10,16 @@ export default function InboxClient({
   permits,
   requests,
   initialTab,
+  deptName,
+  burnPermitCountyInfo,
+  burnPermitRestrictions,
 }: {
   permits: any[]
   requests: any[]
   initialTab: Tab
+  deptName: string | null
+  burnPermitCountyInfo: string | null
+  burnPermitRestrictions: string | null
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
 
@@ -61,7 +67,14 @@ export default function InboxClient({
         </button>
       </div>
 
-      {tab === 'permits' && <BurnPermitsTab permits={permits} />}
+      {tab === 'permits' && (
+        <BurnPermitsTab
+          permits={permits}
+          deptName={deptName}
+          burnPermitCountyInfo={burnPermitCountyInfo}
+          burnPermitRestrictions={burnPermitRestrictions}
+        />
+      )}
 
       {tab === 'records' && <RecordRequestsTab requests={requests} />}
     </div>
