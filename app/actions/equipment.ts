@@ -228,9 +228,24 @@ export async function assignItemToCompartment(formData: FormData) {
   if (!apparatus_compartment_id || !item_id) return { error: 'Compartment and item are required.' }
   if (!expected_quantity || parseInt(expected_quantity) < 1) return { error: 'Expected quantity must be at least 1.' }
   const { data: existing } = await adminClient
-    .from('item_location_standards').select('id')
+    .from('item_location_standards').select('id, active')
     .eq('apparatus_compartment_id', apparatus_compartment_id).eq('item_id', item_id)
-  if (existing?.[0]) return { error: 'This item is already assigned to this compartment.' }
+  const existingAssignment = existing?.[0]
+  if (existingAssignment?.active) return { error: 'This item is already assigned to this compartment.' }
+  if (existingAssignment) {
+    const { error } = await adminClient
+      .from('item_location_standards')
+      .update({
+        expected_quantity: parseInt(expected_quantity),
+        notes: notes || null,
+        active: true,
+      })
+      .eq('id', existingAssignment.id)
+    if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
+    revalidatePath('/equipment')
+    revalidatePath('/apparatus')
+    return { success: true }
+  }
   const { error } = await adminClient.from('item_location_standards').insert({
     apparatus_compartment_id, item_id,
     expected_quantity: parseInt(expected_quantity),
@@ -246,9 +261,13 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can remove items.' }
   const adminClient = createAdminClient()
-  const { error } = await adminClient.from('item_location_standards').delete().eq('id', location_standard_id)
+  const { error } = await adminClient
+    .from('item_location_standards')
+    .update({ active: false })
+    .eq('id', location_standard_id)
   if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
   revalidatePath('/equipment')
+  revalidatePath('/apparatus')
   return { success: true }
 }
 
@@ -274,22 +293,47 @@ export async function moveItemToCompartment(location_standard_id: string, target
   const adminClient = createAdminClient()
 
   const { data: existing } = await adminClient
-    .from('item_location_standards').select('id, item_id')
+    .from('item_location_standards').select('id, item_id, expected_quantity, minimum_quantity, notes')
     .eq('id', location_standard_id)
   const record = existing?.[0]
   if (!record) return { error: 'Item assignment not found.' }
 
   const { data: conflict } = await adminClient
-    .from('item_location_standards').select('id')
+    .from('item_location_standards').select('id, active')
     .eq('apparatus_compartment_id', target_compartment_id)
     .eq('item_id', record.item_id)
-  if (conflict?.[0]) return { error: 'This item is already assigned to the target compartment.' }
+  const targetAssignment = conflict?.[0]
+  if (targetAssignment?.active) return { error: 'This item is already assigned to the target compartment.' }
 
-  const { error } = await adminClient
+  const targetPayload = {
+    apparatus_compartment_id: target_compartment_id,
+    item_id: record.item_id,
+    expected_quantity: record.expected_quantity,
+    minimum_quantity: record.minimum_quantity,
+    notes: record.notes,
+    active: true,
+  }
+
+  const { error } = targetAssignment
+    ? await adminClient
+        .from('item_location_standards')
+        .update(targetPayload)
+        .eq('id', targetAssignment.id)
+    : await adminClient
+        .from('item_location_standards')
+        .insert(targetPayload)
+  if (error) {
+    await logError(error.message, '/equipment')
+    return { error: error.message }
+  }
+
+  const { error: deactivateErr } = await adminClient
     .from('item_location_standards')
-    .update({ apparatus_compartment_id: target_compartment_id })
+    .update({ active: false })
     .eq('id', location_standard_id)
-  if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
+  if (deactivateErr) { await logError(deactivateErr.message, '/equipment'); return { error: deactivateErr.message } }
+
   revalidatePath('/equipment')
+  revalidatePath('/apparatus')
   return { success: true }
 }
