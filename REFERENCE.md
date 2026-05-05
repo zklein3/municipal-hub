@@ -6,7 +6,7 @@
 - Sys admin dashboard — department cards with stats
 - Sys admin — Departments, Users, System Logs (full log viewer with resolve/resolve-all, tab filters, metadata expand, show-resolved toggle)
 - Sys admin dept drill-in — `/admin/dept/[id]` tabbed
-- Dept Admin — Manage Personnel, Compartments, Items, Attendance Settings
+- Dept Admin — Dept Setup, Items, Attendance Settings, Training
 - Personnel roster + profile (role-based editing, change password)
 - Apparatus list + detail (edit, compartment assign/remove)
 - Stations list + detail
@@ -17,15 +17,27 @@
 - Inspection template builder — create templates per item type, add/edit/delete steps, reassign to different item type
 - Inspection run UI — `/inspections` select apparatus+compartment → `/inspections/run` checklist with asset picker, presence checks, all step types, submit logs to DB (apparatus_id, compartment_id, presence checks all persisted)
 - Multi-asset inspection — `expected_quantity` on asset-tracked items drives N inspection slots per item type; each slot gets its own asset picker (cross-slot deduplication) + full checklist; each submits a separate inspection log row
-- Daily Check mode — `/inspections` → compartment → "Daily Check" button → presence-only run (present/missing + qty for all items, no checklist); `?mode=presence` param; QR-ready for future scan landing
+- Daily Check mode — `/inspections` → compartment → "Daily Check" button, or compartment QR/page → Verify Present; presence-only run (present/missing + qty for all items, no checklist); `?mode=presence` param
 - Member activity report (`/reports/my-activity`) — self-view: attendance (present/excused/absent/pending counts + table), inspections (pass/fail counts + table), incidents (count + table); date range filter; all roles
 - Inspection report (`/reports/inspections`) — flat table with asset inspection rows (PASS/FAIL + step detail) and presence check rows (Present/Missing); filters: date range, apparatus, inspector, pass/fail toggle; expandable rows show all step responses; asset tag click drills into per-asset history; printable
 - Inventory Reports — `/reports/inventory` — apparatus cards, date range filter, flagged item reference cards, window.print() print view; linked from apparatus detail page
+- Training/Cert Report (`/reports/training`) — officer/admin, filters by member/cert type/date range, expiry flagging, printable screen view
+- Attendance Report (`/reports/attendance`) — officer/admin, participation rates, threshold flagging, date/member/event type filters, printable
+- Department announcements — `/announcements` plus dashboard unread banner; officers/admins create, admins pin/unpin/delete, all roles mark read
+- Training signatures — `SignaturePadModal` component, saves to Supabase Storage `signatures/`, embedded on `/print/training-signin`
+- Member training record print — `/print/member-training?personnel_id=xxx&from=xxx&to=xxx`
+- Public-facing department sites — `/dept/[slug]/*` path-based, per-dept on/off via `departments.public_site_enabled + public_slug`
+- Burn permit system — public form, officer inbox approval, signatures (officer + applicant), printable Nebraska state permit
+- Records request system — public form, officer inbox review flow
+- Public Inbox (`/inbox`) — burn permits + records requests with pending count badge
+- `apparatus.exclude_from_iso` — flag to exclude vehicles from ISO calculations
+- Burn permit signature flow — officer signs in inbox, resident signs or acknowledges on permit-status page, both signatures embedded on printed permit
 - Equipment move — Move button on each item in equipment detail → modal to pick any apparatus + compartment, single-step reassign (cross-truck supported)
 - Equipment quantity edit — click quantity number inline to edit expected count; officers/admins only; asset items show "assets" label, quantity items show "expected"
 - Attendance module — fully built including verification queue (approve/reject with reason, approve all)
-- Training module — DB migrated, cert types + course units, enrollments, member progress + verification, direct cert entry, training events with self-report + officer log + verification queue
+- Training module — DB migrated, cert types + course units, enrollments, member progress + verification, direct cert entry, training events with self-report + officer log + verification queue + digital signatures
 - Incident log module — DB migrated, manual entry, apparatus + per-unit times, personnel with POV support, fire details, officer verification + finalize flow
+- ISO audit baseline — hose inventory/tests, hydrants/flow tests, apparatus ISO specs, mutual aid log, `/iso/report`
 - Sys admin dept drill-in — mobile layout fixed (responsive grid forms)
 - Incident new form — paged/in-service times auto-fill from apparatus entries
 - Dashboard with real data + upcoming events/training this week with personal attendance status
@@ -36,13 +48,12 @@
 - Vercel deployed + fireops7.com DNS configured
 
 ## What's Placeholder / Not Yet Built
-- Training/cert report — officer/admin, filterable by member + cert type + date range, printable ← next build
-- Attendance report — officer/admin, participation rates, printable
-- QR code system (see QR design section below)
-- ISO audit sections — hose logs, apparatus specs, hydrant flows, mutual aid (see ISO section below)
+- Permit submission notification email to department (next build — see CLAUDE.md)
 - Inspection schedule settings (daily/weekly/monthly per dept)
 - Supabase auth allowed URLs for custom domain
-- Resend from address → custom domain
+- Resend from address → custom domain (blocked until fireops7.com verified, ~1 month)
+- Public site subdomain routing (blocked until Vercel Pro)
+- Officer personnel inline edit on roster cards
 
 ## User Roles & Permissions
 
@@ -79,12 +90,14 @@
 | Assign items to compartments | ❌ | ✅ | ✅ | ✅ |
 | Add/deactivate apparatus/stations | ❌ | ❌ | ✅ | ✅ |
 | Manage compartments/items/categories/assets | ❌ | ❌ | ✅ | ✅ |
-| Add/manage personnel | ❌ | ❌ | ✅ | ✅ |
+| Add/manage personnel | ❌ | ✅* | ✅ | ✅ |
 | Create certification types + courses | ❌ | ❌ | ✅ | ✅ |
 | Enroll members in certification courses | ❌ | ❌ | ✅ | ✅ |
 | Set participation requirements | ❌ | ❌ | ✅ | ✅ |
 | Define excuse types | ❌ | ❌ | ✅ | ✅ |
 | Generate/print QR labels | ❌ | ❌ | ✅ | ✅ |
+
+* Officers can add officers/members and edit operational profile fields from main nav pages. Admin-only setup/structure and admin role assignment stay under `/dept-admin/setup`.
 
 ## Attendance Module Detail
 
@@ -102,7 +115,7 @@
 - Warning banner shown when editing past events with existing attendance records
 - Members see only own attendance; dept-level aggregates on dashboard
 
-## QR + Compartment Page + Inspection Session — DESIGN (to build)
+## QR + Compartment Page + Inspection Session — Built Design
 
 ### Core Principles
 - Scanning is ADDITIVE — never required. Every page works without it
@@ -116,10 +129,10 @@
 - Asset: asset tag (e.g. `CHAINSAW-1`, `SAP-1`)
 - SCBA bottle: bottle ID (e.g. `B-0001`) — already in use
 
-### DB Changes Needed
-- Add `qr_code` text field to `apparatus`, `apparatus_compartments`, `item_assets`
-- Add `inspection_session_id` UUID to `item_asset_inspection_logs` — groups all compartment submissions from one weekly sweep into one session
-- Admin can type human-readable code OR scan existing manufacturer QR to associate
+### DB Changes Applied
+- `qr_code` text field added to `apparatus` and `apparatus_compartments`; asset scan redirects use asset tags via `/equipment/assets?search=...`.
+- `inspection_session_id` UUID added to `item_asset_inspection_logs` — groups all compartment submissions from one weekly sweep into one session.
+- Admin can type human-readable apparatus/compartment codes in the app.
 
 ### Two Scan Modes
 **Mode 1 — Phone camera outside app:**
@@ -153,7 +166,7 @@
 - `inspection_sessions` table: apparatus_id, department_id, status (`in_progress`|`completed`|`expired`), started_by, started_at, expires_at (12h), completed_at
 - `inspection_session_compartments` table: session_id, compartment_id, status (`pending`|`in_progress`|`completed`), claimed_by, claimed_at, completed_at, completed_by, released_by, released_at
 - `item_asset_inspection_logs.inspection_session_id` FK — groups all submissions from one session
-- **Lazy expiry** — on page open, if `expires_at` is past, session marked `expired` and a fresh one is created. No cron yet (planned).
+- **Lazy expiry + cron notification** — on page open, if `expires_at` is past, session is marked `expired` and a fresh one is created. The `notify-expired-sessions` Edge Function also runs hourly, marks stale sessions expired, sets `notified_at`, and emails active officers/admins.
 - **One person per compartment** — compartment claimed (`in_progress`) when user clicks Inspect. Others see it as locked. Officer/admin can release a stuck compartment back to `pending`.
 - **Auto-join** — navigating to apparatus session page auto-joins the open session; no invite needed.
 - **Auto-complete** — session marked `completed` when all compartments done. Officer/admin "Close Session" force-closes regardless.
@@ -170,7 +183,7 @@
 - "Print QR Label" button on apparatus detail + compartment page
 - Print layout: QR image + code text + apparatus/compartment name — uses `window.print()` (same as inventory reports)
 
-### Build Order (when starting this)
+### Build Order (completed)
 1. ✅ DB migration: `qr_code` on apparatus + apparatus_compartments; `inspection_session_id` on item_asset_inspection_logs; `inspection_sessions` + `inspection_session_compartments` tables
 2. ✅ Compartment page (`/equipment/[apparatus_id]/[compartment_id]`) — item list, asset status badges, Verify Present + Start Inspection buttons, recent activity, QR code admin form
 3. ✅ Inspection session (`/inspections/apparatus/[id]`) — compartment checklist, claim/release, auto-complete, officer close
@@ -237,7 +250,7 @@ incidents
 
 incident_times — paged, page_acknowledged, enroute, on_scene, leaving_scene, back_at_station
 incident_apparatus — apparatus_id, role (primary/support/staging)
-incident_personnel — personnel_id, apparatus_id, status (pending/verified/rejected)
+incident_personnel — personnel_id, apparatus_id, status (pending/present/absent)
 incident_fire_details — property_lost, dollar_loss, cause_of_fire, vehicle_make, insurance_info
 ```
 
@@ -251,12 +264,15 @@ incident_fire_details — property_lost, dollar_loss, cause_of_fire, vehicle_mak
 - `item_inspection_templates`, `item_inspection_template_steps`
 - `item_asset_inspection_logs` (+ apparatus_id, compartment_id columns), `item_asset_inspection_log_steps`
 - `compartment_presence_check_logs`
+- `inspection_sessions`, `inspection_session_compartments`
 - `excuse_types`, `participation_requirements`
 - `event_series`, `event_instances`, `event_attendance`
 - `certification_types`, `certification_course_units`, `course_enrollments`
 - `member_course_progress`, `member_certifications`
 - `training_events`, `training_event_attendance`
 - `incidents`, `incident_apparatus`, `incident_personnel`, `incident_fire_details`
+- `announcements`, `announcement_reads`
+- `apparatus_iso_specs`, `hoses`, `hose_tests`, `hydrants`, `hydrant_flow_tests`, `incident_mutual_aid`
 - `scba_bottles`, `scba_fill_logs`, `scba_maintenance_logs`, `scba_cylinder_specs`
 - `system_logs`
 
@@ -267,6 +283,11 @@ incident_fire_details — property_lost, dollar_loss, cause_of_fire, vehicle_mak
 - Training module: `certification_types`, `certification_course_units`, `course_enrollments`, `member_course_progress`, `member_certifications`, `training_events`, `training_event_attendance`
 - Incident module: `incidents`, `incident_apparatus`, `incident_personnel`, `incident_fire_details`
 - Inspection logs: added `apparatus_id`, `compartment_id` to `item_asset_inspection_logs`; new `compartment_presence_check_logs` table
+- Inspection sessions: `inspection_sessions`, `inspection_session_compartments`, `inspection_sessions.notified_at`, `item_asset_inspection_logs.inspection_session_id`
+- QR fields: `apparatus.qr_code`, `apparatus_compartments.qr_code`
+- Announcements: `announcements`, `announcement_reads`
+- Training signatures: `training_event_attendance.signature_url`, `training_event_attendance.signed_at`, Supabase Storage bucket `signatures`
+- ISO baseline: `apparatus_iso_specs`, `hoses`, `hose_tests`, `hydrants`, `hydrant_flow_tests`, `incident_mutual_aid`
 
 ### Fire School (public, no auth)
 - `fire_school_bottles`, `fire_school_fill_logs`
@@ -284,22 +305,23 @@ incident_fire_details — property_lost, dollar_loss, cause_of_fire, vehicle_mak
 - **Attendance** — participation rates by member and event type
 - **Incidents** — call volume, incident type breakdown, apparatus and personnel response
 
-### ISO Sections Still Needing Data + Logs
+### ISO Sections Built So Far
 
 **Hose inventory log**
-- Simple table: hose type (attack/supply/forestry), diameter, length, location (apparatus/station), last test date, test result
-- Admin entry form under Dept Admin
-- Report: all hose by location, last test date, pass/fail
+- Built at `/iso/hoses`: hose inventory plus NFPA 1962 service test log per hose.
+- Reported in `/iso/report` with tested/overdue/failed compliance status.
 
 **Apparatus + pump specs**
-- Add fields to `apparatus` table: pump_gpm, tank_capacity_gallons, pump_manufacturer, pump_year, vehicle_vin, vehicle_year, vehicle_make, vehicle_model
-- Edit form already exists on apparatus detail — just add fields
-- Report: apparatus spec sheet per truck
+- Built as `apparatus_iso_specs`, edited from apparatus detail.
+- Reported in `/iso/report` as apparatus spec coverage.
 
 **Hydrant flow logs**
-- New table: hydrant ID/address, test date, static PSI, residual PSI, flow GPM, tester name
-- Admin entry form, map or list view
-- Report: all hydrant tests by date range
+- Built at `/iso/hydrants`: hydrant list plus flow-test history.
+- Reported in `/iso/report` with recent test/compliance visibility.
+
+**Mutual aid log**
+- Built on incident detail: officers can log mutual aid given/received, apparatus description, personnel count, and times.
+- Reported in `/iso/report` as recent mutual aid activity.
 
 ### Mutual Aid — Three-Tier Design
 
@@ -330,3 +352,66 @@ incident_fire_details — property_lost, dollar_loss, cause_of_fire, vehicle_mak
 - Winslow Run Sheet (Excel) — uploaded April 16, 2026
 - CAD CFS Report (PDF) — uploaded April 16, 2026 (Dodge County 9-1-1)
   - Current workflow: received via email after call → manually transcribed into NERIS
+
+---
+
+## Session History
+
+### 2026-05-05 — Burn Permit Signatures + Public Site Completion
+- Config validation in inbox: yellow banner if county/sheriff info missing, blocks approval server-side
+- Burn permit signature flow (5 steps): DB migration → officer signs in inbox → resident signs/acknowledges on permit-status → signatures embedded on printed permit
+- `PermitSignatureModal` — reuses signature_pad, saves to `signatures/permits/officer/{id}.png`
+- `ApplicantSignatureSection` — public client component: choose (sign digitally / print and sign), inline canvas, acknowledgement path
+- Both print pages updated: applicant signature above (Signature of Applicant), officer signature below (Fire Department Officer)
+- Applicant name filled into "I ___ Accept all financial Responsibility" line
+- `.claude/settings.json` created with `npm run build*` allowlist
+
+### 2026-05-04, session 2 — Public Site + Inbox + Burn Permit
+- Public site at `/dept/[slug]/*` — landing, events, burn permit form, records request form
+- Permit status + public print pages (`/dept/[slug]/permit-status`, `/dept/[slug]/permit-print`)
+- Sys admin Public Site config tab on `/admin/dept/[id]` (5th tab)
+- Officer event public/private toggle from `/events` manage panel
+- Public Inbox (`/inbox`) — burn permits tab + records requests tab, pending badges in nav
+- Printable Nebraska state burn permit (NE Statute 81-520.01 legal text, county sheriff info)
+- `send-permit-approval` Edge Function deployed (email to resident on approval — awaiting domain verification)
+- Approval email currently via logEvent (→ sys admin inbox) until fireops7.com verified in Resend
+- `apparatus.exclude_from_iso` flag — checkbox on apparatus edit, ISO report excludes from stats
+
+### 2026-05-04, session 1 — Announcements + Training Signatures
+- `/announcements` — newest-first, pinned float, officer/admin create, admin pin/delete, all mark read
+- Dashboard unread announcement banner (DashboardAnnouncementBanner)
+- `signature_pad` installed, `SignaturePadModal` built
+- Training signatures: members sign own records, officers collect, `/print/training-signin` embeds images
+
+### 2026-05-03, session 2 — Setup Flow Polish + Permission Model
+- Inspection Templates tab in Dept Setup flow
+- HelpPrompt dismissable help system with localStorage persistence
+- Officer add personnel capability (PersonnelAddForm on /personnel)
+- Dashboard profile card (replaced stat cards)
+- Role-adaptive quick links on dashboard
+- Nav: "Training" → "Certifications", Incidents → Operations group
+- Permission model finalized: setup = admin only, operational pages = role-adaptive
+
+### 2026-05-03, session 1 — Dept Setup Flow
+- `/dept-admin/setup` five-step rail (Stations → Apparatus → Personnel → Compartments → Items & Assets)
+- Desktop sidebar + mobile horizontal scrollable tab bar
+- Each step: existing records as cards with inline edit + add
+
+### 2026-04-30 — Flow & Presentation Polish
+- Dashboard: removed SCBA Bottles stat card
+- Personnel: card grid replacing scrolling table
+- Nav: split Apparatus into Apparatus + Equipment groups
+
+### 2026-04-28 — QR Printing, Session Expiry Notifications, ISO Baseline
+- `/print/qr` dedicated print page
+- Bottle QR labels + fill station auto-check on scan
+- `notify-expired-sessions` Edge Function (hourly cron)
+- ISO DB tables + hose/hydrant/mutual aid pages + apparatus ISO specs card
+
+### 2026-04-27 — Inspection Sessions, Asset Roster, Compartment Detail, QR Infrastructure
+- Inspection sessions (`/inspections/apparatus/[id]`) with claim/release, 12h expiry
+- Asset Roster (`/equipment/assets`) with apparatus assignment
+- Compartment detail page (`/equipment/[id]/[compartment_id]`)
+- QR code columns on apparatus + compartments, `/scan` route
+- Incident attendance self-log + officer verification
+- Excused absence flow, Close Event, auto-close cron
