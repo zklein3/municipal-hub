@@ -38,7 +38,7 @@ export default async function InboxPage({
   // Fetch burn permits for this department
   const { data: permitsRaw } = await adminClient
     .from('burn_permits')
-    .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, approved_by_personnel_id, created_at')
+    .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, approved_by_personnel_id, officer_signed_at, created_at')
     .eq('department_id', department_id)
     .order('created_at', { ascending: false })
 

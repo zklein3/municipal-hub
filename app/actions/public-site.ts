@@ -224,6 +224,45 @@ export async function updateBurnPermitStatus(formData: FormData) {
   return { success: true }
 }
 
+// ─── Permit: Save officer signature ──────────────────────────────────────────
+export async function savePermitOfficerSignature(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+
+  const permit_id = formData.get('permit_id') as string
+  const blob = formData.get('signature') as Blob
+  if (!permit_id || !blob) return { error: 'Missing required fields.' }
+
+  const path = `permits/officer/${permit_id}.png`
+  const { error: uploadErr } = await adminClient.storage
+    .from('signatures')
+    .upload(path, blob, { contentType: 'image/png', upsert: true })
+  if (uploadErr) { await logError(uploadErr, '/inbox'); return { error: uploadErr.message } }
+
+  const signed_at = new Date().toISOString()
+  const { error: dbErr } = await adminClient
+    .from('burn_permits')
+    .update({ officer_signature_url: path, officer_signed_at: signed_at })
+    .eq('id', permit_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true, signedAt: signed_at }
+}
+
 // ─── Inbox: Update record request status ─────────────────────────────────────
 export async function updateRecordRequestStatus(formData: FormData) {
   const supabase = await createClient()

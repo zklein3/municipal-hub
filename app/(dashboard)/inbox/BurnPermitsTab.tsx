@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateBurnPermitStatus } from '@/app/actions/public-site'
+import PermitSignatureModal from './PermitSignatureModal'
 
 type Status = 'pending' | 'approved' | 'denied' | 'cancelled'
 
@@ -20,6 +21,7 @@ interface Permit {
   issued_date: string | null
   approved_by_name: string | null
   created_at: string
+  officer_signed_at: string | null
 }
 
 const STATUS_STYLES: Record<Status, string> = {
@@ -57,6 +59,10 @@ export default function BurnPermitsTab({
   const [expiryDate, setExpiryDate] = useState('')
   const [reviewerNotes, setReviewerNotes] = useState('')
   const [denyingId, setDenyingId] = useState<string | null>(null)
+  const [signingPermit, setSigningPermit] = useState<Permit | null>(null)
+  const [officerSignedAt, setOfficerSignedAt] = useState<Record<string, string>>(
+    Object.fromEntries(permits.filter(p => p.officer_signed_at).map(p => [p.id, p.officer_signed_at!]))
+  )
 
   const filtered = filter === 'all' ? permits : permits.filter(p => p.status === filter)
 
@@ -104,6 +110,7 @@ export default function BurnPermitsTab({
   if (!burnPermitCountyInfo) missingConfig.push('county / sheriff info')
 
   return (
+    <>
     <div>
       {/* Config warning */}
       {missingConfig.length > 0 && (
@@ -171,7 +178,19 @@ export default function BurnPermitsTab({
                       <p className="text-xs text-zinc-500 mb-0.5">📍 {permit.burn_address}</p>
                       <p className="text-xs text-zinc-500">🔥 Burn date: <span className="font-medium text-zinc-700">{formatDate(permit.burn_date)}</span></p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+                      {permit.status === 'approved' && (
+                        officerSignedAt[permit.id] ? (
+                          <span className="text-xs font-semibold text-green-600">Officer Signed ✓</span>
+                        ) : (
+                          <button
+                            onClick={() => setSigningPermit(permit)}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                          >
+                            Officer Sign
+                          </button>
+                        )
+                      )}
                       {permit.status === 'approved' && (
                         <a
                           href={`/print/burn-permit?id=${permit.id}`}
@@ -285,5 +304,19 @@ export default function BurnPermitsTab({
         </div>
       )}
     </div>
+
+    {signingPermit && (
+      <PermitSignatureModal
+        permitId={signingPermit.id}
+        contactName={signingPermit.contact_name}
+        confirmationCode={signingPermit.confirmation_code}
+        onClose={() => setSigningPermit(null)}
+        onSaved={(signedAt) => {
+          setOfficerSignedAt(prev => ({ ...prev, [signingPermit.id]: signedAt }))
+          setSigningPermit(null)
+        }}
+      />
+    )}
+    </>
   )
 }
