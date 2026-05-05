@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import ApplicantSignatureSection from './ApplicantSignatureSection'
 
 function formatDate(d: string | null) {
   if (!d) return '—'
@@ -80,7 +81,7 @@ export default async function PermitStatusPage({
   // Code provided — look up permit
   const { data: permit } = await adminClient
     .from('burn_permits')
-    .select('id, contact_name, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, confirmation_code, department_id')
+    .select('id, contact_name, burn_address, burn_date, status, reviewer_notes, permit_expiry_date, issued_date, confirmation_code, department_id, officer_signed_at, applicant_signed_at, applicant_acknowledged_at')
     .eq('confirmation_code', code.toUpperCase().trim())
     .eq('department_id', dept.id)
     .single()
@@ -147,17 +148,43 @@ export default async function PermitStatusPage({
             </div>
           </div>
 
-          {/* Print button — approved only */}
-          {permit.status === 'approved' && (
-            <a
-              href={`/dept/${slug}/permit-print?code=${permit.confirmation_code}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full rounded-xl bg-red-700 px-4 py-3.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors text-center block"
-            >
-              Print My Permit ↗
-            </a>
-          )}
+          {/* Approved — signature flow */}
+          {permit.status === 'approved' && (() => {
+            const applicantDone = !!(permit.applicant_signed_at || permit.applicant_acknowledged_at)
+
+            // Officer hasn't signed yet
+            if (!permit.officer_signed_at) {
+              return (
+                <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-5 py-4 text-center">
+                  <p className="text-sm text-zinc-500">Your permit has been approved. The department officer is completing their signature — check back shortly.</p>
+                </div>
+              )
+            }
+
+            // Applicant still needs to act
+            if (!applicantDone) {
+              return (
+                <ApplicantSignatureSection
+                  confirmationCode={permit.confirmation_code}
+                  departmentId={dept.id}
+                  contactName={permit.contact_name}
+                  slug={slug}
+                />
+              )
+            }
+
+            // Both done — show print button
+            return (
+              <a
+                href={`/dept/${slug}/permit-print?code=${permit.confirmation_code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full rounded-xl bg-red-700 px-4 py-3.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors text-center block"
+              >
+                Print My Permit ↗
+              </a>
+            )
+          })()}
         </div>
       )}
     </div>

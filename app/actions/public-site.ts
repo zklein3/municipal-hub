@@ -263,6 +263,71 @@ export async function savePermitOfficerSignature(formData: FormData) {
   return { success: true, signedAt: signed_at }
 }
 
+// ─── Permit: Save applicant signature (public — validated by confirmation code) ─
+export async function savePermitApplicantSignature(formData: FormData) {
+  const adminClient = createAdminClient()
+
+  const confirmation_code = (formData.get('confirmation_code') as string)?.toUpperCase().trim()
+  const department_id     = formData.get('department_id') as string
+  const blob              = formData.get('signature') as Blob
+
+  if (!confirmation_code || !department_id || !blob) return { error: 'Missing required fields.' }
+
+  const { data: permit } = await adminClient
+    .from('burn_permits')
+    .select('id, status, officer_signed_at')
+    .eq('confirmation_code', confirmation_code)
+    .eq('department_id', department_id)
+    .single()
+
+  if (!permit) return { error: 'Permit not found.' }
+  if (permit.status !== 'approved') return { error: 'Permit is not approved.' }
+  if (!permit.officer_signed_at) return { error: 'Officer must sign before applicant.' }
+
+  const path = `permits/applicant/${permit.id}.png`
+  const { error: uploadErr } = await adminClient.storage
+    .from('signatures')
+    .upload(path, blob, { contentType: 'image/png', upsert: true })
+  if (uploadErr) return { error: uploadErr.message }
+
+  const signed_at = new Date().toISOString()
+  const { error: dbErr } = await adminClient
+    .from('burn_permits')
+    .update({ applicant_signature_url: path, applicant_signed_at: signed_at })
+    .eq('id', permit.id)
+  if (dbErr) return { error: dbErr.message }
+
+  return { success: true, signedAt: signed_at }
+}
+
+// ─── Permit: Applicant print-and-sign acknowledgement (public) ───────────────
+export async function acknowledgePermitPrintAndSign(formData: FormData) {
+  const adminClient = createAdminClient()
+
+  const confirmation_code = (formData.get('confirmation_code') as string)?.toUpperCase().trim()
+  const department_id     = formData.get('department_id') as string
+
+  if (!confirmation_code || !department_id) return { error: 'Missing required fields.' }
+
+  const { data: permit } = await adminClient
+    .from('burn_permits')
+    .select('id, status, officer_signed_at')
+    .eq('confirmation_code', confirmation_code)
+    .eq('department_id', department_id)
+    .single()
+
+  if (!permit) return { error: 'Permit not found.' }
+  if (permit.status !== 'approved') return { error: 'Permit is not approved.' }
+
+  const { error: dbErr } = await adminClient
+    .from('burn_permits')
+    .update({ applicant_acknowledged_at: new Date().toISOString() })
+    .eq('id', permit.id)
+  if (dbErr) return { error: dbErr.message }
+
+  return { success: true }
+}
+
 // ─── Inbox: Update record request status ─────────────────────────────────────
 export async function updateRecordRequestStatus(formData: FormData) {
   const supabase = await createClient()
