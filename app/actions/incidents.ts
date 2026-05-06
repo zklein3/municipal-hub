@@ -326,12 +326,15 @@ export async function logIncidentAttendance(incident_id: string, role: string) {
     .eq('personnel_id', ctx.me.id)
   if (existing && existing.length > 0) return { error: 'You have already logged onto this incident.' }
 
+  const now = new Date().toISOString()
+  const autoVerify = ctx.isOfficerOrAbove
   const { error: dbErr } = await adminClient.from('incident_personnel').insert({
     incident_id,
     personnel_id: ctx.me.id,
     role: role || 'crew',
-    status: 'pending',
+    status: autoVerify ? 'present' : 'pending',
     submitted_by: ctx.me.id,
+    ...(autoVerify ? { verified_by: ctx.me.id, verified_at: now } : {}),
   })
 
   if (dbErr) {
