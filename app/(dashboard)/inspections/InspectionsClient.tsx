@@ -126,7 +126,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                           </div>
                           <div className="flex gap-2 shrink-0">
                             <Link
-                              href={`/equipment/${a.id}/${c.id}`}
+                              href={`/equipment/${a.id}/${c.id}?from=/inspections`}
                               className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
                             >
                               View

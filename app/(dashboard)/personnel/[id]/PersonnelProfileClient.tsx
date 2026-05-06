@@ -110,7 +110,7 @@ export default function PersonnelProfileClient({
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/personnel')}
           className="text-sm text-zinc-500 hover:text-zinc-700"
         >
           ← Back

@@ -213,7 +213,7 @@ export default function IncidentDetailClient({
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
+          <button onClick={() => router.push('/incidents')} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-zinc-900">

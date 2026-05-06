@@ -65,7 +65,7 @@ export default function StationDetailClient({
     <div className="max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
+        <button onClick={() => router.push('/stations')} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-red-600">
             {station.station_number ? `Station ${station.station_number}` : 'Station'}

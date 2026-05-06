@@ -14,10 +14,14 @@ function fmt(dateStr: string | null) {
 
 export default async function CompartmentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; compartment_id: string }>
+  searchParams: Promise<{ from?: string }>
 }) {
   const { id: apparatus_id, compartment_id } = await params
+  const { from } = await searchParams
+  const backHref = from ?? `/equipment/${apparatus_id}`
   const supabase = await createClient()
   const adminClient = createAdminClient()
 
@@ -216,7 +220,7 @@ export default async function CompartmentPage({
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <BackButton className="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm flex-1 text-center print:hidden" />
+        <BackButton href={backHref} className="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm flex-1 text-center print:hidden" />
         {currentQrCode && (
           <QrPrintLabel
             code={currentQrCode}
