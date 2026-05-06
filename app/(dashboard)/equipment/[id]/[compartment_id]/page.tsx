@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { setCompartmentQrCode } from '@/app/actions/compartments'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import CompartmentItemsClient from './CompartmentItemsClient'
@@ -184,7 +183,6 @@ export default async function CompartmentPage({
     }
   })
 
-  const hasInspectable = compartmentItems.some(i => i.requires_inspection)
   const currentQrCode = compLink.qr_code ?? null
 
   const apparatusBase = apparatus.qr_code ?? apparatus.unit_number
@@ -201,44 +199,24 @@ export default async function CompartmentPage({
     : '—'
   const apparatusLabel = apparatus.unit_number + (apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : '')
 
-  const inspectUrl = `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${compartment_id}`
-
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div className="flex items-start gap-3 mb-6">
-        <BackButton className="mt-1 text-sm text-zinc-500 hover:text-zinc-700 shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-500">{apparatusLabel}</p>
-          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-lg font-mono font-bold text-red-700">
-              {compName?.compartment_code ?? '—'}
-            </span>
-            {compName?.compartment_name && (
-              <span>{compName.compartment_name}</span>
-            )}
-          </h1>
-        </div>
+      <div className="mb-4">
+        <p className="text-sm text-zinc-500">{apparatusLabel}</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-lg font-mono font-bold text-red-700">
+            {compName?.compartment_code ?? '—'}
+          </span>
+          {compName?.compartment_name && (
+            <span>{compName.compartment_name}</span>
+          )}
+        </h1>
       </div>
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <Link
-          href={`${inspectUrl}&mode=presence`}
-          className="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm flex-1 text-center"
-        >
-          <span className="block text-base mb-0.5">✓</span>
-          Verify Present
-        </Link>
-        {hasInspectable && (
-          <Link
-            href={inspectUrl}
-            className="rounded-lg bg-red-700 px-4 py-3 text-sm font-medium text-white hover:bg-red-800 transition-colors shadow-sm flex-1 text-center"
-          >
-            <span className="block text-base mb-0.5">📋</span>
-            Start Inspection
-          </Link>
-        )}
+        <BackButton className="rounded-lg bg-white border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-700 hover:border-red-300 hover:text-red-700 transition-colors shadow-sm flex-1 text-center print:hidden" />
         {currentQrCode && (
           <QrPrintLabel
             code={currentQrCode}
