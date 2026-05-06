@@ -4,18 +4,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { setCompartmentQrCode } from '@/app/actions/compartments'
 import QrPrintLabel from '@/components/QrPrintLabel'
+import CompartmentItemsClient from './CompartmentItemsClient'
 
 function fmt(dateStr: string | null) {
   if (!dateStr) return '—'
   return new Date(dateStr).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-function assetStatusBadge(status: string) {
-  const s = status?.toUpperCase()
-  if (s === 'IN SERVICE') return 'bg-green-100 text-green-700'
-  if (s === 'OUT OF SERVICE') return 'bg-yellow-100 text-yellow-700'
-  return 'bg-zinc-100 text-zinc-500'
-}
 
 export default async function CompartmentPage({
   params,
@@ -139,6 +134,41 @@ export default async function CompartmentPage({
     assetsByItem[a.item_id].push({ id: a.id, asset_tag: a.asset_tag, status: a.status ?? 'IN SERVICE' })
   }
 
+  // All apparatus + compartments for the move modal
+  const { data: allApparatusRaw } = await adminClient
+    .from('apparatus')
+    .select('id, unit_number, apparatus_name')
+    .eq('department_id', myDept.department_id)
+    .eq('active', true)
+    .order('unit_number')
+
+  const allAppIds = (allApparatusRaw ?? []).map(a => a.id)
+  const { data: allCompLinks } = allAppIds.length > 0
+    ? await adminClient
+        .from('apparatus_compartments')
+        .select('id, apparatus_id, compartment_name_id')
+        .in('apparatus_id', allAppIds)
+        .eq('active', true)
+    : { data: [] }
+
+  const allCompNameIds = [...new Set((allCompLinks ?? []).map(c => c.compartment_name_id).filter(Boolean) as string[])]
+  const { data: allCompNames } = allCompNameIds.length > 0
+    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name').in('id', allCompNameIds)
+    : { data: [] }
+  const allCompNameMap = Object.fromEntries((allCompNames ?? []).map(c => [c.id, c]))
+
+  const allApparatus = (allApparatusRaw ?? []).map(a => ({
+    id: a.id,
+    unit_number: a.unit_number,
+    apparatus_name: a.apparatus_name,
+    compartments: (allCompLinks ?? [])
+      .filter(c => c.apparatus_id === a.id)
+      .map(c => {
+        const n = allCompNameMap[c.compartment_name_id]
+        return { id: c.id, compartment_code: n?.compartment_code ?? '—', compartment_name: n?.compartment_name ?? null }
+      }),
+  }))
+
   const compartmentItems = (locationStandards ?? []).map(ls => {
     const item = itemMap[ls.item_id]
     return {
@@ -258,56 +288,11 @@ export default async function CompartmentPage({
         <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">
           Items in Compartment ({compartmentItems.length})
         </h2>
-        {compartmentItems.length === 0 ? (
-          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-10 text-center text-sm text-zinc-400">
-            No items assigned to this compartment.
-          </div>
-        ) : (
-          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-            {compartmentItems.map(item => (
-              <div key={item.id} className="px-4 py-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <p className="font-medium text-zinc-900">{item.item_name}</p>
-                    {item.category_name && (
-                      <p className="text-xs text-zinc-400">{item.category_name}</p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-zinc-700">×{item.expected_quantity}</p>
-                    <p className="text-xs text-zinc-400">expected</p>
-                  </div>
-                </div>
-
-                {/* Asset badges */}
-                {item.tracks_assets && item.assets.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {item.assets.map(a => (
-                      <span
-                        key={a.id}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${assetStatusBadge(a.status)}`}
-                      >
-                        {a.asset_tag ?? 'Unknown'}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {item.tracks_assets && item.assets.length === 0 && (
-                  <p className="text-xs text-zinc-400 italic">No assets assigned</p>
-                )}
-
-                {/* Badges */}
-                <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {item.requires_inspection && (
-                    <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs text-blue-700">
-                      Inspectable
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <CompartmentItemsClient
+          items={compartmentItems}
+          allApparatus={allApparatus}
+          currentCompartmentId={compartment_id}
+        />
       </div>
 
       {/* Recent activity */}

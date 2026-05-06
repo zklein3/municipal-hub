@@ -259,7 +259,7 @@ export async function assignItemToCompartment(formData: FormData) {
 // ─── Remove Item from Compartment ─────────────────────────────────────────────
 export async function removeItemFromCompartment(location_standard_id: string) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can remove items.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
   const { error } = await adminClient
     .from('item_location_standards')
@@ -268,6 +268,7 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
   revalidatePath('/equipment')
   revalidatePath('/apparatus')
+  revalidatePath('/inspections')
   return { success: true }
 }
 
@@ -289,7 +290,7 @@ export async function updateItemQuantity(location_standard_id: string, expected_
 // ─── Move Item to Different Compartment ───────────────────────────────────────
 export async function moveItemToCompartment(location_standard_id: string, target_compartment_id: string) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can move items.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
 
   const { data: existing } = await adminClient
@@ -335,5 +336,6 @@ export async function moveItemToCompartment(location_standard_id: string, target
 
   revalidatePath('/equipment')
   revalidatePath('/apparatus')
+  revalidatePath('/inspections')
   return { success: true }
 }

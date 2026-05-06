@@ -124,22 +124,30 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                             )}
                             <span className="text-xs text-zinc-400 shrink-0">{c.item_count} item{c.item_count !== 1 ? 's' : ''}</span>
                           </div>
-                          {c.item_count > 0 && (
-                            <div className="flex gap-2 shrink-0">
-                              <Link
-                                href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}`}
-                                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-                              >
-                                Inspect
-                              </Link>
-                              <Link
-                                href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}&mode=presence`}
-                                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
-                              >
-                                Daily Check
-                              </Link>
-                            </div>
-                          )}
+                          <div className="flex gap-2 shrink-0">
+                            <Link
+                              href={`/equipment/${a.id}/${c.id}`}
+                              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
+                            >
+                              View
+                            </Link>
+                            {c.item_count > 0 && (
+                              <>
+                                <Link
+                                  href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}`}
+                                  className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                                >
+                                  Inspect
+                                </Link>
+                                <Link
+                                  href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}&mode=presence`}
+                                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+                                >
+                                  Daily Check
+                                </Link>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
