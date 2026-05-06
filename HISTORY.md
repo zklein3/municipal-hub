@@ -2,19 +2,21 @@
 
 ## What's Built & Working ✅
 - Full auth flow + middleware routing
-- Role-aware sidebar (desktop fixed, mobile hamburger drawer)
+- Role-aware sidebar — new structure: Personnel / Training & Events / Operations / Inspections / ISO (officer+) / Reports
+- My Profile link in sidebar footer (name links to own personnel profile)
 - Sys admin dashboard, Departments, Users, System Logs
 - Sys admin dept drill-in `/admin/dept/[id]` — 5 tabs
 - Dept Admin — Dept Setup, Items, Attendance Settings, Training
 - Personnel roster + profile (role-based editing, change password, officer add)
-- Apparatus list + detail (edit, compartment assign/remove, Manage Equipment link)
+- Apparatus list + detail (edit, compartment assign/remove, Manage Equipment link for officer+)
 - Stations list + detail
-- Equipment management — `/equipment/[id]` assign/remove/move items
+- Equipment management — `/equipment/[id]` assign/remove/move items (officer+)
+- Compartment detail — items with Move + Remove for ALL roles, Back button, Print QR
 - Asset Roster — dept-wide with status filters, inline apparatus assignment
-- Compartment detail page — items, assets, inspection history
 - Inspection template builder (inline via Dept Setup)
 - Inspection run — presence checks + full asset checklist, all step types
 - Inspection sessions — claim/release, 12h expiry, expired-session email notifications
+- Inspections landing page — grouped by station → apparatus cards → compartments with View / Inspect / Daily Check
 - Daily Check mode (presence-only)
 - QR system — human-readable codes, `/scan` redirect, print labels
 - Announcements — pinning, unread tracking, dashboard banner
@@ -25,18 +27,20 @@
 - Reports — inspections, inventory, training, attendance, my-activity (all with print)
 - Member training record print
 - Public department sites — `/dept/[slug]/*`, per-dept on/off toggle
-- Burn permit system — public form, inbox approval (sign-then-approve), officer + applicant signatures, printable Nebraska state permit
+- Burn permit system — public form, inbox sign-then-approve flow, officer + applicant signatures, printable Nebraska state permit
+- Burn permit submission notification → logEvent → sys admin email
 - Records request system — public form, inbox review flow
 - Public Inbox — burn permits + records tabs, pending count badge
-- Burn permit notifications — submission and approval via logEvent → sys admin email (temporary)
 - Login show/hide password toggle
+- BackButton component (`components/BackButton.tsx`) — `href` prop for explicit dest, else `router.back()`
 - Fire School — QR scanning, bottle tracking, fill log
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
 
 ## What's Not Yet Built
+- Dept admin hub — `/dept-admin/setup` as ongoing management center (not just first-run wizard)
+- Equipment storage system — unassigned item pool, member add-from-storage
 - Permit approval email direct to resident (blocked until fireops7.com verified in Resend, ~1 month)
-- Permit submission email direct to dept (currently goes to sys admin)
 - Inspection schedule settings (daily/weekly/monthly per dept)
 - Subdomain routing `slug.fireops7.com` (blocked until Vercel Pro)
 - Officer personnel inline edit on roster cards
@@ -98,6 +102,19 @@
 ---
 
 ## Session History
+
+### 2026-05-06 — Nav Redesign + Member Equipment + Back Navigation
+- Nav restructured: Personnel / Training & Events / Operations / Inspections / ISO (officer+) / Reports
+- Apparatus + Stations removed from main nav — accessed via Inspections drill-down
+- My Profile: sidebar footer name links to own personnel profile page
+- Inspections landing page rebuilt — stations group apparatus cards, compartments visible inline with View / Inspect / Daily Check per row
+- Member equipment: `moveItemToCompartment` + `removeItemFromCompartment` opened to all dept members (was officer+)
+- `CompartmentItemsClient` — Move modal (apparatus + compartment picker) + Remove confirm on compartment detail page
+- `BackButton` component (`components/BackButton.tsx`) — accepts `href` for explicit dest or falls back to `router.back()`
+- `?from` navigation pattern: InspectionsClient View links pass `?from=/inspections`; compartment page reads it and passes to BackButton
+- Hardcoded back destinations: personnel → /personnel, stations → /stations, incidents → /incidents
+- Compartment detail page: removed Verify Present + Start Inspection buttons (accessed via Inspections page); Back is now a styled action card button
+- Docs split: CLAUDE.md / REFERENCE.md / MODULES.md / HISTORY.md (previous session)
 
 ### 2026-05-05 — Permit Flow, Login Polish, Equipment Nav
 - Burn permit submission triggers `logEvent` → notify-on-log → sys admin email

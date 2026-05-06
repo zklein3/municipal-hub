@@ -46,8 +46,7 @@
 
 ## Attendance Status Values (event_attendance.status)
 DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
-- `pending` — member self-logged, awaiting officer verification
-- `excused_pending` — member submitted excuse request, awaiting officer approval
+- `pending` — member self-logged | `excused_pending` — excuse request pending
 - `present` — officer approved | `absent` — rejected or auto-closed | `excused` — excuse approved
 - event_instances.status: `scheduled` | `cancelled` | `completed`
 
@@ -86,6 +85,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - Asset Statuses (DB exact values): `IN SERVICE` | `OUT OF SERVICE` | `RETIRED`
 - ASSET_LINK step type fully removed from codebase + DB. Do not re-introduce.
 
+## Back Navigation Pattern
+- `components/BackButton.tsx` — accepts optional `href` prop; uses `router.push(href)` if provided, else `router.back()`
+- Pages with a single parent: hardcode `router.push('/parent')` (personnel → /personnel, stations → /stations, incidents → /incidents)
+- Contextual pages: pass `?from=/origin` in the link, read it in the page, pass as `href` to BackButton
+- Example: InspectionsClient View links pass `?from=/inspections` to compartment detail page
+
 ## Dev Workflow
 - Start: `npm run dev` | Build: `npm run build` (always before pushing)
 - `git add . && git commit -m "message" && git push`
@@ -96,24 +101,30 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - Temp password for new accounts: `Hello1!`
 
 ## Reference Files
-- `REFERENCE.md` — routes, action files, edge functions, permissions, burn permit + public site details
-- `MODULES.md` — equipment/inspection, attendance, training, incident, ISO, fire school module design
+- `REFERENCE.md` — routes, action files, edge functions, permissions, nav structure
+- `MODULES.md` — equipment/inspection, attendance, training, incident, ISO module design
 - `HISTORY.md` — what's built, what's not, DB tables, session history
 
 ---
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Permit Email — Direct to Resident (blocked ~1 month)
-`fireops7.com` must be verified in Resend first (blocked until Wix → new registrar migration). Once verified: swap `logEvent` call in `updateBurnPermitStatus` for the already-deployed `send-permit-approval` Edge Function. One line change.
+### Nav Redesign — Admin Hub (next major build)
+The dept-admin/setup flow needs to become the primary management hub for admins — not a one-time wizard. Discussed design:
+- `/dept-admin/setup` becomes full admin hub: Stations / Apparatus / Personnel / Compartments / Items & Assets tabs (ongoing management, not setup-once)
+- Main nav Apparatus + Stations pages no longer needed for admins (removed from nav already)
+- Officer nav = member nav + elevated options (already done for member level)
+- Admin nav = officer nav + dept hub access
+
+### Equipment Storage System (next after admin hub)
+Members can now move/remove items between compartments. "Storage" (unassigned pool) is the next step:
+- Items removed from a compartment go to a visible unassigned pool (not just disappear)
+- Members can add items from storage into a compartment
+- All moves logged with who/what/from/to/timestamp
+- No named storage locations yet — simple unassigned pool first
+
+### Permit Approval Email — Direct to Resident (blocked ~1 month)
+Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).
 
 ### Personnel Page — Officer Inline Edit (lower priority)
-Officers see Add button on `/personnel` but no inline edit per card. Detail page works fine for now.
-
-### Public Site Option B — API Keys (only when customers ask)
-`department_api_keys` table + public API endpoints for depts with their own site.
-
-### Roadmap
-- Subdomain routing (`slug.fireops7.com`) when Vercel Pro upgraded
-- Inspection schedule settings (daily/weekly/monthly per dept)
-- Permit submission notification email direct to dept (currently goes to sys admin via logEvent)
+Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.

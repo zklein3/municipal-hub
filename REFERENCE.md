@@ -10,15 +10,31 @@
 | `(fire-school)` — `/fire-school`, `/fire-school/bottles`, `/fire-school/fill-log` | Public |
 | `(public-site)` — `/dept/[slug]/*` | Public |
 
+### Nav Structure (layout.tsx)
+| Group | Items | Visibility |
+|---|---|---|
+| (none) | Dashboard | All |
+| Personnel | Roster | All |
+| Training & Events | Events, Certifications | All |
+| Operations | Announcements (badge), Incidents | All; + Public Inbox (officer+) |
+| Inspections | Inspections | Member; + Asset Roster (officer+) |
+| ISO | Hose Inventory, Hydrants, ISO Report | Officer+ only |
+| Reports | My Activity | All; + 4 reports (officer+) |
+| Dept Admin | Dept Setup, Items, Attendance Settings, Training | Admin only |
+| System Admin | Departments, Users, System Logs | Sys admin only |
+
+Sidebar footer: name/role — name is a link to own `/personnel/[id]` profile.
+
 ### Dashboard Routes
 - `/dashboard` — dept dashboard or sys admin overview
 - `/personnel`, `/personnel/[id]` — roster + profile
-- `/apparatus`, `/apparatus/[id]` — apparatus list + detail
-- `/stations`, `/stations/[id]`
-- `/equipment/[id]` — manage items per apparatus (assign/remove/move)
-- `/equipment/[id]/[compartment_id]` — compartment detail (items, assets, history)
-- `/equipment/assets` — dept-wide asset roster (Apparatus nav group)
-- `/inspections`, `/inspections/run`, `/inspections/apparatus/[id]` — inspection flow + sessions
+- `/apparatus`, `/apparatus/[id]` — apparatus list + detail (still exists, not in nav)
+- `/stations`, `/stations/[id]` — stations list + detail (still exists, not in nav)
+- `/equipment/[id]` — manage items per apparatus (assign/remove/move), reached via apparatus detail
+- `/equipment/[id]/[compartment_id]` — compartment detail; Back uses `?from` param; Move + Remove for all roles
+- `/equipment/assets` — dept-wide asset roster (Inspections nav group, officer+)
+- `/inspections` — landing page: stations → apparatus cards → compartments (View / Inspect / Daily Check)
+- `/inspections/run`, `/inspections/apparatus/[id]` — inspection run + session flow
 - `/scan` — QR code lookup + redirect
 - `/events`, `/events/new`
 - `/training` — nav label "Certifications"
