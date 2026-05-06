@@ -130,6 +130,7 @@ Officers need elevated access similar to admin hub but scoped to operational fun
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
 
-### Run Sheet PDF Import (bookmarked — needs API key)
+### Run Sheet PDF Import (ready to build)
 Officer uploads Central Square PDF run sheet → Claude API extracts fields → pre-fills new incident form.
-**To resume:** (1) Create Anthropic API key at console.anthropic.com, (2) add `ANTHROPIC_API_KEY=sk-ant-...` to `.env.local` and Vercel env vars, (3) provide a sanitized sample run sheet PDF to tune the extraction prompt. Then install `@anthropic-ai/sdk` and build the upload + parse flow on the new incident form.
+Cost: ~$0.001–0.003/extraction — absorb into platform cost.
+**To build:** (1) Add `ANTHROPIC_API_KEY` to `.env.local` and Vercel env vars, (2) provide sanitized sample run sheet PDF, (3) install `@anthropic-ai/sdk`, (4) add upload + parse server action, (5) wire into new incident form.
