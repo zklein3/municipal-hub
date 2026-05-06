@@ -55,6 +55,7 @@ export default function NewIncidentClient({
   const [nerisReported, setNerisReported] = useState(false)
 
   // Controlled fields (pre-filled by import)
+  const [incidentNumber, setIncidentNumber] = useState('')
   const [cadNumber, setCadNumber] = useState('')
   const [incidentDate, setIncidentDate] = useState('')
   const [address, setAddress] = useState('')
@@ -123,6 +124,7 @@ export default function NewIncidentClient({
     if (result.error) { setImportError(result.error); setIsParsing(false); return }
 
     const d = result.data!
+    if (d.incident_number)      setIncidentNumber(d.incident_number)
     if (d.cad_number)           setCadNumber(d.cad_number)
     if (d.incident_date)        setIncidentDate(d.incident_date)
     if (d.address)              setAddress(d.address)
@@ -223,7 +225,7 @@ export default function NewIncidentClient({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Incident # <span className="text-zinc-400 font-normal">(optional)</span></label>
-              <input name="incident_number" type="text" placeholder="2026-001" className={inputCls} />
+              <input name="incident_number" type="text" placeholder="2026-001" value={incidentNumber} onChange={e => setIncidentNumber(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>CAD # <span className="text-zinc-400 font-normal">(optional)</span></label>

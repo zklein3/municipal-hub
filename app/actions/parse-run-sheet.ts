@@ -5,6 +5,7 @@ import { logError } from '@/lib/logger'
 
 export type ParsedRunSheet = {
   cad_number?: string
+  incident_number?: string
   incident_date?: string
   address?: string
   incident_type?: string
@@ -58,6 +59,7 @@ export async function parseRunSheet(formData: FormData): Promise<{ data?: Parsed
 Return a JSON object with these fields (all optional, omit if not found):
 {
   "cad_number": "the CFS# value",
+  "incident_number": "from the IR / External Agency Numbers section — the entry that does NOT have a PO: (police officer) assignment next to it. This is the fire department's own incident number (e.g. WIN26-0015).",
   "incident_date": "YYYY-MM-DD",
   "address": "full incident location address",
   "incident_type": one of "fire"|"rescue"|"standby"|"mutual_aid"|"special"|"other" — map vehicle/injury/property damage crashes to "rescue", fire calls to "fire",
