@@ -304,14 +304,24 @@ export default function ApparatusDetailClient({
           <h2 className="text-base font-semibold text-zinc-900">
             Compartments ({compartments.filter(c => c.active).length} active)
           </h2>
-          {compartments.filter(c => c.active).length > 0 && (
-            <Link
-              href={`/inspections/apparatus/${apparatus.id}`}
-              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-            >
-              Start Inspection Session
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {isOfficerOrAbove && compartments.filter(c => c.active).length > 0 && (
+              <Link
+                href={`/equipment/${apparatus.id}`}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+              >
+                Manage Equipment
+              </Link>
+            )}
+            {compartments.filter(c => c.active).length > 0 && (
+              <Link
+                href={`/inspections/apparatus/${apparatus.id}`}
+                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+              >
+                Start Inspection Session
+              </Link>
+            )}
+          </div>
         </div>
         {compError && <Alert type="error" message={compError} />}
 
