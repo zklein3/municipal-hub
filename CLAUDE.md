@@ -130,6 +130,28 @@ Officers need elevated access similar to admin hub but scoped to operational fun
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
 
+### Module / Feature Flag System (design ready, build next)
+Per-department feature flags managed by sys admin. Each dept has a checklist of enabled modules. Nav and routes respect flags. Sys admin panel gets a module toggle UI. Plan presets (e.g. "Starter", "Full") auto-check a standard set but individual overrides always available. Demo dept gets everything on.
+
+**Base (always on for all depts):**
+Personnel, Apparatus, Stations, Inventory, Inspections, Events + Attendance, Training/Certifications, Announcements, Basic Reports
+
+**Bundle A — Operations**
+Incidents, Run Sheet PDF Import, Incident Reports
+- NERIS COMPLIANCE PRIORITY: If FireOps7 incidents match NERIS schema + submit via NERIS API, this eliminates double-entry for departments and becomes a flagship feature. Current form is not NERIS-compliant yet. NERIS is replacing NFIRS as national standard — most depts currently submit through state portals or separate software. Scope the NERIS field gap before building module flags.
+
+**Bundle B — ISO / Compliance**
+ISO audit (hoses, hydrants, ISO report)
+- Standalone — depts pursuing ISO grading specifically need this
+
+**Bundle C — Public Engagement**
+Public site, burn permits, records requests, public inbox
+- Already has `public_site_enabled` flag — extend this to the full bundle
+
+**Bundle D — Medical / EMS** *(future)*
+Medical supply tracking, expiration alerts, EMS-specific inventory
+- For combination fire/EMS departments
+
 ### Run Sheet PDF Import (ready to build)
 Officer uploads Central Square PDF run sheet → Claude API extracts fields → pre-fills new incident form.
 Cost: ~$0.001–0.003/extraction — absorb into platform cost.
