@@ -424,6 +424,30 @@ export async function updateRecordRequestStatus(formData: FormData) {
     .eq('id', request_id)
   if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
 
+  if (status === 'fulfilled' || status === 'denied') {
+    const { data: req } = await adminClient
+      .from('public_record_requests')
+      .select('contact_name, contact_email, confirmation_code, department_id, request_type')
+      .eq('id', request_id)
+      .single()
+    if (req) {
+      await logEvent({
+        log_type: 'user_report',
+        page: '/inbox',
+        personnel_id: me.id,
+        department_id: req.department_id,
+        message: [
+          `Records request ${status}: ${req.contact_name}`,
+          `Email: ${req.contact_email}`,
+          `Request type: ${req.request_type}`,
+          `Confirmation code: ${req.confirmation_code}`,
+          reviewer_notes ? `Notes: ${reviewer_notes}` : null,
+        ].filter(Boolean).join('\n'),
+        metadata: { request_id, confirmation_code: req.confirmation_code, status },
+      })
+    }
+  }
+
   revalidatePath('/inbox')
   return { success: true }
 }
@@ -460,6 +484,32 @@ export async function submitRecordRequest(formData: FormData) {
     await logError(dbErr, 'public/records')
     return { error: 'Something went wrong. Please try again.' }
   }
+
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name')
+    .eq('id', department_id)
+    .single()
+
+  await logEvent({
+    log_type: 'user_report',
+    page: '/dept/records',
+    department_id,
+    message: [
+      `New records request submitted.`,
+      `Applicant: ${contact_name}`,
+      `Email: ${contact_email}`,
+      contact_phone ? `Phone: ${contact_phone}` : null,
+      `Department: ${dept?.name ?? department_id}`,
+      `Request type: ${request_type}`,
+      description ? `Description: ${description}` : null,
+      incident_date ? `Incident date: ${incident_date}` : null,
+      incident_address ? `Incident address: ${incident_address}` : null,
+      `Confirmation code: ${data.confirmation_code}`,
+      `Review at: https://www.fireops7.com/inbox`,
+    ].filter(Boolean).join('\n'),
+    metadata: { confirmation_code: data.confirmation_code, department_id },
+  })
 
   return { confirmationCode: data.confirmation_code }
 }

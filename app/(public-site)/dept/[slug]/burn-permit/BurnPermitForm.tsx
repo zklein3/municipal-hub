@@ -31,12 +31,20 @@ export default function BurnPermitForm({ departmentId, slug }: { departmentId: s
           <p className="text-2xl font-bold text-zinc-900 font-mono tracking-widest">{confirmationCode}</p>
         </div>
         <p className="text-xs text-zinc-400 mb-6">Save this code for your records.</p>
-        <a
-          href={`/dept/${slug}`}
-          className="inline-block rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
-        >
-          Back to Home
-        </a>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <a
+            href={`/dept/${slug}/request-status?code=${confirmationCode}`}
+            className="inline-block rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
+          >
+            Check Permit Status
+          </a>
+          <a
+            href={`/dept/${slug}`}
+            className="inline-block rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
+          >
+            Back to Home
+          </a>
+        </div>
       </div>
     )
   }
