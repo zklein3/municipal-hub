@@ -152,7 +152,9 @@ Public site, burn permits, records requests, public inbox
 Medical supply tracking, expiration alerts, EMS-specific inventory
 - For combination fire/EMS departments
 
-### Run Sheet PDF Import (ready to build)
-Officer uploads Central Square PDF run sheet → Claude API extracts fields → pre-fills new incident form.
-Cost: ~$0.001–0.003/extraction — absorb into platform cost.
-**To build:** (1) Add `ANTHROPIC_API_KEY` to `.env.local` and Vercel env vars, (2) provide sanitized sample run sheet PDF, (3) install `@anthropic-ai/sdk`, (4) add upload + parse server action, (5) wire into new incident form.
+### Run Sheet PDF Import (DONE ✓)
+Central Square CFS PDF → Claude Haiku extracts fields → pre-fills new incident form. `ANTHROPIC_API_KEY` in `.env.local` + Vercel. Action: `app/actions/parse-run-sheet.ts`.
+
+---
+
+## NERIS Compliance Reference → see `NERIS.md`
