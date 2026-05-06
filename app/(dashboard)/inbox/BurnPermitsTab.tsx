@@ -60,6 +60,7 @@ export default function BurnPermitsTab({
   const [reviewerNotes, setReviewerNotes] = useState('')
   const [denyingId, setDenyingId] = useState<string | null>(null)
   const [signingPermit, setSigningPermit] = useState<Permit | null>(null)
+  const [pendingApprovalPermit, setPendingApprovalPermit] = useState<Permit | null>(null)
   const [officerSignedAt, setOfficerSignedAt] = useState<Record<string, string>>(
     Object.fromEntries(permits.filter(p => p.officer_signed_at).map(p => [p.id, p.officer_signed_at!]))
   )
@@ -263,9 +264,9 @@ export default function BurnPermitsTab({
                                   className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500" />
                               </div>
                             </div>
-                            <button onClick={() => handleAction(permit.id, 'approved')} disabled={loading}
+                            <button onClick={() => setPendingApprovalPermit(permit)} disabled={loading}
                               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors self-start">
-                              {loading ? 'Saving...' : 'Approve & Issue Permit'}
+                              Sign &amp; Approve Permit
                             </button>
                           </div>
                         )}
@@ -305,14 +306,19 @@ export default function BurnPermitsTab({
       )}
     </div>
 
-    {signingPermit && (
+    {(pendingApprovalPermit || signingPermit) && (
       <PermitSignatureModal
-        permitId={signingPermit.id}
-        contactName={signingPermit.contact_name}
-        confirmationCode={signingPermit.confirmation_code}
-        onClose={() => setSigningPermit(null)}
-        onSaved={(signedAt) => {
-          setOfficerSignedAt(prev => ({ ...prev, [signingPermit.id]: signedAt }))
+        permitId={(pendingApprovalPermit ?? signingPermit)!.id}
+        contactName={(pendingApprovalPermit ?? signingPermit)!.contact_name}
+        confirmationCode={(pendingApprovalPermit ?? signingPermit)!.confirmation_code}
+        onClose={() => { setPendingApprovalPermit(null); setSigningPermit(null) }}
+        onSaved={async (signedAt) => {
+          const target = pendingApprovalPermit ?? signingPermit
+          if (target) setOfficerSignedAt(prev => ({ ...prev, [target.id]: signedAt }))
+          if (pendingApprovalPermit) {
+            await handleAction(pendingApprovalPermit.id, 'approved')
+            setPendingApprovalPermit(null)
+          }
           setSigningPermit(null)
         }}
       />
