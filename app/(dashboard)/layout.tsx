@@ -98,7 +98,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/dept-admin/setup', label: 'Equipment' },
     { href: '/dept-admin/personnel', label: 'Personnel' },
     { href: '/dept-admin/training', label: 'Training' },
-    { href: '/iso/report', label: 'ISO' },
+    { href: '/iso/hoses', label: 'Hose Inventory' },
+    { href: '/iso/hydrants', label: 'Hydrants' },
+    { href: '/iso/report', label: 'ISO Report' },
   ] : []
 
   const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'
