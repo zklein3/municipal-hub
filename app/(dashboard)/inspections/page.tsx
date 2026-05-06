@@ -25,7 +25,7 @@ export default async function InspectionsPage() {
   // Fetch all active apparatus for this department
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
-    .select('id, unit_number, apparatus_name, station_id, type_id')
+    .select('id, unit_number, apparatus_name, station_id, apparatus_type_id')
     .eq('department_id', myDept.department_id)
     .eq('active', true)
     .order('unit_number')
@@ -38,11 +38,11 @@ export default async function InspectionsPage() {
   const stationMap = Object.fromEntries((stations ?? []).map((s: { id: string; station_name: string; station_number: string | null }) => [s.id, s]))
 
   // Fetch apparatus types
-  const typeIds = (apparatusRaw ?? []).map((a: { type_id: string | null }) => a.type_id).filter(Boolean)
+  const typeIds = (apparatusRaw ?? []).map((a: { apparatus_type_id: string | null }) => a.apparatus_type_id).filter(Boolean)
   const { data: apparatusTypes } = typeIds.length > 0
-    ? await adminClient.from('apparatus_types').select('id, type_name').in('id', typeIds)
+    ? await adminClient.from('apparatus_types').select('id, name').in('id', typeIds)
     : { data: [] }
-  const typeMap = Object.fromEntries((apparatusTypes ?? []).map((t: { id: string; type_name: string }) => [t.id, t.type_name]))
+  const typeMap = Object.fromEntries((apparatusTypes ?? []).map((t: { id: string; name: string }) => [t.id, t.name]))
 
   // Fetch compartments with item counts
   const appIds = (apparatusRaw ?? []).map(a => a.id)
@@ -72,7 +72,7 @@ export default async function InspectionsPage() {
   }, {})
 
   // Build apparatus with compartments
-  const apparatus = (apparatusRaw ?? []).map((a: { id: string; unit_number: string; apparatus_name: string | null; station_id: string | null; type_id: string | null }) => {
+  const apparatus = (apparatusRaw ?? []).map((a: { id: string; unit_number: string; apparatus_name: string | null; station_id: string | null; apparatus_type_id: string | null }) => {
     const comps = (compartmentLinks ?? [])
       .filter((c: { apparatus_id: string }) => c.apparatus_id === a.id)
       .map((c: { id: string; compartment_name_id: string; apparatus_id: string }) => {
@@ -92,7 +92,7 @@ export default async function InspectionsPage() {
       id: a.id,
       unit_number: a.unit_number,
       apparatus_name: a.apparatus_name,
-      type_name: a.type_id ? typeMap[a.type_id] ?? null : null,
+      type_name: a.apparatus_type_id ? typeMap[a.apparatus_type_id] ?? null : null,
       station: a.station_id ? stationMap[a.station_id] ?? null : null,
       compartments: comps,
     }
