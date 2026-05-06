@@ -2,17 +2,20 @@
 
 ## What's Built & Working ✅
 - Full auth flow + middleware routing
-- Role-aware sidebar — new structure: Personnel / Training & Events / Operations / Inspections / ISO (officer+) / Reports
+- Unified main nav — identical for all roles: Dashboard / Personnel / Training & Events / Operations / Inspections / Reports
 - My Profile link in sidebar footer (name links to own personnel profile)
+- Dept Admin hub: Equipment (`/dept-admin/setup`) / Personnel (`/dept-admin/personnel`) / Training (`/dept-admin/training`) / Hose Inventory / Hydrants / ISO Report
+- Equipment hub — 5 tabs: Stations, Apparatus (with Load button), Compartments, Items, Assets
+- Personnel hub — 2 tabs: Members (card grid), Attendance Settings
+- Training hub — 4 tabs: Cert Types, Enrollments, Pending, Events (left rail + mobile scroll)
 - Sys admin dashboard, Departments, Users, System Logs
 - Sys admin dept drill-in `/admin/dept/[id]` — 5 tabs
-- Dept Admin — Dept Setup, Items, Attendance Settings, Training
 - Personnel roster + profile (role-based editing, change password, officer add)
-- Apparatus list + detail (edit, compartment assign/remove, Manage Equipment link for officer+)
+- Apparatus list + detail (edit, compartment assign/remove, Manage Equipment link)
 - Stations list + detail
-- Equipment management — `/equipment/[id]` assign/remove/move items (officer+)
-- Compartment detail — items with Move + Remove for ALL roles, Back button, Print QR
-- Asset Roster — dept-wide with status filters, inline apparatus assignment
+- Equipment management — `/equipment/[id]` assign/remove/move items; Back button below header
+- Compartment detail — items with Move + Remove for ALL roles, Back button action row, Print QR
+- Asset Roster — `/equipment/assets` dept-wide with status filters, inline apparatus assignment
 - Inspection template builder (inline via Dept Setup)
 - Inspection run — presence checks + full asset checklist, all step types
 - Inspection sessions — claim/release, 12h expiry, expired-session email notifications
@@ -23,7 +26,7 @@
 - Events + attendance — full lifecycle, excused absence, close event, auto-close cron
 - Training/Certifications — courses, enrollments, verification, direct cert entry, training events, digital signatures
 - Incidents — manual entry, apparatus/personnel tracking, mutual aid, officer verify + finalize
-- ISO audit — hose/hydrant/apparatus specs, mutual aid log, `/iso/report`
+- ISO audit — hose inventory (add/edit/remove/log test), hydrant flow tests (add/edit/remove/log test), apparatus specs, mutual aid log, `/iso/report`
 - Reports — inspections, inventory, training, attendance, my-activity (all with print)
 - Member training record print
 - Public department sites — `/dept/[slug]/*`, per-dept on/off toggle
@@ -32,14 +35,14 @@
 - Records request system — public form, inbox review flow
 - Public Inbox — burn permits + records tabs, pending count badge
 - Login show/hide password toggle
-- BackButton component (`components/BackButton.tsx`) — `href` prop for explicit dest, else `router.back()`
+- BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
 - Fire School — QR scanning, bottle tracking, fill log
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
 
 ## What's Not Yet Built
-- Dept admin hub — `/dept-admin/setup` as ongoing management center (not just first-run wizard)
-- Equipment storage system — unassigned item pool, member add-from-storage
+- Equipment storage system — unassigned item pool, member add-from-storage, move logging
+- Officer sub-menu — elevated access for officers (not yet designed)
 - Permit approval email direct to resident (blocked until fireops7.com verified in Resend, ~1 month)
 - Inspection schedule settings (daily/weekly/monthly per dept)
 - Subdomain routing `slug.fireops7.com` (blocked until Vercel Pro)
@@ -102,6 +105,18 @@
 ---
 
 ## Session History
+
+### 2026-05-06 — Admin Hub + Unified Nav + ISO
+- Equipment hub (`/dept-admin/setup`): wizard → plain tabs (Stations/Apparatus/Compartments/Items/Assets), Personnel tab removed
+- Load button on each apparatus card → `/equipment/[id]?from=/dept-admin/setup`; back nav returns to hub
+- Back button moved below header as styled action row button across ALL detail pages (equipment, stations, incidents, personnel, inspection run, new incident, new event)
+- Personnel hub (`/dept-admin/personnel`): Members tab (card grid 1→2→3 cols) + Attendance Settings tab
+- Training hub: updated to left rail + mobile scroll tabs, renamed "Training"
+- Main nav unified — identical for all roles: Dashboard/Personnel/Training & Events/Operations/Inspections/Reports
+- ISO removed from main nav; added to Dept Admin: Hose Inventory / Hydrants / ISO Report (3 separate links)
+- Assets tab added to Equipment hub (5th tab): card grid using existing props + "Full Roster →" link
+- `removeHose` + `removeHydrant` server actions added to `iso.ts`
+- Hose/Hydrant pages: Add button moved below header, Remove button added per row (inline confirm/cancel)
 
 ### 2026-05-06 — Nav Redesign + Member Equipment + Back Navigation
 - Nav restructured: Personnel / Training & Events / Operations / Inspections / ISO (officer+) / Reports

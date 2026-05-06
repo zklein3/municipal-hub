@@ -87,9 +87,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## Back Navigation Pattern
 - `components/BackButton.tsx` — accepts optional `href` prop; uses `router.push(href)` if provided, else `router.back()`
-- Pages with a single parent: hardcode `router.push('/parent')` (personnel → /personnel, stations → /stations, incidents → /incidents)
-- Contextual pages: pass `?from=/origin` in the link, read it in the page, pass as `href` to BackButton
-- Example: InspectionsClient View links pass `?from=/inspections` to compartment detail page
+- Back button lives BELOW the header as a styled action row button — never inline with the title
+- Pages with single parent: hardcode destination (personnel → /personnel, stations → /stations, incidents → /incidents)
+- Contextual pages: pass `?from=/origin` in link, read in page, pass as `href` to BackButton
+
+## Nav Structure
+- **Main nav** — identical for all roles: Dashboard / Personnel / Training & Events / Operations / Inspections / Reports
+- **Dept Admin section** — admin only: Equipment / Personnel / Training / Hose Inventory / Hydrants / ISO Report
+- Operations includes Public Inbox for all (badge only shows for officers+)
 
 ## Dev Workflow
 - Start: `npm run dev` | Build: `npm run build` (always before pushing)
@@ -109,22 +114,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Nav Redesign — Admin Hub (next major build)
-The dept-admin/setup flow needs to become the primary management hub for admins — not a one-time wizard. Discussed design:
-- `/dept-admin/setup` becomes full admin hub: Stations / Apparatus / Personnel / Compartments / Items & Assets tabs (ongoing management, not setup-once)
-- Main nav Apparatus + Stations pages no longer needed for admins (removed from nav already)
-- Officer nav = member nav + elevated options (already done for member level)
-- Admin nav = officer nav + dept hub access
-
-### Equipment Storage System (next after admin hub)
-Members can now move/remove items between compartments. "Storage" (unassigned pool) is the next step:
-- Items removed from a compartment go to a visible unassigned pool (not just disappear)
+### Equipment Storage System
+Members can move/remove items between compartments. "Storage" (unassigned pool) is next:
+- Items removed from a compartment go to a visible unassigned pool
 - Members can add items from storage into a compartment
-- All moves logged with who/what/from/to/timestamp
+- Log all moves: who/what/from/to/timestamp
 - No named storage locations yet — simple unassigned pool first
 
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).
+
+### Officer Sub-Menu
+Officers need elevated access similar to admin hub but scoped to operational functions (not structural setup). Not yet designed — discuss next session.
 
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.

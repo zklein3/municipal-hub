@@ -11,19 +11,23 @@
 | `(public-site)` — `/dept/[slug]/*` | Public |
 
 ### Nav Structure (layout.tsx)
-| Group | Items | Visibility |
-|---|---|---|
-| (none) | Dashboard | All |
-| Personnel | Roster | All |
-| Training & Events | Events, Certifications | All |
-| Operations | Announcements (badge), Incidents | All; + Public Inbox (officer+) |
-| Inspections | Inspections | Member; + Asset Roster (officer+) |
-| ISO | Hose Inventory, Hydrants, ISO Report | Officer+ only |
-| Reports | My Activity | All; + 4 reports (officer+) |
-| Dept Admin | Dept Setup, Items, Attendance Settings, Training | Admin only |
-| System Admin | Departments, Users, System Logs | Sys admin only |
 
-Sidebar footer: name/role — name is a link to own `/personnel/[id]` profile.
+**Main nav — identical for all dept roles:**
+| Group | Items |
+|---|---|
+| (none) | Dashboard |
+| Personnel | Roster |
+| Training & Events | Events, Certifications |
+| Operations | Announcements (badge), Incidents, Public Inbox (badge) |
+| (none) | Inspections |
+| Reports | My Activity |
+
+**Dept Admin section — admin only:**
+Equipment / Personnel / Training / Hose Inventory / Hydrants / ISO Report
+
+**System Admin section:** Departments / Users / System Logs
+
+Sidebar footer: name links to own `/personnel/[id]` profile.
 
 ### Dashboard Routes
 - `/dashboard` — dept dashboard or sys admin overview
