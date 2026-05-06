@@ -95,8 +95,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - `member.winfire@fireops7.com` — Winslow member | `test.admin@fireops7.com` — Fremont admin
 - Temp password for new accounts: `Hello1!`
 
-## Full Reference
-Routes, action files, edge functions, DB tables, module details, session history → `REFERENCE.md`
+## Reference Files
+- `REFERENCE.md` — routes, action files, edge functions, permissions, burn permit + public site details
+- `MODULES.md` — equipment/inspection, attendance, training, incident, ISO, fire school module design
+- `HISTORY.md` — what's built, what's not, DB tables, session history
 
 ---
 
