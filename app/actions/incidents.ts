@@ -312,7 +312,6 @@ export async function logIncidentAttendance(incident_id: string, role: string) {
     .eq('id', incident_id)
   const incident = incidentList?.[0]
   if (!incident || incident.department_id !== ctx.department_id) return { error: 'Incident not found.' }
-  if (incident.status === 'finalized') return { error: 'This incident has been finalized.' }
 
   // 7-day self-log window from incident date
   const windowClose = new Date(new Date(incident.incident_date + 'T23:59:59').getTime() + 7 * 24 * 60 * 60 * 1000)

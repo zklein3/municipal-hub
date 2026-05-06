@@ -660,7 +660,7 @@ export default function IncidentDetailClient({
         </div>
 
         {/* Self-log */}
-        {!alreadyOnIncident && !isFinalized && (
+        {!alreadyOnIncident && (
           <div className="mb-4">
             {alreadyOnIncident ? (
               <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-600">
