@@ -36,12 +36,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDeptAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'
 
-  // Nav badge counts
+  // Nav badge counts + dept flags
   let announcementUnreadCount = 0
   let inboxPendingCount = 0
+  let publicSiteEnabled = false
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
-    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }] = await Promise.all([
+    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }] = await Promise.all([
       adminClient.from('announcements').select('id').eq('department_id', user.department_id),
       adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
       isOfficerOrAbove
@@ -50,10 +51,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       isOfficerOrAbove
         ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
         : Promise.resolve({ data: [] }),
+      isDeptAdmin
+        ? adminClient.from('departments').select('public_site_enabled').eq('id', user.department_id).single()
+        : Promise.resolve({ data: null }),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
     inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0)
+    publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
   }
 
   const navGroups: NavGroup[] = isSysAdmin ? [
@@ -101,6 +106,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/iso/hoses', label: 'Hose Inventory' },
     { href: '/iso/hydrants', label: 'Hydrants' },
     { href: '/iso/report', label: 'ISO Report' },
+    ...(publicSiteEnabled ? [{ href: '/dept-admin/public-inbox', label: 'Public Inbox' }] : []),
   ] : []
 
   const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'

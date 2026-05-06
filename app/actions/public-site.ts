@@ -69,6 +69,43 @@ export async function toggleEventSeriesPublic(eventSeriesId: string, isPublic: b
   return { success: true }
 }
 
+export async function saveDeptInboxSettings(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel')
+    .select('department_id, system_role')
+    .eq('personnel_id', me.id)
+    .eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || myDept.system_role !== 'admin') return { error: 'Unauthorized.' }
+
+  const department_id          = myDept.department_id
+  const burn_permit_county_info  = (formData.get('burn_permit_county_info') as string)?.trim() || null
+  const burn_permit_restrictions = (formData.get('burn_permit_restrictions') as string)?.trim() || null
+
+  const { error: dbErr } = await adminClient
+    .from('departments')
+    .update({ burn_permit_county_info, burn_permit_restrictions })
+    .eq('id', department_id)
+
+  if (dbErr) {
+    await logError(dbErr, '/dept-admin/public-inbox')
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/dept-admin/public-inbox')
+  return { success: true }
+}
+
 export async function submitBurnPermit(formData: FormData) {
   const adminClient = createAdminClient()
 
