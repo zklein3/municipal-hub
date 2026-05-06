@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createIncident } from '@/app/actions/incidents'
+import { parseRunSheet } from '@/app/actions/parse-run-sheet'
+import type { ParsedRunSheet } from '@/app/actions/parse-run-sheet'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
@@ -52,6 +54,18 @@ export default function NewIncidentClient({
   const [mutualAidDir, setMutualAidDir] = useState('')
   const [nerisReported, setNerisReported] = useState(false)
 
+  // Controlled fields (pre-filled by import)
+  const [cadNumber, setCadNumber] = useState('')
+  const [incidentDate, setIncidentDate] = useState('')
+  const [address, setAddress] = useState('')
+  const [disposition, setDisposition] = useState('')
+  const [narrative, setNarrative] = useState('')
+
+  // Import state
+  const [isParsing, setIsParsing] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = useState(false)
+
   // Incident-level times (controlled so apparatus form can pre-populate from them)
   const [incidentCallTime, setIncidentCallTime] = useState('')
   const [incidentPaged, setIncidentPaged] = useState('')
@@ -94,6 +108,56 @@ export default function NewIncidentClient({
     setShowAddPersonnel(false)
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setIsParsing(true)
+    setImportError(null)
+    setImportSuccess(false)
+
+    const fd = new FormData()
+    fd.append('pdf', file)
+    const result = await parseRunSheet(fd)
+
+    if (result.error) { setImportError(result.error); setIsParsing(false); return }
+
+    const d = result.data!
+    if (d.cad_number)           setCadNumber(d.cad_number)
+    if (d.incident_date)        setIncidentDate(d.incident_date)
+    if (d.address)              setAddress(d.address)
+    if (d.incident_type)        setIncidentType(d.incident_type)
+    if (d.call_time)            setIncidentCallTime(d.call_time)
+    if (d.paged_at)             setIncidentPaged(d.paged_at)
+    if (d.first_on_scene_at)    setIncidentOnScene(d.first_on_scene_at)
+    if (d.last_leaving_scene_at) setIncidentLeavingScene(d.last_leaving_scene_at)
+    if (d.in_service_at)        setIncidentInService(d.in_service_at)
+    if (d.disposition)          setDisposition(d.disposition)
+    if (d.narrative)            setNarrative(d.narrative)
+
+    if (d.apparatus?.length) {
+      const matched: ApparatusEntry[] = []
+      for (const unit of d.apparatus) {
+        const found = apparatus.find(a => a.unit_number.toUpperCase() === unit.unit_number.toUpperCase())
+        if (found) {
+          matched.push({
+            apparatus_id: found.id,
+            role: unit.role || 'primary',
+            paged_at: d.paged_at || '',
+            enroute_at: unit.enroute_at || '',
+            on_scene_at: unit.on_scene_at || '',
+            leaving_scene_at: unit.leaving_scene_at || '',
+            available_at: unit.available_at || '',
+          })
+        }
+      }
+      if (matched.length > 0) setApparatusRows(matched)
+    }
+
+    setImportSuccess(true)
+    setIsParsing(false)
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -134,6 +198,20 @@ export default function NewIncidentClient({
         <button onClick={() => router.back()} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
       </div>
 
+      {/* Run Sheet Import */}
+      <div className="mb-4 rounded-xl bg-zinc-50 border border-zinc-200 p-4 flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-zinc-700">Import from Run Sheet</p>
+          <p className="text-xs text-zinc-400">Upload a Central Square CFS PDF to auto-fill this form</p>
+        </div>
+        <label className={`relative cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition-colors shrink-0 ${isParsing ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-red-700 text-white hover:bg-red-800'}`}>
+          {isParsing ? 'Reading PDF…' : 'Upload PDF'}
+          <input type="file" accept=".pdf,application/pdf" className="sr-only" onChange={handleImport} disabled={isParsing} />
+        </label>
+        {importSuccess && <p className="w-full text-xs text-green-700 font-medium">Form pre-filled — review and adjust as needed</p>}
+        {importError && <p className="w-full text-xs text-red-600">{importError}</p>}
+      </div>
+
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -149,14 +227,14 @@ export default function NewIncidentClient({
             </div>
             <div>
               <label className={labelCls}>CAD # <span className="text-zinc-400 font-normal">(optional)</span></label>
-              <input name="cad_number" type="text" placeholder="CAD number" className={inputCls} />
+              <input name="cad_number" type="text" placeholder="CAD number" value={cadNumber} onChange={e => setCadNumber(e.target.value)} className={inputCls} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Date <span className="text-red-600">*</span></label>
-              <input name="incident_date" type="date" required className={inputCls} />
+              <input name="incident_date" type="date" required value={incidentDate} onChange={e => setIncidentDate(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Type <span className="text-red-600">*</span></label>
@@ -201,17 +279,17 @@ export default function NewIncidentClient({
 
           <div>
             <label className={labelCls}>Address</label>
-            <input name="address" type="text" placeholder="123 Main St, Winslow" className={inputCls} />
+            <input name="address" type="text" placeholder="123 Main St, Winslow" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} />
           </div>
 
           <div>
             <label className={labelCls}>Disposition</label>
-            <input name="disposition" type="text" placeholder="e.g. Controlled, No fire found, Patient transported" className={inputCls} />
+            <input name="disposition" type="text" placeholder="e.g. Controlled, No fire found, Patient transported" value={disposition} onChange={e => setDisposition(e.target.value)} className={inputCls} />
           </div>
 
           <div>
             <label className={labelCls}>Narrative</label>
-            <textarea name="narrative" rows={3} placeholder="Brief description of the incident…" className={inputCls} />
+            <textarea name="narrative" rows={3} placeholder="Brief description of the incident…" value={narrative} onChange={e => setNarrative(e.target.value)} className={inputCls} />
           </div>
 
           <div className="flex items-center gap-2">
