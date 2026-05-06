@@ -103,26 +103,31 @@ export async function submitBurnPermit(formData: FormData) {
 
   const { data: dept } = await adminClient
     .from('departments')
-    .select('name')
+    .select('name, public_slug')
     .eq('id', department_id)
     .single()
 
   await logEvent({
     log_type: 'user_report',
-    page: 'public/burn-permit',
+    page: '/dept/burn-permit',
     department_id,
     message: [
-      `New burn permit request submitted.`,
-      `Department: ${dept?.name ?? department_id}`,
+      `New burn permit application submitted.`,
       `Applicant: ${contact_name}`,
       `Email: ${contact_email}`,
       contact_phone ? `Phone: ${contact_phone}` : null,
+      `Department: ${dept?.name ?? department_id}`,
       `Burn address: ${burn_address}`,
       `Burn date: ${burn_date}`,
-      `Description: ${burn_description}`,
+      burn_description ? `Description: ${burn_description}` : null,
       `Confirmation code: ${data.confirmation_code}`,
       `Review at: https://www.fireops7.com/inbox`,
     ].filter(Boolean).join('\n'),
+    metadata: {
+      permit_id: data.confirmation_code,
+      confirmation_code: data.confirmation_code,
+      department_id,
+    },
   })
 
   return { confirmationCode: data.confirmation_code }

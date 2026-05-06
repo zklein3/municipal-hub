@@ -22,6 +22,21 @@ async function getUnreadAnnouncements(departmentId: string, personnelId: string)
   return (announcements ?? []).filter(a => !readSet.has(a.id))
 }
 
+async function getPendingInboxCounts(departmentId: string) {
+  const adminClient = createAdminClient()
+  const [{ count: permits }, { count: records }] = await Promise.all([
+    adminClient.from('burn_permits')
+      .select('id', { count: 'exact', head: true })
+      .eq('department_id', departmentId)
+      .eq('status', 'pending'),
+    adminClient.from('public_record_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('department_id', departmentId)
+      .eq('status', 'pending'),
+  ])
+  return { permits: permits ?? 0, records: records ?? 0 }
+}
+
 async function getDashboardData(departmentId: string, personnelId: string) {
   const adminClient = createAdminClient()
 
@@ -182,9 +197,10 @@ export default async function DashboardPage() {
     personnelId: me.id,
   }
 
-  const [data, unreadAnnouncements] = await Promise.all([
+  const [data, unreadAnnouncements, pendingInbox] = await Promise.all([
     getDashboardData(departmentId, me.id),
     getUnreadAnnouncements(departmentId, me.id),
+    isOfficerOrAbove ? getPendingInboxCounts(departmentId) : Promise.resolve({ permits: 0, records: 0 }),
   ])
 
   const greeting = () => {
@@ -244,6 +260,26 @@ export default async function DashboardPage() {
           >
             Preview ↗
           </a>
+        </div>
+      )}
+
+      {/* Officer+: pending inbox banner */}
+      {isOfficerOrAbove && (pendingInbox.permits + pendingInbox.records) > 0 && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-red-800">
+              {pendingInbox.permits + pendingInbox.records} pending inbox item{(pendingInbox.permits + pendingInbox.records) !== 1 ? 's' : ''}
+            </p>
+            <p className="text-xs text-red-600 mt-0.5">
+              {[
+                pendingInbox.permits > 0 ? `${pendingInbox.permits} burn permit${pendingInbox.permits !== 1 ? 's' : ''}` : null,
+                pendingInbox.records > 0 ? `${pendingInbox.records} records request${pendingInbox.records !== 1 ? 's' : ''}` : null,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+          <Link href="/inbox" className="shrink-0 text-xs font-semibold text-red-700 hover:text-red-900 transition-colors ml-4">
+            Review →
+          </Link>
         </div>
       )}
 
