@@ -70,6 +70,7 @@ export default function EquipmentDetailClient({
   allApparatus,
   isAdmin,
   isOfficerOrAbove,
+  backHref,
 }: {
   apparatus: Apparatus
   compartments: Compartment[]
@@ -78,6 +79,7 @@ export default function EquipmentDetailClient({
   allApparatus: ApparatusOption[]
   isAdmin: boolean
   isOfficerOrAbove: boolean
+  backHref?: string
 }) {
   const router = useRouter()
   const [assigningTo, setAssigningTo] = useState<string | null>(null)
@@ -171,7 +173,7 @@ export default function EquipmentDetailClient({
     <div className="max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
+        <button onClick={() => backHref ? router.push(backHref) : router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">
             Unit {apparatus.unit_number}{apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}

@@ -3,8 +3,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import EquipmentDetailClient from './EquipmentDetailClient'
 
-export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EquipmentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string }>
+}) {
   const { id } = await params
+  const { from } = await searchParams
   const supabase = await createClient()
   const adminClient = createAdminClient()
 
@@ -182,6 +189,7 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
       allApparatus={allApparatus}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
+      backHref={from}
     />
   )
 }

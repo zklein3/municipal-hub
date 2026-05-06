@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createApparatus, updateApparatus } from '@/app/actions/apparatus'
 import HelpPrompt from './HelpPrompt'
 
@@ -254,12 +255,20 @@ export default function ApparatusStep({
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setEditingId(a.id); setShowForm(false); setError(null) }}
-                    className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-                  >
-                    Edit
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      href={`/equipment/${a.id}?from=/dept-admin/setup`}
+                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    >
+                      Load
+                    </Link>
+                    <button
+                      onClick={() => { setEditingId(a.id); setShowForm(false); setError(null) }}
+                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
