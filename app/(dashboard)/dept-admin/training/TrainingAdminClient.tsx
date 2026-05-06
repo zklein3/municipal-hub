@@ -96,30 +96,51 @@ export default function TrainingAdminClient({
   const totalPending = pendingProgress.length
   const totalPendingAttendance = trainingEvents.reduce((sum, e) => sum + e.pending_attendance.length, 0)
 
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'certs',       label: 'Cert Types'   },
+    { key: 'enrollments', label: 'Enrollments'  },
+    { key: 'pending',     label: totalPending > 0 ? `Pending (${totalPending})` : 'Pending' },
+    { key: 'events',      label: totalPendingAttendance > 0 ? `Events (${totalPendingAttendance})` : 'Events' },
+  ]
+
   return (
-    <div className="max-w-2xl">
+    <div>
+      {/* Page header */}
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Certifications</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Certifications, enrollments, and training events</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Training</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">{departmentId && 'Cert types, enrollments, and training events'}</p>
       </div>
 
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white rounded-xl border border-zinc-200 p-1">
-        {([
-          { key: 'certs', label: 'Cert Types' },
-          { key: 'enrollments', label: 'Enrollments' },
-          { key: 'pending', label: `Pending${totalPending > 0 ? ` (${totalPending})` : ''}` },
-          { key: 'events', label: `Events${totalPendingAttendance > 0 ? ` (${totalPendingAttendance})` : ''}` },
-        ] as { key: Tab; label: string }[]).map(t => (
+      {/* Mobile tabs */}
+      <div className="md:hidden flex gap-2 overflow-x-auto pb-2 mb-4">
+        {TABS.map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); reset() }}
-            className={`flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors ${tab === t.key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              tab === t.key ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-red-300'
+            }`}>
             {t.label}
           </button>
         ))}
       </div>
+
+      <div className="flex gap-6 items-start">
+        {/* Left tab rail — desktop */}
+        <div className="hidden md:flex flex-col w-44 shrink-0 gap-1">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => { setTab(t.key); reset() }}
+              className={`rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                tab === t.key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 min-w-0">
 
       {/* ── CERT TYPES ─────────────────────────────────────────────────────── */}
       {tab === 'certs' && (
@@ -583,6 +604,8 @@ export default function TrainingAdminClient({
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }
