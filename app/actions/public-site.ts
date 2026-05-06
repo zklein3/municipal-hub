@@ -101,6 +101,30 @@ export async function submitBurnPermit(formData: FormData) {
     return { error: 'Something went wrong. Please try again.' }
   }
 
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name')
+    .eq('id', department_id)
+    .single()
+
+  await logEvent({
+    log_type: 'user_report',
+    page: 'public/burn-permit',
+    department_id,
+    message: [
+      `New burn permit request submitted.`,
+      `Department: ${dept?.name ?? department_id}`,
+      `Applicant: ${contact_name}`,
+      `Email: ${contact_email}`,
+      contact_phone ? `Phone: ${contact_phone}` : null,
+      `Burn address: ${burn_address}`,
+      `Burn date: ${burn_date}`,
+      `Description: ${burn_description}`,
+      `Confirmation code: ${data.confirmation_code}`,
+      `Review at: https://www.fireops7.com/inbox`,
+    ].filter(Boolean).join('\n'),
+  })
+
   return { confirmationCode: data.confirmation_code }
 }
 
