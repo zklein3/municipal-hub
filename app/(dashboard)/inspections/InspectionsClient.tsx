@@ -1,7 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import Link from 'next/link'
 
 interface Compartment {
   id: string
@@ -9,112 +8,148 @@ interface Compartment {
   compartment_name: string | null
   sort_order: number
   item_count: number
+  apparatusId: string
 }
 
 interface Apparatus {
   id: string
   unit_number: string
   apparatus_name: string | null
-  station: { station_name: string; station_number: string | null } | null
+  type_name: string | null
+  station: { id: string; station_name: string; station_number: string | null } | null
   compartments: Compartment[]
 }
 
+interface StationGroup {
+  id: string | null
+  label: string
+  apparatus: Apparatus[]
+}
+
 export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[] }) {
-  const router = useRouter()
-  const [selectedApparatus, setSelectedApparatus] = useState<string | null>(null)
+  // Group by station
+  const stationMap = new Map<string | null, StationGroup>()
 
-  const selected = apparatus.find(a => a.id === selectedApparatus)
+  for (const a of apparatus) {
+    const key = a.station?.id ?? null
+    if (!stationMap.has(key)) {
+      stationMap.set(key, {
+        id: key,
+        label: a.station
+          ? `Station ${a.station.station_number ? a.station.station_number + ' — ' : ''}${a.station.station_name}`
+          : 'Unassigned',
+        apparatus: [],
+      })
+    }
+    stationMap.get(key)!.apparatus.push(a)
+  }
 
-  return (
-    <div className="max-w-lg">
-      <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Inspections</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Select an apparatus and compartment to begin</p>
-      </div>
+  const stations = Array.from(stationMap.values()).sort((a, b) => {
+    if (a.id === null) return 1
+    if (b.id === null) return -1
+    return a.label.localeCompare(b.label)
+  })
 
-      {/* Step 1 — Select Apparatus */}
-      <div className="mb-4">
-        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Step 1 — Select Apparatus</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {apparatus.map(a => (
-            <button
-              key={a.id}
-              onClick={() => setSelectedApparatus(a.id === selectedApparatus ? null : a.id)}
-              className={`rounded-xl border p-4 text-left transition-all ${
-                selectedApparatus === a.id
-                  ? 'border-red-500 bg-red-50 shadow-sm'
-                  : 'border-zinc-200 bg-white hover:border-red-300 hover:shadow-sm'
-              }`}
-            >
-              <p className="text-2xl font-bold text-zinc-900">{a.unit_number}</p>
-              {a.apparatus_name && <p className="text-sm text-zinc-600">{a.apparatus_name}</p>}
-              {a.station && <p className="text-xs text-zinc-400">Station {a.station.station_number} — {a.station.station_name}</p>}
-              <p className="text-xs text-zinc-400 mt-1">{a.compartments.length} compartments</p>
-            </button>
-          ))}
+  if (apparatus.length === 0) {
+    return (
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 mb-6">Inspections</h1>
+        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+          No apparatus found for this department.
         </div>
       </div>
+    )
+  }
 
-      {/* Step 2 — Select Compartment */}
-      {selected && (
-        <div>
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-            Step 2 — Select Compartment on Unit {selected.unit_number}
-          </p>
-          {selected.compartments.length === 0 ? (
-            <div className="rounded-xl bg-white border border-zinc-200 px-5 py-8 text-center text-sm text-zinc-400">
-              No compartments assigned to this apparatus.
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Inspections</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">Select an apparatus to begin an inspection or daily check</p>
+      </div>
+
+      <div className="flex flex-col gap-8">
+        {stations.map(station => (
+          <div key={station.id ?? 'unassigned'}>
+            {/* Station header */}
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider">{station.label}</h2>
+              <div className="flex-1 h-px bg-zinc-200" />
             </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {selected.compartments.map(c => (
-                <div
-                  key={c.id}
-                  className={`rounded-xl border px-5 py-4 ${
-                    c.item_count > 0
-                      ? 'border-zinc-200 bg-white'
-                      : 'border-zinc-100 bg-zinc-50 opacity-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-100 px-2.5 py-1 text-sm font-mono font-bold text-red-700">
-                        {c.compartment_code}
-                      </span>
-                      {c.compartment_name && <span className="text-sm text-zinc-700">{c.compartment_name}</span>}
+
+            {/* Apparatus cards */}
+            <div className="flex flex-col gap-4">
+              {station.apparatus.map(a => (
+                <div key={a.id} className="rounded-xl bg-white border border-zinc-200 overflow-hidden">
+                  {/* Apparatus header */}
+                  <div className="px-5 py-4 flex items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-bold text-zinc-900">{a.unit_number}</span>
+                        {a.apparatus_name && (
+                          <span className="text-sm text-zinc-500">{a.apparatus_name}</span>
+                        )}
+                        {a.type_name && (
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{a.type_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        {a.compartments.length} compartment{a.compartments.length !== 1 ? 's' : ''}
+                      </p>
                     </div>
-                    <span className="text-xs text-zinc-400">{c.item_count} item{c.item_count !== 1 ? 's' : ''}</span>
+                    <Link
+                      href={`/inspections/apparatus/${a.id}`}
+                      className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                    >
+                      Start Session
+                    </Link>
                   </div>
-                  {c.item_count > 0 ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => router.push(`/inspections/run?apparatus_id=${selected.id}&compartment_id=${c.id}`)}
-                        className="flex-1 rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
-                      >
-                        Full Inspection
-                      </button>
-                      <button
-                        onClick={() => router.push(`/inspections/run?apparatus_id=${selected.id}&compartment_id=${c.id}&mode=presence`)}
-                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
-                      >
-                        Daily Check
-                      </button>
+
+                  {/* Compartments */}
+                  {a.compartments.length > 0 && (
+                    <div className="border-t border-zinc-100">
+                      {a.compartments.map((c, i) => (
+                        <div
+                          key={c.id}
+                          className={`flex items-center justify-between px-5 py-3 gap-4 ${
+                            i < a.compartments.length - 1 ? 'border-b border-zinc-100' : ''
+                          } ${c.item_count === 0 ? 'opacity-40' : ''}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="inline-flex items-center rounded-md bg-red-50 border border-red-100 px-2 py-0.5 text-xs font-mono font-bold text-red-700 shrink-0">
+                              {c.compartment_code}
+                            </span>
+                            {c.compartment_name && (
+                              <span className="text-sm text-zinc-600 truncate">{c.compartment_name}</span>
+                            )}
+                            <span className="text-xs text-zinc-400 shrink-0">{c.item_count} item{c.item_count !== 1 ? 's' : ''}</span>
+                          </div>
+                          {c.item_count > 0 && (
+                            <div className="flex gap-2 shrink-0">
+                              <Link
+                                href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}`}
+                                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                              >
+                                Inspect
+                              </Link>
+                              <Link
+                                href={`/inspections/run?apparatus_id=${a.id}&compartment_id=${c.id}&mode=presence`}
+                                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+                              >
+                                Daily Check
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <p className="text-xs text-zinc-400">No items</p>
                   )}
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {apparatus.length === 0 && (
-        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-          No apparatus found for this department.
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

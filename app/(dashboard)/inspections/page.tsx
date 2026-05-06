@@ -25,17 +25,24 @@ export default async function InspectionsPage() {
   // Fetch all active apparatus for this department
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
-    .select('id, unit_number, apparatus_name, station_id')
+    .select('id, unit_number, apparatus_name, station_id, type_id')
     .eq('department_id', myDept.department_id)
     .eq('active', true)
     .order('unit_number')
 
   // Fetch station names
-  const stationIds = (apparatusRaw ?? []).map(a => a.station_id).filter(Boolean)
+  const stationIds = (apparatusRaw ?? []).map((a: { station_id: string | null }) => a.station_id).filter(Boolean)
   const { data: stations } = stationIds.length > 0
     ? await adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
     : { data: [] }
-  const stationMap = Object.fromEntries((stations ?? []).map(s => [s.id, s]))
+  const stationMap = Object.fromEntries((stations ?? []).map((s: { id: string; station_name: string; station_number: string | null }) => [s.id, s]))
+
+  // Fetch apparatus types
+  const typeIds = (apparatusRaw ?? []).map((a: { type_id: string | null }) => a.type_id).filter(Boolean)
+  const { data: apparatusTypes } = typeIds.length > 0
+    ? await adminClient.from('apparatus_types').select('id, type_name').in('id', typeIds)
+    : { data: [] }
+  const typeMap = Object.fromEntries((apparatusTypes ?? []).map((t: { id: string; type_name: string }) => [t.id, t.type_name]))
 
   // Fetch compartments with item counts
   const appIds = (apparatusRaw ?? []).map(a => a.id)
@@ -65,10 +72,10 @@ export default async function InspectionsPage() {
   }, {})
 
   // Build apparatus with compartments
-  const apparatus = (apparatusRaw ?? []).map(a => {
+  const apparatus = (apparatusRaw ?? []).map((a: { id: string; unit_number: string; apparatus_name: string | null; station_id: string | null; type_id: string | null }) => {
     const comps = (compartmentLinks ?? [])
-      .filter(c => c.apparatus_id === a.id)
-      .map(c => {
+      .filter((c: { apparatus_id: string }) => c.apparatus_id === a.id)
+      .map((c: { id: string; compartment_name_id: string; apparatus_id: string }) => {
         const name = compNameMap[c.compartment_name_id]
         return {
           id: c.id,
@@ -76,14 +83,16 @@ export default async function InspectionsPage() {
           compartment_name: name?.compartment_name ?? null,
           sort_order: name?.sort_order ?? 999,
           item_count: itemCountByComp[c.id] ?? 0,
+          apparatusId: a.id,
         }
       })
-      .sort((a, b) => a.sort_order - b.sort_order)
+      .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
 
     return {
       id: a.id,
       unit_number: a.unit_number,
       apparatus_name: a.apparatus_name,
+      type_name: a.type_id ? typeMap[a.type_id] ?? null : null,
       station: a.station_id ? stationMap[a.station_id] ?? null : null,
       compartments: comps,
     }

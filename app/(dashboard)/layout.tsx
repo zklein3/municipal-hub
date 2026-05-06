@@ -22,6 +22,7 @@ async function getUserContext() {
   const dept = deptList?.[0]
   return {
     ...me,
+    personnelId: me.id,
     system_role: dept?.system_role ?? null,
     department_name: (dept?.departments as any)?.name ?? null,
     department_id: dept?.department_id ?? null,
@@ -62,8 +63,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     {
       label: 'Personnel',
       items: [
-        { href: '/personnel', label: 'Personnel' },
-        { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
+        { href: '/personnel', label: 'Roster' },
+      ],
+    },
+    {
+      label: 'Training & Events',
+      items: [
         { href: '/events', label: 'Events' },
         { href: '/training', label: 'Certifications' },
       ],
@@ -71,27 +76,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
     {
       label: 'Operations',
       items: [
+        { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
         { href: '/incidents', label: 'Incidents' },
         ...(isOfficerOrAbove ? [{ href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined }] : []),
       ],
     },
-    {
-      label: 'Apparatus',
+    ...(isOfficerOrAbove ? [{
+      label: 'Inspections',
       items: [
-        { href: '/apparatus', label: 'Apparatus' },
-        { href: '/stations', label: 'Stations' },
         { href: '/inspections', label: 'Inspections' },
         { href: '/equipment/assets', label: 'Asset Roster' },
       ],
-    },
-    {
+    }] : [
+      { items: [{ href: '/inspections', label: 'Inspections' }] },
+    ]),
+    ...(isOfficerOrAbove ? [{
       label: 'ISO',
       items: [
         { href: '/iso/hoses', label: 'Hose Inventory' },
         { href: '/iso/hydrants', label: 'Hydrants' },
         { href: '/iso/report', label: 'ISO Report' },
       ],
-    },
+    }] : []),
     {
       label: 'Reports',
       items: [
@@ -123,6 +129,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
     role: isSysAdmin ? 'System Admin' : systemRole ?? '',
     departmentName: user?.department_name ?? (isSysAdmin ? 'System Administrator' : null),
+    profileHref: user?.personnelId ? `/personnel/${user.personnelId}` : null,
   }
 
   return (
@@ -142,7 +149,7 @@ function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo }: {
   navGroups: NavGroup[]
   adminNavItems: { href: string; label: string }[]
   adminLabel: string
-  userInfo: { name: string; role: string; departmentName: string | null }
+  userInfo: { name: string; role: string; departmentName: string | null; profileHref: string | null }
 }) {
   return (
     <>
@@ -161,8 +168,17 @@ function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo }: {
       </nav>
       <div className="px-4 py-4 border-t border-red-700 flex flex-col gap-2">
         <div className="mb-1">
-          <p className="text-sm font-medium truncate">{userInfo.name}</p>
-          <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
+          {userInfo.profileHref ? (
+            <a href={userInfo.profileHref} className="group block">
+              <p className="text-sm font-medium truncate group-hover:underline">{userInfo.name}</p>
+              <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
+            </a>
+          ) : (
+            <div>
+              <p className="text-sm font-medium truncate">{userInfo.name}</p>
+              <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
+            </div>
+          )}
         </div>
         <FeedbackButton />
         <form action={signOut}>
