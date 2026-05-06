@@ -64,8 +64,7 @@ export default function StationDetailClient({
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.push('/stations')} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
+      <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-red-600">
             {station.station_number ? `Station ${station.station_number}` : 'Station'}
@@ -77,6 +76,9 @@ export default function StationDetailClient({
         }`}>
           {station.active ? 'Active' : 'Inactive'}
         </span>
+      </div>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button onClick={() => router.push('/stations')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
       </div>
 
       {/* Station Info */}

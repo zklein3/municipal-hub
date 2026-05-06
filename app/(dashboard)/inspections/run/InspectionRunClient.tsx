@@ -224,18 +224,20 @@ export default function InspectionRunClient({
   return (
     <div className="max-w-lg">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900">
-            Unit {apparatus.unit_number} — {compartment.code}
-            {compartment.name ? ` · ${compartment.name}` : ''}
-          </h1>
-          <p className="text-sm text-zinc-500">Inspector: {inspectorName}</p>
-          {presenceOnly && (
-            <span className="inline-block mt-1 text-xs rounded-full bg-blue-100 text-blue-700 px-2 py-0.5">Daily Check — Presence Only</span>
-          )}
-        </div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-zinc-900">
+          Unit {apparatus.unit_number} — {compartment.code}
+          {compartment.name ? ` · ${compartment.name}` : ''}
+        </h1>
+        <p className="text-sm text-zinc-500">Inspector: {inspectorName}</p>
+        {presenceOnly && (
+          <span className="inline-block mt-1 text-xs rounded-full bg-blue-100 text-blue-700 px-2 py-0.5">Daily Check — Presence Only</span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button onClick={() => router.back()} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+      </div>
+      <div>
       </div>
 
       {error && (

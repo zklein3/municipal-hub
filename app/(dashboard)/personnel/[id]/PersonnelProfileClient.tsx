@@ -108,14 +108,8 @@ export default function PersonnelProfileClient({
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => router.push('/personnel')}
-          className="text-sm text-zinc-500 hover:text-zinc-700"
-        >
-          ← Back
-        </button>
-        <div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-zinc-900">
             {person.first_name || person.last_name
               ? `${person.first_name} ${person.last_name}`.trim()
@@ -124,10 +118,13 @@ export default function PersonnelProfileClient({
           <p className="text-sm text-zinc-500">{person.email}</p>
         </div>
         {person.is_sys_admin && (
-          <span className="ml-auto inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+          <span className="shrink-0 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
             Sys Admin
           </span>
         )}
+      </div>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button onClick={() => router.push('/personnel')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
       </div>
 
       {/* ── Personal Info ─────────────────────────────────────────────────── */}

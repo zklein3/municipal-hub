@@ -28,12 +28,12 @@ export default function NewEventPage() {
 
   return (
     <div className="max-w-lg">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700">← Back</button>
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900">New Event</h1>
-          <p className="text-sm text-zinc-500">Create a one-time or recurring event</p>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-zinc-900">New Event</h1>
+        <p className="text-sm text-zinc-500">Create a one-time or recurring event</p>
+      </div>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button onClick={() => router.back()} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
       </div>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
