@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import StationsStep from './StationsStep'
 import ApparatusStep from './ApparatusStep'
 import CompartmentsStep from './CompartmentsStep'
@@ -10,8 +11,15 @@ const TABS = [
   { id: 'stations',     label: 'Stations'      },
   { id: 'apparatus',    label: 'Apparatus'     },
   { id: 'compartments', label: 'Compartments'  },
-  { id: 'items',        label: 'Items & Assets'},
+  { id: 'items',        label: 'Items'         },
+  { id: 'assets',       label: 'Assets'        },
 ]
+
+const STATUS_STYLES: Record<string, string> = {
+  'IN SERVICE':      'bg-green-100 text-green-700',
+  'OUT OF SERVICE':  'bg-yellow-100 text-yellow-700',
+  'RETIRED':         'bg-zinc-100 text-zinc-500',
+}
 
 export default function SetupFlowClient({
   department,
@@ -130,6 +138,54 @@ export default function SetupFlowClient({
               {...helpProps}
             />
           )}
+          {activeTab === 'assets' && (() => {
+            const itemMap = Object.fromEntries(items.map(i => [i.id, i.item_name]))
+            const apparatusMap = Object.fromEntries(apparatus.map(a => [a.id, a.unit_number + (a.apparatus_name ? ` — ${a.apparatus_name}` : '')]))
+            const activeAssets = assets.filter(a => a.active)
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-zinc-900">Assets</h2>
+                    <p className="text-sm text-zinc-500">{activeAssets.length} active asset{activeAssets.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <Link
+                    href="/equipment/assets"
+                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  >
+                    Full Roster →
+                  </Link>
+                </div>
+                {activeAssets.length === 0 ? (
+                  <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+                    No assets found. Add assets under the Items tab.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {activeAssets.map(asset => (
+                      <div key={asset.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-zinc-900 font-mono">{asset.asset_tag ?? '—'}</p>
+                            <p className="text-xs text-zinc-500 truncate">{itemMap[asset.item_id] ?? '—'}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[asset.status] ?? 'bg-zinc-100 text-zinc-500'}`}>
+                            {asset.status ?? 'Unknown'}
+                          </span>
+                        </div>
+                        {asset.apparatus_id && (
+                          <p className="text-xs text-zinc-400 mt-1">📍 {apparatusMap[asset.apparatus_id] ?? '—'}</p>
+                        )}
+                        {asset.serial_number && (
+                          <p className="text-xs text-zinc-400">S/N: {asset.serial_number}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>
