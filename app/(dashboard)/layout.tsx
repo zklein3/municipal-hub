@@ -78,36 +78,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       items: [
         { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
         { href: '/incidents', label: 'Incidents' },
-        ...(isOfficerOrAbove ? [{ href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined }] : []),
+        { href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined },
       ],
     },
-    ...(isOfficerOrAbove ? [{
-      label: 'Inspections',
-      items: [
-        { href: '/inspections', label: 'Inspections' },
-        { href: '/equipment/assets', label: 'Asset Roster' },
-      ],
-    }] : [
-      { items: [{ href: '/inspections', label: 'Inspections' }] },
-    ]),
-    ...(isOfficerOrAbove ? [{
-      label: 'ISO',
-      items: [
-        { href: '/iso/hoses', label: 'Hose Inventory' },
-        { href: '/iso/hydrants', label: 'Hydrants' },
-        { href: '/iso/report', label: 'ISO Report' },
-      ],
-    }] : []),
+    { items: [{ href: '/inspections', label: 'Inspections' }] },
     {
       label: 'Reports',
       items: [
         { href: '/reports/my-activity', label: 'My Activity' },
-        ...(isOfficerOrAbove ? [
-          { href: '/reports/inspections', label: 'Inspection Report' },
-          { href: '/reports/inventory', label: 'Inventory Report' },
-          { href: '/reports/training', label: 'Training Report' },
-          { href: '/reports/attendance', label: 'Attendance Report' },
-        ] : []),
       ],
     },
   ]
