@@ -212,62 +212,54 @@ export default function DeptPersonnelClient({
         </div>
       )}
 
-      {/* Personnel Table */}
-      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
-        {sorted.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-zinc-400">
-            No personnel yet. Add someone above.
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-50 border-b border-zinc-200">
-              <tr>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Name</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Email</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Title</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Access Level</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Emp #</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {sorted.map((record) => {
-                const p = record.personnel
-                const name = p?.first_name || p?.last_name
-                  ? `${p.first_name} ${p.last_name}`.trim()
-                  : '—'
-                const status = p?.signup_status ?? record.signup_status
-                return (
-                  <tr key={record.id} className="hover:bg-zinc-50">
-                    <td className="px-6 py-4 font-medium text-zinc-900">{name}</td>
-                    <td className="px-6 py-4 text-zinc-500">{p?.email ?? '—'}</td>
-                    <td className="px-6 py-4 text-zinc-500">
-                      {record.personnel_roles?.name ?? '—'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        record.system_role === 'admin' ? 'bg-red-100 text-red-700' :
-                        record.system_role === 'officer' ? 'bg-blue-100 text-blue-700' :
-                        'bg-zinc-100 text-zinc-600'
-                      }`}>
-                        {record.system_role.charAt(0).toUpperCase() + record.system_role.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-zinc-500">
-                      {record.employee_number ?? '—'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status] ?? 'bg-zinc-100 text-zinc-500'}`}>
-                        {STATUS_LABELS[status] ?? status}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {/* Personnel Cards */}
+      {sorted.length === 0 ? (
+        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+          No personnel yet. Add someone above.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sorted.map((record) => {
+            const p = record.personnel
+            const name = p?.first_name || p?.last_name
+              ? `${p.first_name} ${p.last_name}`.trim()
+              : '—'
+            const status = p?.signup_status ?? record.signup_status
+            return (
+              <div key={record.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-zinc-900 truncate">{name}</p>
+                    <p className="text-xs text-zinc-500 truncate">{p?.email ?? '—'}</p>
+                  </div>
+                  <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    record.system_role === 'admin'   ? 'bg-red-100 text-red-700' :
+                    record.system_role === 'officer' ? 'bg-blue-100 text-blue-700' :
+                                                       'bg-zinc-100 text-zinc-600'
+                  }`}>
+                    {record.system_role.charAt(0).toUpperCase() + record.system_role.slice(1)}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {record.personnel_roles?.name && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                      {record.personnel_roles.name}
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status] ?? 'bg-zinc-100 text-zinc-500'}`}>
+                    {STATUS_LABELS[status] ?? status}
+                  </span>
+                  {record.employee_number && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                      #{record.employee_number}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
