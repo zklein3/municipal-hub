@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { setCompartmentQrCode } from '@/app/actions/compartments'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import CompartmentItemsClient from './CompartmentItemsClient'
+import BackButton from '@/components/BackButton'
 
 function fmt(dateStr: string | null) {
   if (!dateStr) return '—'
@@ -206,9 +207,7 @@ export default async function CompartmentPage({
     <div className="max-w-2xl">
       {/* Header */}
       <div className="flex items-start gap-3 mb-6">
-        <Link href={`/equipment/${apparatus_id}`} className="mt-1 text-sm text-zinc-500 hover:text-zinc-700 shrink-0">
-          ← Back
-        </Link>
+        <BackButton className="mt-1 text-sm text-zinc-500 hover:text-zinc-700 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm text-zinc-500">{apparatusLabel}</p>
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2 flex-wrap">

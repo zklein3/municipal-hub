@@ -6,6 +6,7 @@ import { updateApparatus } from '@/app/actions/apparatus'
 import { assignCompartmentToApparatus, removeCompartmentFromApparatus } from '@/app/actions/compartments'
 import { upsertApparatusIsoSpecs } from '@/app/actions/iso'
 import QrPrintLabel from '@/components/QrPrintLabel'
+import BackButton from '@/components/BackButton'
 
 interface Station {
   id: string
@@ -151,7 +152,7 @@ export default function ApparatusDetailClient({
   return (
     <div className="max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/apparatus" className="text-sm text-zinc-500 hover:text-zinc-700">← Back</Link>
+        <BackButton />
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 truncate">
             Unit {apparatus.unit_number}{apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}
