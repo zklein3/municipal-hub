@@ -273,3 +273,33 @@ export async function removeMutualAid(mutualAidId: string, incidentId: string) {
   revalidatePath(`/incidents/${incidentId}`)
   return { success: true }
 }
+
+// ─── Remove Hose ──────────────────────────────────────────────────────────────
+export async function removeHose(hoseId: string) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('hoses')
+    .update({ active: false })
+    .eq('id', hoseId)
+    .eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr, '/iso/hoses'); return { error: dbErr.message } }
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
+// ─── Remove Hydrant ───────────────────────────────────────────────────────────
+export async function removeHydrant(hydrantId: string) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('hydrants')
+    .update({ active: false })
+    .eq('id', hydrantId)
+    .eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr, '/iso/hydrants'); return { error: dbErr.message } }
+  revalidatePath('/iso/hydrants')
+  return { success: true }
+}

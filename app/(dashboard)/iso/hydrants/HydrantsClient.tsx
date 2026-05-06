@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createHydrant, updateHydrant, addHydrantFlowTest } from '@/app/actions/iso'
+import { createHydrant, updateHydrant, addHydrantFlowTest, removeHydrant } from '@/app/actions/iso'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-xs font-medium text-zinc-700 mb-1"
@@ -63,6 +63,7 @@ export default function HydrantsClient({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loggingTestId, setLoggingTestId] = useState<string | null>(null)
   const [testError, setTestError] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -109,20 +110,20 @@ export default function HydrantsClient({
 
   return (
     <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900">Hydrants</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">{hydrants.length} total · {outOfService} out of service · {testedThisYear}/{hydrants.length} flow tested in past 12 months</p>
-        </div>
-        {isOfficerOrAbove && (
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-zinc-900">Hydrants</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">{hydrants.length} total · {outOfService} out of service · {testedThisYear}/{hydrants.length} flow tested in past 12 months</p>
+      </div>
+      {isOfficerOrAbove && (
+        <div className="flex flex-wrap gap-3 mb-6">
           <button
             onClick={() => { setShowAddForm(true); setAddError(null) }}
-            className="rounded-lg bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
+            className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors shadow-sm"
           >
             + Add Hydrant
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Add form */}
       {showAddForm && (
@@ -291,6 +292,14 @@ export default function HydrantsClient({
                         <>
                           <button onClick={() => { setEditingId(hydrant.id); setEditError(null) }} className="text-xs text-zinc-500 hover:text-zinc-700 font-medium">Edit</button>
                           <button onClick={() => { setLoggingTestId(isLoggingTest ? null : hydrant.id); setExpandedId(hydrant.id); setTestError(null) }} className="text-xs text-red-700 hover:underline font-medium">Log Test</button>
+                          {removingId === hydrant.id ? (
+                            <>
+                              <button onClick={() => { startTransition(async () => { await removeHydrant(hydrant.id); setRemovingId(null); router.refresh() }) }} className="text-xs font-semibold text-red-600 hover:text-red-800">Confirm</button>
+                              <button onClick={() => setRemovingId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setRemovingId(hydrant.id)} className="text-xs text-zinc-400 hover:text-red-600 font-medium">Remove</button>
+                          )}
                         </>
                       )}
                       <button
