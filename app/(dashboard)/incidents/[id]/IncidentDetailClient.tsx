@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   updateIncident, setIncidentStatus,
   addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus,
@@ -54,6 +55,7 @@ export default function IncidentDetailClient({
   isOfficerOrAbove,
   myPersonnelId,
   mutualAid,
+  nerisRecord,
 }: {
   incident: any
   incidentApparatus: ApparatusRow[]
@@ -65,6 +67,7 @@ export default function IncidentDetailClient({
   isOfficerOrAbove: boolean
   myPersonnelId: string
   mutualAid: MutualAidRow[]
+  nerisRecord: { id: string; neris_status: string; completed_at: string | null; neris_submission_id: string | null } | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -380,7 +383,29 @@ export default function IncidentDetailClient({
               {incident.mutual_aid_direction && <div><p className="text-zinc-400 text-xs">Mutual Aid</p><p className="text-zinc-800 font-medium capitalize">{incident.mutual_aid_direction} — {incident.mutual_aid_department}</p></div>}
               {incident.disposition && <div className="col-span-2"><p className="text-zinc-400 text-xs">Disposition</p><p className="text-zinc-800 font-medium">{incident.disposition}</p></div>}
               {incident.narrative && <div className="col-span-2"><p className="text-zinc-400 text-xs">Narrative</p><p className="text-zinc-700">{incident.narrative}</p></div>}
-              <div><p className="text-zinc-400 text-xs">NERIS</p><p className={`font-medium text-sm ${incident.neris_reported ? 'text-green-700' : 'text-zinc-400'}`}>{incident.neris_reported ? '✓ Reported' : 'Not reported'}</p></div>
+              <div>
+                <p className="text-zinc-400 text-xs">NERIS Report</p>
+                {isOfficerOrAbove ? (
+                  <Link href={`/incidents/${incident.id}/neris`} className="inline-flex items-center gap-1 mt-0.5 hover:underline">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      nerisRecord?.neris_status === 'submitted' ? 'bg-green-100 text-green-700' :
+                      nerisRecord?.completed_at ? 'bg-blue-100 text-blue-700' :
+                      nerisRecord ? 'bg-amber-100 text-amber-700' :
+                      'bg-zinc-100 text-zinc-500'
+                    }`}>
+                      {nerisRecord?.neris_status === 'submitted' ? '✓ Submitted' :
+                       nerisRecord?.completed_at ? 'Complete' :
+                       nerisRecord ? 'In Progress' :
+                       'Not Started'}
+                    </span>
+                    <span className="text-xs text-red-600">→</span>
+                  </Link>
+                ) : (
+                  <p className={`font-medium text-sm ${nerisRecord?.neris_status === 'submitted' ? 'text-green-700' : 'text-zinc-400'}`}>
+                    {nerisRecord?.neris_status === 'submitted' ? '✓ Submitted' : nerisRecord ? 'In Progress' : 'Not Started'}
+                  </p>
+                )}
+              </div>
               <div><p className="text-zinc-400 text-xs">Logged by</p><p className="text-zinc-800 font-medium">{personnelNameMap[incident.created_by] ?? '—'}</p></div>
               {incident.finalized_by && <div><p className="text-zinc-400 text-xs">Finalized by</p><p className="text-zinc-800 font-medium">{personnelNameMap[incident.finalized_by] ?? '—'}</p></div>}
             </div>
