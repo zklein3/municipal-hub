@@ -61,6 +61,7 @@ export default function NerisReportClient({
   incidentApparatus,
   incidentPersonnel,
   nerisRecord,
+  mutualAidRows,
   isAdmin,
 }: {
   incident: any
@@ -68,6 +69,7 @@ export default function NerisReportClient({
   incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
   incidentPersonnel: { id: string; personnel_id: string; role: string; name: string }[]
   nerisRecord: any
+  mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
   isAdmin: boolean
 }) {
   const router = useRouter()
@@ -82,7 +84,7 @@ export default function NerisReportClient({
   const isHazmatType   = testingMode || coverType === 'special'
   const isRescueType   = testingMode || coverType === 'rescue'
   const isOutsideFire  = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
-  const hasMutualAid   = testingMode || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
+  const hasMutualAid   = testingMode || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -366,13 +368,34 @@ export default function NerisReportClient({
           <section className={sectionCls}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
-              {testingMode && !incident.mutual_aid_direction && (
+              {testingMode && mutualAidRows.length === 0 && !incident.mutual_aid_direction && (
                 <span className="text-xs text-amber-600 font-medium">Testing — no mutual aid on cover sheet</span>
               )}
             </div>
-            <p className="text-xs text-zinc-400 -mt-1">
-              NERIS aid codes — separate from the cover sheet mutual aid fields.
-            </p>
+
+            {/* Cover sheet mutual aid rows — read-only reference */}
+            {mutualAidRows.length > 0 && (
+              <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3">
+                <p className="text-xs font-semibold text-zinc-500 mb-2">From Cover Sheet</p>
+                <div className="space-y-2">
+                  {mutualAidRows.map(row => (
+                    <div key={row.id} className="text-sm">
+                      <span className="font-medium text-zinc-800">{row.external_department_name}</span>
+                      <span className="text-zinc-400 mx-1.5">·</span>
+                      <span className="text-zinc-600 capitalize">{row.role?.replace(/_/g, ' ')}</span>
+                      {row.apparatus_description && (
+                        <span className="text-zinc-400"> — {row.apparatus_description}</span>
+                      )}
+                      {row.personnel_count != null && (
+                        <span className="text-zinc-400"> · {row.personnel_count} personnel</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-400">Select the NERIS aid classification codes for this mutual aid.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Aid Type</label>

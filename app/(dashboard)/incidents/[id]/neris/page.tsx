@@ -78,6 +78,13 @@ export default async function NerisReportPage({
     name: personnelNameMap[p.personnel_id] ?? 'Unknown',
   }))
 
+  // Fetch mutual aid rows — used to trigger mutual aid section in NERIS form
+  const { data: mutualAidRows } = await adminClient
+    .from('incident_mutual_aid')
+    .select('id, external_department_name, role, apparatus_description, personnel_count')
+    .eq('incident_id', id)
+    .order('created_at')
+
   // Fetch existing NERIS record — do NOT auto-create, lazy creation happens on first save
   const { data: nerisRecord } = await adminClient
     .from('incident_neris')
@@ -93,6 +100,7 @@ export default async function NerisReportPage({
         incidentApparatus={incidentApparatus}
         incidentPersonnel={incidentPersonnel}
         nerisRecord={nerisRecord ?? null}
+        mutualAidRows={mutualAidRows ?? []}
         isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
       />
     </div>
