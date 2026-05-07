@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { claimCompartment, releaseCompartment, closeInspectionSession } from '@/app/actions/inspections'
+import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession } from '@/app/actions/inspections'
 
 interface SessionCompartment {
   id: string
@@ -63,6 +63,17 @@ export default function InspectionSessionClient({
     setError(null)
     startTransition(async () => {
       const res = await releaseCompartment(sc.id)
+      if (res?.error) setError(res.error)
+      setLoadingId(null)
+      router.refresh()
+    })
+  }
+
+  async function handleReopen(sc: SessionCompartment) {
+    setLoadingId(sc.id)
+    setError(null)
+    startTransition(async () => {
+      const res = await reopenCompartment(sc.id)
       if (res?.error) setError(res.error)
       setLoadingId(null)
       router.refresh()
@@ -154,9 +165,20 @@ export default function InspectionSessionClient({
                 </>
               )}
               {sc.status === 'completed' && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                  ✓ Done
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                    ✓ Done
+                  </span>
+                  {isOfficerOrAdmin && (
+                    <button
+                      onClick={() => handleReopen(sc)}
+                      disabled={loadingId === sc.id || isPending}
+                      className="text-xs text-zinc-500 hover:text-amber-700 underline disabled:opacity-50"
+                    >
+                      Reopen
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

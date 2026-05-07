@@ -394,12 +394,18 @@ export async function claimCompartment(session_compartment_id: string) {
 
   const { data: existing } = await adminClient
     .from('inspection_session_compartments')
-    .select('status')
+    .select('status, claimed_by')
     .eq('id', session_compartment_id)
     .single()
 
-  if (existing?.status === 'in_progress') return { error: 'Compartment is already claimed.' }
   if (existing?.status === 'completed') return { error: 'Compartment is already completed.' }
+  if (existing?.status === 'in_progress' && existing.claimed_by !== user.id) {
+    return { error: 'Compartment is already claimed by another user.' }
+  }
+  // Already claimed by this user — let them re-enter without updating claim
+  if (existing?.status === 'in_progress' && existing.claimed_by === user.id) {
+    return { success: true }
+  }
 
   const { error: dbErr } = await adminClient
     .from('inspection_session_compartments')
@@ -407,6 +413,41 @@ export async function claimCompartment(session_compartment_id: string) {
     .eq('id', session_compartment_id)
 
   if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  return { success: true }
+}
+
+// ─── Reopen Completed Compartment (officer/admin) ─────────────────────────────
+export async function reopenCompartment(session_compartment_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const ctx = await getContext()
+  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
+  const role = meList?.[0]?.system_role
+  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+    return { error: 'Only officers and admins can reopen compartments.' }
+  }
+
+  const { data: row, error: dbErr } = await adminClient
+    .from('inspection_session_compartments')
+    .update({ status: 'pending', claimed_by: null, claimed_at: null, completed_by: null, completed_at: null })
+    .eq('id', session_compartment_id)
+    .select('session_id')
+    .single()
+
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+
+  // If the session was marked completed, reopen it too
+  await adminClient
+    .from('inspection_sessions')
+    .update({ status: 'in_progress', completed_at: null })
+    .eq('id', row.session_id)
+    .eq('status', 'completed')
+
+  revalidatePath('/inspections/apparatus')
   return { success: true }
 }
 
