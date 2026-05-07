@@ -59,7 +59,7 @@ export async function getOrCreateNerisRecord(incident_id: string) {
 
 // ─── Save NERIS report (upsert) ───────────────────────────────────────────────
 export async function saveNerisReport(incident_id: string, data: {
-  neris_incident_type?: number | null
+  neris_incident_type?: string | null
   property_use?: string | null
   actions_taken?: string[]
   displaced_persons?: number | null
@@ -69,6 +69,8 @@ export async function saveNerisReport(incident_id: string, data: {
   floor_of_origin?: number | null
   room_of_origin?: string | null
   fire_cause_code?: string | null
+  aid_type?: string | null
+  aid_direction?: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can save NERIS reports.' }

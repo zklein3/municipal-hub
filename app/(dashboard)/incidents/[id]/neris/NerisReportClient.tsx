@@ -8,7 +8,6 @@ import {
   NERIS_INCIDENT_TYPES,
   getFilteredIncidentTypes,
   getIncidentTypeLabel,
-  getPropertyUseLabel,
   NERIS_PROPERTY_USE,
   NERIS_ACTIONS_TAKEN,
   NERIS_RESPONSE_MODE,
@@ -17,6 +16,8 @@ import {
   NERIS_SUPPRESSION_APPLIANCE,
   NERIS_FIRE_CAUSE_IN,
   NERIS_FIRE_CAUSE_OUT,
+  NERIS_AID_TYPE,
+  NERIS_AID_DIRECTION,
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
 
@@ -24,6 +25,9 @@ const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
 const sectionCls = "rounded-xl bg-white border border-zinc-200 p-5 space-y-4"
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
+function toGroups(codes: { code: string; label: string }[], groupLabel: string) {
+  return [{ group: groupLabel, codes }]
+}
 function formatDT(dt: string | null) {
   if (!dt) return '—'
   return new Date(dt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -44,11 +48,6 @@ const APPARATUS_ROLE_LABELS: Record<string, string> = {
   primary: 'Primary', support: 'Support', staging: 'Staging',
 }
 
-// Convert NERIS code lists to grouped format NerisCombobox expects
-function toGroups(codes: { code: string | number; label: string }[], groupLabel: string) {
-  return [{ group: groupLabel, codes }]
-}
-
 export default function NerisReportClient({
   incident,
   fireDetails,
@@ -65,9 +64,14 @@ export default function NerisReportClient({
   isAdmin: boolean
 }) {
   const router = useRouter()
-  const isFireType = incident.incident_type === 'fire'
-  const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
   const isSubmitted = nerisRecord?.neris_status === 'submitted'
+
+  // Testing mode — shows all sections regardless of incident type
+  const [testingMode, setTestingMode] = useState(false)
+
+  const isFireType = testingMode || incident.incident_type === 'fire'
+  const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
+  const hasMutualAid = testingMode || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,21 +79,21 @@ export default function NerisReportClient({
 
   // Incident type filter toggle
   const [showAllTypes, setShowAllTypes] = useState(false)
-  const incidentTypeGroups = showAllTypes
-    ? NERIS_INCIDENT_TYPES
-    : getFilteredIncidentTypes(incident.incident_type)
+  const incidentTypeGroups = showAllTypes ? NERIS_INCIDENT_TYPES : getFilteredIncidentTypes(incident.incident_type)
 
-  // NERIS core fields
-  const [nerisType, setNerisType] = useState<string>(
-    nerisRecord?.neris_incident_type != null ? String(nerisRecord.neris_incident_type) : ''
-  )
+  // Core fields
+  const [nerisType, setNerisType] = useState<string>(nerisRecord?.neris_incident_type ?? '')
   const [propertyUse, setPropertyUse] = useState<string>(nerisRecord?.property_use ?? '')
   const [displacedPersons, setDisplacedPersons] = useState<string>(
     nerisRecord?.displaced_persons != null ? String(nerisRecord.displaced_persons) : ''
   )
   const [actionsTaken, setActionsTaken] = useState<string[]>(nerisRecord?.actions_taken ?? [])
 
-  // Fire module fields
+  // Mutual aid
+  const [aidType, setAidType] = useState<string>(nerisRecord?.aid_type ?? '')
+  const [aidDirection, setAidDirection] = useState<string>(nerisRecord?.aid_direction ?? '')
+
+  // Fire module
   const [fireCondition, setFireCondition] = useState<string>(nerisRecord?.fire_condition_arrival ?? '')
   const [buildingDamage, setBuildingDamage] = useState<string>(nerisRecord?.building_damage ?? '')
   const [suppressionAppliances, setSuppressionAppliances] = useState<string[]>(nerisRecord?.suppression_appliance ?? [])
@@ -99,7 +103,7 @@ export default function NerisReportClient({
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
 
-  // Response modes per apparatus row id
+  // Response modes per apparatus
   const [responseModes, setResponseModes] = useState<Record<string, string>>(
     Object.fromEntries(incidentApparatus.map(a => [a.id, a.response_mode ?? '']))
   )
@@ -111,16 +115,18 @@ export default function NerisReportClient({
     setError(null)
     setSaved(false)
     const result = await saveNerisReport(incident.id, {
-      neris_incident_type: nerisType !== '' ? Number(nerisType) : null,
+      neris_incident_type: nerisType || null,
       property_use: propertyUse || null,
       actions_taken: actionsTaken,
       displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
-      fire_condition_arrival: isFireType ? fireCondition || null : null,
-      building_damage: isFireType ? buildingDamage || null : null,
-      suppression_appliance: isFireType ? suppressionAppliances : [],
-      floor_of_origin: isFireType && floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
-      room_of_origin: isFireType ? roomOfOrigin || null : null,
-      fire_cause_code: isFireType ? fireCauseCode || null : null,
+      fire_condition_arrival: fireCondition || null,
+      building_damage: buildingDamage || null,
+      suppression_appliance: suppressionAppliances,
+      floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
+      room_of_origin: roomOfOrigin || null,
+      fire_cause_code: fireCauseCode || null,
+      aid_type: aidType || null,
+      aid_direction: aidDirection || null,
     })
     if (result?.error) { setError(result.error); setLoading(false); return }
     setSaved(true)
@@ -160,7 +166,7 @@ export default function NerisReportClient({
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-5">
         <button
           type="button"
           onClick={() => router.push(`/incidents/${incident.id}`)}
@@ -170,7 +176,24 @@ export default function NerisReportClient({
         </button>
       </div>
 
-      {/* Cover sheet summary — read-only reference */}
+      {/* Testing mode banner */}
+      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-amber-800">Testing Mode</p>
+          <p className="text-xs text-amber-600">Show all form sections regardless of incident type — toggle off for adaptive behavior.</p>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={testingMode}
+            onChange={e => setTestingMode(e.target.checked)}
+            className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
+          />
+          <span className="text-sm font-semibold text-amber-800">Show All</span>
+        </label>
+      </div>
+
+      {/* Cover sheet reference */}
       <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-5 space-y-3 mb-4">
         <h2 className="text-sm font-semibold text-zinc-700">Cover Sheet Reference</h2>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -193,6 +216,15 @@ export default function NerisReportClient({
             <span className="text-zinc-400 text-xs">First On Scene</span>
             <p className="font-medium text-zinc-800">{formatDT(incident.first_on_scene_at)}</p>
           </div>
+          {(incident.mutual_aid_direction || incident.mutual_aid_department) && (
+            <div className="col-span-2">
+              <span className="text-zinc-400 text-xs">Mutual Aid (Cover Sheet)</span>
+              <p className="font-medium text-zinc-800 capitalize">
+                {incident.mutual_aid_direction === 'to' ? 'Given to' : incident.mutual_aid_direction === 'from' ? 'Received from' : incident.mutual_aid_direction}
+                {incident.mutual_aid_department ? ` — ${incident.mutual_aid_department}` : ''}
+              </p>
+            </div>
+          )}
           {incident.narrative && (
             <div className="col-span-2">
               <span className="text-zinc-400 text-xs">Narrative</span>
@@ -280,6 +312,43 @@ export default function NerisReportClient({
           />
         </section>
 
+        {/* Mutual Aid */}
+        {hasMutualAid && (
+          <section className={sectionCls}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
+              {testingMode && !incident.mutual_aid_direction && (
+                <span className="text-xs text-amber-600 font-medium">Testing — no mutual aid on cover sheet</span>
+              )}
+            </div>
+            <p className="text-xs text-zinc-400 -mt-1">
+              NERIS aid codes — separate from the cover sheet mutual aid fields.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Aid Type</label>
+                <NerisCombobox
+                  groups={toGroups(NERIS_AID_TYPE, 'Aid Type')}
+                  value={aidType}
+                  onChange={setAidType}
+                  placeholder="Select aid type…"
+                  disabled={isSubmitted}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Aid Direction</label>
+                <NerisCombobox
+                  groups={toGroups(NERIS_AID_DIRECTION, 'Aid Direction')}
+                  value={aidDirection}
+                  onChange={setAidDirection}
+                  placeholder="Given or received…"
+                  disabled={isSubmitted}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Apparatus — Response Mode */}
         {incidentApparatus.length > 0 && (
           <section className={sectionCls}>
@@ -306,7 +375,7 @@ export default function NerisReportClient({
                     >
                       <option value="">Select…</option>
                       {NERIS_RESPONSE_MODE.map(m => (
-                        <option key={String(m.code)} value={String(m.code)}>{m.label}</option>
+                        <option key={m.code} value={m.code}>{m.label}</option>
                       ))}
                     </select>
                   </div>
@@ -334,7 +403,12 @@ export default function NerisReportClient({
         {/* Fire Module */}
         {isFireType && (
           <section className={sectionCls}>
-            <h2 className="text-sm font-semibold text-zinc-900">Fire Module</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Fire Module</h2>
+              {testingMode && incident.incident_type !== 'fire' && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a fire incident</span>
+              )}
+            </div>
 
             <div>
               <label className={labelCls}>Condition on Arrival</label>
@@ -362,7 +436,7 @@ export default function NerisReportClient({
               <label className={labelCls}>
                 Fire Cause
                 <span className="ml-1.5 text-xs font-normal text-zinc-400">
-                  ({isOutsideFire ? 'outside/vegetation' : 'inside/structure'})
+                  ({isOutsideFire ? 'outside / vegetation' : 'inside / structure'})
                 </span>
               </label>
               <NerisCombobox
@@ -412,7 +486,6 @@ export default function NerisReportClient({
               />
             </div>
 
-            {/* Cover sheet fire details — read-only */}
             {fireDetails && (
               <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3">
                 <p className="text-xs font-semibold text-zinc-500 mb-2">Cover Sheet Fire Details (flows to NERIS)</p>
