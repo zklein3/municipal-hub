@@ -245,6 +245,26 @@ export default function IncidentDetailClient({
       </div>
       <div className="flex flex-wrap gap-3 mb-6">
         <button onClick={() => router.push('/incidents')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+        {isOfficerOrAbove && (
+          <Link
+            href={`/incidents/${incident.id}/neris`}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors shadow-sm inline-flex items-center gap-2"
+          >
+            <span>NERIS Report</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              nerisRecord?.neris_status === 'submitted' ? 'bg-green-100 text-green-700' :
+              nerisRecord?.completed_at ? 'bg-blue-200 text-blue-800' :
+              nerisRecord ? 'bg-amber-100 text-amber-700' :
+              'bg-zinc-200 text-zinc-500'
+            }`}>
+              {nerisRecord?.neris_status === 'submitted' ? '✓ Submitted' :
+               nerisRecord?.completed_at ? 'Complete' :
+               nerisRecord ? 'In Progress' :
+               'Not Started'}
+            </span>
+            <span>→</span>
+          </Link>
+        )}
       </div>
 
       {/* Edit form */}
@@ -383,29 +403,6 @@ export default function IncidentDetailClient({
               {incident.mutual_aid_direction && <div><p className="text-zinc-400 text-xs">Mutual Aid</p><p className="text-zinc-800 font-medium capitalize">{incident.mutual_aid_direction} — {incident.mutual_aid_department}</p></div>}
               {incident.disposition && <div className="col-span-2"><p className="text-zinc-400 text-xs">Disposition</p><p className="text-zinc-800 font-medium">{incident.disposition}</p></div>}
               {incident.narrative && <div className="col-span-2"><p className="text-zinc-400 text-xs">Narrative</p><p className="text-zinc-700">{incident.narrative}</p></div>}
-              <div>
-                <p className="text-zinc-400 text-xs">NERIS Report</p>
-                {isOfficerOrAbove ? (
-                  <Link href={`/incidents/${incident.id}/neris`} className="inline-flex items-center gap-1 mt-0.5 hover:underline">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      nerisRecord?.neris_status === 'submitted' ? 'bg-green-100 text-green-700' :
-                      nerisRecord?.completed_at ? 'bg-blue-100 text-blue-700' :
-                      nerisRecord ? 'bg-amber-100 text-amber-700' :
-                      'bg-zinc-100 text-zinc-500'
-                    }`}>
-                      {nerisRecord?.neris_status === 'submitted' ? '✓ Submitted' :
-                       nerisRecord?.completed_at ? 'Complete' :
-                       nerisRecord ? 'In Progress' :
-                       'Not Started'}
-                    </span>
-                    <span className="text-xs text-red-600">→</span>
-                  </Link>
-                ) : (
-                  <p className={`font-medium text-sm ${nerisRecord?.neris_status === 'submitted' ? 'text-green-700' : 'text-zinc-400'}`}>
-                    {nerisRecord?.neris_status === 'submitted' ? '✓ Submitted' : nerisRecord ? 'In Progress' : 'Not Started'}
-                  </p>
-                )}
-              </div>
               <div><p className="text-zinc-400 text-xs">Logged by</p><p className="text-zinc-800 font-medium">{personnelNameMap[incident.created_by] ?? '—'}</p></div>
               {incident.finalized_by && <div><p className="text-zinc-400 text-xs">Finalized by</p><p className="text-zinc-800 font-medium">{personnelNameMap[incident.finalized_by] ?? '—'}</p></div>}
             </div>
