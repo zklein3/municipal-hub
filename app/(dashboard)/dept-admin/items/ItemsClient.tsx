@@ -280,9 +280,7 @@ export default function ItemsClient({
                         <div className="flex items-center gap-4">
                           <span className="text-xs text-zinc-400">{items.filter(i => i.category_id === c.id).length} items</span>
                           <button onClick={() => { setEditingCategoryId(c.id); reset() }} className="text-xs font-semibold text-red-600 hover:text-red-800">Edit</button>
-                          {items.filter(i => i.category_id === c.id).length === 0 && (
-                            <button onClick={() => handleDeleteCategory(c.id)} className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
-                          )}
+                          <button onClick={() => handleDeleteCategory(c.id)} className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
                         </div>
                       </div>
                     )}
