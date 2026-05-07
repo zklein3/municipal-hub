@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  createItemCategory, updateItemCategory,
+  createItemCategory, updateItemCategory, deleteItemCategory,
   createItem, updateItem,
   createAsset, updateAsset,
 } from '@/app/actions/equipment'
@@ -121,6 +121,10 @@ export default function ItemsClient({
   async function handleUpdateCategory(formData: FormData) {
     const r = await wrap(() => updateItemCategory(formData))
     if (!r?.error) setEditingCategoryId(null)
+  }
+  async function handleDeleteCategory(category_id: string) {
+    if (!confirm('Delete this category? This cannot be undone.')) return
+    await wrap(() => deleteItemCategory(category_id))
   }
   async function handleAddItem(formData: FormData) {
     formData.set('department_id', departmentId)
@@ -276,6 +280,9 @@ export default function ItemsClient({
                         <div className="flex items-center gap-4">
                           <span className="text-xs text-zinc-400">{items.filter(i => i.category_id === c.id).length} items</span>
                           <button onClick={() => { setEditingCategoryId(c.id); reset() }} className="text-xs font-semibold text-red-600 hover:text-red-800">Edit</button>
+                          {items.filter(i => i.category_id === c.id).length === 0 && (
+                            <button onClick={() => handleDeleteCategory(c.id)} className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
+                          )}
                         </div>
                       </div>
                     )}

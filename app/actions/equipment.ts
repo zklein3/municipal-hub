@@ -53,6 +53,20 @@ export async function createItemCategory(formData: FormData) {
   return { success: true }
 }
 
+// ─── Delete Item Category ─────────────────────────────────────────────────────
+export async function deleteItemCategory(category_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can manage item categories.' }
+  const adminClient = createAdminClient()
+  const { count } = await adminClient.from('items').select('id', { count: 'exact', head: true }).eq('category_id', category_id)
+  if (count && count > 0) return { error: 'Cannot delete a category that has items. Remove or reassign the items first.' }
+  const { error } = await adminClient.from('item_categories').delete().eq('id', category_id)
+  if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
+  revalidatePath('/dept-admin/items')
+  revalidatePath('/dept-admin/setup')
+  return { success: true }
+}
+
 // ─── Update Item Category ─────────────────────────────────────────────────────
 export async function updateItemCategory(formData: FormData) {
   const ctx = await getContext()
