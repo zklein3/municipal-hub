@@ -1,158 +1,284 @@
-// NERIS value sets — static lookup data for all NERIS code fields.
+// NERIS value sets — complete lookup data from official NERIS framework CSVs.
 // Source: https://github.com/ulfsri/neris-framework/tree/main/core_schemas/value_sets/csv
-// coverTypeFilter: which cover sheet incident_type values should show this group.
+// NERIS uses string codes, not NFIRS numeric codes.
 
-export type NerisCode = { code: string | number; label: string }
-export type NerisGroup<T extends NerisCode = NerisCode> = {
-  group: string
-  coverTypeFilter?: string[] // if set, only show when cover type matches
-  codes: T[]
-}
+export type NerisCode = { code: string; label: string }
+export type NerisGroup = { group: string; coverTypeFilter?: string[]; codes: NerisCode[] }
 
 // ─── Incident Types ───────────────────────────────────────────────────────────
-// Numeric codes from type_incident.csv. Grouped for the form picker.
-// coverTypeFilter maps the cover sheet incident_type to the relevant groups.
+// Grouped by value_1 + value_2 from type_incident.csv.
+// coverTypeFilter: which cover sheet incident_type values show this group by default.
 
-export const NERIS_INCIDENT_TYPES: NerisGroup<{ code: number; label: string }>[] = [
+export const NERIS_INCIDENT_TYPES: NerisGroup[] = [
   {
-    group: 'Structure Fire',
+    group: 'Fire — Structure Fire',
     coverTypeFilter: ['fire'],
     codes: [
-      { code: 111, label: 'Structure fire' },
-      { code: 114, label: 'Building fire' },
-      { code: 115, label: 'Manufactured/mobile home structure fire' },
-      { code: 121, label: 'Fire in mobile home used as fixed residence' },
-      { code: 123, label: 'Fire in portable building, fixed location' },
+      { code: 'STRUCTURAL_INVOLVEMENT_FIRE', label: 'Structural Involvement' },
+      { code: 'ROOM_AND_CONTENTS_FIRE', label: 'Room and Contents Fire' },
+      { code: 'CONFINED_COOKING_APPLIANCE_FIRE', label: 'Confined Cooking / Appliance Fire' },
+      { code: 'CHIMNEY_FIRE', label: 'Chimney Fire' },
     ],
   },
   {
-    group: 'Transportation Fire',
+    group: 'Fire — Transportation Fire',
     coverTypeFilter: ['fire'],
     codes: [
-      { code: 130, label: 'Mobile property (vehicle) fire, other' },
-      { code: 131, label: 'Passenger vehicle fire' },
-      { code: 132, label: 'Road freight/transport vehicle fire' },
-      { code: 135, label: 'Aircraft fire' },
-      { code: 137, label: 'Camper/recreational vehicle fire' },
-      { code: 138, label: 'Off-road vehicle fire' },
+      { code: 'VEHICLE_FIRE_PASSENGER', label: 'Vehicle Fire — Passenger' },
+      { code: 'VEHICLE_FIRE_COMMERCIAL', label: 'Vehicle Fire — Commercial' },
+      { code: 'VEHICLE_FIRE_RV', label: 'Vehicle Fire — RV' },
+      { code: 'VEHICLE_FIRE_FOOD_TRUCK', label: 'Vehicle Fire — Food Truck' },
+      { code: 'POWERED_MOBILITY_DEVICE_FIRE', label: 'Powered Mobility Device Fire' },
+      { code: 'BOAT_PERSONAL_WATERCRAFT_BARGE_FIRE', label: 'Boat / Personal Watercraft / Barge Fire' },
+      { code: 'TRAIN_RAIL_FIRE', label: 'Train / Rail Fire' },
+      { code: 'AIRCRAFT_FIRE', label: 'Aircraft Emergency' },
     ],
   },
   {
-    group: 'Outside / Vegetation Fire',
+    group: 'Fire — Outside Fire',
     coverTypeFilter: ['fire'],
     codes: [
-      { code: 140, label: 'Natural vegetation fire, other' },
-      { code: 141, label: 'Forest/woods fire' },
-      { code: 142, label: 'Brush or brush-and-grass mixture fire' },
-      { code: 143, label: 'Grass fire' },
-      { code: 151, label: 'Outside rubbish fire, other' },
-      { code: 154, label: 'Dumpster fire' },
-      { code: 161, label: 'Outside storage fire' },
-      { code: 162, label: 'Outside gas or vapor combustion explosion' },
+      { code: 'VEGETATION_GRASS_FIRE', label: 'Vegetation / Grass Fire' },
+      { code: 'WILDFIRE_WILDLAND', label: 'Wildfire — Wildland' },
+      { code: 'WILDFIRE_URBAN_INTERFACE', label: 'Wildfire — Urban Interface' },
+      { code: 'TRASH_RUBBISH_FIRE', label: 'Trash / Rubbish Fire' },
+      { code: 'DUMPSTER_OUTDOOR_CONTAINER_FIRE', label: 'Dumpster / Other Outdoor Container Fire' },
+      { code: 'CONSTRUCTION_WASTE', label: 'Construction Waste Fire' },
+      { code: 'OUTSIDE_TANK_FIRE', label: 'Outside Tank Fire' },
+      { code: 'UTILITY_INFRASTRUCTURE_FIRE', label: 'Utility Infrastructure Fire' },
+      { code: 'OTHER_OUTSIDE_FIRE', label: 'Other Outside Fire' },
     ],
   },
   {
-    group: 'Rescue / EMS',
+    group: 'Fire — Special Fire',
+    coverTypeFilter: ['fire'],
+    codes: [
+      { code: 'EXPLOSION', label: 'Explosion' },
+      { code: 'ESS_FIRE', label: 'ESS Fire (Energy Storage System)' },
+      { code: 'INFRASTRUCTURE_FIRE', label: 'Infrastructure Fire (Tunnel / Bridge)' },
+    ],
+  },
+  {
+    group: 'Hazardous Situation — Non-Chemical',
+    coverTypeFilter: ['special', 'rescue'],
+    codes: [
+      { code: 'MOTOR_VEHICLE_COLLISION', label: 'Motor Vehicle Collision' },
+      { code: 'ELEC_POWER_LINE_DOWN_ARCHING_MALFUNC', label: 'Electrical Power Line Down / Arching / Malfunction' },
+      { code: 'ELEC_HAZARD_SHORT_CIRCUIT', label: 'Electrical Hazard / Short Circuit' },
+      { code: 'BOMB_THREAT_RESPONSE_SUSPICIOUS_PACKAGE', label: 'Bomb Threat / Response / Suspicious Package' },
+    ],
+  },
+  {
+    group: 'Hazardous Situation — Hazardous Materials',
+    coverTypeFilter: ['special'],
+    codes: [
+      { code: 'GAS_LEAK_ODOR', label: 'Gas Leak / Gas Odor' },
+      { code: 'FUEL_SPILL_ODOR', label: 'Fuel Spill / Fuel Odor' },
+      { code: 'CARBON_MONOXIDE_RELEASE', label: 'Carbon Monoxide Release' },
+      { code: 'HAZMAT_RELEASE_TRANSPORT', label: 'Hazardous Material Release — Transportation' },
+      { code: 'HAZMAT_RELEASE_FACILITY', label: 'Hazardous Material Release — Fixed Facility' },
+      { code: 'BIOLOGICAL_RELEASE_INCIDENT', label: 'Biological Release / Incident' },
+      { code: 'RADIOACTIVE_RELEASE_INCIDENT', label: 'Radioactive Release / Incident' },
+    ],
+  },
+  {
+    group: 'Hazardous Situation — Overpressure',
+    coverTypeFilter: ['special'],
+    codes: [
+      { code: 'RUPTURE_WITHOUT_FIRE', label: 'Rupture Without Fire' },
+      { code: 'NO_RUPTURE', label: 'No Rupture' },
+    ],
+  },
+  {
+    group: 'Hazardous Situation — Investigation',
+    coverTypeFilter: ['special', 'other'],
+    codes: [
+      { code: 'ODOR', label: 'Odor Investigation' },
+      { code: 'SMOKE_INVESTIGATION', label: 'Smoke Investigation' },
+    ],
+  },
+  {
+    group: 'Medical — Illness',
     coverTypeFilter: ['rescue'],
     codes: [
-      { code: 300, label: 'Rescue, EMS incident, other' },
-      { code: 311, label: 'Medical assist, assist EMS crew' },
-      { code: 312, label: 'Patient assist' },
-      { code: 321, label: 'EMS call, excluding vehicle accident with injury' },
-      { code: 322, label: 'Motor vehicle accident with injuries' },
-      { code: 323, label: 'Motor vehicle/pedestrian accident' },
-      { code: 324, label: 'Motor vehicle accident with no injuries' },
-      { code: 341, label: 'Search for person on land' },
-      { code: 342, label: 'Search for person in water' },
-      { code: 351, label: 'Extrication, rescue, other' },
-      { code: 352, label: 'Extrication of victim(s) from building/structure' },
-      { code: 353, label: 'Extrication of victim(s) from vehicle' },
-      { code: 354, label: 'Removal of victim(s) from stalled elevator' },
-      { code: 355, label: 'Rescue or EMS standby' },
-      { code: 356, label: 'High angle rescue' },
-      { code: 361, label: 'Swimming/recreational water areas rescue' },
-      { code: 362, label: 'Ice rescue' },
-      { code: 363, label: 'Swift water rescue' },
+      { code: 'CARDIAC_ARREST', label: 'Cardiac Arrest' },
+      { code: 'CHEST_PAIN_NON_TRAUMA', label: 'Chest Pain (Non-Trauma)' },
+      { code: 'BREATHING_PROBLEMS', label: 'Breathing Problems' },
+      { code: 'STROKE_CVA', label: 'Stroke / CVA' },
+      { code: 'ALTERED_MENTAL_STATUS', label: 'Altered Mental Status' },
+      { code: 'UNCONSCIOUS_VICTIM', label: 'Unconscious Victim' },
+      { code: 'CONVULSIONS_SEIZURES', label: 'Convulsions / Seizures' },
+      { code: 'DIABETIC_PROBLEMS', label: 'Diabetic Problems' },
+      { code: 'ALLERGIC_REACTION_STINGS', label: 'Allergic Reaction / Stings' },
+      { code: 'ABDOMINAL_PAIN', label: 'Abdominal Pain / Problems' },
+      { code: 'BACK_PAIN_NON_TRAUMA', label: 'Back Pain (Non-Trauma)' },
+      { code: 'HEADACHE', label: 'Headache' },
+      { code: 'HEART_PROBLEMS', label: 'Heart Problems' },
+      { code: 'NAUSEA_VOMITING', label: 'Nausea / Vomiting' },
+      { code: 'OVERDOSE', label: 'Overdose / Poisoning' },
+      { code: 'PSYCHOLOGICAL_BEHAVIOR_ISSUES', label: 'Psychological / Behavioral Issues' },
+      { code: 'PREGNANCY_CHILDBIRTH', label: 'Pregnancy / Childbirth' },
+      { code: 'PANDEMIC_EPIDEMIC_OUTBREAK', label: 'Pandemic / Epidemic / Outbreak' },
+      { code: 'SICK_CASE', label: 'Sick Case (General)' },
+      { code: 'WELL_PERSON_CHECK', label: 'Well Person Check' },
+      { code: 'UNKNOWN_PROBLEM', label: 'Unknown Problem' },
+      { code: 'NO_APPROPRIATE_CHOICE', label: 'No Appropriate Choice' },
     ],
   },
   {
-    group: 'Hazardous Materials',
-    coverTypeFilter: ['special', 'other'],
+    group: 'Medical — Injury / Trauma',
+    coverTypeFilter: ['rescue'],
     codes: [
-      { code: 400, label: 'Hazardous condition, other' },
-      { code: 411, label: 'Gasoline or other flammable liquid spill' },
-      { code: 412, label: 'Gas leak (natural gas or LPG)' },
-      { code: 413, label: 'Oil or other combustible liquid spill' },
-      { code: 422, label: 'Chemical spill or leak' },
-      { code: 424, label: 'Carbon monoxide incident' },
-      { code: 440, label: 'Electrical wiring/equipment problem, other' },
-      { code: 444, label: 'Power line down' },
-      { code: 445, label: 'Arcing, shorted electrical equipment' },
-      { code: 451, label: 'Biological hazard, confirmed or suspected' },
-      { code: 461, label: 'Building or structure weakened or collapsed' },
+      { code: 'MOTOR_VEHICLE_COLLISION', label: 'Motor Vehicle Collision' },
+      { code: 'FALL', label: 'Fall' },
+      { code: 'HEMORRHAGE_LACERATION', label: 'Hemorrhage / Laceration' },
+      { code: 'GUNSHOT_WOUND', label: 'Gunshot Wound' },
+      { code: 'STAB_PENETRATING_TRAUMA', label: 'Stab / Penetrating Trauma' },
+      { code: 'ASSAULT', label: 'Assault' },
+      { code: 'BURNS_EXPLOSION', label: 'Burns / Explosion' },
+      { code: 'CARBON_MONOXIDE_OTHER_INHALATION_INJURY', label: 'Carbon Monoxide / Inhalation Injury' },
+      { code: 'CHOKING', label: 'Choking' },
+      { code: 'DROWNING_DIVING_SCUBA_ACCIDENT', label: 'Drowning / Diving / SCUBA Accident' },
+      { code: 'ELECTROCUTION', label: 'Electrocution' },
+      { code: 'EYE_TRAUMA', label: 'Eye Trauma' },
+      { code: 'HEAT_COLD_EXPOSURE', label: 'Heat / Cold Exposure' },
+      { code: 'INDUSTRIAL_INACCESSIBLE_ENTRAPMENT', label: 'Industrial / Entrapment (Non-Vehicle)' },
+      { code: 'ANIMAL_BITES', label: 'Animal Bites' },
+      { code: 'POISONING', label: 'Poisoning' },
+      { code: 'OTHER_TRAUMATIC_INJURY', label: 'Other Traumatic Injury' },
     ],
   },
   {
-    group: 'Service Call',
-    coverTypeFilter: ['standby', 'special', 'mutual_aid', 'other'],
+    group: 'Medical — Other',
+    coverTypeFilter: ['rescue'],
     codes: [
-      { code: 500, label: 'Service call, other' },
-      { code: 511, label: 'Lock-out' },
-      { code: 521, label: 'Water evacuation' },
-      { code: 522, label: 'Water or steam leak' },
-      { code: 531, label: 'Smoke or odor removal' },
-      { code: 541, label: 'Animal problem' },
-      { code: 542, label: 'Animal rescue' },
-      { code: 551, label: 'Assist police or other governmental agency' },
-      { code: 553, label: 'Public service' },
-      { code: 554, label: 'Assist invalid' },
-      { code: 555, label: 'Defective elevator, no occupants' },
+      { code: 'MEDICAL_ALARM', label: 'Medical Alarm' },
+      { code: 'TRANSFER_INTERFACILITY', label: 'Transfer / Interfacility' },
+      { code: 'AIRMEDICAL_TRANSPORT', label: 'Airmedical Transport' },
+      { code: 'INTERCEPT_OTHER_UNIT', label: 'Intercept Other Unit' },
+      { code: 'STANDBY_REQUEST', label: 'Standby Request' },
+      { code: 'HEALTHCARE_PROFESSIONAL_ADMISSION', label: 'Healthcare Professional Admission' },
+      { code: 'COMMUNITY_PUBLIC_HEALTH', label: 'Community / Public Health' },
     ],
   },
   {
-    group: 'Good Intent Call',
-    coverTypeFilter: ['standby', 'other', 'mutual_aid'],
+    group: 'Rescue — Outside',
+    coverTypeFilter: ['rescue'],
     codes: [
-      { code: 611, label: 'Dispatched and cancelled enroute' },
-      { code: 621, label: 'Wrong location' },
-      { code: 622, label: 'No incident found on arrival' },
-      { code: 631, label: 'Authorized controlled burning' },
-      { code: 651, label: 'Smoke scare, odor of smoke' },
-      { code: 652, label: 'Steam, vapor, fog, or dust thought to be smoke' },
-      { code: 671, label: 'Hazmat release, canceled or unfounded' },
+      { code: 'EXTRICATION_ENTRAPPED', label: 'Extrication / Entrapped' },
+      { code: 'HIGH_ANGLE_RESCUE', label: 'High Angle Rescue' },
+      { code: 'LOW_ANGLE_RESCUE', label: 'Low Angle Rescue' },
+      { code: 'STEEP_ANGLE_RESCUE', label: 'Steep Angle Rescue' },
+      { code: 'CONFINED_SPACE_RESCUE', label: 'Confined Space Rescue' },
+      { code: 'TRENCH', label: 'Trench Rescue' },
+      { code: 'BACKOUNTRY_RESCUE', label: 'Backcountry Rescue' },
+      { code: 'LIMITED_NO_ACCESS', label: 'Limited / No Access' },
     ],
   },
   {
-    group: 'False Alarm / Alarm System',
+    group: 'Rescue — Structure',
+    coverTypeFilter: ['rescue'],
+    codes: [
+      { code: 'BUILDING_STRUCTURE_COLLAPSE', label: 'Building / Structure Collapse' },
+      { code: 'ELEVATOR_ESCALATOR_RESCUE', label: 'Elevator / Escalator Rescue' },
+      { code: 'CONFINED_SPACE_RESCUE', label: 'Confined Space Rescue' },
+      { code: 'EXTRICATION_ENTRAPPED', label: 'Extrication / Entrapped' },
+    ],
+  },
+  {
+    group: 'Rescue — Transportation',
+    coverTypeFilter: ['rescue'],
+    codes: [
+      { code: 'MOTOR_VEHICLE_EXTRICATION_ENTRAPPED', label: 'Motor Vehicle Collision Extrication / Entrapment' },
+      { code: 'TRAIN_RAIL_COLLISION_DERAILMENT', label: 'Train / Rail Collision or Derailment' },
+      { code: 'AVIATION_COLLISION_CRASH', label: 'Aviation Collision / Crash' },
+      { code: 'AVIATION_STANDBY', label: 'Aviation Standby' },
+    ],
+  },
+  {
+    group: 'Rescue — Water',
+    coverTypeFilter: ['rescue'],
+    codes: [
+      { code: 'PERSON_IN_WATER_STANDING', label: 'Person in Water — Standing Water / Lake' },
+      { code: 'PERSON_IN_WATER_SWIFTWATER', label: 'Person in Water — Swiftwater / River' },
+      { code: 'WATERCRAFT_IN_DISTRESS', label: 'Watercraft in Distress' },
+    ],
+  },
+  {
+    group: 'Public Service — Citizen Assist',
+    coverTypeFilter: ['standby', 'mutual_aid', 'other'],
+    codes: [
+      { code: 'CITIZEN_ASSIST_SERVICE_CALL', label: 'Citizen Assist / Service Call' },
+      { code: 'PERSON_IN_DISTRESS', label: 'Person in Distress' },
+      { code: 'LOST_PERSON', label: 'Lost Person' },
+      { code: 'LIFT_ASSIST', label: 'Lift Assist' },
+    ],
+  },
+  {
+    group: 'Public Service — Alarms',
+    coverTypeFilter: ['standby', 'other'],
+    codes: [
+      { code: 'FIRE_ALARM', label: 'Fire / Smoke Alarm' },
+      { code: 'CO_ALARM', label: 'CO Alarm' },
+      { code: 'GAS_ALARM', label: 'Gas Alarm' },
+      { code: 'OTHER_ALARM', label: 'Other Alarm' },
+    ],
+  },
+  {
+    group: 'Public Service — Disaster / Weather',
+    coverTypeFilter: ['standby', 'special', 'other'],
+    codes: [
+      { code: 'WEATHER_RESPONSE', label: 'Weather Response' },
+      { code: 'DAMAGE_ASSESSMENT', label: 'Damage Assessment' },
+    ],
+  },
+  {
+    group: 'Public Service — Other',
+    coverTypeFilter: ['standby', 'mutual_aid', 'other'],
+    codes: [
+      { code: 'STANDBY', label: 'Standby' },
+      { code: 'MOVE_UP', label: 'Move-up / Cover Assignment' },
+      { code: 'DAMAGED_HYDRANT', label: 'Damaged Hydrant' },
+    ],
+  },
+  {
+    group: 'No Emergency — False Alarm',
     coverTypeFilter: ['other'],
     codes: [
-      { code: 700, label: 'False alarm or false call, other' },
-      { code: 711, label: 'Municipal alarm system, malicious false alarm' },
-      { code: 721, label: 'Bomb scare — no bomb' },
-      { code: 733, label: 'Smoke detector activation — malfunction, no fire' },
-      { code: 735, label: 'Alarm system sounded — malfunction' },
-      { code: 736, label: 'CO detector activation — malfunction' },
-      { code: 743, label: 'Smoke detector activation — no fire, unintentional' },
-      { code: 745, label: 'Alarm system sounded — no fire, unintentional' },
-      { code: 746, label: 'Carbon monoxide detector activation — no CO' },
+      { code: 'MALFUNCTIONING_ALARM', label: 'Malfunctioning Alarm' },
+      { code: 'ACCIDENTAL_ALARM', label: 'Accidental Alarm' },
+      { code: 'INTENTIONAL_FALSE_ALARM', label: 'Intentional False Alarm' },
+      { code: 'BOMB_SCARE', label: 'Bomb Scare' },
+      { code: 'OTHER_FALSE_CALL', label: 'Other False Call' },
     ],
   },
   {
-    group: 'Severe Weather / Disaster',
-    coverTypeFilter: ['special', 'other'],
+    group: 'No Emergency — Good Intent',
+    coverTypeFilter: ['other', 'standby'],
     codes: [
-      { code: 800, label: 'Disaster, major incident, other' },
-      { code: 812, label: 'Wind storm, tornado/hurricane assessment' },
-      { code: 813, label: 'Ice storm assessment' },
-      { code: 814, label: 'Flood assessment' },
-      { code: 815, label: 'Lightning strike (no fire)' },
+      { code: 'NO_INCIDENT_FOUND_LOCATION_ERROR', label: 'No Incident Found / Location Error' },
+      { code: 'SMOKE_FROM_NONHOSTILE_SOURCE', label: 'Smoke from Nonhostile Source' },
+      { code: 'CONTROLLED_BURNING_AUTHORIZED', label: 'Controlled Burning (Authorized)' },
+      { code: 'INVESTIGATE_HAZARDOUS_RELEASE', label: 'Investigate Hazardous Release — Nothing Found' },
+    ],
+  },
+  {
+    group: 'No Emergency — Cancelled',
+    coverTypeFilter: ['other', 'standby'],
+    codes: [
+      { code: 'CANCELLED', label: 'Cancelled / Dispatched and Cancelled En Route' },
+    ],
+  },
+  {
+    group: 'Law Enforcement Support',
+    coverTypeFilter: ['other', 'standby', 'mutual_aid'],
+    codes: [
+      { code: 'LAWENFORCE', label: 'Law Enforcement Support' },
     ],
   },
 ]
 
-// Returns only the groups relevant to a given cover sheet incident_type.
-// Falls back to all groups if no filter matches.
-export function getFilteredIncidentTypes(coverType: string | null) {
+export function getFilteredIncidentTypes(coverType: string | null): NerisGroup[] {
   if (!coverType) return NERIS_INCIDENT_TYPES
   const filtered = NERIS_INCIDENT_TYPES.filter(
     g => !g.coverTypeFilter || g.coverTypeFilter.includes(coverType)
@@ -160,95 +286,165 @@ export function getFilteredIncidentTypes(coverType: string | null) {
   return filtered.length > 0 ? filtered : NERIS_INCIDENT_TYPES
 }
 
-export function getIncidentTypeLabel(code: number | null): string {
+export function getIncidentTypeLabel(code: string | null): string {
   if (!code) return '—'
   for (const group of NERIS_INCIDENT_TYPES) {
     const match = group.codes.find(c => c.code === code)
-    if (match) return `${code} — ${match.label}`
+    if (match) return match.label
   }
-  return String(code)
+  return code
 }
 
 // ─── Property Use ─────────────────────────────────────────────────────────────
+// From type_location_use.csv — code = value_2, group = description_1
+
 export const NERIS_PROPERTY_USE: NerisGroup[] = [
   {
     group: 'Residential',
     codes: [
-      { code: '419', label: '1 or 2 family dwelling' },
-      { code: '429', label: 'Multifamily dwelling' },
-      { code: '439', label: 'Boarding/rooming house, residential hotel' },
-      { code: '449', label: 'Hotel/motel, commercial' },
-      { code: '460', label: 'Dormitory-type residence, other' },
+      { code: 'DETATCHED_SINGLE_FAMILY_DWELLING', label: 'Detached Single Family Dwelling' },
+      { code: 'ATTACHED_SINGLE_FAMILY_DWELLING', label: 'Attached Single Family Dwelling' },
+      { code: 'MULTI_FAMILY_LOWRISE_DWELLING', label: 'Multi-Family Low-Rise (≤4 Stories)' },
+      { code: 'MULTI_FAMILY_MIDRISE_DWELLING', label: 'Multi-Family Mid-Rise (5–8 Stories)' },
+      { code: 'MULTI_FAMILY_HIGHRISE_DWELLING', label: 'Multi-Family High-Rise (≥9 Stories)' },
+      { code: 'MANUFACTURED_MOBILE_HOME', label: 'Manufactured / Mobile Home' },
+      { code: 'TEMPORARY_LODGING_HOTEL_MOTEL', label: 'Hotel / Motel / Temporary Lodging' },
+      { code: 'CONGREGATE_HOUSING', label: 'Congregate Housing (Dorms / Boarding)' },
+      { code: 'UNHOUSED_TEMPORARY_SHELTER', label: 'Unhoused / Temporary Shelter' },
+      { code: 'DETATCHED_GARAGE', label: 'Detached Garage' },
     ],
   },
   {
     group: 'Assembly',
     codes: [
-      { code: '130', label: 'Church, mosque, synagogue, temple' },
-      { code: '150', label: 'Restaurant or cafeteria' },
-      { code: '160', label: 'Bar or nightclub' },
-      { code: '170', label: 'Athletic facility' },
-      { code: '182', label: 'Movie theater' },
+      { code: 'RELIGIOUS', label: 'Religious (Church / Mosque / Synagogue)' },
+      { code: 'COMMUNITY_CENTER', label: 'Community Center' },
+      { code: 'CONVENTION_CENTER', label: 'Convention Center' },
+      { code: 'INDOOR_ARENA', label: 'Indoor Arena' },
+      { code: 'OUTDOOR_ARENA_AMPHITHEATER_PARK', label: 'Outdoor Arena / Amphitheater / Amusement Park' },
+      { code: 'TEMP_OUTDOOR_STRUCT_EVENT', label: 'Temporary Outdoor Structure / Event' },
+      { code: 'MUSEUM_EXHIBIT_HALL_LIBRARY', label: 'Museum / Exhibit Hall / Library' },
     ],
   },
   {
-    group: 'Commercial / Business',
+    group: 'Commercial',
     codes: [
-      { code: '511', label: 'Convenience store' },
-      { code: '519', label: 'Grocery store' },
-      { code: '571', label: 'Service station, gas station' },
-      { code: '579', label: 'Motor vehicle dealer, showroom' },
-      { code: '592', label: 'Bank, savings and loan' },
-      { code: '599', label: 'Business office' },
+      { code: 'RESTAURANT_CAFE', label: 'Restaurant / Cafe' },
+      { code: 'BAR_NIGHTCLUB', label: 'Bar / Nightclub' },
+      { code: 'RETAIL_WHOLESALE_TRADE', label: 'Retail / Wholesale / Trade' },
+      { code: 'OFFICE_OTHER_TECHNICAL_SERVICES', label: 'Office / Technical Services' },
+      { code: 'ENTERTAINMENT_RECREATION', label: 'Entertainment / Recreation' },
+      { code: 'THEATERS_STUDIO', label: 'Theater / Studio' },
+      { code: 'VEHICLE_REPAIR_SERVICES', label: 'Vehicle Repair Services' },
+      { code: 'VEHICLE_FUELING_CHARGING_STATION', label: 'Vehicle Fueling / Charging Station' },
+      { code: 'VETERINARY_PET', label: 'Veterinary (Pet)' },
     ],
   },
   {
-    group: 'Educational',
+    group: 'Education',
     codes: [
-      { code: '200', label: 'Educational, other' },
-      { code: '213', label: 'Elementary school' },
-      { code: '215', label: 'High school / junior high school' },
-      { code: '241', label: 'Adult education center' },
-      { code: '250', label: 'Daycare in commercial property' },
+      { code: 'K_12_SCHOOLS', label: 'K–12 Schools' },
+      { code: 'PREK_DAYCARE', label: 'Pre-K / Day Care' },
+      { code: 'COLLEGES_UNIVERSITIES', label: 'Colleges / Universities' },
+      { code: 'OTHER_EDUCATIONAL_BUILDINGS', label: 'Other Educational Buildings' },
     ],
   },
   {
     group: 'Health Care',
     codes: [
-      { code: '311', label: 'Nursing home, 24-hour care' },
-      { code: '331', label: 'Hospital' },
-      { code: '342', label: 'Doctor / dentist office' },
+      { code: 'HOSPITAL_24_HOUR_MEDICAL_FACILITIES', label: 'Hospital / 24-Hour Medical Facility' },
+      { code: 'NURSING_HOME_ASSISTED_LIVING_RESIDENCE_ONSITE', label: 'Nursing Home / Assisted Living' },
+      { code: 'MEDICAL_OFFICE_CLINIC', label: 'Medical Office / Clinic' },
+      { code: 'ALCOHOL_DRUG_REHABILITATION_CENTER', label: 'Alcohol / Drug Rehabilitation Center' },
     ],
   },
   {
-    group: 'Government / Public Safety',
+    group: 'Government',
     codes: [
-      { code: '361', label: 'Jail, prison' },
-      { code: '365', label: 'Police station' },
+      { code: 'FIRE_MEDICAL_STATION', label: 'Fire Station / Medical Response Station' },
+      { code: 'POLICE_EMERGENCY_STATION', label: 'Police Station / Emergency Response' },
+      { code: 'JAIL_PRISON_REFORMATORY', label: 'Jail / Prison / Reformatory' },
+      { code: 'GENERAL_SERVICES', label: 'Government General Services' },
+      { code: 'NON_CIVILIAN_STRUCTURES', label: 'Non-Civilian / Military Structures' },
     ],
   },
   {
-    group: 'Industrial / Agriculture',
+    group: 'Industrial',
     codes: [
-      { code: '600', label: 'Industrial, utility, defense, other' },
-      { code: '629', label: 'Laboratory or science laboratory' },
-      { code: '700', label: 'Manufacturing, processing, other' },
-      { code: '819', label: 'Livestock / poultry storage (barn)' },
-      { code: '882', label: 'Greenhouse' },
-      { code: '891', label: 'Forest, timberland, woodland' },
+      { code: 'LIGHT', label: 'Light Industrial' },
+      { code: 'HEAVY', label: 'Heavy Industrial' },
+      { code: 'CHEMICAL', label: 'Chemical Industrial' },
+      { code: 'FOOD_DRUGS', label: 'Food / Drug Manufacturing' },
+      { code: 'METALS_MINERALS_PROCESSING', label: 'Metals / Minerals Processing' },
+      { code: 'COLD_STORAGE', label: 'Cold Storage' },
     ],
   },
   {
-    group: 'Outside / Other',
+    group: 'Agriculture',
     codes: [
-      { code: '900', label: 'Outside or special property, other' },
-      { code: '919', label: 'Dump or sanitary landfill' },
-      { code: '924', label: 'Vacant lot' },
-      { code: '926', label: 'Outbuilding or shed' },
-      { code: '931', label: 'Open land or field' },
-      { code: '936', label: 'Vacant building' },
-      { code: '941', label: 'Transportation way' },
-      { code: '952', label: 'Roadway' },
+      { code: 'FARM_BUILDING', label: 'Farm Building' },
+      { code: 'STORAGE_SILO', label: 'Crop / Product Storage / Silo' },
+      { code: 'AUCTION_FEEDLOT', label: 'Auction / Feedlot' },
+      { code: 'ANIMAL_PROCESSING', label: 'Animal Processing' },
+      { code: 'VETERINARY_LIVESTOCK', label: 'Veterinary (Livestock)' },
+    ],
+  },
+  {
+    group: 'Storage',
+    codes: [
+      { code: 'STORAGE_SINGLE_TENANT', label: 'Storage — Single Tenant' },
+      { code: 'STORAGE_MULTI_TENANT', label: 'Storage — Multi-Tenant' },
+      { code: 'STORAGE_PORTABLE_BUILDING', label: 'Storage — Portable Building' },
+    ],
+  },
+  {
+    group: 'Utility / Infrastructure',
+    codes: [
+      { code: 'ENERGY_FACILITY_INFRASTRUCTURE', label: 'Energy Facility / Infrastructure' },
+      { code: 'WATER_SANITATION_FACILITY_INFRASTRUCTURE', label: 'Water / Sanitation Facility' },
+      { code: 'TRASH_RECYCLING_FACILITY', label: 'Trash / Recycling Facility' },
+      { code: 'TRANSPORTATION_STATION_HUB_AREA', label: 'Transportation Station / Hub (Airport / Bus / Train)' },
+    ],
+  },
+  {
+    group: 'Roadway / Access',
+    codes: [
+      { code: 'STREET', label: 'Street / Road' },
+      { code: 'HIGHWAY_INTERSTATE', label: 'Highway / Interstate' },
+      { code: 'LIMITED_ACCESS_HIGHWAY_INTERSTATE', label: 'Limited Access Highway / Interstate' },
+      { code: 'BRIDGE', label: 'Bridge' },
+      { code: 'TUNNEL', label: 'Tunnel' },
+      { code: 'RAILROAD_RAILYARD', label: 'Railroad / Railyard' },
+      { code: 'PARKING_LOT_GARAGE', label: 'Parking Lot / Parking Garage' },
+      { code: 'SIDEWALK', label: 'Sidewalk' },
+    ],
+  },
+  {
+    group: 'Outdoor',
+    codes: [
+      { code: 'GROUND_VACANT_LAND', label: 'Ground / Vacant Land' },
+      { code: 'FOREST_GRASSLANDS_WOODLAND_WILDLAND_AREAS', label: 'Forest / Grassland / Wildland' },
+      { code: 'ORCHARD_CROPS_FARMLAND', label: 'Orchard / Crops / Farmland' },
+      { code: 'PLAYGROUND_PARK_RECREATIONAL_AREA', label: 'Playground / Park / Recreational Area' },
+      { code: 'CAMP_SITE', label: 'Camp Site' },
+      { code: 'HIKING_TRAIL', label: 'Hiking Trail' },
+      { code: 'WATERFRONT', label: 'Waterfront (Beach / Dock)' },
+      { code: 'OPEN_WATER', label: 'Open Water (Lake / River / Pond / Ocean)' },
+    ],
+  },
+  {
+    group: 'Outdoor Industrial',
+    codes: [
+      { code: 'CONSTRUCTION_SITE', label: 'Construction Site' },
+      { code: 'INDUSTRIAL_YARD', label: 'Industrial Yard' },
+      { code: 'DUMP_LANDFILL', label: 'Dump / Landfill' },
+      { code: 'MINE', label: 'Mine / Oil Field (Non-Building)' },
+    ],
+  },
+  {
+    group: 'Unclassified',
+    codes: [
+      { code: 'UNCLASSIFIED', label: 'Unclassified' },
     ],
   },
 ]
@@ -257,107 +453,160 @@ export function getPropertyUseLabel(code: string | null): string {
   if (!code) return '—'
   for (const group of NERIS_PROPERTY_USE) {
     const match = group.codes.find(c => c.code === code)
-    if (match) return `${code} — ${match.label}`
+    if (match) return match.label
   }
   return code
 }
 
 // ─── Actions Taken ────────────────────────────────────────────────────────────
+// From type_action_tactic.csv — code = value_2 (or value_1 if no value_2).
+// Sub-variants (value_3) collapsed into parent where granularity not needed.
+
 export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
   {
-    group: 'Command & Control',
+    group: 'Emergency Medical Care',
     codes: [
-      { code: 'INCIDENT_COMMAND', label: 'Incident command' },
-      { code: 'SAFETY_OFFICER', label: 'Safety officer' },
-      { code: 'PERSONNEL_ACCOUNTABILITY', label: 'Personnel accountability' },
-      { code: 'EVACUATION_ORDERED', label: 'Evacuation ordered' },
-      { code: 'PIO', label: 'Public information officer' },
+      { code: 'PATIENT_ASSESSMENT', label: 'Patient Assessment' },
+      { code: 'PROVIDE_BASIC_LIFE_SUPPORT', label: 'Basic Life Support (BLS)' },
+      { code: 'PROVIDE_ADVANCED_LIFE_SUPPORT', label: 'Advanced Life Support (ALS)' },
+      { code: 'PROVIDE_TRANSPORT', label: 'Patient Transport' },
+      { code: 'PATIENT_REFERRAL', label: 'Patient Referral' },
     ],
   },
   {
-    group: 'Fire Suppression',
+    group: 'Command and Control',
     codes: [
-      { code: 'STRUCTURAL_FIRE_SUPPRESSION', label: 'Structural fire suppression' },
-      { code: 'EXTERIOR_FIRE_SUPPRESSION', label: 'Exterior fire suppression' },
-      { code: 'VEHICLE_FIRE_SUPPRESSION', label: 'Vehicle fire suppression' },
-      { code: 'WILDLAND_FIRE_SUPPRESSION', label: 'Wildland fire suppression' },
-      { code: 'STANDPIPE_OPS', label: 'Standpipe operations' },
-      { code: 'MASTER_STREAM_OPS', label: 'Master stream operations' },
+      { code: 'ESTABLISH_INCIDENT_COMMAND', label: 'Establish Incident Command' },
+      { code: 'SAFETY_OFFICER_ASSIGNED', label: 'Safety Officer Assigned' },
+      { code: 'ACCOUNTABILITY_OFFICER_ASSIGNED', label: 'Accountability Officer Assigned' },
+      { code: 'PIO_ASSIGNED', label: 'PIO Assigned' },
+      { code: 'NOTIFY_OTHER_AGENCIES', label: 'Notify Other Agencies' },
+      { code: 'INCIDENT_ASSESSMENT_COMPLETED', label: 'Incident Assessment (360°) Completed' },
+    ],
+  },
+  {
+    group: 'Suppression',
+    codes: [
+      { code: 'STRUCTURAL_FIRE_SUPPRESSION.INTERIOR', label: 'Structural Fire Suppression — Interior' },
+      { code: 'STRUCTURAL_FIRE_SUPPRESSION.EXTERIOR', label: 'Structural Fire Suppression — Exterior' },
+      { code: 'STRUCTURAL_FIRE_SUPPRESSION.EXTERIOR_AND_INTERIOR', label: 'Structural Fire Suppression — Interior & Exterior' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.FIRE_CONTROL_EXTINGUISHMENT', label: 'Outside Fire — Control / Extinguishment' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.ESTABLISH_FIRE_LINES', label: 'Outside Fire — Establish Fire Lines' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.STRUCTURE_PROTECTION', label: 'Outside Fire — Structure Protection' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.CONFINEMENT', label: 'Outside Fire — Confinement' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.BACKBURN', label: 'Outside Fire — Backburn' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.FIRE_RETARDANT_DROP', label: 'Outside Fire — Fire Retardant Drop (Aircraft)' },
+      { code: 'OUTSIDE_FIRE_SUPPRESSION.WATER_DROP', label: 'Outside Fire — Water Drop (Aircraft)' },
+    ],
+  },
+  {
+    group: 'Containment',
+    codes: [
+      { code: 'HAND_CREW_FUEL_BREAK', label: 'Hand Crew Fuel Break' },
+      { code: 'DOZER_FUEL_BREAK', label: 'Dozer Fuel Break' },
     ],
   },
   {
     group: 'Ventilation',
     codes: [
-      { code: 'VERTICAL_VENTILATION', label: 'Vertical ventilation' },
-      { code: 'HORIZONTAL_VENTILATION', label: 'Horizontal ventilation' },
-      { code: 'POSITIVE_PRESSURE_VENTILATION', label: 'Positive pressure ventilation' },
-      { code: 'HYDRAULIC_VENTILATION', label: 'Hydraulic ventilation' },
+      { code: 'VERTICAL', label: 'Vertical Ventilation' },
+      { code: 'HORIZONTAL', label: 'Horizontal Ventilation' },
+      { code: 'POSITIVE_PRESSURE', label: 'Positive Pressure Ventilation' },
+      { code: 'HYDRAULIC', label: 'Hydraulic Ventilation' },
     ],
   },
   {
-    group: 'Search & Rescue',
+    group: 'Search',
     codes: [
-      { code: 'STRUCTURE_SEARCH', label: 'Structure search' },
-      { code: 'VICTIM_RESCUE', label: 'Victim rescue from structure' },
-      { code: 'VEHICLE_EXTRICATION', label: 'Vehicle extrication' },
-      { code: 'HIGH_ANGLE_RESCUE', label: 'High angle rescue' },
-      { code: 'WATER_RESCUE', label: 'Water rescue' },
-      { code: 'AREA_SEARCH', label: 'Area / land search' },
+      { code: 'DOOR_INITIATED_SEARCH', label: 'Door-Initiated Structure Search' },
+      { code: 'WINDOW_INITIATED_SEARCH', label: 'Window-Initiated Structure Search' },
+      { code: 'SEARCH_AREA_OF_COLLAPSE', label: 'Search — Area of Collapse' },
+      { code: 'SEARCH_UNDERGROUND_INFRASTRUCTURE', label: 'Search — Underground Infrastructure' },
+      { code: 'WIDE_AREA_OUTDOOR_SEARCH', label: 'Wide Area / Outdoor Search' },
+      { code: 'SEARCH_WATERWAY', label: 'Search — Waterway' },
+      { code: 'BODY_RECOVERY', label: 'Body Recovery' },
+      { code: 'USAR_K9_SEARCH', label: 'USAR K9 Search' },
     ],
   },
   {
-    group: 'Emergency Medical',
+    group: 'Salvage and Overhaul',
     codes: [
-      { code: 'PATIENT_ASSESSMENT', label: 'Patient assessment' },
-      { code: 'BLS_CARE', label: 'Basic life support care' },
-      { code: 'ALS_CARE', label: 'Advanced life support care' },
-      { code: 'CPR_AED', label: 'CPR / AED' },
-      { code: 'PATIENT_TRANSPORT', label: 'Patient transport' },
-      { code: 'PATIENT_TRANSFER', label: 'Patient transfer to EMS' },
-      { code: 'TRIAGE', label: 'Triage' },
+      { code: 'SALVAGE_AND_OVERHAUL', label: 'Salvage and Overhaul' },
     ],
   },
   {
-    group: 'Hazmat',
+    group: 'Forcible Entry',
     codes: [
-      { code: 'HAZMAT_MITIGATION', label: 'Hazmat mitigation' },
-      { code: 'DECONTAMINATION', label: 'Decontamination' },
-      { code: 'SPILL_CONTROL', label: 'Spill control / containment' },
-      { code: 'AIR_MONITORING', label: 'Sampling / air monitoring' },
+      { code: 'FORCIBLE_ENTRY', label: 'Forcible Entry' },
     ],
   },
   {
-    group: 'Overhaul & Salvage',
+    group: 'Investigation',
     codes: [
-      { code: 'OVERHAUL', label: 'Overhaul' },
-      { code: 'SALVAGE', label: 'Salvage operations' },
-      { code: 'UTILITY_CONTROL', label: 'Utility control (gas/electric/water)' },
-      { code: 'SCENE_SECURITY', label: 'Scene security / crowd control' },
-    ],
-  },
-  {
-    group: 'Scene Management',
-    codes: [
-      { code: 'TRAFFIC_CONTROL', label: 'Traffic control' },
-      { code: 'ROAD_CLOSURE', label: 'Road closure / lane blockage' },
-      { code: 'SCENE_LIGHTING', label: 'Scene lighting' },
-      { code: 'PERIMETER_ESTABLISHMENT', label: 'Perimeter establishment' },
-      { code: 'FLUID_CLEANUP', label: 'Fluid cleanup / absorbent deployment' },
-      { code: 'DEBRIS_REMOVAL', label: 'Debris removal from roadway' },
-      { code: 'SCENE_PRESERVATION', label: 'Scene preservation / documentation' },
-    ],
-  },
-  {
-    group: 'Service / Standby',
-    codes: [
-      { code: 'STANDBY_ONLY', label: 'Standby only' },
-      { code: 'MUTUAL_AID_GIVEN', label: 'Mutual aid given' },
-      { code: 'MUTUAL_AID_RECEIVED', label: 'Mutual aid received' },
       { code: 'INVESTIGATION', label: 'Investigation' },
-      { code: 'PUBLIC_ASSIST', label: 'Public assist' },
-      { code: 'LOCK_OUT', label: 'Lock-out / entry assistance' },
-      { code: 'ANIMAL_CONTROL', label: 'Animal control' },
-      { code: 'LIFT_ASSIST', label: 'Lift assist' },
+    ],
+  },
+  {
+    group: 'Hazardous Situation Mitigation',
+    codes: [
+      { code: 'TAKE_SAMPLES', label: 'Take Samples' },
+      { code: 'ATMOSPHERIC_MONITORING_INTERIOR', label: 'Atmospheric Monitoring — Interior' },
+      { code: 'ATMOSPHERIC_MONITORING_EXTERIOR_FENCELINE', label: 'Atmospheric Monitoring — Exterior / Fenceline' },
+      { code: 'SPILL_CONTROL', label: 'Spill Control' },
+      { code: 'LEAK_STOP', label: 'Leak Stop' },
+      { code: 'REMOVE_HAZARD', label: 'Remove Hazard' },
+      { code: 'DECONTAMINATION', label: 'Decontamination' },
+    ],
+  },
+  {
+    group: 'Personnel Contamination Reduction',
+    codes: [
+      { code: 'ON_SCENE_CONTAMINATION_REDUCTION', label: 'On-Scene Contamination Reduction' },
+      { code: 'CLEAN_CAB_TRANSPORT', label: 'Clean Cab Transport' },
+      { code: 'PPE_WASHED_POST_INCIDENT', label: 'PPE Washed Post-Incident' },
+    ],
+  },
+  {
+    group: 'Evacuation',
+    codes: [
+      { code: 'EVACUATION_CONNECTED_INTERIOR', label: 'Evacuation — Connected Interior Spaces' },
+      { code: 'EVACUATION_REMOTE_INTERIOR', label: 'Evacuation — Remote Interior Spaces' },
+      { code: 'EVACUATION_NEARBY_BUILDINGS', label: 'Evacuation — Nearby Buildings' },
+      { code: 'EVACUATION_LARGE_AREA', label: 'Evacuation — Large Area' },
+    ],
+  },
+  {
+    group: 'Provide Equipment',
+    codes: [
+      { code: 'PROVIDE_LIGHT', label: 'Provide Light / Scene Lighting' },
+      { code: 'PROVIDE_ELECTRICAL_POWER', label: 'Provide Electrical Power' },
+      { code: 'PROVIDE_SPECIAL_EQUIPMENT', label: 'Provide Special Equipment' },
+      { code: 'PROVIDE_DRONE_VIDEO_EQUIPMENT', label: 'Provide Drone / Video Equipment' },
+    ],
+  },
+  {
+    group: 'Provide Services',
+    codes: [
+      { code: 'CONTROL_TRAFFIC', label: 'Traffic Control' },
+      { code: 'CONTROL_CROWD', label: 'Crowd Control / Scene Security' },
+      { code: 'ASSIST_UNINJURED_PERSON', label: 'Assist Uninjured Person' },
+      { code: 'ASSIST_ANIMAL', label: 'Assist Animal' },
+      { code: 'REMOVE_WATER', label: 'Remove Water' },
+      { code: 'SECURE_PROPERTY', label: 'Secure Property' },
+      { code: 'RESTORE_SPRINKLER_SYSTEM', label: 'Restore Sprinkler System' },
+      { code: 'RESTORE_RESET_ALARM_SYSTEM', label: 'Restore / Reset Alarm System' },
+      { code: 'SHUT_DOWN_ALARM', label: 'Shut Down Alarm' },
+      { code: 'SHUT_DOWN_SPRINKLER_SYSTEM', label: 'Shut Down Sprinkler System' },
+      { code: 'PROVIDE_APPARATUS_WATER', label: 'Provide Apparatus / Water' },
+      { code: 'DAMAGE_ASSESSMENT', label: 'Damage Assessment' },
+    ],
+  },
+  {
+    group: 'Information / Enforcement',
+    codes: [
+      { code: 'PROVIDE_PUBLIC_INFORMATION', label: 'Provide Public Information' },
+      { code: 'REFER_TO_PROPER_AHJ', label: 'Refer to Proper AHJ' },
+      { code: 'ENFORCE_CODE_OR_LAW', label: 'Enforce Code or Law' },
     ],
   },
 ]
@@ -390,7 +639,7 @@ export const NERIS_FIRE_CONDITION_ARRIVAL: NerisCode[] = [
 export const NERIS_BUILDING_DAMAGE: NerisCode[] = [
   { code: 'NO_DAMAGE', label: 'No damage' },
   { code: 'MINOR_DAMAGE', label: 'Minor damage — limited, no displacement' },
-  { code: 'MODERATE_DAMAGE', label: 'Moderate damage — flame/water/smoke, possible displacement' },
+  { code: 'MODERATE_DAMAGE', label: 'Moderate damage — possible displacement' },
   { code: 'MAJOR_DAMAGE', label: 'Major damage — total loss, occupant displacement' },
 ]
 
@@ -458,7 +707,7 @@ export const NERIS_AID_DIRECTION: NerisCode[] = [
   { code: 'RECEIVED', label: 'Received (another department assisted us)' },
 ]
 
-// ─── Cover sheet incident_type → NERIS category label ────────────────────────
+// ─── Cover sheet type → human label ──────────────────────────────────────────
 export const COVER_TYPE_LABEL: Record<string, string> = {
   fire: 'Fire',
   rescue: 'Rescue / EMS',
