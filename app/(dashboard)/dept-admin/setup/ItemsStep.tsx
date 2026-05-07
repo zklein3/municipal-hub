@@ -230,6 +230,9 @@ export default function ItemsStep({
             {items.filter(i => i.active).length} items · {assets.filter(a => a.active).length} assets · {templates.filter(t => t.active).length} templates
           </p>
         </div>
+        <Link href="/equipment/storage" className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors">
+          Storage →
+        </Link>
       </div>
 
       {/* Tabs */}

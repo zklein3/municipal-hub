@@ -97,12 +97,20 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                         {a.compartments.length} compartment{a.compartments.length !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <Link
-                      href={`/inspections/apparatus/${a.id}`}
-                      className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-                    >
-                      Start Session
-                    </Link>
+                    <div className="flex gap-2 shrink-0">
+                      <Link
+                        href={`/equipment/${a.id}?from=/inspections`}
+                        className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
+                      >
+                        Equipment
+                      </Link>
+                      <Link
+                        href={`/inspections/apparatus/${a.id}`}
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                      >
+                        Start Session
+                      </Link>
+                    </div>
                   </div>
 
                   {/* Compartments */}
