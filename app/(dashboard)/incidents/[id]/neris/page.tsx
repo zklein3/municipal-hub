@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import { getOrCreateNerisRecord } from '@/app/actions/neris'
 import NerisReportClient from './NerisReportClient'
 
 export default async function NerisReportPage({
@@ -49,7 +48,6 @@ export default async function NerisReportPage({
     .select('id, apparatus_id, role, response_mode, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', id)
 
-  // Fetch apparatus names
   const apparatusIds = (apparatusRaw ?? []).map(a => a.apparatus_id).filter(Boolean)
   const { data: apparatusNames } = apparatusIds.length > 0
     ? await adminClient.from('apparatus').select('id, unit_number, apparatus_name').in('id', apparatusIds)
@@ -80,10 +78,12 @@ export default async function NerisReportPage({
     name: personnelNameMap[p.personnel_id] ?? 'Unknown',
   }))
 
-  // Get or create NERIS record
-  const nerisResult = await getOrCreateNerisRecord(id)
-  if (nerisResult?.error) redirect(`/incidents/${id}`)
-  const nerisRecord = nerisResult.record
+  // Fetch existing NERIS record — do NOT auto-create, lazy creation happens on first save
+  const { data: nerisRecord } = await adminClient
+    .from('incident_neris')
+    .select('*')
+    .eq('incident_id', id)
+    .maybeSingle()
 
   return (
     <div className="max-w-2xl">
@@ -92,7 +92,7 @@ export default async function NerisReportPage({
         fireDetails={fireDetails}
         incidentApparatus={incidentApparatus}
         incidentPersonnel={incidentPersonnel}
-        nerisRecord={nerisRecord}
+        nerisRecord={nerisRecord ?? null}
         isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
       />
     </div>

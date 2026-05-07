@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveNerisReport, saveApparatusResponseMode } from '@/app/actions/neris'
+import NerisCombobox from '@/components/NerisCombobox'
 import {
+  NERIS_INCIDENT_TYPES,
   getFilteredIncidentTypes,
   getIncidentTypeLabel,
   getPropertyUseLabel,
@@ -18,9 +20,9 @@ import {
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
 
-const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
 const sectionCls = "rounded-xl bg-white border border-zinc-200 p-5 space-y-4"
+const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
 function formatDT(dt: string | null) {
   if (!dt) return '—'
@@ -40,6 +42,11 @@ const FIRE_SUBTYPE_LABELS: Record<string, string> = {
 }
 const APPARATUS_ROLE_LABELS: Record<string, string> = {
   primary: 'Primary', support: 'Support', staging: 'Staging',
+}
+
+// Convert NERIS code lists to grouped format NerisCombobox expects
+function toGroups(codes: { code: string | number; label: string }[], groupLabel: string) {
+  return [{ group: groupLabel, codes }]
 }
 
 export default function NerisReportClient({
@@ -66,8 +73,16 @@ export default function NerisReportClient({
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Incident type filter toggle
+  const [showAllTypes, setShowAllTypes] = useState(false)
+  const incidentTypeGroups = showAllTypes
+    ? NERIS_INCIDENT_TYPES
+    : getFilteredIncidentTypes(incident.incident_type)
+
   // NERIS core fields
-  const [nerisType, setNerisType] = useState<number | ''>(nerisRecord?.neris_incident_type ?? '')
+  const [nerisType, setNerisType] = useState<string>(
+    nerisRecord?.neris_incident_type != null ? String(nerisRecord.neris_incident_type) : ''
+  )
   const [propertyUse, setPropertyUse] = useState<string>(nerisRecord?.property_use ?? '')
   const [displacedPersons, setDisplacedPersons] = useState<string>(
     nerisRecord?.displaced_persons != null ? String(nerisRecord.displaced_persons) : ''
@@ -84,23 +99,11 @@ export default function NerisReportClient({
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
 
-  // Response modes per apparatus (apparatus incident row id → mode)
+  // Response modes per apparatus row id
   const [responseModes, setResponseModes] = useState<Record<string, string>>(
     Object.fromEntries(incidentApparatus.map(a => [a.id, a.response_mode ?? '']))
   )
   const [responseModeSaving, setResponseModeSaving] = useState<string | null>(null)
-
-  function toggleAction(code: string) {
-    setActionsTaken(prev =>
-      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-    )
-  }
-
-  function toggleAppliance(code: string) {
-    setSuppressionAppliances(prev =>
-      prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
-    )
-  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -131,7 +134,6 @@ export default function NerisReportClient({
     setResponseModeSaving(null)
   }
 
-  const filteredIncidentTypes = getFilteredIncidentTypes(incident.incident_type)
   const fireCauseCodes = isOutsideFire ? NERIS_FIRE_CAUSE_OUT : NERIS_FIRE_CAUSE_IN
 
   return (
@@ -142,9 +144,14 @@ export default function NerisReportClient({
           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             nerisRecord?.neris_status === 'submitted' ? 'bg-green-100 text-green-700' :
             nerisRecord?.completed_at ? 'bg-blue-100 text-blue-700' :
+            nerisRecord ? 'bg-amber-100 text-amber-700' :
             'bg-zinc-100 text-zinc-500'
           }`}>
-            NERIS — {nerisRecord?.neris_status === 'submitted' ? 'Submitted' : nerisRecord?.completed_at ? 'Completed' : 'Draft'}
+            NERIS — {
+              nerisRecord?.neris_status === 'submitted' ? 'Submitted' :
+              nerisRecord?.completed_at ? 'Completed' :
+              nerisRecord ? 'In Progress' : 'Not Started'
+            }
           </span>
         </div>
         <h1 className="text-xl font-bold text-zinc-900">NERIS Report</h1>
@@ -164,8 +171,8 @@ export default function NerisReportClient({
       </div>
 
       {/* Cover sheet summary — read-only reference */}
-      <div className={`${sectionCls} mb-4 bg-zinc-50`}>
-        <h2 className="text-sm font-semibold text-zinc-700">Cover Sheet (read-only reference)</h2>
+      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-5 space-y-3 mb-4">
+        <h2 className="text-sm font-semibold text-zinc-700">Cover Sheet Reference</h2>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div>
             <span className="text-zinc-400 text-xs">Type</span>
@@ -189,7 +196,7 @@ export default function NerisReportClient({
           {incident.narrative && (
             <div className="col-span-2">
               <span className="text-zinc-400 text-xs">Narrative</span>
-              <p className="font-medium text-zinc-800 line-clamp-2">{incident.narrative}</p>
+              <p className="text-zinc-700 line-clamp-2">{incident.narrative}</p>
             </div>
           )}
         </div>
@@ -197,79 +204,54 @@ export default function NerisReportClient({
 
       {isSubmitted && (
         <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-          This report has been submitted to NERIS (ID: {nerisRecord.neris_submission_id ?? '—'}) and is locked for editing.
+          Submitted to NERIS — ID: {nerisRecord.neris_submission_id ?? '—'}. This report is locked.
         </div>
       )}
-
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {saved && (
-        <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-          Saved successfully.
-        </div>
-      )}
+      {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {saved && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Saved successfully.</div>}
 
       <form onSubmit={handleSave} className="space-y-5">
 
-        {/* NERIS Core — Incident Type */}
+        {/* Incident Type */}
         <section className={sectionCls}>
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-4">
             <h2 className="text-sm font-semibold text-zinc-900">NERIS Incident Type</h2>
-            <span className="text-xs text-zinc-400">
-              Filtered for: {COVER_TYPE_LABEL[incident.incident_type] ?? incident.incident_type}
-            </span>
+            <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={showAllTypes}
+                onChange={e => setShowAllTypes(e.target.checked)}
+                className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+              />
+              <span className="text-xs text-zinc-500">Show all types</span>
+            </label>
           </div>
-          {nerisType && (
-            <p className="text-xs text-zinc-500 -mt-1">
-              Selected: <span className="font-semibold text-zinc-700">{getIncidentTypeLabel(Number(nerisType))}</span>
+          {!showAllTypes && (
+            <p className="text-xs text-zinc-400 -mt-2">
+              Filtered to <span className="font-medium text-zinc-600">{COVER_TYPE_LABEL[incident.incident_type] ?? incident.incident_type}</span> — check "Show all types" to see every NERIS code.
             </p>
           )}
-          <select
+          <NerisCombobox
+            groups={incidentTypeGroups}
             value={nerisType}
-            onChange={e => setNerisType(e.target.value ? Number(e.target.value) : '')}
+            onChange={setNerisType}
+            placeholder="Select NERIS incident type…"
             disabled={isSubmitted}
-            className={inputCls}
-          >
-            <option value="">Select NERIS incident type…</option>
-            {filteredIncidentTypes.map(group => (
-              <optgroup key={group.group} label={group.group}>
-                {group.codes.map(c => (
-                  <option key={c.code} value={c.code}>{c.code} — {c.label}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <p className="text-xs text-zinc-400">
-            Showing types relevant to "{COVER_TYPE_LABELS[incident.incident_type] ?? incident.incident_type}" incidents.
-            If none match, all types are available —
-            <button type="button" onClick={() => {}} className="ml-1 underline text-zinc-500">show all</button>.
-          </p>
+          />
         </section>
 
-        {/* Property Use + Displaced Persons */}
+        {/* Scene Information */}
         <section className={sectionCls}>
           <h2 className="text-sm font-semibold text-zinc-900">Scene Information</h2>
           <div>
             <label className={labelCls}>Property Use</label>
-            {propertyUse && (
-              <p className="text-xs text-zinc-500 mb-1">{getPropertyUseLabel(propertyUse)}</p>
-            )}
-            <select
+            <NerisCombobox
+              groups={NERIS_PROPERTY_USE}
               value={propertyUse}
-              onChange={e => setPropertyUse(e.target.value)}
+              onChange={setPropertyUse}
+              placeholder="Select property use…"
               disabled={isSubmitted}
-              className={inputCls}
-            >
-              <option value="">Select property use…</option>
-              {NERIS_PROPERTY_USE.map(group => (
-                <optgroup key={group.group} label={group.group}>
-                  {group.codes.map(c => (
-                    <option key={c.code} value={String(c.code)}>{c.code} — {c.label}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className={labelCls}>Displaced Persons</label>
@@ -288,37 +270,21 @@ export default function NerisReportClient({
         {/* Actions Taken */}
         <section className={sectionCls}>
           <h2 className="text-sm font-semibold text-zinc-900">Actions Taken on Scene</h2>
-          {actionsTaken.length > 0 && (
-            <p className="text-xs text-zinc-500">{actionsTaken.length} action{actionsTaken.length !== 1 ? 's' : ''} selected</p>
-          )}
-          <div className="space-y-3">
-            {NERIS_ACTIONS_TAKEN.map(group => (
-              <div key={group.group}>
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">{group.group}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {group.codes.map(c => (
-                    <label key={String(c.code)} className="flex items-center gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={actionsTaken.includes(String(c.code))}
-                        onChange={() => !isSubmitted && toggleAction(String(c.code))}
-                        disabled={isSubmitted}
-                        className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                      />
-                      <span className="text-sm text-zinc-700 group-hover:text-zinc-900">{c.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          <NerisCombobox
+            multiple
+            groups={NERIS_ACTIONS_TAKEN}
+            value={actionsTaken}
+            onChange={setActionsTaken}
+            placeholder="Select actions taken…"
+            disabled={isSubmitted}
+          />
         </section>
 
         {/* Apparatus — Response Mode */}
         {incidentApparatus.length > 0 && (
           <section className={sectionCls}>
             <h2 className="text-sm font-semibold text-zinc-900">Apparatus Response Mode</h2>
-            <p className="text-xs text-zinc-400 -mt-1">Set per-unit whether response was emergent (lights &amp; siren) or non-emergent.</p>
+            <p className="text-xs text-zinc-400 -mt-1">Set per-unit whether response was emergent or non-emergent.</p>
             <div className="divide-y divide-zinc-100">
               {incidentApparatus.map(a => (
                 <div key={a.id} className="flex items-center justify-between py-2.5">
@@ -350,7 +316,7 @@ export default function NerisReportClient({
           </section>
         )}
 
-        {/* Personnel summary — read-only */}
+        {/* Personnel — read-only */}
         {incidentPersonnel.length > 0 && (
           <section className={sectionCls}>
             <h2 className="text-sm font-semibold text-zinc-900">Personnel on Scene</h2>
@@ -372,35 +338,40 @@ export default function NerisReportClient({
 
             <div>
               <label className={labelCls}>Condition on Arrival</label>
-              <select value={fireCondition} onChange={e => setFireCondition(e.target.value)} disabled={isSubmitted} className={inputCls}>
-                <option value="">Select…</option>
-                {NERIS_FIRE_CONDITION_ARRIVAL.map(c => (
-                  <option key={String(c.code)} value={String(c.code)}>{c.label}</option>
-                ))}
-              </select>
+              <NerisCombobox
+                groups={toGroups(NERIS_FIRE_CONDITION_ARRIVAL, 'Condition on Arrival')}
+                value={fireCondition}
+                onChange={setFireCondition}
+                placeholder="Select condition on arrival…"
+                disabled={isSubmitted}
+              />
             </div>
 
             <div>
               <label className={labelCls}>Building Damage</label>
-              <select value={buildingDamage} onChange={e => setBuildingDamage(e.target.value)} disabled={isSubmitted} className={inputCls}>
-                <option value="">Select…</option>
-                {NERIS_BUILDING_DAMAGE.map(c => (
-                  <option key={String(c.code)} value={String(c.code)}>{c.label}</option>
-                ))}
-              </select>
+              <NerisCombobox
+                groups={toGroups(NERIS_BUILDING_DAMAGE, 'Building Damage')}
+                value={buildingDamage}
+                onChange={setBuildingDamage}
+                placeholder="Select building damage…"
+                disabled={isSubmitted}
+              />
             </div>
 
             <div>
-              <label className={labelCls}>Fire Cause</label>
-              <p className="text-xs text-zinc-400 mb-1.5">
-                {isOutsideFire ? 'Outside / vegetation fire cause' : 'Interior / structure fire cause'}
-              </p>
-              <select value={fireCauseCode} onChange={e => setFireCauseCode(e.target.value)} disabled={isSubmitted} className={inputCls}>
-                <option value="">Select…</option>
-                {fireCauseCodes.map(c => (
-                  <option key={String(c.code)} value={String(c.code)}>{c.label}</option>
-                ))}
-              </select>
+              <label className={labelCls}>
+                Fire Cause
+                <span className="ml-1.5 text-xs font-normal text-zinc-400">
+                  ({isOutsideFire ? 'outside/vegetation' : 'inside/structure'})
+                </span>
+              </label>
+              <NerisCombobox
+                groups={toGroups(fireCauseCodes, isOutsideFire ? 'Outside Fire Cause' : 'Inside Fire Cause')}
+                value={fireCauseCode}
+                onChange={setFireCauseCode}
+                placeholder="Select fire cause…"
+                disabled={isSubmitted}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -431,20 +402,14 @@ export default function NerisReportClient({
 
             <div>
               <label className={labelCls}>Suppression Appliances Used</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1">
-                {NERIS_SUPPRESSION_APPLIANCE.map(c => (
-                  <label key={String(c.code)} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={suppressionAppliances.includes(String(c.code))}
-                      onChange={() => !isSubmitted && toggleAppliance(String(c.code))}
-                      disabled={isSubmitted}
-                      className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                    />
-                    <span className="text-sm text-zinc-700">{c.label}</span>
-                  </label>
-                ))}
-              </div>
+              <NerisCombobox
+                multiple
+                groups={toGroups(NERIS_SUPPRESSION_APPLIANCE, 'Suppression Appliances')}
+                value={suppressionAppliances}
+                onChange={setSuppressionAppliances}
+                placeholder="Select suppression appliances used…"
+                disabled={isSubmitted}
+              />
             </div>
 
             {/* Cover sheet fire details — read-only */}
