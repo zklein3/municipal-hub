@@ -55,6 +55,7 @@ export default function PersonnelStep({
   helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
+  const [search, setSearch] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -78,6 +79,12 @@ export default function PersonnelStep({
 
   const roleOrder: Record<string, number> = { admin: 0, officer: 1, member: 2 }
   const sorted = [...personnel].sort((a, b) => (roleOrder[a.system_role] ?? 9) - (roleOrder[b.system_role] ?? 9))
+  const q = search.toLowerCase()
+  const filteredPersonnel = q ? sorted.filter(r => {
+    const p = r.personnel
+    return (p ? `${p.first_name} ${p.last_name}`.toLowerCase().includes(q) : false) ||
+      (p?.email ?? '').toLowerCase().includes(q)
+  }) : sorted
 
   return (
     <div>
@@ -156,14 +163,22 @@ export default function PersonnelStep({
         </div>
       )}
 
+      {sorted.length > 0 && (
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search personnel..."
+          className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+      )}
+
       {/* Cards */}
       {sorted.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
           No personnel yet — add your first member above.
         </div>
+      ) : filteredPersonnel.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No personnel match "{search}".</div>
       ) : (
         <div className="flex flex-col gap-3">
-          {sorted.map(record => {
+          {filteredPersonnel.map(record => {
             const p = record.personnel
             const name = p ? `${p.first_name} ${p.last_name}`.trim() : '—'
             const status = p?.signup_status ?? record.signup_status

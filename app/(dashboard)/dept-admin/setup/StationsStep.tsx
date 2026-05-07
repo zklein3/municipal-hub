@@ -82,6 +82,7 @@ export default function StationsStep({
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -149,14 +150,26 @@ export default function StationsStep({
         </div>
       )}
 
+      {/* Search */}
+      {stations.length > 0 && (
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search stations..."
+          className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+      )}
+
       {/* Cards */}
-      {stations.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
-          No stations yet — add your first station above.
-        </div>
-      ) : (
+      {(() => {
+        const q = search.toLowerCase()
+        const filtered = q ? stations.filter(s => s.station_name.toLowerCase().includes(q) || (s.city ?? '').toLowerCase().includes(q) || (s.address_line_1 ?? '').toLowerCase().includes(q)) : stations
+        if (stations.length === 0) return (
+          <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No stations yet — add your first station above.</div>
+        )
+        if (filtered.length === 0) return (
+          <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No stations match "{search}".</div>
+        )
+        return (
         <div className="flex flex-col gap-3">
-          {stations.map(station => (
+          {filtered.map(station => (
             <div key={station.id} className={`rounded-xl bg-white border shadow-sm ${
               station.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'
             }`}>
@@ -232,7 +245,8 @@ export default function StationsStep({
             </div>
           ))}
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

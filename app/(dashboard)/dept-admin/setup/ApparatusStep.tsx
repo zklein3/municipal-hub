@@ -151,8 +151,18 @@ export default function ApparatusStep({
 }) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const q = search.toLowerCase()
+  const filteredApparatus = q ? apparatus.filter(a =>
+    (a.apparatus_name ?? '').toLowerCase().includes(q) ||
+    a.unit_number.toLowerCase().includes(q) ||
+    (a.make ?? '').toLowerCase().includes(q) ||
+    (a.model ?? '').toLowerCase().includes(q) ||
+    (a.station?.station_name ?? '').toLowerCase().includes(q)
+  ) : apparatus
 
   async function handleCreate(formData: FormData) {
     setError(null); setLoading(true)
@@ -206,14 +216,22 @@ export default function ApparatusStep({
         </div>
       )}
 
+      {apparatus.length > 0 && (
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search apparatus..."
+          className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+      )}
+
       {/* Cards */}
       {apparatus.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
           No apparatus yet — add your first unit above.
         </div>
+      ) : filteredApparatus.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No apparatus match "{search}".</div>
       ) : (
         <div className="flex flex-col gap-3">
-          {apparatus.map(a => (
+          {filteredApparatus.map(a => (
             <div key={a.id} className={`rounded-xl bg-white border shadow-sm ${
               a.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'
             }`}>

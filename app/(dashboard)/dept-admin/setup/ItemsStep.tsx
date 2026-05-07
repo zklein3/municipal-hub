@@ -52,6 +52,7 @@ export default function ItemsStep({
   helpResetKey: number
 }) {
   const [activeTab, setActiveTab] = useState<Tab>('categories')
+  const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -207,6 +208,12 @@ export default function ItemsStep({
   const trackableItems = items.filter(i => i.tracks_assets)
   const inspectableItems = items.filter(i => i.requires_inspection && i.active)
 
+  const q = search.toLowerCase()
+  const filteredCategories = q ? categories.filter(c => c.category_name.toLowerCase().includes(q)) : categories
+  const filteredItems = q ? items.filter(i => i.item_name.toLowerCase().includes(q) || (i.item_description ?? '').toLowerCase().includes(q) || (catMap[i.category_id ?? ''] ?? '').toLowerCase().includes(q)) : items
+  const filteredAssets = q ? trackableItems.filter(i => i.item_name.toLowerCase().includes(q) || (assetsByItem[i.id] ?? []).some(a => a.asset_tag.toLowerCase().includes(q) || (a.serial_number ?? '').toLowerCase().includes(q))) : trackableItems
+  const filteredInspectable = q ? inspectableItems.filter(i => i.item_name.toLowerCase().includes(q) || (templatesByItem[i.id] ?? []).some(t => t.template_name.toLowerCase().includes(q))) : inspectableItems
+
   const TABS: { id: Tab; label: string; count: number }[] = [
     { id: 'categories', label: 'Categories',           count: categories.filter(c => c.active).length },
     { id: 'items',      label: 'Items',                count: items.filter(i => i.active).length },
@@ -230,7 +237,7 @@ export default function ItemsStep({
         {TABS.map(tab => (
           <button
             key={tab.id}
-            onClick={() => { setActiveTab(tab.id); clear() }}
+            onClick={() => { setActiveTab(tab.id); setSearch(''); clear() }}
             className={`shrink-0 flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === tab.id ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
             }`}
@@ -246,6 +253,14 @@ export default function ItemsStep({
           </button>
         ))}
       </div>
+
+      <input
+        type="search"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder={`Search ${activeTab}...`}
+        className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+      />
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
@@ -287,9 +302,11 @@ export default function ItemsStep({
           )}
           {categories.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories yet — add one above.</div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories match "{search}".</div>
           ) : (
             <div className="flex flex-col gap-2">
-              {categories.map(cat => (
+              {filteredCategories.map(cat => (
                 <div key={cat.id} className={`rounded-xl bg-white border shadow-sm ${cat.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'}`}>
                   {editingCatId === cat.id ? (
                     <div className="p-4">
@@ -396,9 +413,11 @@ export default function ItemsStep({
           )}
           {items.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No items yet — add categories first, then add items.</div>
+          ) : filteredItems.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No items match "{search}".</div>
           ) : (
             <div className="flex flex-col gap-2">
-              {items.map(item => (
+              {filteredItems.map(item => (
                 <div key={item.id} className={`rounded-xl bg-white border shadow-sm ${item.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'}`}>
                   {editingItemId === item.id ? (
                     <div className="p-5">
@@ -490,9 +509,11 @@ export default function ItemsStep({
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">
               No asset-tracked items yet. In the Items tab, create an item with "Requires Inspection" checked — it will automatically track individual assets.
             </div>
+          ) : filteredAssets.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No assets match "{search}".</div>
           ) : (
             <div className="flex flex-col gap-4">
-              {trackableItems.map(item => {
+              {filteredAssets.map(item => {
                 const itemAssets = assetsByItem[item.id] ?? []
                 return (
                   <div key={item.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
@@ -633,9 +654,11 @@ export default function ItemsStep({
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">
               No inspectable items yet. In the Items tab, create an item with "Requires Inspection" checked — it will appear here for template setup.
             </div>
+          ) : filteredInspectable.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No templates match "{search}".</div>
           ) : (
             <div className="flex flex-col gap-4">
-              {inspectableItems.map(item => {
+              {filteredInspectable.map(item => {
                 const itemTemplates = templatesByItem[item.id] ?? []
                 const hasTemplates = itemTemplates.length > 0
 

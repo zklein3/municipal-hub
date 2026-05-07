@@ -43,9 +43,16 @@ export default function CompartmentsStep({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [assignChecked, setAssignChecked] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const q = search.toLowerCase()
+  const filteredCompartments = q ? compartments.filter(c =>
+    c.compartment_code.toLowerCase().includes(q) ||
+    (c.compartment_name ?? '').toLowerCase().includes(q)
+  ) : compartments
 
   async function handleCreate(formData: FormData) {
     setError(null); setSuccess(null); setLoading(true)
@@ -148,14 +155,22 @@ export default function CompartmentsStep({
         </div>
       )}
 
+      {compartments.length > 0 && (
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search compartments..."
+          className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+      )}
+
       {/* Cards */}
       {compartments.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
           No compartment templates yet — add your first above.
         </div>
+      ) : filteredCompartments.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No compartments match "{search}".</div>
       ) : (
         <div className="flex flex-col gap-3">
-          {compartments.map(c => {
+          {filteredCompartments.map(c => {
             const assignedCount = usageMap[c.id] ?? 0
 
             return (
