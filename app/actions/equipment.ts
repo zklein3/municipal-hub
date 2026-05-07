@@ -24,6 +24,7 @@ async function getContext() {
   const myDept = myDeptList?.[0]
   return {
     me,
+    user_id: user.id,
     department_id: myDept?.department_id ?? null,
     system_role: myDept?.system_role ?? null,
     isAdmin: myDept?.system_role === 'admin' || me.is_sys_admin,
@@ -261,6 +262,13 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   const ctx = await getContext()
   if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
+  const { data: standards } = await adminClient
+    .from('item_location_standards')
+    .select('expected_quantity')
+    .eq('id', location_standard_id)
+  if ((standards?.[0]?.expected_quantity ?? 0) > 0) {
+    return { error: 'Move all quantity to storage before removing this item from the compartment.' }
+  }
   const { error } = await adminClient
     .from('item_location_standards')
     .update({ active: false })
@@ -338,4 +346,244 @@ export async function moveItemToCompartment(location_standard_id: string, target
   revalidatePath('/apparatus')
   revalidatePath('/inspections')
   return { success: true }
+}
+
+// ─── Move Quantity to Storage ─────────────────────────────────────────────────
+export async function moveQuantityToStorage(location_standard_id: string, quantity: number) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can move inventory.' }
+  if (quantity < 1) return { error: 'Quantity must be at least 1.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+
+  const { data: standards } = await adminClient
+    .from('item_location_standards')
+    .select('id, item_id, expected_quantity, apparatus_compartment_id')
+    .eq('id', location_standard_id)
+    .eq('active', true)
+  const standard = standards?.[0]
+  if (!standard) return { error: 'Item assignment not found.' }
+  if (quantity > standard.expected_quantity) return { error: 'Cannot move more than the current compartment quantity.' }
+
+  const { error: compartmentErr } = await adminClient
+    .from('item_location_standards')
+    .update({ expected_quantity: standard.expected_quantity - quantity })
+    .eq('id', location_standard_id)
+  if (compartmentErr) { await logError(compartmentErr.message, '/equipment'); return { error: compartmentErr.message } }
+
+  const { data: storageList } = await adminClient
+    .from('department_item_storage')
+    .select('id, quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', standard.item_id)
+  const storageRow = storageList?.[0]
+  if (storageRow) {
+    const { error: storageErr } = await adminClient
+      .from('department_item_storage')
+      .update({ quantity: storageRow.quantity + quantity, updated_at: new Date().toISOString() })
+      .eq('id', storageRow.id)
+    if (storageErr) { await logError(storageErr.message, '/equipment'); return { error: storageErr.message } }
+  } else {
+    const { error: storageErr } = await adminClient
+      .from('department_item_storage')
+      .insert({ department_id, item_id: standard.item_id, quantity, par_quantity: 0 })
+    if (storageErr) { await logError(storageErr.message, '/equipment'); return { error: storageErr.message } }
+  }
+
+  await adminClient.from('item_movement_log').insert({
+    department_id,
+    item_id: standard.item_id,
+    quantity,
+    from_type: 'compartment',
+    from_id: standard.apparatus_compartment_id,
+    to_type: 'storage',
+    to_id: null,
+    moved_by: ctx.user_id,
+    reason: null,
+  })
+
+  revalidatePath('/equipment')
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Move Quantity from Storage to Compartment ────────────────────────────────
+export async function moveQuantityFromStorage(
+  item_id: string,
+  target_compartment_id: string,
+  quantity: number,
+) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can move inventory.' }
+  if (quantity < 1) return { error: 'Quantity must be at least 1.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+
+  const { data: storageList } = await adminClient
+    .from('department_item_storage')
+    .select('id, quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  const storage = storageList?.[0]
+  if (!storage || storage.quantity < quantity) return { error: 'Not enough quantity in storage.' }
+
+  const { data: existingList } = await adminClient
+    .from('item_location_standards')
+    .select('id, active, expected_quantity')
+    .eq('apparatus_compartment_id', target_compartment_id)
+    .eq('item_id', item_id)
+  const existing = existingList?.[0]
+
+  if (existing?.active) {
+    const { error: updateErr } = await adminClient
+      .from('item_location_standards')
+      .update({ expected_quantity: existing.expected_quantity + quantity })
+      .eq('id', existing.id)
+    if (updateErr) { await logError(updateErr.message, '/equipment'); return { error: updateErr.message } }
+  } else if (existing) {
+    const { error: updateErr } = await adminClient
+      .from('item_location_standards')
+      .update({ active: true, expected_quantity: quantity })
+      .eq('id', existing.id)
+    if (updateErr) { await logError(updateErr.message, '/equipment'); return { error: updateErr.message } }
+  } else {
+    const { error: insertErr } = await adminClient
+      .from('item_location_standards')
+      .insert({ apparatus_compartment_id: target_compartment_id, item_id, expected_quantity: quantity, active: true })
+    if (insertErr) { await logError(insertErr.message, '/equipment'); return { error: insertErr.message } }
+  }
+
+  const { error: storageErr } = await adminClient
+    .from('department_item_storage')
+    .update({ quantity: storage.quantity - quantity, updated_at: new Date().toISOString() })
+    .eq('id', storage.id)
+  if (storageErr) { await logError(storageErr.message, '/equipment'); return { error: storageErr.message } }
+
+  await adminClient.from('item_movement_log').insert({
+    department_id,
+    item_id,
+    quantity,
+    from_type: 'storage',
+    from_id: null,
+    to_type: 'compartment',
+    to_id: target_compartment_id,
+    moved_by: ctx.user_id,
+    reason: null,
+  })
+
+  revalidatePath('/equipment')
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Remove from Inventory (from storage only) ────────────────────────────────
+export async function removeFromInventory(item_id: string, quantity: number, reason: 'retired' | 'lost' | 'damaged') {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can remove items from inventory.' }
+  if (quantity < 1) return { error: 'Quantity must be at least 1.' }
+  if (!reason) return { error: 'A reason is required.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+
+  const { data: storageList } = await adminClient
+    .from('department_item_storage')
+    .select('id, quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  const storage = storageList?.[0]
+  if (!storage || storage.quantity < quantity) return { error: 'Not enough quantity in storage to remove.' }
+
+  const { error: storageErr } = await adminClient
+    .from('department_item_storage')
+    .update({ quantity: storage.quantity - quantity, updated_at: new Date().toISOString() })
+    .eq('id', storage.id)
+  if (storageErr) { await logError(storageErr.message, '/equipment/storage'); return { error: storageErr.message } }
+
+  const { error: logErr } = await adminClient.from('item_movement_log').insert({
+    department_id,
+    item_id,
+    quantity,
+    from_type: 'storage',
+    from_id: null,
+    to_type: reason,
+    to_id: null,
+    moved_by: ctx.user_id,
+    reason,
+  })
+  if (logErr) { await logError(logErr.message, '/equipment/storage'); return { error: logErr.message } }
+
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Set Department Quantity (deliberate admin declaration) ───────────────────
+export async function setDepartmentQuantity(item_id: string, quantity: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can set department quantity.' }
+  if (quantity < 0) return { error: 'Quantity cannot be negative.' }
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
+    .from('items')
+    .update({ department_quantity: quantity })
+    .eq('id', item_id)
+  if (error) { await logError(error.message, '/equipment/storage'); return { error: error.message } }
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Set Storage PAR ──────────────────────────────────────────────────────────
+export async function setStoragePar(item_id: string, par_quantity: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can set storage PAR.' }
+  if (par_quantity < 0) return { error: 'PAR cannot be negative.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+  const { data: existing } = await adminClient
+    .from('department_item_storage')
+    .select('id')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  if (existing?.[0]) {
+    const { error } = await adminClient
+      .from('department_item_storage')
+      .update({ par_quantity, updated_at: new Date().toISOString() })
+      .eq('id', existing[0].id)
+    if (error) { await logError(error.message, '/equipment/storage'); return { error: error.message } }
+  } else {
+    const { error } = await adminClient
+      .from('department_item_storage')
+      .insert({ department_id, item_id, quantity: 0, par_quantity })
+    if (error) { await logError(error.message, '/equipment/storage'); return { error: error.message } }
+  }
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Get Suggested Department Quantity ───────────────────────────────────────
+export async function getSuggestedDepartmentQuantity(item_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Not authorized.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+
+  const { data: standards } = await adminClient
+    .from('item_location_standards')
+    .select('expected_quantity')
+    .eq('item_id', item_id)
+    .eq('active', true)
+  const compartmentTotal = standards?.reduce((sum, s) => sum + (s.expected_quantity ?? 0), 0) ?? 0
+
+  const { data: storageList } = await adminClient
+    .from('department_item_storage')
+    .select('par_quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  const storagePar = storageList?.[0]?.par_quantity ?? 0
+
+  return { success: true, suggested: compartmentTotal + storagePar }
 }

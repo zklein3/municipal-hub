@@ -75,11 +75,22 @@ export default async function EquipmentPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Equipment</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Select an apparatus to view its equipment</p>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <Link href="/equipment/storage"
+          className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 hover:border-red-300 hover:shadow-md transition-all group">
+          <div>
+            <p className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Inventory Storage</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Unassigned pool · department totals · PAR levels</p>
+          </div>
+          <span className="text-xs font-semibold text-red-600 group-hover:text-red-800">View →</span>
+        </Link>
       </div>
 
       {apparatus.length === 0 ? (
