@@ -197,6 +197,12 @@ export default function EquipmentDetailClient({
         >
           ← Back
         </button>
+        <Link
+          href="/equipment/storage"
+          className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+        >
+          Inventory Storage →
+        </Link>
       </div>
 
       {error && (

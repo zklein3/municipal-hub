@@ -63,9 +63,14 @@ export default function SetupFlowClient({
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Equipment</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">{department.name}</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900">Equipment</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">{department.name}</p>
+        </div>
+        <Link href="/equipment/storage" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors shadow-sm">
+          Inventory Storage →
+        </Link>
       </div>
 
       {/* Tabs — mobile: horizontal scroll, desktop: left rail */}
