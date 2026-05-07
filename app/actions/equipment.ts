@@ -276,13 +276,6 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   const ctx = await getContext()
   if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
-  const { data: standards } = await adminClient
-    .from('item_location_standards')
-    .select('expected_quantity')
-    .eq('id', location_standard_id)
-  if ((standards?.[0]?.expected_quantity ?? 0) > 0) {
-    return { error: 'Move all quantity to storage before removing this item from the compartment.' }
-  }
   const { error } = await adminClient
     .from('item_location_standards')
     .update({ active: false })
