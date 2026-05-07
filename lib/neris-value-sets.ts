@@ -694,6 +694,84 @@ export const NERIS_FIRE_CAUSE_OUT: NerisCode[] = [
   { code: 'UNABLE_TO_BE_DETERMINED', label: 'Unable to be determined' },
 ]
 
+// ─── Medical Module ───────────────────────────────────────────────────────────
+// From mod_medical.csv — type_medical_patient_care, type_medical_patient_status, type_medical_transport
+
+export const NERIS_PATIENT_EVALUATION_CARE: NerisCode[] = [
+  { code: 'PATIENT_EVALUATED_CARE_PROVIDED', label: 'Patient evaluated — care provided' },
+  { code: 'PATIENT_EVALUATED_REFUSED_CARE', label: 'Patient evaluated — refused care' },
+  { code: 'PATIENT_EVALUATED_NO_CARE_REQUIRED', label: 'Patient evaluated — no care required' },
+  { code: 'PATIENT_REFUSED_EVALUATION_CARE', label: 'Patient refused evaluation / care' },
+  { code: 'PATIENT_SUPPORT_SERVICES_PROVIDED', label: 'Patient support services provided' },
+]
+
+export const NERIS_PATIENT_IMPROVED_STATUS: NerisCode[] = [
+  { code: 'IMPROVED', label: 'Improved' },
+  { code: 'UNCHANGED', label: 'Unchanged' },
+  { code: 'WORSE', label: 'Worse' },
+]
+
+export const NERIS_MEDICAL_DISPOSITION: NerisCode[] = [
+  { code: 'TRANSPORTED_ALS', label: 'Transported — ALS' },
+  { code: 'TRANSPORTED_BLS', label: 'Transported — BLS' },
+  { code: 'TRANSPORTED_AIR', label: 'Transported — Air Medical' },
+  { code: 'TREATED_RELEASED', label: 'Treated on scene — released' },
+  { code: 'TREATED_TRANSFERRED', label: 'Treated on scene — transferred to EMS' },
+  { code: 'REFUSED_TRANSPORT', label: 'Refused transport / AMA' },
+  { code: 'NO_TREATMENT_REQUIRED', label: 'No treatment required' },
+  { code: 'DECEASED_PRIOR', label: 'Deceased prior to arrival' },
+  { code: 'DECEASED_ON_SCENE', label: 'Deceased on scene' },
+]
+
+// ─── Hazmat Module ────────────────────────────────────────────────────────────
+// From mod_hazard.csv — type_hazard_disposition, type_hazard_dot
+
+export const NERIS_HAZSIT_DISPOSITION: NerisCode[] = [
+  { code: 'CONTROLLED', label: 'Controlled — hazard mitigated' },
+  { code: 'NOT_CONTROLLED', label: 'Not controlled — ongoing hazard' },
+  { code: 'MONITORED', label: 'Monitored — no active mitigation needed' },
+  { code: 'REFERRED', label: 'Referred to another agency' },
+  { code: 'NO_HAZARD_FOUND', label: 'No hazard found' },
+]
+
+export const NERIS_DOT_HAZARD_CLASS: NerisCode[] = [
+  { code: 'CLASS_1', label: 'Class 1 — Explosives' },
+  { code: 'CLASS_2', label: 'Class 2 — Gases' },
+  { code: 'CLASS_3', label: 'Class 3 — Flammable Liquids' },
+  { code: 'CLASS_4', label: 'Class 4 — Flammable Solids' },
+  { code: 'CLASS_5', label: 'Class 5 — Oxidizers / Organic Peroxides' },
+  { code: 'CLASS_6', label: 'Class 6 — Toxic / Infectious Materials' },
+  { code: 'CLASS_7', label: 'Class 7 — Radioactive Materials' },
+  { code: 'CLASS_8', label: 'Class 8 — Corrosives' },
+  { code: 'CLASS_9', label: 'Class 9 — Miscellaneous Hazardous Materials' },
+  { code: 'NOT_REGULATED', label: 'Not DOT regulated' },
+]
+
+// ─── Rescue Module ────────────────────────────────────────────────────────────
+// From mod_rescue_nonff.csv — type_rescue, type_casualty, type_casualty_cause
+
+export const NERIS_RESCUE_TYPE: NerisCode[] = [
+  { code: 'FIREFIGHTER_RESCUED', label: 'Firefighter rescued by crew' },
+  { code: 'FIREFIGHTER_ASSISTED_EVACUATION', label: 'Firefighter-assisted evacuation' },
+  { code: 'SELF_EVACUATED', label: 'Occupant self-evacuated' },
+  { code: 'NO_RESCUE', label: 'No rescue required' },
+]
+
+export const NERIS_CASUALTY_TYPE: NerisCode[] = [
+  { code: 'UNINJURED', label: 'Uninjured' },
+  { code: 'INJURED_NONFATALLY', label: 'Injured — nonfatally' },
+  { code: 'INJURED_FATALLY', label: 'Injured — fatally' },
+]
+
+export const NERIS_CASUALTY_CAUSE: NerisCode[] = [
+  { code: 'BURNS', label: 'Burns' },
+  { code: 'SMOKE_INHALATION', label: 'Smoke inhalation' },
+  { code: 'TRAUMA', label: 'Trauma' },
+  { code: 'CARDIAC', label: 'Cardiac event' },
+  { code: 'FALL', label: 'Fall' },
+  { code: 'OTHER', label: 'Other' },
+]
+
 // ─── Aid Type ─────────────────────────────────────────────────────────────────
 export const NERIS_AID_TYPE: NerisCode[] = [
   { code: 'SUPPORT_AID', label: 'Support aid — assisting the primary entity' },

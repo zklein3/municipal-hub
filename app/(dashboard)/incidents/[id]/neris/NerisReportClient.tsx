@@ -7,7 +7,6 @@ import NerisCombobox from '@/components/NerisCombobox'
 import {
   NERIS_INCIDENT_TYPES,
   getFilteredIncidentTypes,
-  getIncidentTypeLabel,
   NERIS_PROPERTY_USE,
   NERIS_ACTIONS_TAKEN,
   NERIS_RESPONSE_MODE,
@@ -18,6 +17,14 @@ import {
   NERIS_FIRE_CAUSE_OUT,
   NERIS_AID_TYPE,
   NERIS_AID_DIRECTION,
+  NERIS_PATIENT_EVALUATION_CARE,
+  NERIS_PATIENT_IMPROVED_STATUS,
+  NERIS_MEDICAL_DISPOSITION,
+  NERIS_HAZSIT_DISPOSITION,
+  NERIS_DOT_HAZARD_CLASS,
+  NERIS_RESCUE_TYPE,
+  NERIS_CASUALTY_TYPE,
+  NERIS_CASUALTY_CAUSE,
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
 
@@ -66,12 +73,16 @@ export default function NerisReportClient({
   const router = useRouter()
   const isSubmitted = nerisRecord?.neris_status === 'submitted'
 
-  // Testing mode — shows all sections regardless of incident type
+  // Testing mode (admin only) — forces all sections visible
   const [testingMode, setTestingMode] = useState(false)
 
-  const isFireType = testingMode || incident.incident_type === 'fire'
-  const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
-  const hasMutualAid = testingMode || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
+  const coverType = incident.incident_type
+  const isFireType     = testingMode || coverType === 'fire'
+  const isMedicalType  = testingMode || coverType === 'rescue'
+  const isHazmatType   = testingMode || coverType === 'special'
+  const isRescueType   = testingMode || coverType === 'rescue'
+  const isOutsideFire  = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
+  const hasMutualAid   = testingMode || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -103,6 +114,30 @@ export default function NerisReportClient({
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
 
+  // Medical module
+  const [patientCount, setPatientCount] = useState<string>(
+    nerisRecord?.patient_count != null ? String(nerisRecord.patient_count) : ''
+  )
+  const [patientEvalCare, setPatientEvalCare] = useState<string>(nerisRecord?.patient_evaluation_care ?? '')
+  const [patientStatus, setPatientStatus] = useState<string>(nerisRecord?.patient_improved_status ?? '')
+  const [medicalDisposition, setMedicalDisposition] = useState<string>(nerisRecord?.medical_disposition ?? '')
+
+  // Hazmat module
+  const [hazsitDisposition, setHazsitDisposition] = useState<string>(nerisRecord?.hazsit_disposition ?? '')
+  const [hazsitEvacuated, setHazsitEvacuated] = useState<string>(
+    nerisRecord?.hazsit_evacuated != null ? String(nerisRecord.hazsit_evacuated) : ''
+  )
+  const [chemicalName, setChemicalName] = useState<string>(nerisRecord?.chemical_name ?? '')
+  const [chemicalDotClass, setChemicalDotClass] = useState<string>(nerisRecord?.chemical_dot_class ?? '')
+  const [chemicalReleaseOccurred, setChemicalReleaseOccurred] = useState<boolean>(
+    nerisRecord?.chemical_release_occurred ?? false
+  )
+
+  // Rescue module
+  const [rescueType, setRescueType] = useState<string>(nerisRecord?.rescue_type ?? '')
+  const [casualtyType, setCasualtyType] = useState<string>(nerisRecord?.casualty_type ?? '')
+  const [casualtyCause, setCasualtyCause] = useState<string>(nerisRecord?.casualty_cause ?? '')
+
   // Response modes per apparatus
   const [responseModes, setResponseModes] = useState<Record<string, string>>(
     Object.fromEntries(incidentApparatus.map(a => [a.id, a.response_mode ?? '']))
@@ -127,6 +162,18 @@ export default function NerisReportClient({
       fire_cause_code: fireCauseCode || null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
+      patient_count: patientCount !== '' ? parseInt(patientCount) : null,
+      patient_evaluation_care: patientEvalCare || null,
+      patient_improved_status: patientStatus || null,
+      medical_disposition: medicalDisposition || null,
+      hazsit_disposition: hazsitDisposition || null,
+      hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
+      chemical_name: chemicalName || null,
+      chemical_dot_class: chemicalDotClass || null,
+      chemical_release_occurred: chemicalReleaseOccurred,
+      rescue_type: rescueType || null,
+      casualty_type: casualtyType || null,
+      casualty_cause: casualtyCause || null,
     })
     if (result?.error) { setError(result.error); setLoading(false); return }
     setSaved(true)
@@ -176,22 +223,24 @@ export default function NerisReportClient({
         </button>
       </div>
 
-      {/* Testing mode banner */}
-      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-amber-800">Testing Mode</p>
-          <p className="text-xs text-amber-600">Show all form sections regardless of incident type — toggle off for adaptive behavior.</p>
+      {/* Testing mode banner — admin only */}
+      {isAdmin && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Testing Mode <span className="text-xs font-normal">(admin only)</span></p>
+            <p className="text-xs text-amber-600">Show all modules regardless of incident type — toggle off for adaptive behavior.</p>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={testingMode}
+              onChange={e => setTestingMode(e.target.checked)}
+              className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
+            />
+            <span className="text-sm font-semibold text-amber-800">Show All</span>
+          </label>
         </div>
-        <label className="flex items-center gap-2 cursor-pointer shrink-0">
-          <input
-            type="checkbox"
-            checked={testingMode}
-            onChange={e => setTestingMode(e.target.checked)}
-            className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
-          />
-          <span className="text-sm font-semibold text-amber-800">Show All</span>
-        </label>
-      </div>
+      )}
 
       {/* Cover sheet reference */}
       <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-5 space-y-3 mb-4">
@@ -497,6 +546,149 @@ export default function NerisReportClient({
                 </div>
               </div>
             )}
+          </section>
+        )}
+
+        {/* Medical Module */}
+        {isMedicalType && (
+          <section className={sectionCls}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Medical Module</h2>
+              {testingMode && coverType !== 'rescue' && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a rescue/medical incident</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Patient Count</label>
+                <input
+                  type="number" min={0} value={patientCount}
+                  onChange={e => setPatientCount(e.target.value)}
+                  disabled={isSubmitted} placeholder="0" className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Patient Status After Intervention</label>
+                <NerisCombobox
+                  groups={toGroups(NERIS_PATIENT_IMPROVED_STATUS, 'Patient Status')}
+                  value={patientStatus} onChange={setPatientStatus}
+                  placeholder="Select status…" disabled={isSubmitted}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Patient Evaluation / Care</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_PATIENT_EVALUATION_CARE, 'Evaluation / Care')}
+                value={patientEvalCare} onChange={setPatientEvalCare}
+                placeholder="Select evaluation / care status…" disabled={isSubmitted}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Medical Disposition</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_MEDICAL_DISPOSITION, 'Medical Disposition')}
+                value={medicalDisposition} onChange={setMedicalDisposition}
+                placeholder="Select transport / disposition outcome…" disabled={isSubmitted}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Rescue Module */}
+        {isRescueType && (
+          <section className={sectionCls}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Rescue Module</h2>
+              {testingMode && coverType !== 'rescue' && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a rescue incident</span>
+              )}
+            </div>
+            <div>
+              <label className={labelCls}>Rescue Type</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_RESCUE_TYPE, 'Rescue Type')}
+                value={rescueType} onChange={setRescueType}
+                placeholder="Select rescue type…" disabled={isSubmitted}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Casualty Type</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_CASUALTY_TYPE, 'Casualty Type')}
+                value={casualtyType} onChange={setCasualtyType}
+                placeholder="Select casualty type…" disabled={isSubmitted}
+              />
+            </div>
+            {casualtyType && casualtyType !== 'UNINJURED' && (
+              <div>
+                <label className={labelCls}>Casualty Cause</label>
+                <NerisCombobox
+                  groups={toGroups(NERIS_CASUALTY_CAUSE, 'Casualty Cause')}
+                  value={casualtyCause} onChange={setCasualtyCause}
+                  placeholder="Select cause of injury…" disabled={isSubmitted}
+                />
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Hazmat Module */}
+        {isHazmatType && (
+          <section className={sectionCls}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Hazmat Module</h2>
+              {testingMode && coverType !== 'special' && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a hazmat incident</span>
+              )}
+            </div>
+            <div>
+              <label className={labelCls}>Hazmat Disposition</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_HAZSIT_DISPOSITION, 'Hazmat Disposition')}
+                value={hazsitDisposition} onChange={setHazsitDisposition}
+                placeholder="Select hazmat outcome…" disabled={isSubmitted}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Number Evacuated</label>
+                <input
+                  type="number" min={0} value={hazsitEvacuated}
+                  onChange={e => setHazsitEvacuated(e.target.value)}
+                  disabled={isSubmitted} placeholder="0" className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Chemical Name</label>
+                <input
+                  type="text" value={chemicalName}
+                  onChange={e => setChemicalName(e.target.value)}
+                  disabled={isSubmitted} placeholder="e.g. Natural Gas, Propane"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>DOT Hazard Class</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_DOT_HAZARD_CLASS, 'DOT Hazard Class')}
+                value={chemicalDotClass} onChange={setChemicalDotClass}
+                placeholder="Select DOT hazard classification…" disabled={isSubmitted}
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={chemicalReleaseOccurred}
+                  onChange={e => setChemicalReleaseOccurred(e.target.checked)}
+                  disabled={isSubmitted}
+                  className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                />
+                <span className="text-sm font-medium text-zinc-700">Chemical release occurred</span>
+              </label>
+            </div>
           </section>
         )}
 

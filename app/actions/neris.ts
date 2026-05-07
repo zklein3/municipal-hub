@@ -71,6 +71,21 @@ export async function saveNerisReport(incident_id: string, data: {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
+  // Medical module
+  patient_count?: number | null
+  patient_evaluation_care?: string | null
+  patient_improved_status?: string | null
+  medical_disposition?: string | null
+  // Hazmat module
+  hazsit_disposition?: string | null
+  hazsit_evacuated?: number | null
+  chemical_name?: string | null
+  chemical_dot_class?: string | null
+  chemical_release_occurred?: boolean | null
+  // Rescue module
+  rescue_type?: string | null
+  casualty_type?: string | null
+  casualty_cause?: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can save NERIS reports.' }
