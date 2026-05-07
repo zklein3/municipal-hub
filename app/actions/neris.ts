@@ -141,6 +141,21 @@ export async function saveApparatusResponseMode(apparatus_incident_id: string, r
   return { success: true }
 }
 
+// ─── Reopen report for editing ───────────────────────────────────────────────
+export async function reopenNerisReport(incident_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can reopen NERIS reports.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('incident_neris')
+    .update({ completed_by: null, completed_at: null, updated_at: new Date().toISOString() })
+    .eq('incident_id', incident_id)
+  if (dbErr) { await logError(dbErr.message, '/incidents/neris'); return { error: dbErr.message } }
+  revalidatePath(`/incidents/${incident_id}`)
+  revalidatePath(`/incidents/${incident_id}/neris`)
+  return { success: true }
+}
+
 // ─── Mark report complete ─────────────────────────────────────────────────────
 export async function markNerisComplete(incident_id: string) {
   const ctx = await getContext()

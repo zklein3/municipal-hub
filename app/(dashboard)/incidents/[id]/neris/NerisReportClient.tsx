@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveNerisReport, saveApparatusResponseMode } from '@/app/actions/neris'
+import { saveNerisReport, saveApparatusResponseMode, markNerisComplete, reopenNerisReport } from '@/app/actions/neris'
 import NerisCombobox from '@/components/NerisCombobox'
 import {
   NERIS_INCIDENT_TYPES,
@@ -63,6 +63,7 @@ export default function NerisReportClient({
   nerisRecord,
   mutualAidRows,
   isAdmin,
+  isOfficerOrAbove,
 }: {
   incident: any
   fireDetails: any
@@ -71,6 +72,7 @@ export default function NerisReportClient({
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
   isAdmin: boolean
+  isOfficerOrAbove: boolean
 }) {
   const router = useRouter()
   const isSubmitted = nerisRecord?.neris_status === 'submitted'
@@ -715,16 +717,76 @@ export default function NerisReportClient({
           </section>
         )}
 
-        {/* Save */}
+        {/* Save / Mark Ready */}
         {!isSubmitted && (
-          <div className="flex gap-3 pb-8">
+          <div className="flex flex-wrap gap-3 pb-8">
             <button
               type="submit"
               disabled={loading}
               className="rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Saving…' : 'Save NERIS Report'}
+              {loading ? 'Saving…' : 'Save'}
             </button>
+            {isOfficerOrAbove && nerisRecord && !nerisRecord.completed_at && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true)
+                  setError(null)
+                  // Save current state first, then mark complete
+                  const saveResult = await saveNerisReport(incident.id, {
+                    neris_incident_type: nerisType || null,
+                    property_use: propertyUse || null,
+                    actions_taken: actionsTaken,
+                    displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
+                    fire_condition_arrival: fireCondition || null,
+                    building_damage: buildingDamage || null,
+                    suppression_appliance: suppressionAppliances,
+                    floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
+                    room_of_origin: roomOfOrigin || null,
+                    fire_cause_code: fireCauseCode || null,
+                    aid_type: aidType || null,
+                    aid_direction: aidDirection || null,
+                    patient_count: patientCount !== '' ? parseInt(patientCount) : null,
+                    patient_evaluation_care: patientEvalCare || null,
+                    patient_improved_status: patientStatus || null,
+                    medical_disposition: medicalDisposition || null,
+                    hazsit_disposition: hazsitDisposition || null,
+                    hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
+                    chemical_name: chemicalName || null,
+                    chemical_dot_class: chemicalDotClass || null,
+                    chemical_release_occurred: chemicalReleaseOccurred,
+                    rescue_type: rescueType || null,
+                    casualty_type: casualtyType || null,
+                    casualty_cause: casualtyCause || null,
+                  })
+                  if (saveResult?.error) { setError(saveResult.error); setLoading(false); return }
+                  const markResult = await markNerisComplete(incident.id)
+                  if (markResult?.error) { setError(markResult.error); setLoading(false); return }
+                  router.refresh()
+                  setLoading(false)
+                }}
+                className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Saving…' : 'Mark Ready to Submit'}
+              </button>
+            )}
+            {nerisRecord?.completed_at && !isSubmitted && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true)
+                  await reopenNerisReport(incident.id)
+                  router.refresh()
+                  setLoading(false)
+                }}
+                className="rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 transition-colors"
+              >
+                Reopen for Editing
+              </button>
+            )}
             <button
               type="button"
               onClick={() => router.push(`/incidents/${incident.id}`)}

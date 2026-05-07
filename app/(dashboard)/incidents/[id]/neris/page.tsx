@@ -102,6 +102,7 @@ export default async function NerisReportPage({
         nerisRecord={nerisRecord ?? null}
         mutualAidRows={mutualAidRows ?? []}
         isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
+        isOfficerOrAbove={isOfficerOrAbove}
       />
     </div>
   )
