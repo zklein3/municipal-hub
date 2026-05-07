@@ -183,6 +183,7 @@ export default async function CompartmentPage({
       tracks_assets: item?.tracks_assets ?? false,
       requires_inspection: item?.requires_inspection ?? false,
       expected_quantity: ls.expected_quantity,
+      minimum_quantity: ls.minimum_quantity ?? null,
       assets: assetsByItem[ls.item_id] ?? [],
     }
   })

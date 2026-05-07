@@ -239,9 +239,11 @@ export async function assignItemToCompartment(formData: FormData) {
   const apparatus_compartment_id = formData.get('apparatus_compartment_id') as string
   const item_id = formData.get('item_id') as string
   const expected_quantity = formData.get('expected_quantity') as string
+  const minimum_quantity = formData.get('minimum_quantity') as string
   const notes = formData.get('notes') as string
   if (!apparatus_compartment_id || !item_id) return { error: 'Compartment and item are required.' }
   if (!expected_quantity || parseInt(expected_quantity) < 1) return { error: 'Expected quantity must be at least 1.' }
+  const minQty = minimum_quantity ? parseInt(minimum_quantity) : null
   const { data: existing } = await adminClient
     .from('item_location_standards').select('id, active')
     .eq('apparatus_compartment_id', apparatus_compartment_id).eq('item_id', item_id)
@@ -252,6 +254,7 @@ export async function assignItemToCompartment(formData: FormData) {
       .from('item_location_standards')
       .update({
         expected_quantity: parseInt(expected_quantity),
+        minimum_quantity: minQty,
         notes: notes || null,
         active: true,
       })
@@ -264,6 +267,7 @@ export async function assignItemToCompartment(formData: FormData) {
   const { error } = await adminClient.from('item_location_standards').insert({
     apparatus_compartment_id, item_id,
     expected_quantity: parseInt(expected_quantity),
+    minimum_quantity: minQty,
     notes: notes || null, active: true,
   })
   if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
@@ -287,15 +291,17 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   return { success: true }
 }
 
-// ─── Update Item Expected Quantity ────────────────────────────────────────────
-export async function updateItemQuantity(location_standard_id: string, expected_quantity: number) {
+// ─── Update Item Expected Quantity + Minimum ─────────────────────────────────
+export async function updateItemQuantity(location_standard_id: string, expected_quantity: number, minimum_quantity?: number | null) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can update quantities.' }
   if (!expected_quantity || expected_quantity < 1) return { error: 'Quantity must be at least 1.' }
   const adminClient = createAdminClient()
+  const update: Record<string, unknown> = { expected_quantity }
+  if (minimum_quantity !== undefined) update.minimum_quantity = minimum_quantity && minimum_quantity > 0 ? minimum_quantity : null
   const { error } = await adminClient
     .from('item_location_standards')
-    .update({ expected_quantity })
+    .update(update)
     .eq('id', location_standard_id)
   if (error) { await logError(error.message, '/equipment'); return { error: error.message } }
   revalidatePath('/equipment')

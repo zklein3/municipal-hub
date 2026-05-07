@@ -85,12 +85,14 @@ export default function EquipmentDetailClient({
   const [assigningTo, setAssigningTo] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState('')
   const [quantity, setQuantity] = useState('1')
+  const [minQty, setMinQty] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Edit quantity state: location_standard_id -> draft value
+  // Edit quantity state
   const [editingQty, setEditingQty] = useState<string | null>(null)
   const [qtyDraft, setQtyDraft] = useState('')
+  const [minDraft, setMinDraft] = useState('')
 
   // Move modal state
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null)
@@ -113,6 +115,7 @@ export default function EquipmentDetailClient({
     formData.set('apparatus_compartment_id', compartmentId)
     formData.set('item_id', selectedItem)
     formData.set('expected_quantity', quantity)
+    if (minQty) formData.set('minimum_quantity', minQty)
     const result = await assignItemToCompartment(formData)
     if (result?.error) setError(result.error)
     else {
@@ -128,7 +131,8 @@ export default function EquipmentDetailClient({
     if (!qty || qty < 1) return
     setError(null)
     setLoading(true)
-    const result = await updateItemQuantity(locationId, qty)
+    const min = minDraft !== '' ? parseInt(minDraft) : undefined
+    const result = await updateItemQuantity(locationId, qty, min)
     if (result?.error) setError(result.error)
     else setEditingQty(null)
     setLoading(false)
@@ -283,6 +287,16 @@ export default function EquipmentDetailClient({
                         placeholder="Qty"
                       />
                     </div>
+                    <div className="w-20">
+                      <input
+                        type="number"
+                        min="0"
+                        value={minQty}
+                        onChange={e => setMinQty(e.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        placeholder="Min"
+                      />
+                    </div>
                     <button
                       onClick={() => handleAssign(c.id)}
                       disabled={!selectedItem || loading}
@@ -302,10 +316,13 @@ export default function EquipmentDetailClient({
                   {c.items.map(item => (
                     <div key={item.id} className="flex items-center px-5 py-3">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium text-zinc-900">{item.item_name}</p>
                           {item.requires_inspection && (
                             <span className="text-xs rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5">Inspection</span>
+                          )}
+                          {item.minimum_quantity != null && item.expected_quantity < item.minimum_quantity && (
+                            <span className="text-xs rounded-full bg-red-100 text-red-700 px-2 py-0.5">⚠ Below Min</span>
                           )}
                         </div>
                         <p className="text-xs text-zinc-400">{item.category_name}</p>
@@ -313,27 +330,40 @@ export default function EquipmentDetailClient({
                       <div className="flex items-center gap-4">
                         {isOfficerOrAbove && editingQty === item.id ? (
                           <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="1"
-                              value={qtyDraft}
-                              onChange={e => setQtyDraft(e.target.value)}
-                              className="w-16 rounded-lg border border-zinc-300 px-2 py-1 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                              autoFocus
-                            />
-                            <button
-                              onClick={() => handleUpdateQty(item.id)}
-                              disabled={loading || !qtyDraft || parseInt(qtyDraft) < 1}
-                              className="text-xs font-semibold text-green-700 hover:text-green-900 disabled:opacity-50"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingQty(null)}
-                              className="text-xs text-zinc-400 hover:text-zinc-600"
-                            >
-                              Cancel
-                            </button>
+                            <div className="flex flex-col gap-1">
+                              <input
+                                type="number"
+                                min="1"
+                                value={qtyDraft}
+                                onChange={e => setQtyDraft(e.target.value)}
+                                className="w-16 rounded-lg border border-zinc-300 px-2 py-1 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                                placeholder="Qty"
+                                autoFocus
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={minDraft}
+                                onChange={e => setMinDraft(e.target.value)}
+                                className="w-16 rounded-lg border border-zinc-300 px-2 py-1 text-sm text-center focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                placeholder="Min"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => handleUpdateQty(item.id)}
+                                disabled={loading || !qtyDraft || parseInt(qtyDraft) < 1}
+                                className="text-xs font-semibold text-green-700 hover:text-green-900 disabled:opacity-50"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingQty(null)}
+                                className="text-xs text-zinc-400 hover:text-zinc-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div
@@ -342,11 +372,15 @@ export default function EquipmentDetailClient({
                               if (!isOfficerOrAbove) return
                               setEditingQty(item.id)
                               setQtyDraft(String(item.expected_quantity))
+                              setMinDraft(item.minimum_quantity != null ? String(item.minimum_quantity) : '')
                             }}
                             title={isOfficerOrAbove ? 'Click to edit' : undefined}
                           >
                             <p className="text-lg font-bold text-zinc-900">{item.expected_quantity}</p>
                             <p className="text-xs text-zinc-400">{item.requires_inspection ? 'assets' : 'expected'}</p>
+                            {item.minimum_quantity != null && (
+                              <p className="text-xs text-zinc-400">min {item.minimum_quantity}</p>
+                            )}
                           </div>
                         )}
                         {isOfficerOrAbove && editingQty !== item.id && (
