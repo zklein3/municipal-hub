@@ -56,15 +56,24 @@ export default async function StoragePage() {
 
   const apparatusIds = (apparatusRaw ?? []).map(a => a.id)
 
-  // Compartments flat
+  // Compartments flat (apparatus_compartments links to compartment_names for code/name)
   const { data: compartmentsRaw } = apparatusIds.length > 0
     ? await adminClient
         .from('apparatus_compartments')
-        .select('id, apparatus_id, compartment_code, compartment_name')
+        .select('id, apparatus_id, compartment_name_id')
         .in('apparatus_id', apparatusIds)
         .eq('active', true)
+    : { data: [] }
+
+  const compNameIds = [...new Set((compartmentsRaw ?? []).map(c => c.compartment_name_id).filter(Boolean) as string[])]
+  const { data: compNamesRaw } = compNameIds.length > 0
+    ? await adminClient
+        .from('compartment_names')
+        .select('id, compartment_code, compartment_name, sort_order')
+        .in('id', compNameIds)
         .order('sort_order')
     : { data: [] }
+  const compNameMap = Object.fromEntries((compNamesRaw ?? []).map(n => [n.id, n]))
 
   const compartmentIds = (compartmentsRaw ?? []).map(c => c.id)
 
@@ -90,7 +99,11 @@ export default async function StoragePage() {
     apparatus_name: a.apparatus_name,
     compartments: (compartmentsRaw ?? [])
       .filter(c => c.apparatus_id === a.id)
-      .map(c => ({ id: c.id, compartment_code: c.compartment_code, compartment_name: c.compartment_name })),
+      .sort((a, b) => ((compNameMap[a.compartment_name_id]?.sort_order ?? 999) - (compNameMap[b.compartment_name_id]?.sort_order ?? 999)))
+      .map(c => {
+        const n = compNameMap[c.compartment_name_id]
+        return { id: c.id, compartment_code: n?.compartment_code ?? '—', compartment_name: n?.compartment_name ?? null }
+      }),
   }))
 
   // Merge into storage items
