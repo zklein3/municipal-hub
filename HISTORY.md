@@ -54,6 +54,7 @@
 ## UI/UX Cleanup Backlog
 Items flagged during development — address during next cleanup pass:
 - `/dept-admin/items` page is duplicated by `/dept-admin/setup` (ItemsStep.tsx). Nav points to setup; `/dept-admin/items` only reachable via asset roster deep link and direct URL. Options: delete `/dept-admin/items` and update the asset roster link, or extract a shared component. Low urgency — admin-only, off-nav.
+- `/equipment/page.tsx` (hub index) is an orphan — equipment is now accessed via Inspections apparatus cards. Can be removed; update the asset roster link (`/dept-admin/items?tab=assets`) to point elsewhere.
 
 ---
 
