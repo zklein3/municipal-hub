@@ -36,10 +36,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDeptAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'
 
-  // Nav badge counts + dept flags
+  // Nav badge counts + dept module flags
   let announcementUnreadCount = 0
   let inboxPendingCount = 0
   let publicSiteEnabled = false
+  let moduleOperations = false
+  let moduleIso = false
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
     const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }] = await Promise.all([
@@ -51,14 +53,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       isOfficerOrAbove
         ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
         : Promise.resolve({ data: [] }),
-      isDeptAdmin
-        ? adminClient.from('departments').select('public_site_enabled').eq('id', user.department_id).single()
-        : Promise.resolve({ data: null }),
+      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso').eq('id', user.department_id).single(),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
     inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0)
     publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
+    moduleOperations = (deptFlags as any)?.module_operations ?? false
+    moduleIso = (deptFlags as any)?.module_iso ?? false
   }
 
   const navGroups: NavGroup[] = isSysAdmin ? [
@@ -82,8 +84,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       label: 'Operations',
       items: [
         { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
-        { href: '/incidents', label: 'Incidents' },
-        { href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined },
+        ...(moduleOperations ? [{ href: '/incidents', label: 'Incidents' }] : []),
+        ...(publicSiteEnabled ? [{ href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined }] : []),
       ],
     },
     { items: [{ href: '/inspections', label: 'Inspections' }] },
@@ -104,9 +106,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/dept-admin/setup', label: 'Equipment' },
     { href: '/dept-admin/personnel', label: 'Personnel' },
     { href: '/dept-admin/training', label: 'Training' },
-    { href: '/iso/hoses', label: 'Hose Inventory' },
-    { href: '/iso/hydrants', label: 'Hydrants' },
-    { href: '/iso/report', label: 'ISO Report' },
+    ...(moduleIso ? [
+      { href: '/iso/hoses', label: 'Hose Inventory' },
+      { href: '/iso/hydrants', label: 'Hydrants' },
+      { href: '/iso/report', label: 'ISO Report' },
+    ] : []),
     ...(publicSiteEnabled ? [{ href: '/dept-admin/public-inbox', label: 'Public Inbox' }] : []),
   ] : []
 

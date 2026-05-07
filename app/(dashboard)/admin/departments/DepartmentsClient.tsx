@@ -125,7 +125,13 @@ export default function DepartmentsClient({ departments }: { departments: Depart
                       {dept.active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 flex items-center gap-4">
+                    <a
+                      href={`/admin/dept/${dept.id}`}
+                      className="text-xs text-zinc-600 hover:text-zinc-900 font-medium"
+                    >
+                      Manage
+                    </a>
                     <button
                       onClick={() => handleToggle(dept.id, dept.active)}
                       className="text-xs text-red-600 hover:text-red-800 font-medium"

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveNerisReport, saveApparatusResponseMode, markNerisComplete, reopenNerisReport } from '@/app/actions/neris'
+import { saveNerisReport, saveApparatusResponseMode, markNerisComplete, reopenNerisReport, submitToNeris } from '@/app/actions/neris'
 import NerisCombobox from '@/components/NerisCombobox'
 import {
   NERIS_INCIDENT_TYPES,
@@ -770,6 +770,24 @@ export default function NerisReportClient({
                 className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Saving…' : 'Mark Ready to Submit'}
+              </button>
+            )}
+            {nerisRecord?.completed_at && !isSubmitted && isAdmin && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  if (!confirm('Submit this incident to NERIS? This cannot be undone.')) return
+                  setLoading(true)
+                  setError(null)
+                  const result = await submitToNeris(incident.id)
+                  if (result?.error) { setError(result.error); setLoading(false); return }
+                  router.refresh()
+                  setLoading(false)
+                }}
+                className="rounded-lg bg-green-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Submitting…' : 'Submit to NERIS'}
               </button>
             )}
             {nerisRecord?.completed_at && !isSubmitted && (

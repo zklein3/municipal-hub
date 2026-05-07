@@ -18,6 +18,10 @@ export default async function IncidentsPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
+  // Module gate — Bundle A required
+  const { data: deptFlags } = await adminClient.from('departments').select('module_operations').eq('id', myDept.department_id).single()
+  if (!deptFlags?.module_operations) redirect('/dashboard')
+
   const department_id = myDept.department_id
   const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
 

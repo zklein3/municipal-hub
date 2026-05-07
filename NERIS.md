@@ -101,9 +101,66 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 
 ---
 
+## Vendor Integration Architecture
+
+NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departments are the **enrollers**.
+
+### Step 1 — FireOps7 gets a Vendor Client ID (one-time)
+- Register FireOps7 as a vendor with FSRI via the helpdesk: https://neris.atlassian.net/servicedesk/customer/portals
+- **Vendor account requested — Ticket: HLPDSK-31956** (check zklein3@outlook.com for updates)
+- FSRI issues a **Client ID + Client Secret** (UUID format: `05dd2999-329b-41ec-b94d-xxxxxxxxxxxx`)
+- This is a single ID for the entire FireOps7 platform — not per-department
+
+### Compatibility Badge Requirements (must complete after receiving Client ID)
+1. Enroll with the FSRI Fire Department (test dept) — Request Enrollment for NERIS Compatibility Badge
+2. POST a valid incident from that integration connection
+3. PUT/PATCH an update to that incident using its UID
+4. POST a new station to the FSRI Fire Department
+5. POST a unit to that created station
+6. Submit compatibility check request — Request Compatibility Check
+- Software passing these steps is considered **Version 1 Data Exchange Compatible**
+
+### Station Required Fields (POST)
+- `station_id` — agency NERIS ID + "S" + 3-digit number (e.g. `[NERIS_ID]S001`)
+- `station_address_1`, `station_city`, `station_state`, `station_zip`
+- `station_point` — WGS84 coordinates (lat/lng)
+- `station_staffing` — minimum staffing at station level
+
+### Unit Required Fields (POST)
+- `station_unit_id_1` — unit's CAD designation
+- `station_unit_staffing` — minimum staffing required to dispatch
+- `station_unit_capability` — type classification (value set TBD)
+
+### Test Strategy
+- Create a dedicated NERIS test department in FireOps7 with fully NERIS-compliant data
+- Use the test API (`api-test.neris.fsri.org/v1`) to validate the full push path end-to-end before compatibility submission
+- Test flow: FireOps7 test dept → incidents/stations/units → NERIS test API → verify response → then submit against FSRI Fire Dept for badge
+- All submissions for the compatibility check target the **FSRI Fire Department** (their test dept), not a real department
+
+### Step 2 — Each department enrolls FireOps7 (per-department, done by dept admin)
+1. Dept admin logs into NERIS at https://app.neris.fsri.org
+2. Select **Enrollments** from the left menu
+3. Enter FireOps7's **Client ID** (not their NERIS ID)
+4. Select **Enroll Integration** → confirm permissions popup
+5. FireOps7 now has API access to that department's data
+
+**Permissions granted per enrollment:**
+- View, create, and modify incident data for their entity
+- View and modify entity attributes (location, stations, staffing, units)
+
+### FireOps7 implementation notes
+- Store the FireOps7 Client ID / API credentials in `.env.local` and Vercel env vars (not per-department)
+- Each department that has enrolled will be accessible via the API — scope submissions by department
+- Departments can revoke access at any time by deleting the enrollment in NERIS
+
+### Alternatives
+- **Self-report option**: Departments can get their own NERIS credentials and submit directly without a vendor. FireOps7 could support this as a fallback (store dept-level API key in `departments` table), but vendor enrollment is the cleaner long-term path.
+
+---
+
 ## Notes
 
 - NERIS ID is epoch milliseconds of incident start time (system-generated, not dept-assigned)
 - Departments keep their own internal incident number separately
 - `computed: true` fields are auto-populated by NERIS from geo/parcel data — don't need to submit those
-- API authentication details to be confirmed when ready to build
+- ResponseRack is an example of an already-enrolled vendor — same model FireOps7 will follow
