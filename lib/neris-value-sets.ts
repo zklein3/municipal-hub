@@ -336,6 +336,18 @@ export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
     ],
   },
   {
+    group: 'Scene Management',
+    codes: [
+      { code: 'TRAFFIC_CONTROL', label: 'Traffic control' },
+      { code: 'ROAD_CLOSURE', label: 'Road closure / lane blockage' },
+      { code: 'SCENE_LIGHTING', label: 'Scene lighting' },
+      { code: 'PERIMETER_ESTABLISHMENT', label: 'Perimeter establishment' },
+      { code: 'FLUID_CLEANUP', label: 'Fluid cleanup / absorbent deployment' },
+      { code: 'DEBRIS_REMOVAL', label: 'Debris removal from roadway' },
+      { code: 'SCENE_PRESERVATION', label: 'Scene preservation / documentation' },
+    ],
+  },
+  {
     group: 'Service / Standby',
     codes: [
       { code: 'STANDBY_ONLY', label: 'Standby only' },
@@ -343,6 +355,9 @@ export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
       { code: 'MUTUAL_AID_RECEIVED', label: 'Mutual aid received' },
       { code: 'INVESTIGATION', label: 'Investigation' },
       { code: 'PUBLIC_ASSIST', label: 'Public assist' },
+      { code: 'LOCK_OUT', label: 'Lock-out / entry assistance' },
+      { code: 'ANIMAL_CONTROL', label: 'Animal control' },
+      { code: 'LIFT_ASSIST', label: 'Lift assist' },
     ],
   },
 ]
