@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  createItemCategory, updateItemCategory,
+  createItemCategory, updateItemCategory, deleteItemCategory,
   createItem, updateItem,
   createAsset, updateAsset,
 } from '@/app/actions/equipment'
@@ -92,6 +92,14 @@ export default function ItemsStep({
     const result = await updateItemCategory(formData)
     if (result?.error) setError(result.error)
     else { setSuccess('Category updated.'); setEditingCatId(null) }
+    setLoading(false)
+  }
+  async function handleDeleteCategory(category_id: string) {
+    if (!confirm('Delete this category? This cannot be undone.')) return
+    clear(); setLoading(true)
+    const result = await deleteItemCategory(category_id)
+    if (result?.error) setError(result.error)
+    else setSuccess('Category deleted.')
     setLoading(false)
   }
 
@@ -317,8 +325,12 @@ export default function ItemsStep({
                         {!cat.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
                         <span className="text-xs text-zinc-400">{items.filter(i => i.category_id === cat.id && i.active).length} items</span>
                       </div>
-                      <button onClick={() => { setEditingCatId(cat.id); setShowCatForm(false); clear() }}
-                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setEditingCatId(cat.id); setShowCatForm(false); clear() }}
+                          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                        <button onClick={() => handleDeleteCategory(cat.id)}
+                          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-600 hover:border-red-200 transition-colors">Delete</button>
+                      </div>
                     </div>
                   )}
                 </div>
