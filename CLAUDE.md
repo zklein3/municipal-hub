@@ -114,7 +114,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Inventory / Equipment Storage System
+### Asset Storage + Inspection Reconciliation
 This is the next immediate build. NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials.
 
 Members can move/remove items between compartments. "Storage" (unassigned pool) is next:
@@ -122,6 +122,20 @@ Members can move/remove items between compartments. "Storage" (unassigned pool) 
 - Members can add items from storage into a compartment
 - Log all moves: who/what/from/to/timestamp
 - Restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`): do not let quantity items disappear directly from a compartment. Require moving quantity to storage first, then allow adding from storage later.
+
+Asset storage and inspection reconciliation build plan:
+- Goal: assets are assigned to an apparatus or to storage, not to compartments. Compartment standards define what item types and quantities should be present. Inspections identify which exact assets are physically present, then use that information to reconcile asset assignment with a movement audit trail.
+- Core model: quantity items use storage counts; asset-tracked items use `item_assets.apparatus_id`; `item_assets.apparatus_id = null` means storage/unassigned; assets are not assigned to compartments; compartment standards stay in `item_location_standards`.
+- Phase 1: update the inspection asset picker to group matching assets as assigned to current apparatus, assigned to another apparatus, then storage/unassigned. Show clear labels and prevent duplicate selection in the same inspection.
+- Phase 2: when a user selects an asset assigned elsewhere, prompt whether to assign it to the current apparatus. If confirmed, update `item_assets.apparatus_id`, log the move, and continue inspection.
+- Phase 3: ensure movement logs support asset moves with `department_id`, `item_id`, `asset_id`, quantity/1, from/to type + id, `moved_by`, source (`inspection_reconciliation` or `manual`), and timestamp.
+- Phase 4: at session close, compare assets assigned to the apparatus against assets selected during the session. Show assigned assets not found and default the action to move to storage.
+- Phase 5: moving an unaccounted asset to storage sets `item_assets.apparatus_id = null` and logs apparatus -> storage. If later found on another apparatus, prompt and log storage -> apparatus.
+- Phase 6: extend `/equipment/storage` to show stored/unassigned assets, apparatus-assigned assets, total active assets, and admin/officer manual move controls.
+- Phase 7: add apparatus asset summary showing expected quantity from compartment standards, assigned asset count on apparatus, and shortage/surplus indicators.
+- Phase 8: permissions stay layered. Admins create/edit/retire assets and override assignments; officers can manually move assets; members can trigger assignment changes only during inspection reconciliation.
+- Phase 9: add movement history by asset, apparatus, item type, user, and source. Separate inspection-driven moves from manual moves.
+- Phase 10: safety rules: do not assign assets to compartments, do not silently auto-reassign without confirmation, do not block inspection completion for unresolved reconciliation, preserve inspection results, and always log assignment changes.
 - No named storage locations yet — simple unassigned pool first
 
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
