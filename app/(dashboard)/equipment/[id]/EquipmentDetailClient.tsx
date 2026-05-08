@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, updateItemQuantity } from '@/app/actions/equipment'
+import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, moveQuantityToStorage, updateItemQuantity } from '@/app/actions/equipment'
 
 interface Apparatus {
   id: string
@@ -60,6 +60,8 @@ interface MoveTarget {
   locationId: string
   itemName: string
   sourceCompartmentId: string
+  expectedQuantity: number
+  canMoveToStorage: boolean
 }
 
 export default function EquipmentDetailClient({
@@ -98,6 +100,7 @@ export default function EquipmentDetailClient({
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null)
   const [moveApparatusId, setMoveApparatusId] = useState('')
   const [moveCompartmentId, setMoveCompartmentId] = useState('')
+  const [moveStorageQty, setMoveStorageQty] = useState('1')
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moveLoading, setMoveLoading] = useState(false)
 
@@ -147,9 +150,16 @@ export default function EquipmentDetailClient({
   }
 
   function openMoveModal(item: CompartmentItem, sourceCompartmentId: string) {
-    setMoveTarget({ locationId: item.id, itemName: item.item_name, sourceCompartmentId })
+    setMoveTarget({
+      locationId: item.id,
+      itemName: item.item_name,
+      sourceCompartmentId,
+      expectedQuantity: item.expected_quantity,
+      canMoveToStorage: !item.requires_inspection,
+    })
     setMoveApparatusId(apparatus.id)
     setMoveCompartmentId('')
+    setMoveStorageQty(String(item.expected_quantity))
     setMoveError(null)
   }
 
@@ -159,7 +169,25 @@ export default function EquipmentDetailClient({
     setMoveLoading(true)
     const result = await moveItemToCompartment(moveTarget.locationId, moveCompartmentId)
     if (result?.error) setMoveError(result.error)
-    else setMoveTarget(null)
+    else {
+      setMoveTarget(null)
+      router.refresh()
+    }
+    setMoveLoading(false)
+  }
+
+  async function handleMoveToStorage() {
+    if (!moveTarget) return
+    const qty = parseInt(moveStorageQty)
+    if (!qty || qty < 1 || qty > moveTarget.expectedQuantity) return
+    setMoveError(null)
+    setMoveLoading(true)
+    const result = await moveQuantityToStorage(moveTarget.locationId, qty)
+    if (result?.error) setMoveError(result.error)
+    else {
+      setMoveTarget(null)
+      router.refresh()
+    }
     setMoveLoading(false)
   }
 
@@ -429,6 +457,36 @@ export default function EquipmentDetailClient({
             {moveError && (
               <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{moveError}</div>
             )}
+
+            <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+              <p className="text-xs font-semibold text-blue-800 mb-2">Storage</p>
+              {moveTarget.canMoveToStorage ? (
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-blue-700 mb-1">
+                      Quantity (max {moveTarget.expectedQuantity})
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={moveTarget.expectedQuantity}
+                      value={moveStorageQty}
+                      onChange={e => setMoveStorageQty(e.target.value)}
+                      className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleMoveToStorage}
+                    disabled={moveLoading || !moveStorageQty || parseInt(moveStorageQty) < 1 || parseInt(moveStorageQty) > moveTarget.expectedQuantity}
+                    className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                  >
+                    Move to Storage
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-blue-700">Storage moves are currently available for quantity-tracked items only.</p>
+              )}
+            </div>
 
             <div className="flex flex-col gap-3">
               <div>
