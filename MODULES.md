@@ -9,6 +9,13 @@
 - Asset Statuses (DB exact): `IN SERVICE` | `OUT OF SERVICE` | `RETIRED`
 - ASSET_LINK step type fully removed. Do not re-introduce.
 
+### Inventory / Storage - Immediate Build
+- Build simple storage as an unassigned item pool first; no named storage locations yet.
+- Items removed from compartments should move into storage, not disappear.
+- Members should be able to add items from storage into a compartment.
+- Log all moves with user, item, source, destination, and timestamp.
+- Restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`) so quantity-tracked items must be moved to storage before removal.
+
 ### Two Check Modes
 - **Daily Check** — presence-only (`?mode=presence`). Present/missing + qty per item, no checklist. Logs to `compartment_presence_check_logs`. Available from `/inspections` → "Daily Check" or compartment page.
 - **Full Inspection** — asset-tracked items with template → N slots driven by `expected_quantity`. Each slot: pick asset → run checklist → submit separate log row.

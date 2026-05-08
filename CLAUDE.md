@@ -114,11 +114,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Equipment Storage System
+### Inventory / Equipment Storage System
+This is the next immediate build. NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials.
+
 Members can move/remove items between compartments. "Storage" (unassigned pool) is next:
 - Items removed from a compartment go to a visible unassigned pool
 - Members can add items from storage into a compartment
 - Log all moves: who/what/from/to/timestamp
+- Restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`): do not let quantity items disappear directly from a compartment. Require moving quantity to storage first, then allow adding from storage later.
 - No named storage locations yet — simple unassigned pool first
 
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
@@ -130,7 +133,7 @@ Officers need elevated access similar to admin hub but scoped to operational fun
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
 
-### Module / Feature Flag System (design ready, build next)
+### Module / Feature Flag System (design ready, after storage)
 Per-department feature flags managed by sys admin. Each dept has a checklist of enabled modules. Nav and routes respect flags. Sys admin panel gets a module toggle UI. Plan presets (e.g. "Starter", "Full") auto-check a standard set but individual overrides always available. Demo dept gets everything on.
 
 **Base (always on for all depts):**
@@ -138,7 +141,8 @@ Personnel, Apparatus, Stations, Inventory, Inspections, Events + Attendance, Tra
 
 **Bundle A — Operations**
 Incidents, Run Sheet PDF Import, Incident Reports
-- NERIS COMPLIANCE PRIORITY: If FireOps7 incidents match NERIS schema + submit via NERIS API, this eliminates double-entry for departments and becomes a flagship feature. Current form is not NERIS-compliant yet. NERIS is replacing NFIRS as national standard — most depts currently submit through state portals or separate software. Scope the NERIS field gap before building module flags.
+- NERIS BLOCKED: Do not build NERIS integration until FSRI/vendor permission and credentials are granted.
+- NERIS COMPLIANCE PRIORITY: After permission is granted, scope the NERIS field gap before building module flags around incident reporting. If FireOps7 incidents match NERIS schema and submit via the NERIS API, this eliminates double-entry for departments and becomes a flagship feature.
 
 **Bundle B — ISO / Compliance**
 ISO audit (hoses, hydrants, ISO report)

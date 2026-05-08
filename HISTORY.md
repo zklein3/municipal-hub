@@ -41,7 +41,8 @@
 - Vercel deployed + fireops7.com DNS live
 
 ## What's Not Yet Built
-- Equipment storage system — unassigned item pool, member add-from-storage, move logging. **When building:** restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`) — was removed temporarily since storage doesn't exist yet. Gate removal on quantity = 0 and require user to move quantity to storage first.
+- Immediate next build: inventory / equipment storage system. Build the unassigned item pool, member add-from-storage, move logging, and restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`) so quantity items move to storage instead of disappearing.
+- NERIS compliance/API integration is intentionally blocked until FSRI/vendor permission and credentials are granted.
 - Officer sub-menu — elevated access for officers (not yet designed)
 - Permit approval email direct to resident (blocked until fireops7.com verified in Resend, ~1 month)
 - Inspection schedule settings (daily/weekly/monthly per dept)

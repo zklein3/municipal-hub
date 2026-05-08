@@ -1,5 +1,7 @@
 # NERIS Compliance Reference
 
+**Current build status:** Blocked. Do not build NERIS compliance/API integration until FireOps7 receives FSRI/vendor permission and credentials. The immediate build focus is inventory/equipment storage.
+
 **Source:** https://github.com/ulfsri/neris-framework
 **API (Production):** https://api.neris.fsri.org/v1 — Swagger: /docs | Redoc: /redoc
 **API (Test):** https://api-test.neris.fsri.org/v1
