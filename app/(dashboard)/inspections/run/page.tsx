@@ -76,7 +76,7 @@ export default async function InspectionRunPage({
   const { data: assets } = assetItemIds.length > 0
     ? await adminClient
         .from('item_assets')
-        .select('id, item_id, asset_tag, serial_number, status')
+        .select('id, item_id, asset_tag, serial_number, status, apparatus_id')
         .eq('department_id', myDept.department_id)
         .in('item_id', assetItemIds)
         .eq('active', true)
@@ -124,6 +124,7 @@ export default async function InspectionRunPage({
         asset_tag: a.asset_tag,
         serial_number: a.serial_number,
         status: a.status,
+        apparatus_id: a.apparatus_id ?? null,
       })),
       templates: itemTemplates.map(t => ({
         id: t.id,

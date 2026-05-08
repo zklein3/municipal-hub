@@ -231,6 +231,43 @@ export async function assignAssetApparatus(asset_id: string, apparatus_id: strin
   return { success: true }
 }
 
+// ─── Move Asset to Apparatus (inspection reconciliation, all members) ─────────
+export async function moveAssetToApparatus(asset_id: string, to_apparatus_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authenticated.' }
+  const adminClient = createAdminClient()
+
+  const { data: assetList } = await adminClient
+    .from('item_assets')
+    .select('id, item_id, apparatus_id')
+    .eq('id', asset_id)
+  const asset = assetList?.[0]
+  if (!asset) return { error: 'Asset not found.' }
+
+  const { error: updateErr } = await adminClient
+    .from('item_assets')
+    .update({ apparatus_id: to_apparatus_id })
+    .eq('id', asset_id)
+  if (updateErr) { await logError(updateErr.message, '/inspections'); return { error: updateErr.message } }
+
+  await adminClient.from('item_movement_log').insert({
+    department_id: ctx.department_id,
+    item_id: asset.item_id,
+    asset_id,
+    quantity: 1,
+    from_type: asset.apparatus_id ? 'apparatus' : 'storage',
+    from_id: asset.apparatus_id ?? null,
+    to_type: 'apparatus',
+    to_id: to_apparatus_id,
+    moved_by: ctx.user_id,
+    source: 'inspection_reconciliation',
+  })
+
+  revalidatePath('/equipment/assets')
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
 // ─── Assign Item to Compartment ───────────────────────────────────────────────
 export async function assignItemToCompartment(formData: FormData) {
   const ctx = await getContext()

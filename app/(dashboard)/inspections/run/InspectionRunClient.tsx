@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitInspection } from '@/app/actions/inspections'
+import { moveAssetToApparatus } from '@/app/actions/equipment'
 
 interface Step {
   id: string
@@ -23,6 +24,7 @@ interface Asset {
   asset_tag: string
   serial_number: string | null
   status: string
+  apparatus_id: string | null
 }
 
 interface ChecklistItem {
@@ -80,6 +82,10 @@ export default function InspectionRunClient({
   const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({})
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [stepResponses, setStepResponses] = useState<Record<string, Record<string, StepResponse>>>({})
+
+  const [pendingReassign, setPendingReassign] = useState<{ locationId: string; slotIndex: number; assetId: string; assetLabel: string } | null>(null)
+  const [confirmedReassigns, setConfirmedReassigns] = useState<string[]>([])
+  const [reassigning, setReassigning] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -316,6 +322,10 @@ export default function InspectionRunClient({
                       .filter((_, i) => i !== slotIndex)
                       .filter(Boolean)
                     const availableAssets = item.assets.filter(a => !otherSelectedIds.includes(a.id))
+                    const thisAppAssets = availableAssets.filter(a => a.apparatus_id === apparatus.id)
+                    const otherAppAssets = availableAssets.filter(a => a.apparatus_id !== null && a.apparatus_id !== apparatus.id)
+                    const storageAssets = availableAssets.filter(a => a.apparatus_id === null)
+                    const isPending = pendingReassign?.locationId === item.location_standard_id && pendingReassign?.slotIndex === slotIndex
 
                     return (
                       <div key={slotIndex} className={slotIndex > 0 ? 'border-t border-zinc-100 pt-5' : ''}>
@@ -336,15 +346,77 @@ export default function InspectionRunClient({
                           ) : (
                             <select
                               value={selectedAssets[item.location_standard_id]?.[slotIndex] ?? ''}
-                              onChange={e => setAssetForSlot(item.location_standard_id, slotIndex, e.target.value)}
+                              onChange={e => {
+                                const assetId = e.target.value
+                                if (!assetId) return
+                                const picked = item.assets.find(a => a.id === assetId)
+                                if (picked?.apparatus_id && picked.apparatus_id !== apparatus.id && !confirmedReassigns.includes(assetId)) {
+                                  const label = picked.asset_tag + (picked.serial_number ? ` — S/N: ${picked.serial_number}` : '')
+                                  setPendingReassign({ locationId: item.location_standard_id, slotIndex, assetId, assetLabel: label })
+                                } else {
+                                  setAssetForSlot(item.location_standard_id, slotIndex, assetId)
+                                }
+                              }}
                               className={inputCls}>
                               <option value="">Select asset...</option>
-                              {availableAssets.map(a => (
-                                <option key={a.id} value={a.id}>
-                                  {a.asset_tag}{a.serial_number ? ` — S/N: ${a.serial_number}` : ''}
-                                </option>
-                              ))}
+                              {thisAppAssets.length > 0 && (
+                                <optgroup label="On this apparatus">
+                                  {thisAppAssets.map(a => (
+                                    <option key={a.id} value={a.id}>{a.asset_tag}{a.serial_number ? ` — S/N: ${a.serial_number}` : ''}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {otherAppAssets.length > 0 && (
+                                <optgroup label="On another apparatus">
+                                  {otherAppAssets.map(a => (
+                                    <option key={a.id} value={a.id}>{a.asset_tag}{a.serial_number ? ` — S/N: ${a.serial_number}` : ''}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {storageAssets.length > 0 && (
+                                <optgroup label="Unassigned / storage">
+                                  {storageAssets.map(a => (
+                                    <option key={a.id} value={a.id}>{a.asset_tag}{a.serial_number ? ` — S/N: ${a.serial_number}` : ''}</option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
+                          )}
+
+                          {isPending && (
+                            <div className="mt-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3">
+                              <p className="text-sm font-medium text-yellow-800 mb-1">
+                                <strong>{pendingReassign!.assetLabel}</strong> is assigned to another apparatus.
+                              </p>
+                              <p className="text-sm text-yellow-700 mb-3">
+                                Reassign to Unit {apparatus.unit_number} during this inspection?
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  disabled={reassigning}
+                                  onClick={async () => {
+                                    setReassigning(true)
+                                    const res = await moveAssetToApparatus(pendingReassign!.assetId, apparatus.id)
+                                    if (res?.error) {
+                                      setError(res.error)
+                                    } else {
+                                      setConfirmedReassigns(prev => [...prev, pendingReassign!.assetId])
+                                      setAssetForSlot(pendingReassign!.locationId, pendingReassign!.slotIndex, pendingReassign!.assetId)
+                                    }
+                                    setPendingReassign(null)
+                                    setReassigning(false)
+                                  }}
+                                  className="rounded-lg bg-yellow-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-yellow-800 disabled:opacity-50">
+                                  {reassigning ? 'Reassigning...' : 'Reassign & Select'}
+                                </button>
+                                <button
+                                  disabled={reassigning}
+                                  onClick={() => setPendingReassign(null)}
+                                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
 
