@@ -1,12 +1,5 @@
 # FireOps7 — Quick Reference (Routes, Actions, Permissions)
 
-## Current Build Priority
-- Immediate next build: inventory / equipment storage system.
-- Storage starts as a simple unassigned item pool; no named storage locations yet.
-- Members can add items from storage into compartments.
-- Moves/removals must be logged with user, item, source, destination, and timestamp.
-- NERIS compliance/API integration is blocked until FSRI/vendor permission and credentials are granted.
-
 ## App Route Structure
 
 ### Route Groups
@@ -69,9 +62,13 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 
 ---
 
-## Key Action Files
-Storage build note: restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`) so quantity-tracked items move to storage instead of disappearing.
+## Back Navigation Pattern
+- `components/BackButton.tsx` — `href` prop for explicit dest, else `router.back()`
+- Back button lives BELOW the header as a styled action row button — never inline with title
+- Single parent pages: hardcode dest (personnel → /personnel, stations → /stations, incidents → /incidents)
+- Contextual pages: pass `?from=/origin` in link, read in page, pass as `href` to BackButton
 
+## Key Action Files
 - `app/actions/auth.ts` — signIn, changePassword, signOut
 - `app/actions/personnel.ts` — updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword
 - `app/actions/apparatus.ts` — createApparatus, updateApparatus

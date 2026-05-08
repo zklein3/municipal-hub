@@ -60,16 +60,6 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - Main content: `pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8`
 - globals.css forces `color: #18181b` and `-webkit-text-fill-color` on all inputs
 
-## Error Logging
-- Table: `system_logs` (log_type: error | user_report | info)
-- `lib/logger.ts` — logError(), logEvent()
-- `notify-on-log` Edge Function → email to zklein3@gmail.com via Resend
-
-## RLS / DB Rules
-- All dept-wide queries MUST use admin client
-- Never use nested Supabase joins
-- Recursive RLS causes infinite loops
-
 ## Dynamic Route Params — CRITICAL
 ```ts
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
@@ -79,22 +69,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
   const { key } = await searchParams
 }
 ```
-
-## Equipment / Item Type Flags
-- `tracks_quantity` — count-based | `tracks_assets` — individual tracking | `requires_presence_check` — apparatus check | `requires_inspection` — has template + schedule | `tracks_expiration` — expiry date
-- Asset Statuses (DB exact values): `IN SERVICE` | `OUT OF SERVICE` | `RETIRED`
-- ASSET_LINK step type fully removed from codebase + DB. Do not re-introduce.
-
-## Back Navigation Pattern
-- `components/BackButton.tsx` — accepts optional `href` prop; uses `router.push(href)` if provided, else `router.back()`
-- Back button lives BELOW the header as a styled action row button — never inline with the title
-- Pages with single parent: hardcode destination (personnel → /personnel, stations → /stations, incidents → /incidents)
-- Contextual pages: pass `?from=/origin` in link, read in page, pass as `href` to BackButton
-
-## Nav Structure
-- **Main nav** — identical for all roles: Dashboard / Personnel / Training & Events / Operations / Inspections / Reports
-- **Dept Admin section** — admin only: Equipment / Personnel / Training / Hose Inventory / Hydrants / ISO Report
-- Operations includes Public Inbox for all (badge only shows for officers+)
 
 ## Dev Workflow
 - Start: `npm run dev` | Build: `npm run build` (always before pushing)
