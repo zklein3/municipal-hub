@@ -9,6 +9,7 @@ import {
   addIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
 } from '@/app/actions/incidents'
 import { addMutualAid, removeMutualAid } from '@/app/actions/iso'
+import { parseRunSheet, type ParsedRunSheet } from '@/app/actions/parse-run-sheet'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
@@ -77,6 +78,13 @@ export default function IncidentDetailClient({
   const [incidentType, setIncidentType] = useState(incident.incident_type)
   const [nerisReported, setNerisReported] = useState(incident.neris_reported)
 
+  // Run sheet re-import
+  const [isParsing, setIsParsing] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSuccess, setImportSuccess] = useState(false)
+  const [importedData, setImportedData] = useState<ParsedRunSheet | null>(null)
+  const [formKey, setFormKey] = useState(0)
+
   // Apparatus editing
   const [showAddApparatus, setShowAddApparatus] = useState(false)
   const [editingApparatusId, setEditingApparatusId] = useState<string | null>(null)
@@ -101,6 +109,27 @@ export default function IncidentDetailClient({
   const alreadyOnIncident = incidentPersonnel.some(p => p.personnel_id === myPersonnelId)
   const pendingPersonnel = incidentPersonnel.filter(p => p.status === 'pending')
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setIsParsing(true)
+    setImportError(null)
+    setImportSuccess(false)
+    const fd = new FormData()
+    fd.set('pdf', file)
+    const result = await parseRunSheet(fd)
+    if (result.error) {
+      setImportError(result.error)
+    } else if (result.data) {
+      setImportedData(result.data)
+      if (result.data.incident_type) setIncidentType(result.data.incident_type)
+      setImportSuccess(true)
+      setFormKey(k => k + 1)
+    }
+    setIsParsing(false)
+  }
+
   async function handleEditSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setEditError(null)
@@ -110,6 +139,8 @@ export default function IncidentDetailClient({
       const result = await updateIncident(incident.id, fd)
       if (result?.error) { setEditError(result.error); return }
       setEditing(false)
+      setImportedData(null)
+      setImportSuccess(false)
       router.refresh()
     })
   }
@@ -269,25 +300,39 @@ export default function IncidentDetailClient({
 
       {/* Edit form */}
       {editing ? (
-        <form onSubmit={handleEditSubmit} className="space-y-6">
+        <form key={formKey} onSubmit={handleEditSubmit} className="space-y-6">
           {editError && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{editError}</div>}
+
+          {/* Run sheet re-import */}
+          <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-zinc-700">Re-import from Run Sheet</p>
+              <p className="text-xs text-zinc-400">Upload an updated CFS PDF to overwrite form fields</p>
+            </div>
+            <label className={`relative cursor-pointer rounded-lg px-4 py-2 text-sm font-semibold transition-colors shrink-0 ${isParsing ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-red-700 text-white hover:bg-red-800'}`}>
+              {isParsing ? 'Reading PDF…' : 'Upload PDF'}
+              <input type="file" accept=".pdf,application/pdf" className="sr-only" onChange={handleImport} disabled={isParsing} />
+            </label>
+            {importSuccess && <p className="w-full text-xs text-green-700 font-medium">Form updated from run sheet — review and save</p>}
+            {importError && <p className="w-full text-xs text-red-600">{importError}</p>}
+          </div>
 
           <section className="rounded-xl bg-white border border-zinc-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-zinc-900">Incident Details</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Incident #</label>
-                <input name="incident_number" type="text" defaultValue={incident.incident_number ?? ''} className={inputCls} />
+                <input name="incident_number" type="text" defaultValue={importedData?.incident_number ?? incident.incident_number ?? ''} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>CAD #</label>
-                <input name="cad_number" type="text" defaultValue={incident.cad_number ?? ''} className={inputCls} />
+                <input name="cad_number" type="text" defaultValue={importedData?.cad_number ?? incident.cad_number ?? ''} className={inputCls} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Date <span className="text-red-600">*</span></label>
-                <input name="incident_date" type="date" required defaultValue={incident.incident_date} className={inputCls} />
+                <input name="incident_date" type="date" required defaultValue={importedData?.incident_date ?? incident.incident_date} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Type <span className="text-red-600">*</span></label>
@@ -328,15 +373,15 @@ export default function IncidentDetailClient({
             )}
             <div>
               <label className={labelCls}>Address</label>
-              <input name="address" type="text" defaultValue={incident.address ?? ''} className={inputCls} />
+              <input name="address" type="text" defaultValue={importedData?.address ?? incident.address ?? ''} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Disposition</label>
-              <input name="disposition" type="text" defaultValue={incident.disposition ?? ''} className={inputCls} />
+              <input name="disposition" type="text" defaultValue={importedData?.disposition ?? incident.disposition ?? ''} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Narrative</label>
-              <textarea name="narrative" rows={3} defaultValue={incident.narrative ?? ''} className={inputCls} />
+              <textarea name="narrative" rows={3} defaultValue={importedData?.narrative ?? incident.narrative ?? ''} className={inputCls} />
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="edit_neris" checked={nerisReported} onChange={e => setNerisReported(e.target.checked)} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
@@ -348,11 +393,11 @@ export default function IncidentDetailClient({
             <h2 className="text-sm font-semibold text-zinc-900">Incident Times</h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {[
-                { name: 'call_time', label: 'Call Time', val: incident.call_time },
-                { name: 'paged_at', label: 'Paged', val: incident.paged_at },
-                { name: 'first_on_scene_at', label: 'First On Scene', val: incident.first_on_scene_at },
-                { name: 'last_leaving_scene_at', label: 'Last Leaving Scene', val: incident.last_leaving_scene_at },
-                { name: 'in_service_at', label: 'In Service', val: incident.in_service_at },
+                { name: 'call_time', label: 'Call Time', val: importedData?.call_time ?? incident.call_time },
+                { name: 'paged_at', label: 'Paged', val: importedData?.paged_at ?? incident.paged_at },
+                { name: 'first_on_scene_at', label: 'First On Scene', val: importedData?.first_on_scene_at ?? incident.first_on_scene_at },
+                { name: 'last_leaving_scene_at', label: 'Last Leaving Scene', val: importedData?.last_leaving_scene_at ?? incident.last_leaving_scene_at },
+                { name: 'in_service_at', label: 'In Service', val: importedData?.in_service_at ?? incident.in_service_at },
               ].map(f => (
                 <div key={f.name}>
                   <label className={labelCls}>{f.label}</label>
@@ -384,7 +429,7 @@ export default function IncidentDetailClient({
             <button type="submit" disabled={isPending} className="rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
               {isPending ? 'Saving…' : 'Save Changes'}
             </button>
-            <button type="button" onClick={() => { setEditing(false); setEditError(null) }} className="rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
+            <button type="button" onClick={() => { setEditing(false); setEditError(null); setImportedData(null); setImportSuccess(false); setImportError(null) }} className="rounded-lg border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
               Cancel
             </button>
           </div>
