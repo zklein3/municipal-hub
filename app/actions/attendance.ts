@@ -91,6 +91,9 @@ export async function createEventSeries(formData: FormData) {
   const oneYearOut = new Date()
   oneYearOut.setFullYear(oneYearOut.getFullYear() + 1)
 
+  const generate_through_date_raw = formData.get('generate_through_date') as string
+  const generate_through_date = generate_through_date_raw || oneYearOut.toISOString().split('T')[0]
+
   const { data: series, error: seriesErr } = await adminClient.from('event_series').insert({
     department_id,
     event_type,
@@ -105,7 +108,7 @@ export async function createEventSeries(formData: FormData) {
     duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
     requires_verification,
     active: true,
-    generate_through_date: oneYearOut.toISOString().split('T')[0],
+    generate_through_date,
     created_by: ctx.me.id,
   }).select('id').single()
 
@@ -129,7 +132,7 @@ export async function createEventSeries(formData: FormData) {
       recurrence_week_of_month: recurrence_week_of_month ? parseInt(recurrence_week_of_month) : null,
       recurrence_date: recurrence_date ? parseInt(recurrence_date) : null,
       start_time: start_time || null,
-    }, today, oneYearOut)
+    }, today, new Date(generate_through_date))
 
     if (occurrences.length > 0) {
       await adminClient.from('event_instances').insert(
@@ -445,6 +448,20 @@ export async function closeEventInstance(instance_id: string) {
   revalidatePath('/reports/my-activity')
   revalidatePath('/dashboard')
   return { success: true, absent_count: absentIds.length }
+}
+
+// ─── Delete Event Instance (admin only) ───────────────────────────────────────
+export async function deleteEventInstance(instance_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can delete events.' }
+
+  const adminClient = createAdminClient()
+  await adminClient.from('event_attendance').delete().eq('instance_id', instance_id)
+  const { error } = await adminClient.from('event_instances').delete().eq('id', instance_id)
+
+  if (error) { await logError(error.message, '/events'); return { error: error.message } }
+  revalidatePath('/events')
+  return { success: true }
 }
 
 // ─── Cancel Event Instance ─────────────────────────────────────────────────────

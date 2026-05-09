@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse } from '@/app/actions/attendance'
+import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
 
 interface AttendanceRecord {
@@ -42,6 +42,7 @@ interface Event {
   recurrence_type: string
   event_date: string
   start_time: string | null
+  duration_minutes: number | null
   location: string | null
   status: string
   notes: string | null
@@ -100,6 +101,17 @@ function formatTime(timeStr: string | null) {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const hour12 = hour % 12 || 12
   return `${hour12}:${m} ${ampm}`
+}
+
+function formatEndTime(startTime: string | null, durationMinutes: number | null): string | null {
+  if (!startTime || !durationMinutes) return null
+  const [h, m] = startTime.split(':').map(Number)
+  const total = h * 60 + m + durationMinutes
+  const endH = Math.floor(total / 60) % 24
+  const endM = total % 60
+  const ampm = endH >= 12 ? 'PM' : 'AM'
+  const hour12 = endH % 12 || 12
+  return `${hour12}:${String(endM).padStart(2, '0')} ${ampm}`
 }
 
 function formatDateTime(iso: string) {
@@ -264,6 +276,16 @@ export default function EventsClient({
     setLoading(false)
   }
 
+  async function handleDelete(instance_id: string) {
+    if (!confirm('Permanently delete this event? This cannot be undone and will remove any logged attendance.')) return
+    reset()
+    setLoading(true)
+    const result = await deleteEventInstance(instance_id)
+    if (result?.error) setError(result.error)
+    else { setSuccess('Event deleted.'); router.refresh() }
+    setLoading(false)
+  }
+
   async function handleCloseEvent(instance_id: string) {
     if (!confirm('Close this event? All members with no attendance record will be marked absent.')) return
     reset()
@@ -385,7 +407,9 @@ export default function EventsClient({
                         )}
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
-                        {event.start_time && <span>🕐 {formatTime(event.start_time)}</span>}
+                        {event.start_time && (
+                          <span>🕐 {formatTime(event.start_time)}{formatEndTime(event.start_time, event.duration_minutes) ? ` – ${formatEndTime(event.start_time, event.duration_minutes)}` : ''}</span>
+                        )}
                         {event.location && <span>📍 {event.location}</span>}
                         {isOfficerOrAbove && hasPending && (
                           <span className="text-yellow-600 font-semibold">⏳ {event.pending_count} pending</span>
@@ -452,6 +476,11 @@ export default function EventsClient({
                       {isOfficerOrAbove && !cancelled && !completed && (
                         <button onClick={() => handleCancel(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
                           Cancel
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button onClick={() => handleDelete(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
+                          Delete
                         </button>
                       )}
                     </div>

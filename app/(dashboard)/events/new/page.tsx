@@ -143,6 +143,21 @@ export default function NewEventPage() {
               <p className="text-xs text-zinc-400 mt-1">Max 28 to ensure it occurs every month.</p>
             </div>
           )}
+
+          {/* Series end date — only for recurring events */}
+          {recurrenceType !== 'one_time' && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                Series Ends On <span className="text-zinc-400 font-normal">(optional — defaults to 1 year out)</span>
+              </label>
+              <input
+                name="generate_through_date"
+                type="date"
+                min={new Date().toISOString().split('T')[0]}
+                className={inputCls}
+              />
+            </div>
+          )}
         </div>
 
         {/* Verification */}

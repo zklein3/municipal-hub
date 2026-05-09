@@ -107,6 +107,13 @@ NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permiss
 - Phase 9: movement history by asset, apparatus, item type, user, and source. Separate inspection-driven from manual moves.
 - Phase 10: safety rules — no asset-to-compartment assignment, no silent auto-reassign, don't block inspection for unresolved reconciliation, always log changes.
 
+### Events — Delete + End Time (DONE ✓ 2026-05-09, feature/neris branch)
+User feedback from `/events` page (system_log IDs 16ac6509, da88add2) requested two fixes:
+- **Delete button** ✓ — Admins can permanently delete an event instance (removes attendance records too). `deleteEventInstance` added to `app/actions/attendance.ts`. Delete button visible to admins only in `EventsClient.tsx`.
+- **End time display** ✓ — Event cards now show "7:00 PM – 8:30 PM" when `start_time` + `duration_minutes` are both present. `formatEndTime` added to `EventsClient.tsx`.
+- **Series end date** ✓ — New recurring event form now has an optional "Series Ends On" date field (`generate_through_date`). Defaults to 1 year if left blank.
+Mark those system_log entries resolved when merging to main.
+
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).
 
