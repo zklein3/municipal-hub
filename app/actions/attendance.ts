@@ -162,12 +162,14 @@ export async function updateEventInstance(formData: FormData) {
   const location = formData.get('location') as string
   const notes = formData.get('notes') as string
   const status = formData.get('status') as string
+  const start_time = formData.get('start_time') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
 
   const { error } = await adminClient.from('event_instances').update({
     location: location || null,
     notes: notes || null,
     status,
+    start_time: start_time || null,
     requires_verification,
     updated_at: new Date().toISOString(),
   }).eq('id', id)
