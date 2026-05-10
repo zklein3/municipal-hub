@@ -202,10 +202,22 @@ export async function submitToNeris(incident_id: string) {
   if (!neris.neris_incident_type) return { error: 'NERIS incident type is required before submitting.' }
 
   // Fetch apparatus
-  const { data: apparatus } = await adminClient
+  let { data: apparatus, error: apparatusError } = await adminClient
     .from('incident_apparatus')
     .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', incident_id)
+  if (apparatusError) {
+    const fallback = await adminClient
+      .from('incident_apparatus')
+      .select('id, apparatus_id, role, paged_at, on_scene_at, leaving_scene_at, available_at')
+      .eq('incident_id', incident_id)
+
+    apparatus = (fallback.data ?? []).map((a: any) => ({
+      ...a,
+      response_mode: null,
+      staffing_count: null,
+    }))
+  }
   const apparatusIds = (apparatus ?? []).map((a: any) => a.apparatus_id).filter(Boolean)
   const { data: apparatusPersonnel } = apparatusIds.length > 0
     ? await adminClient

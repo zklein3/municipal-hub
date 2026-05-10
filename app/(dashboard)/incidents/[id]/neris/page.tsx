@@ -43,11 +43,27 @@ export default async function NerisReportPage({
     : { data: [] }
   const fireDetails = fireDetailsList?.[0] ?? null
 
-  // Fetch apparatus on this incident (with response_mode)
-  const { data: apparatusRaw } = await adminClient
+  // Fetch apparatus on this incident. Fall back to cover-sheet columns if the
+  // NERIS-specific columns have not been applied in Supabase yet.
+  let { data: apparatusRaw, error: apparatusError } = await adminClient
     .from('incident_apparatus')
     .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', id)
+    .order('created_at')
+
+  if (apparatusError) {
+    const fallback = await adminClient
+      .from('incident_apparatus')
+      .select('id, apparatus_id, role, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
+      .eq('incident_id', id)
+      .order('created_at')
+
+    apparatusRaw = (fallback.data ?? []).map(a => ({
+      ...a,
+      response_mode: null,
+      staffing_count: null,
+    }))
+  }
 
   const apparatusIds = (apparatusRaw ?? []).map(a => a.apparatus_id).filter(Boolean)
   const { data: apparatusNames } = apparatusIds.length > 0

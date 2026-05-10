@@ -6,4 +6,5 @@ alter table public.incident_neris
   add column if not exists no_action_reason text;
 
 alter table public.incident_apparatus
+  add column if not exists response_mode text,
   add column if not exists staffing_count integer;
