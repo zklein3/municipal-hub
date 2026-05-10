@@ -18,6 +18,10 @@ export default async function HydrantsPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
+  // Module gate — Bundle B required
+  const { data: deptFlags } = await adminClient.from('departments').select('module_iso').eq('id', myDept.department_id).single()
+  if (!deptFlags?.module_iso) redirect('/dashboard')
+
   const department_id = myDept.department_id
   const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
 

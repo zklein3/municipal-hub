@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse } from '@/app/actions/attendance'
+import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
 
 interface AttendanceRecord {
@@ -42,6 +42,7 @@ interface Event {
   recurrence_type: string
   event_date: string
   start_time: string | null
+  duration_minutes: number | null
   location: string | null
   status: string
   notes: string | null
@@ -102,6 +103,17 @@ function formatTime(timeStr: string | null) {
   return `${hour12}:${m} ${ampm}`
 }
 
+function formatEndTime(startTime: string | null, durationMinutes: number | null): string | null {
+  if (!startTime || !durationMinutes) return null
+  const [h, m] = startTime.split(':').map(Number)
+  const total = h * 60 + m + durationMinutes
+  const endH = Math.floor(total / 60) % 24
+  const endM = total % 60
+  const ampm = endH >= 12 ? 'PM' : 'AM'
+  const hour12 = endH % 12 || 12
+  return `${hour12}:${String(endM).padStart(2, '0')} ${ampm}`
+}
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
@@ -154,6 +166,14 @@ export default function EventsClient({
   // Log attendance confirmation step
   const [confirmingLogId, setConfirmingLogId] = useState<string | null>(null)
 
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editScope, setEditScope] = useState<'instance' | 'series'>('instance')
+  const [editForm, setEditForm] = useState({
+    title: '', event_type: 'meeting', description: '', location: '',
+    start_time: '', duration_minutes: '', notes: '', requires_verification: true,
+  })
+
   // Public/private toggle state per series_id
   const [publicState, setPublicState] = useState<Record<string, boolean>>(
     Object.fromEntries(events.map(e => [e.series_id, e.is_public]))
@@ -166,6 +186,54 @@ export default function EventsClient({
     const result = await toggleEventSeriesPublic(seriesId, next, departmentId)
     if (!result.error) setPublicState(prev => ({ ...prev, [seriesId]: next }))
     setTogglingSeriesId(null)
+  }
+
+  function handleEditStart(event: Event) {
+    setEditForm({
+      title: event.title,
+      event_type: event.event_type,
+      description: event.description ?? '',
+      location: event.location ?? '',
+      start_time: event.start_time ?? '',
+      duration_minutes: event.duration_minutes != null ? String(event.duration_minutes) : '',
+      notes: event.notes ?? '',
+      requires_verification: event.requires_verification,
+    })
+    setEditScope('instance')
+    setEditingId(event.id)
+    setExpandedId(event.id)
+  }
+
+  async function handleEditSave(event: Event) {
+    reset()
+    setLoading(true)
+    const fd = new FormData()
+    fd.set('requires_verification', editForm.requires_verification ? 'true' : 'false')
+
+    if (editScope === 'series' || event.recurrence_type === 'one_time') {
+      fd.set('series_id', event.series_id)
+      fd.set('from_date', event.event_date)
+      fd.set('title', editForm.title)
+      fd.set('description', editForm.description)
+      fd.set('location', editForm.location)
+      fd.set('start_time', editForm.start_time)
+      fd.set('duration_minutes', editForm.duration_minutes)
+      const result = await updateEventSeries(fd)
+      if (result?.error) { setError(result.error); setLoading(false); return }
+    } else {
+      fd.set('id', event.id)
+      fd.set('location', editForm.location)
+      fd.set('start_time', editForm.start_time)
+      fd.set('notes', editForm.notes)
+      fd.set('status', event.status)
+      const result = await updateEventInstance(fd)
+      if (result?.error) { setError(result.error); setLoading(false); return }
+    }
+
+    setEditingId(null)
+    setSuccess('Event updated.')
+    router.refresh()
+    setLoading(false)
   }
 
   function reset() { setError(null); setSuccess(null) }
@@ -261,6 +329,16 @@ export default function EventsClient({
     const result = await cancelEventInstance(instance_id)
     if (result?.error) setError(result.error)
     else { setSuccess('Event cancelled.'); router.refresh() }
+    setLoading(false)
+  }
+
+  async function handleDelete(instance_id: string) {
+    if (!confirm('Permanently delete this event? This cannot be undone and will remove any logged attendance.')) return
+    reset()
+    setLoading(true)
+    const result = await deleteEventInstance(instance_id)
+    if (result?.error) setError(result.error)
+    else { setSuccess('Event deleted.'); router.refresh() }
     setLoading(false)
   }
 
@@ -385,7 +463,9 @@ export default function EventsClient({
                         )}
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
-                        {event.start_time && <span>🕐 {formatTime(event.start_time)}</span>}
+                        {event.start_time && (
+                          <span>🕐 {formatTime(event.start_time)}{formatEndTime(event.start_time, event.duration_minutes) ? ` – ${formatEndTime(event.start_time, event.duration_minutes)}` : ''}</span>
+                        )}
                         {event.location && <span>📍 {event.location}</span>}
                         {isOfficerOrAbove && hasPending && (
                           <span className="text-yellow-600 font-semibold">⏳ {event.pending_count} pending</span>
@@ -449,9 +529,21 @@ export default function EventsClient({
                           {isExpanded ? 'Hide' : isOfficerOrAbove ? 'Manage' : 'Details'}
                         </button>
                       )}
+                      {isOfficerOrAbove && !cancelled && (
+                        <button
+                          onClick={() => editingId === event.id ? setEditingId(null) : handleEditStart(event)}
+                          className="text-xs text-zinc-400 hover:text-zinc-700">
+                          {editingId === event.id ? 'Cancel Edit' : 'Edit'}
+                        </button>
+                      )}
                       {isOfficerOrAbove && !cancelled && !completed && (
                         <button onClick={() => handleCancel(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
                           Cancel
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button onClick={() => handleDelete(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
+                          Delete
                         </button>
                       )}
                     </div>
@@ -473,6 +565,134 @@ export default function EventsClient({
 
                     {isOfficerOrAbove ? (
                       <>
+                        {/* ── INLINE EDIT FORM ─────────────────────────── */}
+                        {editingId === event.id && (
+                          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+                            <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Edit Event</p>
+
+                            {/* Scope toggle for recurring events */}
+                            {event.recurrence_type !== 'one_time' && (
+                              <div className="flex gap-2">
+                                {(['instance', 'series'] as const).map(s => (
+                                  <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => setEditScope(s)}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${editScope === s ? 'bg-blue-600 text-white' : 'bg-white border border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}>
+                                    {s === 'instance' ? 'This event only' : 'This & all future'}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Series-level fields (title, type, description, duration) */}
+                            {(editScope === 'series' || event.recurrence_type === 'one_time') && (
+                              <>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="col-span-2">
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Title</label>
+                                    <input
+                                      type="text"
+                                      value={editForm.title}
+                                      onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Type</label>
+                                    <select
+                                      value={editForm.event_type}
+                                      onChange={e => setEditForm(f => ({ ...f, event_type: e.target.value }))}
+                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                      <option value="meeting">Meeting</option>
+                                      <option value="training">Training</option>
+                                      <option value="special">Special Event</option>
+                                      <option value="incident">Incident</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Duration (min)</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={editForm.duration_minutes}
+                                      onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Description</label>
+                                    <input
+                                      type="text"
+                                      value={editForm.description}
+                                      onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
+
+                            {/* Instance-level fields (always shown) */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1">Location</label>
+                                <input
+                                  type="text"
+                                  value={editForm.location}
+                                  onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1">Start Time</label>
+                                <input
+                                  type="time"
+                                  step="60"
+                                  value={editForm.start_time}
+                                  onChange={e => setEditForm(f => ({ ...f, start_time: e.target.value }))}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              {editScope === 'instance' && event.recurrence_type !== 'one_time' && (
+                                <div className="col-span-2">
+                                  <label className="block text-xs font-medium text-zinc-700 mb-1">Notes</label>
+                                  <input
+                                    type="text"
+                                    value={editForm.notes}
+                                    onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editForm.requires_verification}
+                                onChange={e => setEditForm(f => ({ ...f, requires_verification: e.target.checked }))}
+                                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-xs text-zinc-700">Require attendance verification</span>
+                            </label>
+
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => handleEditSave(event)}
+                                disabled={loading}
+                                className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                                {loading ? 'Saving…' : 'Save Changes'}
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* ── PUBLIC SITE TOGGLE ───────────────────────── */}
                         {publicSiteEnabled && (
                           <div className="flex items-center justify-between rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5">

@@ -62,6 +62,12 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 
 ---
 
+## Back Navigation Pattern
+- `components/BackButton.tsx` — `href` prop for explicit dest, else `router.back()`
+- Back button lives BELOW the header as a styled action row button — never inline with title
+- Single parent pages: hardcode dest (personnel → /personnel, stations → /stations, incidents → /incidents)
+- Contextual pages: pass `?from=/origin` in link, read in page, pass as `href` to BackButton
+
 ## Key Action Files
 - `app/actions/auth.ts` — signIn, changePassword, signOut
 - `app/actions/personnel.ts` — updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword

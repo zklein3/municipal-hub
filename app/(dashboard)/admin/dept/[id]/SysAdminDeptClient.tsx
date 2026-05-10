@@ -7,6 +7,7 @@ import { createStation } from '@/app/actions/stations'
 import { createApparatus } from '@/app/actions/apparatus'
 import { createCompartmentName, updateCompartmentName } from '@/app/actions/compartments'
 import PublicSiteTab from './PublicSiteTab'
+import ModulesTab from './ModulesTab'
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -25,7 +26,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']
 
-type Tab = 'personnel' | 'stations' | 'apparatus' | 'compartments' | 'public_site'
+type Tab = 'personnel' | 'stations' | 'apparatus' | 'compartments' | 'public_site' | 'modules'
 
 interface Dept {
   id: string; name: string; code: string | null; active: boolean
@@ -33,6 +34,7 @@ interface Dept {
   public_phone: string | null; public_email: string | null; public_address: string | null
   public_tagline: string | null; public_about: string | null
   burn_permit_restrictions: string | null; burn_permit_county_info: string | null
+  module_operations: boolean; module_iso: boolean
 }
 interface EventSeries { id: string; title: string; event_type: string | null; is_public: boolean; active: boolean }
 interface PersonnelRecord {
@@ -110,6 +112,7 @@ export default function SysAdminDeptClient({
     { key: 'apparatus', label: 'Apparatus', count: apparatus.length },
     { key: 'compartments', label: 'Compartments', count: compartmentNames.length },
     { key: 'public_site', label: 'Public Site' },
+    { key: 'modules', label: 'Modules' },
   ]
 
   return (
@@ -557,6 +560,15 @@ export default function SysAdminDeptClient({
             burn_permit_county_info: dept.burn_permit_county_info,
           }}
           eventSeries={eventSeries}
+        />
+      )}
+
+      {tab === 'modules' && (
+        <ModulesTab
+          departmentId={departmentId}
+          moduleOperations={dept.module_operations}
+          moduleIso={dept.module_iso}
+          publicSiteEnabled={dept.public_site_enabled}
         />
       )}
     </div>

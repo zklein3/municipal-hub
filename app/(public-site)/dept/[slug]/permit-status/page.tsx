@@ -52,10 +52,18 @@ export default async function PermitStatusPage({
           <p className="text-sm text-zinc-500 mt-0.5">{dept.name}</p>
         </div>
 
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Looking for a <strong>records request</strong>? Use the{' '}
+          <Link href={`/dept/${slug}/request-status`} className="font-semibold underline hover:text-blue-600">
+            Status Center
+          </Link>{' '}
+          — it handles both burn permits and records requests.
+        </div>
+
         <form method="GET" className="rounded-xl bg-white border border-zinc-200 p-6 flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">
-              Confirmation Code <span className="text-red-500">*</span>
+              Burn Permit Confirmation Code <span className="text-red-500">*</span>
             </label>
             <input
               name="code"
@@ -65,7 +73,7 @@ export default async function PermitStatusPage({
               placeholder="e.g. A3F92B1C"
               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase tracking-widest focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
-            <p className="mt-1 text-xs text-zinc-400">This was shown on screen when you submitted your request.</p>
+            <p className="mt-1 text-xs text-zinc-400">This was shown on screen when you submitted your burn permit application.</p>
           </div>
           <button
             type="submit"
@@ -95,10 +103,18 @@ export default async function PermitStatusPage({
       </div>
 
       {!permit ? (
-        <div className="rounded-xl bg-white border border-zinc-200 p-8 text-center">
-          <p className="text-sm font-medium text-zinc-700 mb-1">No permit found</p>
-          <p className="text-xs text-zinc-400">Check your confirmation code and try again.</p>
-          <p className="text-xs font-mono text-zinc-300 mt-2">{code.toUpperCase()}</p>
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl bg-white border border-zinc-200 p-8 text-center">
+            <p className="text-sm font-medium text-zinc-700 mb-1">No burn permit found</p>
+            <p className="text-xs text-zinc-400">Check your confirmation code and try again.</p>
+            <p className="text-xs font-mono text-zinc-300 mt-2">{code.toUpperCase()}</p>
+          </div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            Have a <strong>records request</strong> code?{' '}
+            <Link href={`/dept/${slug}/request-status?q=${code.toUpperCase()}`} className="font-semibold underline hover:text-blue-600">
+              Try the Status Center →
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-4">

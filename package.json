@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "neris:smoke": "node scripts/neris-smoke-test.mjs",
     "lint": "eslint"
   },
   "dependencies": {

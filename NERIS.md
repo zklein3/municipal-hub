@@ -1,5 +1,7 @@
 # NERIS Compliance Reference
 
+**Current build status:** Partially unblocked. FireOps7 has NERIS test vendor access, but certified auth mode and enrollment are still pending FSRI confirmation. Keep API auth isolated so Basic vs OAuth is a small env/config change.
+
 **Source:** https://github.com/ulfsri/neris-framework
 **API (Production):** https://api.neris.fsri.org/v1 — Swagger: /docs | Redoc: /redoc
 **API (Test):** https://api-test.neris.fsri.org/v1
@@ -101,9 +103,108 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 
 ---
 
+## Requirements Mapping
+
+- Phase 1 mapper lives in `lib/neris-requirements.ts`
+- It evaluates FireOps7 cover sheet data, `incident_neris`, apparatus, personnel, and mutual aid rows into:
+  - active NERIS modules
+  - missing required/conditional fields
+  - blocked fields FireOps7 does not collect yet
+  - computed fields NERIS should derive
+  - local completion vs API validation readiness
+- `/incidents/[id]/neris` shows a compact read-only summary from this mapper.
+- Next phase: expand the summary into section-level checklist navigation and use FSRI validation errors to refine the rules.
+
+---
+
+## Phase 3 Data Gap Inventory
+
+| NERIS Field | Applies When | FireOps7 Source | Status | Proposed Storage |
+|---|---|---|---|---|
+| Unit staffing at dispatch | Unit response exists | Not collected per unit | Missing | `incident_apparatus.staffing_count` |
+| Outside fire acres burned | Grass, wildland, other outside fires | Not collected | Missing | `incident_neris.outside_fire_acres` |
+| No-action reason | No actions taken, cancelled, false alarm, good intent | Not collected | Missing | `incident_neris.no_action_reason` |
+| Incident latitude/longitude | Every incident if available | Address only | Partial/API-confirm-needed | Future `incidents` lat/lng fields or location table |
+| Displacement cause | Incidents with displaced persons | Displaced count only | Partial/API-confirm-needed | Future `incident_neris.displacement_cause` |
+| Medical transport details | Medical incidents | Basic disposition only | Partial/API-confirm-needed | Future medical subrecord |
+| Station/unit NERIS IDs | Compatibility and production entity sync | Not collected | Missing | Future station/apparatus NERIS columns |
+
+Phase 3 migration file: `supabase/neris_phase3_data_gaps.sql`.
+
+---
+
+## Vendor Integration Architecture
+
+NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departments are the **enrollers**.
+
+### Step 1 — FireOps7 gets a Vendor Client ID (one-time)
+- Register FireOps7 as a vendor with FSRI via the helpdesk: https://neris.atlassian.net/servicedesk/customer/portals
+- **✅ DONE — Ticket: HLPDSK-31956 (Conor Brady, FSRI)**
+- **FireOps7 Vendor ID (test): `VN03615504`** — Vendor Admin access
+- **FSRI Test Department: `FD35049607`** — use this for all dev/compatibility work
+- Welcome email sent to zklein3@outlook.com with portal login + temp password
+- After logging into https://app-test.neris.fsri.org — verify whether certified vendor auth uses HTTP Basic auth or OAuth2 client credentials
+- Store common values as: `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_USE_TEST=true`
+- If OAuth2 is required, also store: `NERIS_AUTH_MODE=oauth`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`
+- If Basic auth is approved, also store: `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD`
+- This is a single credential set for the entire FireOps7 platform — not per-department
+- Local smoke test after credentials are saved:
+  - Set `NERIS_USE_TEST=true`
+  - Run `npm run neris:smoke`
+  - Expected OAuth success: token request OK, then entity fetch OK for the FSRI test department
+  - Expected Basic success: entity fetch OK for the FSRI test department
+- Current FSRI question: Zachary asked Conor Brady whether HTTP Basic auth is acceptable for certified vendor integration or OAuth2 client credentials are required
+
+### Compatibility Badge Requirements (must complete after receiving Client ID)
+1. Enroll with the FSRI Fire Department (test dept) — Request Enrollment for NERIS Compatibility Badge
+2. POST a valid incident from that integration connection
+3. PUT/PATCH an update to that incident using its UID
+4. POST a new station to the FSRI Fire Department
+5. POST a unit to that created station
+6. Submit compatibility check request — Request Compatibility Check
+- Software passing these steps is considered **Version 1 Data Exchange Compatible**
+
+### Station Required Fields (POST)
+- `station_id` — agency NERIS ID + "S" + 3-digit number (e.g. `[NERIS_ID]S001`)
+- `station_address_1`, `station_city`, `station_state`, `station_zip`
+- `station_point` — WGS84 coordinates (lat/lng)
+- `station_staffing` — minimum staffing at station level
+
+### Unit Required Fields (POST)
+- `station_unit_id_1` — unit's CAD designation
+- `station_unit_staffing` — minimum staffing required to dispatch
+- `station_unit_capability` — type classification (value set TBD)
+
+### Test Strategy
+- Create a dedicated NERIS test department in FireOps7 with fully NERIS-compliant data
+- Use the test API (`api-test.neris.fsri.org/v1`) to validate the full push path end-to-end before compatibility submission
+- Test flow: FireOps7 test dept → incidents/stations/units → NERIS test API → verify response → then submit against FSRI Fire Dept for badge
+- All submissions for the compatibility check target the **FSRI Fire Department** (their test dept), not a real department
+
+### Step 2 — Each department enrolls FireOps7 (per-department, done by dept admin)
+1. Dept admin logs into NERIS at https://app.neris.fsri.org
+2. Select **Enrollments** from the left menu
+3. Enter FireOps7's **Client ID** (not their NERIS ID)
+4. Select **Enroll Integration** → confirm permissions popup
+5. FireOps7 now has API access to that department's data
+
+**Permissions granted per enrollment:**
+- View, create, and modify incident data for their entity
+- View and modify entity attributes (location, stations, staffing, units)
+
+### FireOps7 implementation notes
+- Store the FireOps7 Client ID / API credentials in `.env.local` and Vercel env vars (not per-department)
+- Each department that has enrolled will be accessible via the API — scope submissions by department
+- Departments can revoke access at any time by deleting the enrollment in NERIS
+
+### Alternatives
+- **Self-report option**: Departments can get their own NERIS credentials and submit directly without a vendor. FireOps7 could support this as a fallback (store dept-level API key in `departments` table), but vendor enrollment is the cleaner long-term path.
+
+---
+
 ## Notes
 
 - NERIS ID is epoch milliseconds of incident start time (system-generated, not dept-assigned)
 - Departments keep their own internal incident number separately
 - `computed: true` fields are auto-populated by NERIS from geo/parcel data — don't need to submit those
-- API authentication details to be confirmed when ready to build
+- ResponseRack is an example of an already-enrolled vendor — same model FireOps7 will follow

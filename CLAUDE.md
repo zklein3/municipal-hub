@@ -60,16 +60,6 @@ DB constraint: `pending` | `present` | `absent` | `excused` | `excused_pending`
 - Main content: `pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8`
 - globals.css forces `color: #18181b` and `-webkit-text-fill-color` on all inputs
 
-## Error Logging
-- Table: `system_logs` (log_type: error | user_report | info)
-- `lib/logger.ts` — logError(), logEvent()
-- `notify-on-log` Edge Function → email to zklein3@gmail.com via Resend
-
-## RLS / DB Rules
-- All dept-wide queries MUST use admin client
-- Never use nested Supabase joins
-- Recursive RLS causes infinite loops
-
 ## Dynamic Route Params — CRITICAL
 ```ts
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
@@ -79,22 +69,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
   const { key } = await searchParams
 }
 ```
-
-## Equipment / Item Type Flags
-- `tracks_quantity` — count-based | `tracks_assets` — individual tracking | `requires_presence_check` — apparatus check | `requires_inspection` — has template + schedule | `tracks_expiration` — expiry date
-- Asset Statuses (DB exact values): `IN SERVICE` | `OUT OF SERVICE` | `RETIRED`
-- ASSET_LINK step type fully removed from codebase + DB. Do not re-introduce.
-
-## Back Navigation Pattern
-- `components/BackButton.tsx` — accepts optional `href` prop; uses `router.push(href)` if provided, else `router.back()`
-- Back button lives BELOW the header as a styled action row button — never inline with the title
-- Pages with single parent: hardcode destination (personnel → /personnel, stations → /stations, incidents → /incidents)
-- Contextual pages: pass `?from=/origin` in link, read in page, pass as `href` to BackButton
-
-## Nav Structure
-- **Main nav** — identical for all roles: Dashboard / Personnel / Training & Events / Operations / Inspections / Reports
-- **Dept Admin section** — admin only: Equipment / Personnel / Training / Hose Inventory / Hydrants / ISO Report
-- Operations includes Public Inbox for all (badge only shows for officers+)
 
 ## Dev Workflow
 - Start: `npm run dev` | Build: `npm run build` (always before pushing)
@@ -114,12 +88,46 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Equipment Storage System
-Members can move/remove items between compartments. "Storage" (unassigned pool) is next:
-- Items removed from a compartment go to a visible unassigned pool
-- Members can add items from storage into a compartment
-- Log all moves: who/what/from/to/timestamp
-- No named storage locations yet — simple unassigned pool first
+### NERIS API Integration — Resume Here (UNBLOCKED 2026-05-10)
+Credentials received from Conor Brady (FSRI). Vendor ID: VN03615504, Test Dept: FD35049607.
+Auth confirmed: HTTP Basic auth — username `VN03615504`, password from portal. Awaiting Conor's reply on whether Basic is certified for vendor integrations or if OAuth2 is required.
+Once auth confirmed: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD` to `.env.local`, run `npm run neris:smoke`, then start compatibility badge work against FD35049607.
+
+**API Review items (flagged with TODO(api-review) in code):**
+- `app/actions/neris.ts` — Verify `patients[]` and `victims[]` payload field names against openapi.json once credentials active. Unified `incident_persons` splits into both medical and rescue sections; field names must match NERIS schema exactly.
+- Module activation: UI now mirrors `getNerisActiveModules` — sections open based on both cover type AND selected NERIS code. Verify NERIS accepts partial modules (e.g. rescue section present on a fire call if rescue code selected).
+
+### Asset Storage + Inspection Reconciliation — Resume at Phase 4
+NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials — NOW UNBLOCKED, see above.
+
+**Phases 1–3 DONE (2026-05-08, feature/neris branch):**
+- Phase 1 ✓ — Inspection asset picker groups: "On this apparatus" / "On another apparatus" / "Unassigned / storage" (optgroups in select)
+- Phase 2 ✓ — Selecting a cross-apparatus asset shows inline yellow confirmation prompt; confirm fires `moveAssetToApparatus` action
+- Phase 3 ✓ — DB migration: `asset_id` + `source` (manual | inspection_reconciliation) added to `item_movement_log`
+- Key files: `app/(dashboard)/inspections/run/InspectionRunClient.tsx`, `app/(dashboard)/inspections/run/page.tsx`, `app/actions/equipment.ts` (`moveAssetToApparatus`)
+
+**Phases 4–10 remaining — resume here:**
+- Core model: quantity items use storage counts; asset-tracked items use `item_assets.apparatus_id`; `apparatus_id = null` means storage/unassigned; assets are not assigned to compartments; compartment standards stay in `item_location_standards`.
+- Phase 4: at session close, compare assets assigned to the apparatus against assets selected during the session. Show assigned assets not found and default the action to move to storage.
+- Phase 5: moving an unaccounted asset to storage sets `item_assets.apparatus_id = null` and logs apparatus → storage.
+- Phase 6: extend `/equipment/storage` to show stored/unassigned assets, apparatus-assigned assets, total active assets, and admin/officer manual move controls.
+- Phase 7: add apparatus asset summary showing expected quantity from compartment standards, assigned asset count on apparatus, and shortage/surplus indicators.
+- Phase 8: permissions — admins create/edit/retire assets and override; officers manually move; members trigger assignment changes only during inspection reconciliation.
+- Phase 9: movement history by asset, apparatus, item type, user, and source. Separate inspection-driven from manual moves.
+- Phase 10: safety rules — no asset-to-compartment assignment, no silent auto-reassign, don't block inspection for unresolved reconciliation, always log changes.
+
+### Events — Delete + End Time (DONE ✓ 2026-05-09, feature/neris branch)
+User feedback from `/events` page (system_log IDs 16ac6509, da88add2) requested two fixes:
+- **Delete button** ✓ — Admins can permanently delete an event instance (removes attendance records too). `deleteEventInstance` added to `app/actions/attendance.ts`. Delete button visible to admins only in `EventsClient.tsx`.
+- **End time display** ✓ — Event cards now show "7:00 PM – 8:30 PM" when `start_time` + `duration_minutes` are both present. `formatEndTime` added to `EventsClient.tsx`.
+- **Series end date** ✓ — New recurring event form now has an optional "Series Ends On" date field (`generate_through_date`). Defaults to 1 year if left blank.
+Mark those system_log entries resolved when merging to main.
+
+### Status Center — Burn Permits + Records Requests Lookup
+User feedback (Brock Pierson, 2026-05-09): records request confirmation codes don't work on the burn permit status page. Need to extend the status lookup to support both burn permits and records requests, and rename the page (e.g. "Status Center" or "Status Portal"). Currently lives at `/dept/[slug]/permit-status`.
+
+### Events — Show All Special Events for Current Year
+User feedback (2026-05-09): special events should show all for the current year on the events landing page, not just the current rolling 30-day past / 60-day future window.
 
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).
@@ -130,7 +138,7 @@ Officers need elevated access similar to admin hub but scoped to operational fun
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
 
-### Module / Feature Flag System (design ready, build next)
+### Module / Feature Flag System (design ready, after storage)
 Per-department feature flags managed by sys admin. Each dept has a checklist of enabled modules. Nav and routes respect flags. Sys admin panel gets a module toggle UI. Plan presets (e.g. "Starter", "Full") auto-check a standard set but individual overrides always available. Demo dept gets everything on.
 
 **Base (always on for all depts):**
@@ -138,7 +146,8 @@ Personnel, Apparatus, Stations, Inventory, Inspections, Events + Attendance, Tra
 
 **Bundle A — Operations**
 Incidents, Run Sheet PDF Import, Incident Reports
-- NERIS COMPLIANCE PRIORITY: If FireOps7 incidents match NERIS schema + submit via NERIS API, this eliminates double-entry for departments and becomes a flagship feature. Current form is not NERIS-compliant yet. NERIS is replacing NFIRS as national standard — most depts currently submit through state portals or separate software. Scope the NERIS field gap before building module flags.
+- NERIS BLOCKED: Do not build NERIS integration until FSRI/vendor permission and credentials are granted.
+- NERIS COMPLIANCE PRIORITY: After permission is granted, scope the NERIS field gap before building module flags around incident reporting. If FireOps7 incidents match NERIS schema and submit via the NERIS API, this eliminates double-entry for departments and becomes a flagship feature.
 
 **Bundle B — ISO / Compliance**
 ISO audit (hoses, hydrants, ISO report)

@@ -772,6 +772,31 @@ export const NERIS_CASUALTY_CAUSE: NerisCode[] = [
   { code: 'OTHER', label: 'Other' },
 ]
 
+// ─── Vehicle-specific rescue fields ──────────────────────────────────────────
+// Used when incident type is a motor vehicle collision / extrication
+
+export const NERIS_VEHICLE_TYPE: NerisCode[] = [
+  { code: 'PASSENGER_CAR', label: 'Passenger car' },
+  { code: 'SUV_PICKUP', label: 'SUV / pickup truck' },
+  { code: 'VAN', label: 'Van / minivan' },
+  { code: 'MOTORCYCLE', label: 'Motorcycle / moped' },
+  { code: 'COMMERCIAL_TRUCK', label: 'Commercial truck / semi' },
+  { code: 'BUS', label: 'Bus / transit vehicle' },
+  { code: 'RV', label: 'RV / motorhome' },
+  { code: 'FARM_EQUIPMENT', label: 'Farm / off-road equipment' },
+  { code: 'OTHER', label: 'Other vehicle' },
+  { code: 'UNKNOWN', label: 'Unknown' },
+]
+
+export const NERIS_SAFETY_DEVICE: NerisCode[] = [
+  { code: 'SEATBELT', label: 'Seatbelt worn' },
+  { code: 'CHILD_RESTRAINT', label: 'Child restraint / car seat' },
+  { code: 'AIRBAG_DEPLOYED', label: 'Airbag deployed' },
+  { code: 'HELMET', label: 'Helmet worn' },
+  { code: 'NONE', label: 'None / not worn' },
+  { code: 'UNKNOWN', label: 'Unknown' },
+]
+
 // ─── Aid Type ─────────────────────────────────────────────────────────────────
 export const NERIS_AID_TYPE: NerisCode[] = [
   { code: 'SUPPORT_AID', label: 'Support aid — assisting the primary entity' },

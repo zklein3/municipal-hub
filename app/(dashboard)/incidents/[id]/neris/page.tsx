@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import NerisReportClient from './NerisReportClient'
+import { evaluateNerisRequirements } from '@/lib/neris-requirements'
 
 export default async function NerisReportPage({
   params,
@@ -42,11 +43,28 @@ export default async function NerisReportPage({
     : { data: [] }
   const fireDetails = fireDetailsList?.[0] ?? null
 
-  // Fetch apparatus on this incident (with response_mode)
-  const { data: apparatusRaw } = await adminClient
+  // Fetch apparatus on this incident. Fall back to cover-sheet columns if the
+  // NERIS-specific columns have not been applied in Supabase yet.
+  let { data: apparatusRaw, error: apparatusError } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, notes, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', id)
+    .order('created_at')
+
+  if (apparatusError) {
+    const fallback = await adminClient
+      .from('incident_apparatus')
+      .select('id, apparatus_id, role, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
+      .eq('incident_id', id)
+      .order('created_at')
+
+    apparatusRaw = (fallback.data ?? []).map(a => ({
+      ...a,
+      response_mode: null,
+      staffing_count: null,
+      notes: null,
+    }))
+  }
 
   const apparatusIds = (apparatusRaw ?? []).map(a => a.apparatus_id).filter(Boolean)
   const { data: apparatusNames } = apparatusIds.length > 0
@@ -54,17 +72,24 @@ export default async function NerisReportPage({
     : { data: [] }
   const apparatusNameMap = Object.fromEntries((apparatusNames ?? []).map(a => [a.id, a]))
 
-  const incidentApparatus = (apparatusRaw ?? []).map(a => ({
-    ...a,
-    unit_number: apparatusNameMap[a.apparatus_id]?.unit_number ?? '?',
-    apparatus_name: apparatusNameMap[a.apparatus_id]?.apparatus_name ?? null,
-  }))
-
   // Fetch personnel on this incident
   const { data: personnelRaw } = await adminClient
     .from('incident_personnel')
-    .select('id, personnel_id, role')
+    .select('id, personnel_id, apparatus_id, role, status')
     .eq('incident_id', id)
+
+  const personnelByApparatus = new Map<string, number>()
+  for (const row of personnelRaw ?? []) {
+    if (!row.apparatus_id || row.status === 'absent') continue
+    personnelByApparatus.set(row.apparatus_id, (personnelByApparatus.get(row.apparatus_id) ?? 0) + 1)
+  }
+
+  const incidentApparatus = (apparatusRaw ?? []).map(a => ({
+    ...a,
+    staffing_count: a.staffing_count ?? personnelByApparatus.get(a.apparatus_id) ?? null,
+    unit_number: apparatusNameMap[a.apparatus_id]?.unit_number ?? '?',
+    apparatus_name: apparatusNameMap[a.apparatus_id]?.apparatus_name ?? null,
+  }))
 
   const personnelIds = (personnelRaw ?? []).map(p => p.personnel_id).filter(Boolean)
   const { data: personnelNames } = personnelIds.length > 0
@@ -76,6 +101,7 @@ export default async function NerisReportPage({
   const incidentPersonnel = (personnelRaw ?? []).map(p => ({
     ...p,
     name: personnelNameMap[p.personnel_id] ?? 'Unknown',
+    unit_number: p.apparatus_id ? apparatusNameMap[p.apparatus_id]?.unit_number ?? null : null,
   }))
 
   // Fetch mutual aid rows — used to trigger mutual aid section in NERIS form
@@ -92,6 +118,15 @@ export default async function NerisReportPage({
     .eq('incident_id', id)
     .maybeSingle()
 
+  const requirementSummary = evaluateNerisRequirements({
+    incident,
+    nerisRecord: nerisRecord ?? null,
+    incidentApparatus,
+    incidentPersonnel,
+    mutualAidRows: mutualAidRows ?? [],
+    apiEnrollmentReady: false,
+  })
+
   return (
     <div className="max-w-2xl">
       <NerisReportClient
@@ -101,6 +136,7 @@ export default async function NerisReportPage({
         incidentPersonnel={incidentPersonnel}
         nerisRecord={nerisRecord ?? null}
         mutualAidRows={mutualAidRows ?? []}
+        requirementSummary={requirementSummary}
         isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
         isOfficerOrAbove={isOfficerOrAbove}
       />
