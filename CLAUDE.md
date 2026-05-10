@@ -88,8 +88,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### NERIS API Integration — Resume Here (UNBLOCKED 2026-05-10)
+Credentials received from Conor Brady (FSRI). Vendor ID: VN03615504, Test Dept: FD35049607.
+**Next step:** Fetch Swagger docs at `https://api-test.neris.fsri.org/v1/docs` to find auth flow (token endpoint, Client ID/Secret location). May need to reply to HLPDSK-31956 asking Conor where API credentials live — they are not visible in the portal or welcome email.
+Once auth is known: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET` to `.env.local` and Vercel, then start compatibility badge work against FD35049607 on the test API.
+
 ### Asset Storage + Inspection Reconciliation — Resume at Phase 4
-NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials.
+NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials — NOW UNBLOCKED, see above.
 
 **Phases 1–3 DONE (2026-05-08, feature/neris branch):**
 - Phase 1 ✓ — Inspection asset picker groups: "On this apparatus" / "On another apparatus" / "Unassigned / storage" (optgroups in select)
