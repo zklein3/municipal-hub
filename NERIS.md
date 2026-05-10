@@ -1,6 +1,6 @@
 # NERIS Compliance Reference
 
-**Current build status:** Blocked. Do not build NERIS compliance/API integration until FireOps7 receives FSRI/vendor permission and credentials. The immediate build focus is inventory/equipment storage.
+**Current build status:** Partially unblocked. FireOps7 has NERIS test vendor access, but certified auth mode and enrollment are still pending FSRI confirmation. Keep API auth isolated so Basic vs OAuth is a small env/config change.
 
 **Source:** https://github.com/ulfsri/neris-framework
 **API (Production):** https://api.neris.fsri.org/v1 — Swagger: /docs | Redoc: /redoc
@@ -113,9 +113,17 @@ NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departme
 - **FireOps7 Vendor ID (test): `VN03615504`** — Vendor Admin access
 - **FSRI Test Department: `FD35049607`** — use this for all dev/compatibility work
 - Welcome email sent to zklein3@outlook.com with portal login + temp password
-- After logging into https://app-test.neris.fsri.org — locate the API Client ID + Client Secret for use in `.env.local`
-- Store as: `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`
+- After logging into https://app-test.neris.fsri.org — verify whether certified vendor auth uses HTTP Basic auth or OAuth2 client credentials
+- Store common values as: `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_USE_TEST=true`
+- If OAuth2 is required, also store: `NERIS_AUTH_MODE=oauth`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`
+- If Basic auth is approved, also store: `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD`
 - This is a single credential set for the entire FireOps7 platform — not per-department
+- Local smoke test after credentials are saved:
+  - Set `NERIS_USE_TEST=true`
+  - Run `npm run neris:smoke`
+  - Expected OAuth success: token request OK, then entity fetch OK for the FSRI test department
+  - Expected Basic success: entity fetch OK for the FSRI test department
+- Current FSRI question: Zachary asked Conor Brady whether HTTP Basic auth is acceptable for certified vendor integration or OAuth2 client credentials are required
 
 ### Compatibility Badge Requirements (must complete after receiving Client ID)
 1. Enroll with the FSRI Fire Department (test dept) — Request Enrollment for NERIS Compatibility Badge
