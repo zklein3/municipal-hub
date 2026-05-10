@@ -88,81 +88,49 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### NERIS API Integration — Resume Here (UNBLOCKED 2026-05-10)
-Credentials received from Conor Brady (FSRI). Vendor ID: VN03615504, Test Dept: FD35049607.
-Auth confirmed: HTTP Basic auth — username `VN03615504`, password from portal. Awaiting Conor's reply on whether Basic is certified for vendor integrations or if OAuth2 is required.
-Once auth confirmed: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD` to `.env.local`, run `npm run neris:smoke`, then start compatibility badge work against FD35049607.
-
-**API Review items (flagged with TODO(api-review) in code):**
-- `app/actions/neris.ts` — Verify `patients[]` and `victims[]` payload field names against openapi.json once credentials active. Unified `incident_persons` splits into both medical and rescue sections; field names must match NERIS schema exactly.
-- Module activation: UI now mirrors `getNerisActiveModules` — sections open based on both cover type AND selected NERIS code. Verify NERIS accepts partial modules (e.g. rescue section present on a fire call if rescue code selected).
+### NERIS API Integration (UNBLOCKED — waiting on auth confirmation)
+Credentials received from Conor Brady (FSRI). Vendor ID: `VN03615504`, Test Dept: `FD35049607`.
+Auth confirmed as HTTP Basic — username `VN03615504`, password from portal. Awaiting Conor's reply on whether Basic is certified or if OAuth2 is required before finalizing.
+Once confirmed: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD` to `.env.local`, run `npm run neris:smoke`, then compatibility badge work against FD35049607.
+**TODO(api-review) in `app/actions/neris.ts`:** verify `patients[]` / `victims[]` field names and partial-module acceptance against openapi.json once live.
 
 ### Asset Storage + Inspection Reconciliation — Resume at Phase 4
-NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials — NOW UNBLOCKED, see above.
+Phases 1–3 done. Key files: `app/(dashboard)/inspections/run/InspectionRunClient.tsx`, `app/actions/equipment.ts` (`moveAssetToApparatus`).
+- Phase 4: session-close reconciliation — compare apparatus-assigned assets vs. selected; show unaccounted, default to move-to-storage
+- Phase 5: move unaccounted asset to storage → `item_assets.apparatus_id = null` + log
+- Phase 6: `/equipment/storage` — stored/unassigned assets, apparatus-assigned assets, manual move controls
+- Phase 7: apparatus asset summary — expected qty vs. assigned, shortage/surplus indicators
+- Phase 8: permissions (admins create/retire/override; officers move; members only via inspection)
+- Phase 9: movement history by asset/apparatus/item/user/source
+- Phase 10: safety rules — no silent auto-reassign, don't block inspection for unresolved reconciliation
 
-**Phases 1–3 DONE (2026-05-08, feature/neris branch):**
-- Phase 1 ✓ — Inspection asset picker groups: "On this apparatus" / "On another apparatus" / "Unassigned / storage" (optgroups in select)
-- Phase 2 ✓ — Selecting a cross-apparatus asset shows inline yellow confirmation prompt; confirm fires `moveAssetToApparatus` action
-- Phase 3 ✓ — DB migration: `asset_id` + `source` (manual | inspection_reconciliation) added to `item_movement_log`
-- Key files: `app/(dashboard)/inspections/run/InspectionRunClient.tsx`, `app/(dashboard)/inspections/run/page.tsx`, `app/actions/equipment.ts` (`moveAssetToApparatus`)
-
-**Phases 4–10 remaining — resume here:**
-- Core model: quantity items use storage counts; asset-tracked items use `item_assets.apparatus_id`; `apparatus_id = null` means storage/unassigned; assets are not assigned to compartments; compartment standards stay in `item_location_standards`.
-- Phase 4: at session close, compare assets assigned to the apparatus against assets selected during the session. Show assigned assets not found and default the action to move to storage.
-- Phase 5: moving an unaccounted asset to storage sets `item_assets.apparatus_id = null` and logs apparatus → storage.
-- Phase 6: extend `/equipment/storage` to show stored/unassigned assets, apparatus-assigned assets, total active assets, and admin/officer manual move controls.
-- Phase 7: add apparatus asset summary showing expected quantity from compartment standards, assigned asset count on apparatus, and shortage/surplus indicators.
-- Phase 8: permissions — admins create/edit/retire assets and override; officers manually move; members trigger assignment changes only during inspection reconciliation.
-- Phase 9: movement history by asset, apparatus, item type, user, and source. Separate inspection-driven from manual moves.
-- Phase 10: safety rules — no asset-to-compartment assignment, no silent auto-reassign, don't block inspection for unresolved reconciliation, always log changes.
-
-### Events — Delete + End Time (DONE ✓ 2026-05-09, feature/neris branch)
-User feedback from `/events` page (system_log IDs 16ac6509, da88add2) requested two fixes:
-- **Delete button** ✓ — Admins can permanently delete an event instance (removes attendance records too). `deleteEventInstance` added to `app/actions/attendance.ts`. Delete button visible to admins only in `EventsClient.tsx`.
-- **End time display** ✓ — Event cards now show "7:00 PM – 8:30 PM" when `start_time` + `duration_minutes` are both present. `formatEndTime` added to `EventsClient.tsx`.
-- **Series end date** ✓ — New recurring event form now has an optional "Series Ends On" date field (`generate_through_date`). Defaults to 1 year if left blank.
-Mark those system_log entries resolved when merging to main.
-
-### Status Center — Burn Permits + Records Requests Lookup
-User feedback (Brock Pierson, 2026-05-09): records request confirmation codes don't work on the burn permit status page. Need to extend the status lookup to support both burn permits and records requests, and rename the page (e.g. "Status Center" or "Status Portal"). Currently lives at `/dept/[slug]/permit-status`.
-
-### Events — Show All Special Events for Current Year
-User feedback (2026-05-09): special events should show all for the current year on the events landing page, not just the current rolling 30-day past / 60-day future window.
-
-### Permit Approval Email — Direct to Resident (blocked ~1 month)
-Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).
+### Permit Approval Email (blocked)
+Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function. Blocked until `fireops7.com` verified in Resend post-Wix migration.
 
 ### Officer Sub-Menu
-Officers need elevated access similar to admin hub but scoped to operational functions (not structural setup). Not yet designed — discuss next session.
+Officers need elevated access similar to admin hub but scoped to operational functions. Not yet designed.
 
 ### Personnel Page — Officer Inline Edit (lower priority)
 Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
 
 ### Module / Feature Flag System (design ready, after storage)
-Per-department feature flags managed by sys admin. Each dept has a checklist of enabled modules. Nav and routes respect flags. Sys admin panel gets a module toggle UI. Plan presets (e.g. "Starter", "Full") auto-check a standard set but individual overrides always available. Demo dept gets everything on.
+Bundles: A = Operations, B = ISO, C = Public, D = Medical (future). `module_operations` + `module_iso` already in DB and nav-gated. Remaining: sys admin toggle UI, plan presets, demo dept gets everything on.
 
-**Base (always on for all depts):**
-Personnel, Apparatus, Stations, Inventory, Inspections, Events + Attendance, Training/Certifications, Announcements, Basic Reports
+---
 
-**Bundle A — Operations**
-Incidents, Run Sheet PDF Import, Incident Reports
-- NERIS BLOCKED: Do not build NERIS integration until FSRI/vendor permission and credentials are granted.
-- NERIS COMPLIANCE PRIORITY: After permission is granted, scope the NERIS field gap before building module flags around incident reporting. If FireOps7 incidents match NERIS schema and submit via the NERIS API, this eliminates double-entry for departments and becomes a flagship feature.
+## Run Sheet Import — Central Square CFS Format
+Action: `app/actions/parse-run-sheet.ts` | Model: Claude Haiku | Key: `ANTHROPIC_API_KEY`
 
-**Bundle B — ISO / Compliance**
-ISO audit (hoses, hydrants, ISO report)
-- Standalone — depts pursuing ISO grading specifically need this
+**Three time sources in every CFS:**
+1. Page 1 header — `Call Time` → `call_time` | `Completed Time` → `in_service_at`
+2. `Response Times` block — dept-level: `Assigned` → `paged_at`, `Arrived` → `first_on_scene_at`, `Leaving` → `last_leaving_scene_at`
+3. `Unit Response Times` section — per-vehicle: `Enroute`, `Arrived`, `Leaving Scene`, `Available`/`Off Duty`
 
-**Bundle C — Public Engagement**
-Public site, burn permits, records requests, public inbox
-- Already has `public_site_enabled` flag — extend this to the full bundle
+**Unit number matching:** CAD uses 3-letter agency prefix (e.g. `WIN11`); DB stores plain number (`11`). Parser is given the dept's unit list; Claude returns plain numbers. Client-side fallback strips alpha prefix before matching.
 
-**Bundle D — Medical / EMS** *(future)*
-Medical supply tracking, expiration alerts, EMS-specific inventory
-- For combination fire/EMS departments
+**Timestamp storage:** All times stored as local values with no timezone conversion — Supabase timezone = UTC. `formatDT` uses `timeZone: 'UTC'` to prevent CDT→UTC shift on display. Never instruct Claude to convert times to UTC.
 
-### Run Sheet PDF Import (DONE ✓)
-Central Square CFS PDF → Claude Haiku extracts fields → pre-fills new incident form. `ANTHROPIC_API_KEY` in `.env.local` + Vercel. Action: `app/actions/parse-run-sheet.ts`.
+**Re-import on existing incidents:** "Import Run Sheet" button on incident detail page (`app/(dashboard)/incidents/[id]/IncidentDetailClient.tsx`) — overwrites incident fields and upserts apparatus rows in place.
 
 ---
 
