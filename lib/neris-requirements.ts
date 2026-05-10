@@ -50,9 +50,8 @@ export type NerisRecordInput = {
   chemical_name?: string | null
   chemical_dot_class?: string | null
   chemical_release_occurred?: boolean | null
-  rescue_type?: string | null
-  casualty_type?: string | null
-  casualty_cause?: string | null
+  rescue_victims?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string }[] | null
+  vehicles_involved?: number | null
 }
 
 export type NerisApparatusInput = {
@@ -580,32 +579,16 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   }
 
   if (modules.rescue) {
+    const victimCount = neris.rescue_victims?.length ?? 0
     add({
-      id: 'rescue.type',
+      id: 'rescue.victims',
       section: 'rescue',
-      label: 'Rescue type',
+      label: 'At least one victim record',
       severity: 'required',
-      status: completeIf(hasText(neris.rescue_type)),
+      status: completeIf(victimCount > 0),
       source: 'neris_report',
+      detail: victimCount > 0 ? `${victimCount} victim${victimCount === 1 ? '' : 's'} recorded` : undefined,
     })
-    add({
-      id: 'rescue.casualty',
-      section: 'rescue',
-      label: 'Casualty type',
-      severity: 'conditional',
-      status: completeIf(hasText(neris.casualty_type)),
-      source: 'neris_report',
-    })
-    if (hasText(neris.casualty_type) && neris.casualty_type !== 'UNINJURED') {
-      add({
-        id: 'rescue.casualty_cause',
-        section: 'rescue',
-        label: 'Casualty cause',
-        severity: 'conditional',
-        status: completeIf(hasText(neris.casualty_cause)),
-        source: 'neris_report',
-      })
-    }
   }
 
   add({

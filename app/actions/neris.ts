@@ -82,10 +82,9 @@ export async function saveNerisReport(incident_id: string, data: {
   chemical_name?: string | null
   chemical_dot_class?: string | null
   chemical_release_occurred?: boolean | null
-  // Rescue module
-  rescue_type?: string | null
-  casualty_type?: string | null
-  casualty_cause?: string | null
+  // Rescue module — per-victim records
+  rescue_victims?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string }[] | null
+  vehicles_involved?: number | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can save NERIS reports.' }
@@ -330,12 +329,19 @@ export async function submitToNeris(incident_id: string) {
     }
   }
 
-  // Rescue module
-  if (neris.rescue_type || neris.casualty_type) {
+  // Rescue module — per-victim records
+  const rescueVictims = neris.rescue_victims ?? []
+  if (rescueVictims.length > 0 || neris.vehicles_involved != null) {
     payload.rescue = {
-      rescue_type: neris.rescue_type ?? undefined,
-      casualty_type: neris.casualty_type ?? undefined,
-      casualty_cause: neris.casualty_cause ?? undefined,
+      vehicles_involved: neris.vehicles_involved ?? undefined,
+      victims: rescueVictims.map((v: any) => ({
+        rescue_type: v.rescue_type || undefined,
+        casualty_type: v.casualty_type || undefined,
+        casualty_cause: v.casualty_cause || undefined,
+        entrapped: v.entrapped || undefined,
+        vehicle_type: v.vehicle_type || undefined,
+        safety_device: v.safety_device || undefined,
+      })),
     }
   }
 
