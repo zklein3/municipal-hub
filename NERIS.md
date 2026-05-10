@@ -109,9 +109,13 @@ NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departme
 
 ### Step 1 — FireOps7 gets a Vendor Client ID (one-time)
 - Register FireOps7 as a vendor with FSRI via the helpdesk: https://neris.atlassian.net/servicedesk/customer/portals
-- **Vendor account requested — Ticket: HLPDSK-31956** (check zklein3@outlook.com for updates)
-- FSRI issues a **Client ID + Client Secret** (UUID format: `05dd2999-329b-41ec-b94d-xxxxxxxxxxxx`)
-- This is a single ID for the entire FireOps7 platform — not per-department
+- **✅ DONE — Ticket: HLPDSK-31956 (Conor Brady, FSRI)**
+- **FireOps7 Vendor ID (test): `VN03615504`** — Vendor Admin access
+- **FSRI Test Department: `FD35049607`** — use this for all dev/compatibility work
+- Welcome email sent to zklein3@outlook.com with portal login + temp password
+- After logging into https://app-test.neris.fsri.org — locate the API Client ID + Client Secret for use in `.env.local`
+- Store as: `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`
+- This is a single credential set for the entire FireOps7 platform — not per-department
 
 ### Compatibility Badge Requirements (must complete after receiving Client ID)
 1. Enroll with the FSRI Fire Department (test dept) — Request Enrollment for NERIS Compatibility Badge
