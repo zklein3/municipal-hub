@@ -248,7 +248,7 @@ export async function updateBurnPermitStatus(formData: FormData) {
 
     if (permit) {
       const statusUrl = dept?.public_slug
-        ? `https://www.fireops7.com/dept/${dept.public_slug}/permit-status?code=${permit.confirmation_code}`
+        ? `https://www.fireops7.com/dept/${dept.public_slug}/request-status?code=${permit.confirmation_code}`
         : null
       const printUrl = dept?.public_slug
         ? `https://www.fireops7.com/dept/${dept.public_slug}/permit-print?code=${permit.confirmation_code}`

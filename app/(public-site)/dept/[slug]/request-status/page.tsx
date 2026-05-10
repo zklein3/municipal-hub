@@ -57,7 +57,7 @@ export default async function RequestStatusPage({
       <div className="max-w-md">
         <div className="mb-6">
           <Link href={`/dept/${slug}`} className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors">← Back</Link>
-          <h1 className="text-2xl font-bold text-zinc-900 mt-2">Check Request Status</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 mt-2">Status Center</h1>
           <p className="text-sm text-zinc-500 mt-0.5">{dept.name}</p>
         </div>
 
@@ -74,13 +74,13 @@ export default async function RequestStatusPage({
               placeholder="e.g. A3F92B1C"
               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase tracking-widest focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
-            <p className="mt-1 text-xs text-zinc-400">Works for burn permit and records requests.</p>
+            <p className="mt-1 text-xs text-zinc-400">Works for burn permits and records requests.</p>
           </div>
           <button
             type="submit"
             className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
           >
-            Look Up Request
+            Check Status
           </button>
         </form>
       </div>
@@ -107,8 +107,8 @@ export default async function RequestStatusPage({
   return (
     <div className="max-w-lg">
       <div className="mb-6">
-        <Link href={`/dept/${slug}/request-status`} className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors">← Look Up Another</Link>
-        <h1 className="text-2xl font-bold text-zinc-900 mt-2">Request Status</h1>
+        <Link href={`/dept/${slug}/request-status`} className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors">← Check Another</Link>
+        <h1 className="text-2xl font-bold text-zinc-900 mt-2">Status Center</h1>
         <p className="text-sm text-zinc-500 mt-0.5">{dept.name}</p>
       </div>
 
