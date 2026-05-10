@@ -119,6 +119,7 @@ export default function NerisReportClient({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [readyGuardOpen, setReadyGuardOpen] = useState(false)
 
   // Incident type filter toggle
   const [showAllTypes, setShowAllTypes] = useState(false)
@@ -220,6 +221,9 @@ export default function NerisReportClient({
   }
 
   const fireCauseCodes = isOutsideFire ? NERIS_FIRE_CAUSE_OUT : NERIS_FIRE_CAUSE_IN
+  const localOpenRequirements = requirementSummary.requirements.filter(req =>
+    req.status === 'missing' && ['required', 'conditional'].includes(req.severity)
+  )
 
   return (
     <div>
@@ -402,6 +406,20 @@ export default function NerisReportClient({
       </div>
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
       {saved && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Saved successfully.</div>}
+      {readyGuardOpen && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Complete required NERIS fields before marking ready.</p>
+          <p className="mt-1 text-xs text-amber-700">You can save this draft and finish it later. Use the readiness links above to jump to the missing sections.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+            {localOpenRequirements.slice(0, 6).map(req => (
+              <li key={req.id}>{req.label}</li>
+            ))}
+          </ul>
+          {localOpenRequirements.length > 6 && (
+            <p className="mt-2 text-xs text-amber-700">And {localOpenRequirements.length - 6} more required item{localOpenRequirements.length - 6 === 1 ? '' : 's'}.</p>
+          )}
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-5">
 
@@ -840,8 +858,15 @@ export default function NerisReportClient({
                 type="button"
                 disabled={loading}
                 onClick={async () => {
+                  if (!requirementSummary.readyForLocalCompletion) {
+                    setReadyGuardOpen(true)
+                    setError(null)
+                    setSaved(false)
+                    return
+                  }
                   setLoading(true)
                   setError(null)
+                  setReadyGuardOpen(false)
                   // Save current state first, then mark complete
                   const saveResult = await saveNerisReport(incident.id, {
                     neris_incident_type: nerisType || null,
