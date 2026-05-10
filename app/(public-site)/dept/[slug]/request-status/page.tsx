@@ -122,22 +122,26 @@ export default async function RequestStatusPage({
   const isNameSearch = !permit && !recordRequest
 
   if (isNameSearch) {
-    const [{ data: np }, { data: nr }] = await Promise.all([
-      adminClient
-        .from('burn_permits')
-        .select('id, contact_name, burn_address, burn_date, status, confirmation_code, created_at')
-        .ilike('contact_name', `%${nameQuery}%`)
-        .eq('department_id', dept.id)
-        .order('created_at', { ascending: false })
-        .limit(15),
-      adminClient
-        .from('public_record_requests')
-        .select('id, contact_name, request_type, description, status, confirmation_code, created_at')
-        .ilike('contact_name', `%${nameQuery}%`)
-        .eq('department_id', dept.id)
-        .order('created_at', { ascending: false })
-        .limit(15),
-    ])
+    // Split into words so "Zachary Klein" matches "Zachary Adam Klein" — each word must appear
+    const words = nameQuery.trim().split(/\s+/).filter(Boolean)
+
+    let permitsQuery = adminClient
+      .from('burn_permits')
+      .select('id, contact_name, burn_address, burn_date, status, confirmation_code, created_at')
+      .eq('department_id', dept.id)
+      .order('created_at', { ascending: false })
+      .limit(15)
+    for (const word of words) permitsQuery = permitsQuery.ilike('contact_name', `%${word}%`)
+
+    let recordsQuery = adminClient
+      .from('public_record_requests')
+      .select('id, contact_name, request_type, description, status, confirmation_code, created_at')
+      .eq('department_id', dept.id)
+      .order('created_at', { ascending: false })
+      .limit(15)
+    for (const word of words) recordsQuery = recordsQuery.ilike('contact_name', `%${word}%`)
+
+    const [{ data: np }, { data: nr }] = await Promise.all([permitsQuery, recordsQuery])
     namePermits = np ?? []
     nameRecords = nr ?? []
   }
