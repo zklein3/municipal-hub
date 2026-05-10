@@ -90,8 +90,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ### NERIS API Integration — Resume Here (UNBLOCKED 2026-05-10)
 Credentials received from Conor Brady (FSRI). Vendor ID: VN03615504, Test Dept: FD35049607.
-**Next step:** Fetch Swagger docs at `https://api-test.neris.fsri.org/v1/docs` to find auth flow (token endpoint, Client ID/Secret location). May need to reply to HLPDSK-31956 asking Conor where API credentials live — they are not visible in the portal or welcome email.
-Once auth is known: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET` to `.env.local` and Vercel, then start compatibility badge work against FD35049607 on the test API.
+Auth confirmed: HTTP Basic auth — username `VN03615504`, password from portal. Awaiting Conor's reply on whether Basic is certified for vendor integrations or if OAuth2 is required.
+Once auth confirmed: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD` to `.env.local`, run `npm run neris:smoke`, then start compatibility badge work against FD35049607.
+
+**API Review items (flagged with TODO(api-review) in code):**
+- `app/actions/neris.ts` — Verify `patients[]` and `victims[]` payload field names against openapi.json once credentials active. Unified `incident_persons` splits into both medical and rescue sections; field names must match NERIS schema exactly.
+- Module activation: UI now mirrors `getNerisActiveModules` — sections open based on both cover type AND selected NERIS code. Verify NERIS accepts partial modules (e.g. rescue section present on a fire call if rescue code selected).
 
 ### Asset Storage + Inspection Reconciliation — Resume at Phase 4
 NERIS work is intentionally excluded until FireOps7 receives FSRI/vendor permission and credentials — NOW UNBLOCKED, see above.
@@ -118,6 +122,12 @@ User feedback from `/events` page (system_log IDs 16ac6509, da88add2) requested 
 - **End time display** ✓ — Event cards now show "7:00 PM – 8:30 PM" when `start_time` + `duration_minutes` are both present. `formatEndTime` added to `EventsClient.tsx`.
 - **Series end date** ✓ — New recurring event form now has an optional "Series Ends On" date field (`generate_through_date`). Defaults to 1 year if left blank.
 Mark those system_log entries resolved when merging to main.
+
+### Status Center — Burn Permits + Records Requests Lookup
+User feedback (Brock Pierson, 2026-05-09): records request confirmation codes don't work on the burn permit status page. Need to extend the status lookup to support both burn permits and records requests, and rename the page (e.g. "Status Center" or "Status Portal"). Currently lives at `/dept/[slug]/permit-status`.
+
+### Events — Show All Special Events for Current Year
+User feedback (2026-05-09): special events should show all for the current year on the events landing page, not just the current rolling 30-day past / 60-day future window.
 
 ### Permit Approval Email — Direct to Resident (blocked ~1 month)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function (already deployed). Blocked until `fireops7.com` verified in Resend (post-Wix migration).

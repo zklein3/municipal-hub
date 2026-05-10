@@ -304,6 +304,9 @@ export async function submitToNeris(incident_id: string) {
   }
 
   // Unified persons — split into medical + rescue payload sections
+  // TODO(api-review): verify NERIS API schema for nested patients[] and victims[] arrays once
+  // credentials are active. Field names (evaluation_care, improved_status, disposition,
+  // rescue_type, entrapped, vehicle_type, safety_device) must match openapi.json exactly.
   const persons = neris.incident_persons ?? []
   if (persons.length > 0) {
     payload.medical = {
