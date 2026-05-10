@@ -74,16 +74,14 @@ export async function saveNerisReport(incident_id: string, data: {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
-  // Medical module — per-patient records
-  medical_patients?: { evaluation_care: string; improved_status: string; disposition: string }[] | null
+  // Unified persons — rescue + medical per person
+  incident_persons?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string; evaluation_care: string; improved_status: string; disposition: string }[] | null
   // Hazmat module
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
   chemical_name?: string | null
   chemical_dot_class?: string | null
   chemical_release_occurred?: boolean | null
-  // Rescue module — per-victim records
-  rescue_victims?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string }[] | null
   vehicles_involved?: number | null
 }) {
   const ctx = await getContext()
@@ -305,17 +303,30 @@ export async function submitToNeris(incident_id: string) {
     }
   }
 
-  // Medical module — per-patient records
-  const patients = neris.medical_patients ?? []
-  if (patients.length > 0) {
+  // Unified persons — split into medical + rescue payload sections
+  const persons = neris.incident_persons ?? []
+  if (persons.length > 0) {
     payload.medical = {
-      patient_count: patients.length,
-      patients: patients.map((p: { evaluation_care: string; improved_status: string; disposition: string }) => ({
+      patient_count: persons.length,
+      patients: persons.map((p: any) => ({
         evaluation_care: p.evaluation_care || undefined,
         improved_status: p.improved_status || undefined,
         disposition: p.disposition || undefined,
       })),
     }
+    payload.rescue = {
+      vehicles_involved: neris.vehicles_involved ?? undefined,
+      victims: persons.map((p: any) => ({
+        rescue_type: p.rescue_type || undefined,
+        casualty_type: p.casualty_type || undefined,
+        casualty_cause: p.casualty_cause || undefined,
+        entrapped: p.entrapped || undefined,
+        vehicle_type: p.vehicle_type || undefined,
+        safety_device: p.safety_device || undefined,
+      })),
+    }
+  } else if (neris.vehicles_involved != null) {
+    payload.rescue = { vehicles_involved: neris.vehicles_involved }
   }
 
   // Hazmat module
@@ -326,22 +337,6 @@ export async function submitToNeris(incident_id: string) {
       chemical_name: neris.chemical_name ?? undefined,
       dot_class: neris.chemical_dot_class ?? undefined,
       release_occurred: neris.chemical_release_occurred ?? undefined,
-    }
-  }
-
-  // Rescue module — per-victim records
-  const rescueVictims = neris.rescue_victims ?? []
-  if (rescueVictims.length > 0 || neris.vehicles_involved != null) {
-    payload.rescue = {
-      vehicles_involved: neris.vehicles_involved ?? undefined,
-      victims: rescueVictims.map((v: any) => ({
-        rescue_type: v.rescue_type || undefined,
-        casualty_type: v.casualty_type || undefined,
-        casualty_cause: v.casualty_cause || undefined,
-        entrapped: v.entrapped || undefined,
-        vehicle_type: v.vehicle_type || undefined,
-        safety_device: v.safety_device || undefined,
-      })),
     }
   }
 

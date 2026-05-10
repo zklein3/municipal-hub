@@ -44,13 +44,12 @@ export type NerisRecordInput = {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
-  medical_patients?: { evaluation_care: string; improved_status: string; disposition: string }[] | null
+  incident_persons?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string; evaluation_care: string; improved_status: string; disposition: string }[] | null
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
   chemical_name?: string | null
   chemical_dot_class?: string | null
   chemical_release_occurred?: boolean | null
-  rescue_victims?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string }[] | null
   vehicles_involved?: number | null
 }
 
@@ -546,7 +545,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   }
 
   if (modules.medical) {
-    const patientCount = neris.medical_patients?.length ?? 0
+    const patientCount = neris.incident_persons?.length ?? 0
     add({
       id: 'medical.patients',
       section: 'medical',
@@ -579,7 +578,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   }
 
   if (modules.rescue) {
-    const victimCount = neris.rescue_victims?.length ?? 0
+    const victimCount = neris.incident_persons?.length ?? 0
     add({
       id: 'rescue.victims',
       section: 'rescue',
