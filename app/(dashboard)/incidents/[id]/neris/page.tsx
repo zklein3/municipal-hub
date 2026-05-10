@@ -55,17 +55,24 @@ export default async function NerisReportPage({
     : { data: [] }
   const apparatusNameMap = Object.fromEntries((apparatusNames ?? []).map(a => [a.id, a]))
 
-  const incidentApparatus = (apparatusRaw ?? []).map(a => ({
-    ...a,
-    unit_number: apparatusNameMap[a.apparatus_id]?.unit_number ?? '?',
-    apparatus_name: apparatusNameMap[a.apparatus_id]?.apparatus_name ?? null,
-  }))
-
   // Fetch personnel on this incident
   const { data: personnelRaw } = await adminClient
     .from('incident_personnel')
-    .select('id, personnel_id, role')
+    .select('id, personnel_id, apparatus_id, role, status')
     .eq('incident_id', id)
+
+  const personnelByApparatus = new Map<string, number>()
+  for (const row of personnelRaw ?? []) {
+    if (!row.apparatus_id || row.status === 'absent') continue
+    personnelByApparatus.set(row.apparatus_id, (personnelByApparatus.get(row.apparatus_id) ?? 0) + 1)
+  }
+
+  const incidentApparatus = (apparatusRaw ?? []).map(a => ({
+    ...a,
+    staffing_count: a.staffing_count ?? personnelByApparatus.get(a.apparatus_id) ?? null,
+    unit_number: apparatusNameMap[a.apparatus_id]?.unit_number ?? '?',
+    apparatus_name: apparatusNameMap[a.apparatus_id]?.apparatus_name ?? null,
+  }))
 
   const personnelIds = (personnelRaw ?? []).map(p => p.personnel_id).filter(Boolean)
   const { data: personnelNames } = personnelIds.length > 0
@@ -77,6 +84,7 @@ export default async function NerisReportPage({
   const incidentPersonnel = (personnelRaw ?? []).map(p => ({
     ...p,
     name: personnelNameMap[p.personnel_id] ?? 'Unknown',
+    unit_number: p.apparatus_id ? apparatusNameMap[p.apparatus_id]?.unit_number ?? null : null,
   }))
 
   // Fetch mutual aid rows — used to trigger mutual aid section in NERIS form

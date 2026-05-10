@@ -95,7 +95,7 @@ export default function NerisReportClient({
   incident: any
   fireDetails: any
   incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
-  incidentPersonnel: { id: string; personnel_id: string; role: string; name: string }[]
+  incidentPersonnel: { id: string; personnel_id: string; apparatus_id: string | null; role: string; status: string | null; name: string; unit_number: string | null }[]
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
   requirementSummary: NerisRequirementSummary
@@ -593,7 +593,7 @@ export default function NerisReportClient({
         {showUnitsSection && (
           <section id="neris-section-units" className={`${sectionCls} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Apparatus Response Mode</h2>
-            <p className="text-xs text-zinc-400 -mt-1">Set per-unit whether response was emergent or non-emergent.</p>
+            <p className="text-xs text-zinc-400 -mt-1">Staffing is prefilled from cover sheet personnel assigned to each unit; adjust if needed.</p>
             {incidentApparatus.length === 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-sm font-semibold text-amber-800">No apparatus are attached to this incident.</p>
@@ -673,7 +673,7 @@ export default function NerisReportClient({
             <div className="flex flex-wrap gap-1.5">
               {incidentPersonnel.map(p => (
                 <span key={p.id} className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700">
-                  {p.name}
+                  {p.name}{p.unit_number ? ` - ${p.unit_number}` : ''}
                 </span>
               ))}
             </div>

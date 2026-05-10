@@ -207,6 +207,18 @@ export async function submitToNeris(incident_id: string) {
     .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', incident_id)
   const apparatusIds = (apparatus ?? []).map((a: any) => a.apparatus_id).filter(Boolean)
+  const { data: apparatusPersonnel } = apparatusIds.length > 0
+    ? await adminClient
+      .from('incident_personnel')
+      .select('apparatus_id, status')
+      .eq('incident_id', incident_id)
+      .in('apparatus_id', apparatusIds)
+    : { data: [] }
+  const personnelByApparatus = new Map<string, number>()
+  for (const row of apparatusPersonnel ?? []) {
+    if (!row.apparatus_id || row.status === 'absent') continue
+    personnelByApparatus.set(row.apparatus_id, (personnelByApparatus.get(row.apparatus_id) ?? 0) + 1)
+  }
   const { data: apparatusNames } = apparatusIds.length > 0
     ? await adminClient.from('apparatus').select('id, unit_number').in('id', apparatusIds)
     : { data: [] }
@@ -260,7 +272,7 @@ export async function submitToNeris(incident_id: string) {
     payload.unit_response = apparatus.map((a: any) => ({
       unit_id: unitNumberMap[a.apparatus_id] ?? a.apparatus_id,
       response_mode: a.response_mode ?? undefined,
-      staffing_count: a.staffing_count ?? undefined,
+      staffing_count: a.staffing_count ?? personnelByApparatus.get(a.apparatus_id) ?? undefined,
       paged_at: a.paged_at ?? undefined,
       on_scene_at: a.on_scene_at ?? undefined,
       leaving_scene_at: a.leaving_scene_at ?? undefined,
