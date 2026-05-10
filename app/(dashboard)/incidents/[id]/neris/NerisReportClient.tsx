@@ -102,7 +102,7 @@ export default function NerisReportClient({
 }: {
   incident: any
   fireDetails: any
-  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; notes: string | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
+  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; notes: string | null; paged_at: string | null; enroute_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
   incidentPersonnel: { id: string; personnel_id: string; apparatus_id: string | null; role: string; status: string | null; name: string; unit_number: string | null }[]
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
@@ -779,6 +779,16 @@ export default function NerisReportClient({
                       rows={3}
                       className="flex-1 w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 resize-none focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     />
+                    {/* Time summary — from cover sheet */}
+                    {(a.paged_at || a.enroute_at || a.on_scene_at || a.leaving_scene_at || a.available_at) && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-zinc-400 pt-1">
+                        {a.paged_at      && <span><span className="font-medium text-zinc-500">Paged</span> {formatDT(a.paged_at)}</span>}
+                        {a.enroute_at    && <span><span className="font-medium text-zinc-500">Enroute</span> {formatDT(a.enroute_at)}</span>}
+                        {a.on_scene_at   && <span><span className="font-medium text-zinc-500">On Scene</span> {formatDT(a.on_scene_at)}</span>}
+                        {a.leaving_scene_at && <span><span className="font-medium text-zinc-500">Leaving</span> {formatDT(a.leaving_scene_at)}</span>}
+                        {a.available_at  && <span><span className="font-medium text-zinc-500">Available</span> {formatDT(a.available_at)}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
