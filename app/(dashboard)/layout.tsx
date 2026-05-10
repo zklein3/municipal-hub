@@ -71,6 +71,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       label: 'Personnel',
       items: [
         { href: '/personnel', label: 'Roster' },
+        { href: user?.personnelId ? `/personnel/${user.personnelId}` : '/personnel', label: 'My Profile' },
       ],
     },
     {

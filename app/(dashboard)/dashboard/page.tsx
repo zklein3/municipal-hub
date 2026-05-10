@@ -143,10 +143,6 @@ function formatTime(t: string | null) {
   return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
 }
 
-function formatDate(d: string | null) {
-  if (!d) return null
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -181,11 +177,6 @@ export default async function DashboardPage() {
     .eq('id', myDept.department_id)
     .single()
 
-  // Fetch my title/rank if set
-  const { data: roleData } = myDept.role_id
-    ? await adminClient.from('personnel_roles').select('name').eq('id', myDept.role_id).single()
-    : { data: null }
-
   const departmentId = myDept.department_id
   const departmentName = deptData?.name ?? 'Your Department'
   const publicSiteUrl = deptData?.public_site_enabled && deptData?.public_slug
@@ -194,19 +185,6 @@ export default async function DashboardPage() {
   const systemRole = myDept.system_role
   const isAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
-
-  const profile = {
-    name: [me.first_name, me.last_name].filter(Boolean).join(' ') || 'Your Name',
-    initials: [me.first_name?.[0], me.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?',
-    systemRole,
-    title: roleData?.name ?? null,
-    department: departmentName,
-    employeeNumber: myDept.employee_number ?? null,
-    hireDate: myDept.hire_date ?? null,
-    phone: me.phone ?? null,
-    email: me.email ?? null,
-    personnelId: me.id,
-  }
 
   const [data, unreadAnnouncements, pendingInbox] = await Promise.all([
     getDashboardData(departmentId, me.id),
@@ -308,60 +286,6 @@ export default async function DashboardPage() {
           </Link>
         </div>
       )}
-
-      {/* Profile card */}
-      <div className="mb-6 rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
-        <div className="flex items-start gap-4">
-          {/* Initials avatar */}
-          <div className="shrink-0 w-14 h-14 rounded-full bg-red-700 flex items-center justify-center text-white text-xl font-bold">
-            {profile.initials}
-          </div>
-
-          {/* Main info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 flex-wrap">
-              <div>
-                <p className="text-xl font-bold text-zinc-900 leading-tight">{profile.name}</p>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    systemRole === 'admin'   ? 'bg-red-100 text-red-700' :
-                    systemRole === 'officer' ? 'bg-blue-100 text-blue-700' :
-                                               'bg-zinc-100 text-zinc-600'
-                  }`}>
-                    {systemRole.charAt(0).toUpperCase() + systemRole.slice(1)}
-                  </span>
-                  {profile.title && (
-                    <span className="text-sm text-zinc-500">{profile.title}</span>
-                  )}
-                  <span className="text-sm text-zinc-400">{profile.department}</span>
-                </div>
-              </div>
-              <Link
-                href={`/personnel/${profile.personnelId}`}
-                className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
-              >
-                Edit Profile →
-              </Link>
-            </div>
-
-            {/* Detail row */}
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-zinc-500">
-              {profile.employeeNumber && (
-                <span><span className="text-zinc-400 text-xs">Emp #</span> {profile.employeeNumber}</span>
-              )}
-              {profile.hireDate && (
-                <span><span className="text-zinc-400 text-xs">Hired</span> {formatDate(profile.hireDate)}</span>
-              )}
-              {profile.phone && (
-                <span>{profile.phone}</span>
-              )}
-              {profile.email && (
-                <span className="truncate max-w-xs">{profile.email}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Upcoming Events */}
       {hasUpcoming ? (
