@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveNerisReport, saveApparatusResponseMode, markNerisComplete, reopenNerisReport, submitToNeris } from '@/app/actions/neris'
+import { saveNerisReport, saveApparatusResponseMode, markNerisComplete, reopenNerisReport, submitToNeris, previewNerisPayload } from '@/app/actions/neris'
 import NerisCombobox from '@/components/NerisCombobox'
 import {
   NERIS_INCIDENT_TYPES,
@@ -128,6 +128,12 @@ export default function NerisReportClient({
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [readyGuardOpen, setReadyGuardOpen] = useState(false)
+
+  // Payload preview
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewData, setPreviewData] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
 
   // Incident type filter toggle
   const [showAllTypes, setShowAllTypes] = useState(false)
@@ -319,6 +325,59 @@ export default function NerisReportClient({
             />
             <span className="text-sm font-semibold text-amber-800">Show All</span>
           </label>
+        </div>
+      )}
+
+      {/* Payload preview — admin / testing mode */}
+      {(isAdmin || testingMode) && (
+        <div className="mb-4 rounded-lg border border-zinc-200 bg-white overflow-hidden">
+          <button
+            type="button"
+            onClick={async () => {
+              if (previewOpen) { setPreviewOpen(false); return }
+              setPreviewLoading(true)
+              setPreviewError(null)
+              setPreviewData(null)
+              const result = await previewNerisPayload(incident.id)
+              if (result?.error) {
+                setPreviewError(result.error)
+              } else {
+                setPreviewData(JSON.stringify(result.payload, null, 2))
+              }
+              setPreviewLoading(false)
+              setPreviewOpen(true)
+            }}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono text-zinc-500">JSON</span>
+              Preview NERIS Payload
+            </span>
+            <span className="text-zinc-400 text-xs">{previewOpen ? '▲ Hide' : '▼ Show'}</span>
+          </button>
+          {previewLoading && (
+            <div className="px-4 pb-3 text-xs text-zinc-400">Building payload…</div>
+          )}
+          {previewError && (
+            <div className="px-4 pb-3 text-xs text-red-600">{previewError}</div>
+          )}
+          {previewOpen && previewData && (
+            <div className="border-t border-zinc-100">
+              <div className="px-4 py-2 flex items-center justify-between">
+                <p className="text-xs text-zinc-400">This is the exact JSON that will be sent to NERIS. Field names marked <span className="font-mono bg-zinc-100 px-1 rounded">TODO(api-review)</span> need verification against the NERIS openapi.json once credentials are active.</p>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(previewData)}
+                  className="ml-3 shrink-0 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre className="overflow-x-auto bg-zinc-950 text-green-400 text-xs p-4 max-h-[480px] overflow-y-auto font-mono leading-relaxed">
+                {previewData}
+              </pre>
+            </div>
+          )}
         </div>
       )}
 

@@ -159,6 +159,154 @@ export async function reopenNerisReport(incident_id: string) {
   return { success: true }
 }
 
+// ─── Shared payload builder — used by both preview and submit ─────────────────
+// Adding a new field here automatically updates both the preview and the submission.
+// TODO(api-review): verify all field names against NERIS openapi.json once credentials active.
+function buildNerisPayload(
+  incident: any,
+  neris: any,
+  apparatus: any[],
+  personnelByApparatus: Map<string, number>,
+  unitNumberMap: Record<string, string>,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    dispatch: {
+      internal_id: incident.incident_number ?? undefined,
+      cad_id: incident.cad_number ?? undefined,
+      incident_start: incident.call_time ?? `${incident.incident_date}T00:00:00Z`,
+      incident_end: incident.in_service_at ?? undefined,
+      address: incident.address ?? undefined,
+    },
+    incident_types: [{ code: neris.neris_incident_type }],
+  }
+
+  if (neris.property_use || neris.displaced_persons != null) {
+    payload.locations = [{
+      property_use: neris.property_use ?? undefined,
+      displaced_persons: neris.displaced_persons ?? undefined,
+    }]
+  }
+
+  if (neris.actions_taken?.length > 0) {
+    payload.actions_tactics = {
+      actions: neris.actions_taken.map((code: string) => ({ code })),
+    }
+  } else if (neris.no_action_reason) {
+    payload.actions_tactics = { no_action_reason: neris.no_action_reason }
+  }
+
+  if (neris.aid_type) {
+    payload.aids = [{ aid_type: neris.aid_type, direction: neris.aid_direction ?? undefined }]
+  }
+
+  if (apparatus.length > 0) {
+    payload.unit_response = apparatus.map((a: any) => ({
+      unit_id: unitNumberMap[a.apparatus_id] ?? a.apparatus_id,
+      response_mode: a.response_mode ?? undefined,
+      staffing_count: a.staffing_count ?? personnelByApparatus.get(a.apparatus_id) ?? undefined,
+      paged_at: a.paged_at ?? undefined,
+      on_scene_at: a.on_scene_at ?? undefined,
+      leaving_scene_at: a.leaving_scene_at ?? undefined,
+      available_at: a.available_at ?? undefined,
+    }))
+  }
+
+  if (incident.narrative) {
+    payload.comments = [{ comment: incident.narrative }]
+  }
+
+  if (neris.fire_condition_arrival || neris.building_damage || neris.fire_cause_code || neris.outside_fire_acres != null) {
+    payload.fire = {
+      condition_arrival: neris.fire_condition_arrival ?? undefined,
+      building_damage: neris.building_damage ?? undefined,
+      cause: neris.fire_cause_code ?? undefined,
+      outside_fire_acres: neris.outside_fire_acres ?? undefined,
+      suppression_appliances: neris.suppression_appliance ?? undefined,
+      floor_of_origin: neris.floor_of_origin ?? undefined,
+      room_of_origin: neris.room_of_origin ?? undefined,
+    }
+  }
+
+  const persons = neris.incident_persons ?? []
+  if (persons.length > 0) {
+    payload.medical = {
+      patient_count: persons.length,
+      patients: persons.map((p: any) => ({
+        evaluation_care: p.evaluation_care || undefined,
+        improved_status: p.improved_status || undefined,
+        disposition: p.disposition || undefined,
+      })),
+    }
+    payload.rescue = {
+      vehicles_involved: neris.vehicles_involved ?? undefined,
+      victims: persons.map((p: any) => ({
+        rescue_type: p.rescue_type || undefined,
+        casualty_type: p.casualty_type || undefined,
+        casualty_cause: p.casualty_cause || undefined,
+        entrapped: p.entrapped || undefined,
+        vehicle_type: p.vehicle_type || undefined,
+        safety_device: p.safety_device || undefined,
+      })),
+    }
+  } else if (neris.vehicles_involved != null) {
+    payload.rescue = { vehicles_involved: neris.vehicles_involved }
+  }
+
+  if (neris.hazsit_disposition || neris.chemical_name) {
+    payload.hazmat = {
+      disposition: neris.hazsit_disposition ?? undefined,
+      evacuated: neris.hazsit_evacuated ?? undefined,
+      chemical_name: neris.chemical_name ?? undefined,
+      dot_class: neris.chemical_dot_class ?? undefined,
+      release_occurred: neris.chemical_release_occurred ?? undefined,
+    }
+  }
+
+  return payload
+}
+
+// ─── Preview payload (no submission) ─────────────────────────────────────────
+export async function previewNerisPayload(incident_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can preview the NERIS payload.' }
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+
+  const { data: incList } = await adminClient.from('incidents').select('*').eq('id', incident_id).eq('department_id', department_id)
+  const incident = incList?.[0]
+  if (!incident) return { error: 'Incident not found.' }
+
+  const { data: nerisList } = await adminClient.from('incident_neris').select('*').eq('incident_id', incident_id)
+  const neris = nerisList?.[0] ?? {}
+
+  let { data: apparatus, error: apparatusError } = await adminClient
+    .from('incident_apparatus')
+    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
+    .eq('incident_id', incident_id)
+  if (apparatusError) {
+    const fallback = await adminClient.from('incident_apparatus').select('id, apparatus_id, role, paged_at, on_scene_at, leaving_scene_at, available_at').eq('incident_id', incident_id)
+    apparatus = (fallback.data ?? []).map((a: any) => ({ ...a, response_mode: null, staffing_count: null }))
+  }
+
+  const apparatusIds = (apparatus ?? []).map((a: any) => a.apparatus_id).filter(Boolean)
+  const { data: apparatusPersonnel } = apparatusIds.length > 0
+    ? await adminClient.from('incident_personnel').select('apparatus_id, status').eq('incident_id', incident_id).in('apparatus_id', apparatusIds)
+    : { data: [] }
+  const personnelByApparatus = new Map<string, number>()
+  for (const row of apparatusPersonnel ?? []) {
+    if (!row.apparatus_id || row.status === 'absent') continue
+    personnelByApparatus.set(row.apparatus_id, (personnelByApparatus.get(row.apparatus_id) ?? 0) + 1)
+  }
+  const { data: apparatusNames } = apparatusIds.length > 0
+    ? await adminClient.from('apparatus').select('id, unit_number').in('id', apparatusIds)
+    : { data: [] }
+  const unitNumberMap = Object.fromEntries((apparatusNames ?? []).map((a: any) => [a.id, a.unit_number]))
+
+  const payload = buildNerisPayload(incident, neris, apparatus ?? [], personnelByApparatus, unitNumberMap)
+  return { payload }
+}
+
 // ─── Submit report to NERIS API ───────────────────────────────────────────────
 export async function submitToNeris(incident_id: string) {
   const ctx = await getContext()
@@ -236,112 +384,7 @@ export async function submitToNeris(incident_id: string) {
     .select('*')
     .eq('incident_id', incident_id)
 
-  // Build NERIS incident payload
-  // TODO: verify exact field names against NERIS API once credentials are available
-  // Payload structure based on openapi.json IncidentPayload schema
-  const payload: Record<string, unknown> = {
-    dispatch: {
-      internal_id: incident.incident_number ?? undefined,
-      cad_id: incident.cad_number ?? undefined,
-      incident_start: incident.call_time ?? `${incident.incident_date}T00:00:00Z`,
-      incident_end: incident.in_service_at ?? undefined,
-      address: incident.address ?? undefined,
-    },
-    incident_types: [{ code: neris.neris_incident_type }],
-  }
-
-  if (neris.property_use || neris.displaced_persons != null) {
-    payload.locations = [{
-      property_use: neris.property_use ?? undefined,
-      displaced_persons: neris.displaced_persons ?? undefined,
-    }]
-  }
-
-  if (neris.actions_taken?.length > 0) {
-    payload.actions_tactics = {
-      actions: neris.actions_taken.map((code: string) => ({ code })),
-    }
-  } else if (neris.no_action_reason) {
-    payload.actions_tactics = {
-      no_action_reason: neris.no_action_reason,
-    }
-  }
-
-  if (neris.aid_type) {
-    payload.aids = [{
-      aid_type: neris.aid_type,
-      direction: neris.aid_direction ?? undefined,
-    }]
-  }
-
-  if (apparatus?.length) {
-    payload.unit_response = apparatus.map((a: any) => ({
-      unit_id: unitNumberMap[a.apparatus_id] ?? a.apparatus_id,
-      response_mode: a.response_mode ?? undefined,
-      staffing_count: a.staffing_count ?? personnelByApparatus.get(a.apparatus_id) ?? undefined,
-      paged_at: a.paged_at ?? undefined,
-      on_scene_at: a.on_scene_at ?? undefined,
-      leaving_scene_at: a.leaving_scene_at ?? undefined,
-      available_at: a.available_at ?? undefined,
-    }))
-  }
-
-  if (incident.narrative) {
-    payload.comments = [{ comment: incident.narrative }]
-  }
-
-  // Fire module
-  if (neris.fire_condition_arrival || neris.building_damage || neris.fire_cause_code || neris.outside_fire_acres != null) {
-    payload.fire = {
-      condition_arrival: neris.fire_condition_arrival ?? undefined,
-      building_damage: neris.building_damage ?? undefined,
-      cause: neris.fire_cause_code ?? undefined,
-      outside_fire_acres: neris.outside_fire_acres ?? undefined,
-      suppression_appliances: neris.suppression_appliance ?? undefined,
-      floor_of_origin: neris.floor_of_origin ?? undefined,
-      room_of_origin: neris.room_of_origin ?? undefined,
-    }
-  }
-
-  // Unified persons — split into medical + rescue payload sections
-  // TODO(api-review): verify NERIS API schema for nested patients[] and victims[] arrays once
-  // credentials are active. Field names (evaluation_care, improved_status, disposition,
-  // rescue_type, entrapped, vehicle_type, safety_device) must match openapi.json exactly.
-  const persons = neris.incident_persons ?? []
-  if (persons.length > 0) {
-    payload.medical = {
-      patient_count: persons.length,
-      patients: persons.map((p: any) => ({
-        evaluation_care: p.evaluation_care || undefined,
-        improved_status: p.improved_status || undefined,
-        disposition: p.disposition || undefined,
-      })),
-    }
-    payload.rescue = {
-      vehicles_involved: neris.vehicles_involved ?? undefined,
-      victims: persons.map((p: any) => ({
-        rescue_type: p.rescue_type || undefined,
-        casualty_type: p.casualty_type || undefined,
-        casualty_cause: p.casualty_cause || undefined,
-        entrapped: p.entrapped || undefined,
-        vehicle_type: p.vehicle_type || undefined,
-        safety_device: p.safety_device || undefined,
-      })),
-    }
-  } else if (neris.vehicles_involved != null) {
-    payload.rescue = { vehicles_involved: neris.vehicles_involved }
-  }
-
-  // Hazmat module
-  if (neris.hazsit_disposition || neris.chemical_name) {
-    payload.hazmat = {
-      disposition: neris.hazsit_disposition ?? undefined,
-      evacuated: neris.hazsit_evacuated ?? undefined,
-      chemical_name: neris.chemical_name ?? undefined,
-      dot_class: neris.chemical_dot_class ?? undefined,
-      release_occurred: neris.chemical_release_occurred ?? undefined,
-    }
-  }
+  const payload = buildNerisPayload(incident, neris, apparatus ?? [], personnelByApparatus, unitNumberMap)
 
   // Validate first
   const validation = await nerisValidateIncident(nerisEntityId, payload)
