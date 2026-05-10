@@ -119,6 +119,7 @@ export default function NewIncidentClient({
 
     const fd = new FormData()
     fd.append('pdf', file)
+    fd.append('apparatus_units', JSON.stringify(apparatus.map(a => a.unit_number)))
     const result = await parseRunSheet(fd)
 
     if (result.error) { setImportError(result.error); setIsParsing(false); return }
@@ -140,7 +141,12 @@ export default function NewIncidentClient({
     if (d.apparatus?.length) {
       const matched: ApparatusEntry[] = []
       for (const unit of d.apparatus) {
-        const found = apparatus.find(a => a.unit_number.toUpperCase() === unit.unit_number.toUpperCase())
+        // Strip leading alpha prefix (e.g. "WIN11" → "11") to handle CAD agency prefixes
+        const numericSuffix = unit.unit_number.replace(/^[A-Za-z]+/, '')
+        const found = apparatus.find(a =>
+          a.unit_number.toUpperCase() === unit.unit_number.toUpperCase() ||
+          (numericSuffix && a.unit_number === numericSuffix)
+        )
         if (found) {
           matched.push({
             apparatus_id: found.id,
