@@ -102,7 +102,7 @@ export default function NerisReportClient({
 }: {
   incident: any
   fireDetails: any
-  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
+  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; notes: string | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
   incidentPersonnel: { id: string; personnel_id: string; apparatus_id: string | null; role: string; status: string | null; name: string; unit_number: string | null }[]
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
@@ -156,6 +156,8 @@ export default function NerisReportClient({
   function showVehicleFields(rescueType: string) { return VEHICLE_RESCUE_TYPES.has(rescueType) || isMotorVehicle }
   function showEntrapmentField(rescueType: string) { return ENTRAPMENT_RESCUE_TYPES.has(rescueType) || isMotorVehicle }
   const [propertyUse, setPropertyUse] = useState<string>(nerisRecord?.property_use ?? '')
+  const [propertyNormalUse, setPropertyNormalUse] = useState<string>(nerisRecord?.property_normal_use ?? '')
+  const [nerisNarrative, setNerisNarrative] = useState<string>(nerisRecord?.neris_narrative ?? '')
   const [displacedPersons, setDisplacedPersons] = useState<string>(
     nerisRecord?.displaced_persons != null ? String(nerisRecord.displaced_persons) : ''
   )
@@ -212,6 +214,9 @@ export default function NerisReportClient({
   const [staffingCounts, setStaffingCounts] = useState<Record<string, string>>(
     Object.fromEntries(incidentApparatus.map(a => [a.id, a.staffing_count != null ? String(a.staffing_count) : '']))
   )
+  const [apparatusNotes, setApparatusNotes] = useState<Record<string, string>>(
+    Object.fromEntries(incidentApparatus.map(a => [a.id, a.notes ?? '']))
+  )
   const [responseModeSaving, setResponseModeSaving] = useState<string | null>(null)
 
   async function handleSave(e: React.FormEvent) {
@@ -222,6 +227,8 @@ export default function NerisReportClient({
     const result = await saveNerisReport(incident.id, {
       neris_incident_type: nerisType || null,
       property_use: propertyUse || null,
+      property_normal_use: propertyNormalUse || null,
+      neris_narrative: nerisNarrative || null,
       actions_taken: actionsTaken,
       no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
       displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
@@ -251,22 +258,21 @@ export default function NerisReportClient({
     setResponseModes(prev => ({ ...prev, [apparatusIncidentId]: mode }))
     setResponseModeSaving(apparatusIncidentId)
     const staffingValue = staffingCounts[apparatusIncidentId]
-    await saveApparatusResponseMode(
-      apparatusIncidentId,
-      mode,
-      staffingValue !== '' ? parseInt(staffingValue) : null
-    )
+    await saveApparatusResponseMode(apparatusIncidentId, mode, staffingValue !== '' ? parseInt(staffingValue) : null, apparatusNotes[apparatusIncidentId] || null)
     setResponseModeSaving(null)
   }
 
   async function handleStaffingCountBlur(apparatusIncidentId: string) {
     setResponseModeSaving(apparatusIncidentId)
     const staffingValue = staffingCounts[apparatusIncidentId]
-    await saveApparatusResponseMode(
-      apparatusIncidentId,
-      responseModes[apparatusIncidentId] ?? '',
-      staffingValue !== '' ? parseInt(staffingValue) : null
-    )
+    await saveApparatusResponseMode(apparatusIncidentId, responseModes[apparatusIncidentId] ?? '', staffingValue !== '' ? parseInt(staffingValue) : null, apparatusNotes[apparatusIncidentId] || null)
+    setResponseModeSaving(null)
+  }
+
+  async function handleApparatusNotesBlur(apparatusIncidentId: string) {
+    setResponseModeSaving(apparatusIncidentId)
+    const staffingValue = staffingCounts[apparatusIncidentId]
+    await saveApparatusResponseMode(apparatusIncidentId, responseModes[apparatusIncidentId] ?? '', staffingValue !== '' ? parseInt(staffingValue) : null, apparatusNotes[apparatusIncidentId] || null)
     setResponseModeSaving(null)
   }
 
@@ -556,20 +562,55 @@ export default function NerisReportClient({
             placeholder="Select NERIS incident type…"
             disabled={isSubmitted}
           />
+          <div>
+            <label className={labelCls}>
+              NERIS Narrative <span className="text-zinc-400 font-normal text-xs">— overrides cover sheet narrative for NERIS submission</span>
+            </label>
+            <p className="text-xs text-zinc-400 mb-1">Leave blank to use the cover sheet narrative as-is.</p>
+            <textarea
+              rows={3}
+              value={nerisNarrative}
+              onChange={e => setNerisNarrative(e.target.value)}
+              disabled={isSubmitted}
+              placeholder="Optional — enter a NERIS-specific narrative if needed…"
+              className={inputCls}
+            />
+            {!nerisNarrative && incident.narrative && (
+              <p className="mt-1 text-xs text-zinc-400 line-clamp-2">
+                <span className="font-medium text-zinc-500">Cover sheet: </span>{incident.narrative}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Scene Information */}
         <section id="neris-section-location" className={`${sectionCls} scroll-mt-6`}>
           <h2 className="text-sm font-semibold text-zinc-900">Scene Information</h2>
-          <div>
-            <label className={labelCls}>Property Use</label>
-            <NerisCombobox
-              groups={NERIS_PROPERTY_USE}
-              value={propertyUse}
-              onChange={setPropertyUse}
-              placeholder="Select property use…"
-              disabled={isSubmitted}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>
+                Property Use <span className="text-zinc-400 font-normal text-xs">— in use at time of incident</span>
+              </label>
+              <NerisCombobox
+                groups={NERIS_PROPERTY_USE}
+                value={propertyUse}
+                onChange={setPropertyUse}
+                placeholder="Select use at time of incident…"
+                disabled={isSubmitted}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>
+                Normal / Intended Use <span className="text-zinc-400 font-normal text-xs">— property&apos;s typical use</span>
+              </label>
+              <NerisCombobox
+                groups={NERIS_PROPERTY_USE}
+                value={propertyNormalUse}
+                onChange={setPropertyNormalUse}
+                placeholder="Select normal use…"
+                disabled={isSubmitted}
+              />
+            </div>
           </div>
           <div>
             <label className={labelCls}>Displaced Persons</label>
@@ -721,6 +762,17 @@ export default function NerisReportClient({
                         <option key={m.code} value={m.code}>{m.label}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      value={apparatusNotes[a.id] ?? ''}
+                      onChange={e => setApparatusNotes(prev => ({ ...prev, [a.id]: e.target.value }))}
+                      onBlur={() => handleApparatusNotesBlur(a.id)}
+                      disabled={isSubmitted}
+                      placeholder={`Notes for ${a.unit_number} (optional)`}
+                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
                   </div>
                 </div>
               ))}
@@ -1139,6 +1191,8 @@ export default function NerisReportClient({
                   const saveResult = await saveNerisReport(incident.id, {
                     neris_incident_type: nerisType || null,
                     property_use: propertyUse || null,
+      property_normal_use: propertyNormalUse || null,
+      neris_narrative: nerisNarrative || null,
                     actions_taken: actionsTaken,
                     no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
                     displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,

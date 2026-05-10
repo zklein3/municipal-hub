@@ -47,7 +47,7 @@ export default async function NerisReportPage({
   // NERIS-specific columns have not been applied in Supabase yet.
   let { data: apparatusRaw, error: apparatusError } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, notes, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', id)
     .order('created_at')
 
@@ -62,6 +62,7 @@ export default async function NerisReportPage({
       ...a,
       response_mode: null,
       staffing_count: null,
+      notes: null,
     }))
   }
 

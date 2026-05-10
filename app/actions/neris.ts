@@ -62,6 +62,8 @@ export async function getOrCreateNerisRecord(incident_id: string) {
 export async function saveNerisReport(incident_id: string, data: {
   neris_incident_type?: string | null
   property_use?: string | null
+  property_normal_use?: string | null
+  neris_narrative?: string | null
   actions_taken?: string[]
   no_action_reason?: string | null
   displaced_persons?: number | null
@@ -129,13 +131,15 @@ export async function saveNerisReport(incident_id: string, data: {
 export async function saveApparatusResponseMode(
   apparatus_incident_id: string,
   response_mode: string,
-  staffing_count?: number | null
+  staffing_count?: number | null,
+  notes?: string | null,
 ) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can set response mode.' }
   const adminClient = createAdminClient()
   const updates: Record<string, string | number | null> = { response_mode: response_mode || null }
   if (staffing_count !== undefined) updates.staffing_count = staffing_count
+  if (notes !== undefined) updates.notes = notes || null
   const { error: dbErr } = await adminClient
     .from('incident_apparatus')
     .update(updates)
@@ -180,9 +184,10 @@ function buildNerisPayload(
     incident_types: [{ code: neris.neris_incident_type }],
   }
 
-  if (neris.property_use || neris.displaced_persons != null) {
+  if (neris.property_use || neris.property_normal_use || neris.displaced_persons != null) {
     payload.locations = [{
       property_use: neris.property_use ?? undefined,
+      normal_use: neris.property_normal_use ?? undefined,
       displaced_persons: neris.displaced_persons ?? undefined,
     }]
   }
@@ -208,11 +213,13 @@ function buildNerisPayload(
       on_scene_at: a.on_scene_at ?? undefined,
       leaving_scene_at: a.leaving_scene_at ?? undefined,
       available_at: a.available_at ?? undefined,
+      notes: a.notes ?? undefined,
     }))
   }
 
-  if (incident.narrative) {
-    payload.comments = [{ comment: incident.narrative }]
+  const narrative = neris.neris_narrative || incident.narrative
+  if (narrative) {
+    payload.comments = [{ comment: narrative }]
   }
 
   if (neris.fire_condition_arrival || neris.building_damage || neris.fire_cause_code || neris.outside_fire_acres != null) {
@@ -282,7 +289,7 @@ export async function previewNerisPayload(incident_id: string) {
 
   let { data: apparatus, error: apparatusError } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, notes, paged_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', incident_id)
   if (apparatusError) {
     const fallback = await adminClient.from('incident_apparatus').select('id, apparatus_id, role, paged_at, on_scene_at, leaving_scene_at, available_at').eq('incident_id', incident_id)
@@ -346,7 +353,7 @@ export async function submitToNeris(incident_id: string) {
   // Fetch apparatus
   let { data: apparatus, error: apparatusError } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, notes, paged_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', incident_id)
   if (apparatusError) {
     const fallback = await adminClient
