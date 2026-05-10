@@ -27,6 +27,7 @@ import {
   NERIS_CASUALTY_CAUSE,
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
+import type { NerisRequirementSummary } from '@/lib/neris-requirements'
 
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
 const sectionCls = "rounded-xl bg-white border border-zinc-200 p-5 space-y-4"
@@ -62,6 +63,7 @@ export default function NerisReportClient({
   incidentPersonnel,
   nerisRecord,
   mutualAidRows,
+  requirementSummary,
   isAdmin,
   isOfficerOrAbove,
 }: {
@@ -71,6 +73,7 @@ export default function NerisReportClient({
   incidentPersonnel: { id: string; personnel_id: string; role: string; name: string }[]
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
+  requirementSummary: NerisRequirementSummary
   isAdmin: boolean
   isOfficerOrAbove: boolean
 }) {
@@ -292,6 +295,63 @@ export default function NerisReportClient({
           Submitted to NERIS — ID: {nerisRecord.neris_submission_id ?? '—'}. This report is locked.
         </div>
       )}
+      <div className="mb-4 rounded-xl bg-white border border-zinc-200 p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-900">NERIS Requirements Map</h2>
+            <p className="text-xs text-zinc-500 mt-1">
+              {requirementSummary.readyForLocalCompletion
+                ? 'Local required fields look complete. API validation is still blocked until FSRI enrollment is ready.'
+                : 'Required or conditional NERIS fields are still missing.'}
+            </p>
+          </div>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            requirementSummary.readyForLocalCompletion ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+          }`}>
+            {requirementSummary.complete}/{requirementSummary.totalApplicable} complete
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
+            <p className="text-lg font-bold text-zinc-900">{requirementSummary.missing}</p>
+            <p className="text-[11px] font-medium text-zinc-500">Missing</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
+            <p className="text-lg font-bold text-zinc-900">{requirementSummary.blocked}</p>
+            <p className="text-[11px] font-medium text-zinc-500">Blocked</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
+            <p className="text-lg font-bold text-zinc-900">{requirementSummary.computed}</p>
+            <p className="text-[11px] font-medium text-zinc-500">Computed</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
+            <p className="text-lg font-bold text-zinc-900">
+              {Object.values(requirementSummary.activeModules).filter(Boolean).length}
+            </p>
+            <p className="text-[11px] font-medium text-zinc-500">Modules</p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {requirementSummary.requirements
+            .filter(req => req.status === 'missing' || req.status === 'blocked')
+            .slice(0, 6)
+            .map(req => (
+              <div key={req.id} className="flex items-start justify-between gap-3 text-xs">
+                <div>
+                  <p className="font-medium text-zinc-800">{req.label}</p>
+                  {req.detail && <p className="text-zinc-400 mt-0.5">{req.detail}</p>}
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${
+                  req.status === 'blocked' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {req.status === 'blocked' ? 'Blocked' : 'Missing'}
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
       {saved && <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Saved successfully.</div>}
 

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import NerisReportClient from './NerisReportClient'
+import { evaluateNerisRequirements } from '@/lib/neris-requirements'
 
 export default async function NerisReportPage({
   params,
@@ -92,6 +93,15 @@ export default async function NerisReportPage({
     .eq('incident_id', id)
     .maybeSingle()
 
+  const requirementSummary = evaluateNerisRequirements({
+    incident,
+    nerisRecord: nerisRecord ?? null,
+    incidentApparatus,
+    incidentPersonnel,
+    mutualAidRows: mutualAidRows ?? [],
+    apiEnrollmentReady: false,
+  })
+
   return (
     <div className="max-w-2xl">
       <NerisReportClient
@@ -101,6 +111,7 @@ export default async function NerisReportPage({
         incidentPersonnel={incidentPersonnel}
         nerisRecord={nerisRecord ?? null}
         mutualAidRows={mutualAidRows ?? []}
+        requirementSummary={requirementSummary}
         isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
         isOfficerOrAbove={isOfficerOrAbove}
       />

@@ -103,6 +103,20 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 
 ---
 
+## Requirements Mapping
+
+- Phase 1 mapper lives in `lib/neris-requirements.ts`
+- It evaluates FireOps7 cover sheet data, `incident_neris`, apparatus, personnel, and mutual aid rows into:
+  - active NERIS modules
+  - missing required/conditional fields
+  - blocked fields FireOps7 does not collect yet
+  - computed fields NERIS should derive
+  - local completion vs API validation readiness
+- `/incidents/[id]/neris` shows a compact read-only summary from this mapper.
+- Next phase: expand the summary into section-level checklist navigation and use FSRI validation errors to refine the rules.
+
+---
+
 ## Vendor Integration Architecture
 
 NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departments are the **enrollers**.
