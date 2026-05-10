@@ -115,6 +115,10 @@ export default function NerisReportClient({
   const isRescueType   = testingMode || coverType === 'rescue'
   const isOutsideFire  = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
   const hasMutualAid   = testingMode || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
+  const hasOpenUnitsWork = requirementSummary.sections.some(section => section.section === 'units' && !!section.firstOpenRequirement)
+  const hasOpenPersonnelWork = requirementSummary.sections.some(section => section.section === 'personnel' && !!section.firstOpenRequirement)
+  const showUnitsSection = testingMode || incidentApparatus.length > 0 || hasOpenUnitsWork
+  const showPersonnelSection = testingMode || incidentPersonnel.length > 0 || hasOpenPersonnelWork
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -289,7 +293,7 @@ export default function NerisReportClient({
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-amber-800">Testing Mode <span className="text-xs font-normal">(admin only)</span></p>
-            <p className="text-xs text-amber-600">Show all modules regardless of incident type — toggle off for adaptive behavior.</p>
+            <p className="text-xs text-amber-600">Show all modules and readiness sections regardless of incident type — toggle off for adaptive behavior.</p>
           </div>
           <label className="flex items-center gap-2 cursor-pointer shrink-0">
             <input
@@ -586,10 +590,24 @@ export default function NerisReportClient({
         )}
 
         {/* Apparatus — Response Mode */}
-        {incidentApparatus.length > 0 && (
+        {showUnitsSection && (
           <section id="neris-section-units" className={`${sectionCls} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Apparatus Response Mode</h2>
             <p className="text-xs text-zinc-400 -mt-1">Set per-unit whether response was emergent or non-emergent.</p>
+            {incidentApparatus.length === 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">No apparatus are attached to this incident.</p>
+                <p className="mt-1 text-xs text-amber-700">Add responding apparatus from the incident detail page, then return here to set staffing and response mode.</p>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/incidents/${incident.id}`)}
+                  className="mt-3 rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                >
+                  Back to Incident
+                </button>
+              </div>
+            )}
+            {incidentApparatus.length > 0 && (
             <div className="divide-y divide-zinc-100">
               {incidentApparatus.map(a => (
                 <div key={a.id} className="flex items-center justify-between py-2.5">
@@ -629,14 +647,29 @@ export default function NerisReportClient({
                 </div>
               ))}
             </div>
+            )}
           </section>
         )}
 
         {/* Personnel — read-only */}
-        {incidentPersonnel.length > 0 && (
+        {showPersonnelSection && (
           <section id="neris-section-personnel" className={`${sectionCls} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Personnel on Scene</h2>
             <p className="text-xs text-zinc-400 -mt-1">From cover sheet — flows directly to NERIS payload.</p>
+            {incidentPersonnel.length === 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">No personnel are attached to this incident.</p>
+                <p className="mt-1 text-xs text-amber-700">Add personnel from the incident detail page if responders should be included in the NERIS record.</p>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/incidents/${incident.id}`)}
+                  className="mt-3 rounded-lg bg-white border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                >
+                  Back to Incident
+                </button>
+              </div>
+            )}
+            {incidentPersonnel.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {incidentPersonnel.map(p => (
                 <span key={p.id} className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700">
@@ -644,6 +677,7 @@ export default function NerisReportClient({
                 </span>
               ))}
             </div>
+            )}
           </section>
         )}
 
