@@ -94,7 +94,7 @@ export default function NerisReportClient({
 }: {
   incident: any
   fireDetails: any
-  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
+  incidentApparatus: { id: string; apparatus_id: string; unit_number: string; apparatus_name: string | null; role: string; response_mode: string | null; staffing_count: number | null; paged_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }[]
   incidentPersonnel: { id: string; personnel_id: string; role: string; name: string }[]
   nerisRecord: any
   mutualAidRows: { id: string; external_department_name: string; role: string; apparatus_description: string | null; personnel_count: number | null }[]
@@ -132,6 +132,7 @@ export default function NerisReportClient({
     nerisRecord?.displaced_persons != null ? String(nerisRecord.displaced_persons) : ''
   )
   const [actionsTaken, setActionsTaken] = useState<string[]>(nerisRecord?.actions_taken ?? [])
+  const [noActionReason, setNoActionReason] = useState<string>(nerisRecord?.no_action_reason ?? '')
 
   // Mutual aid
   const [aidType, setAidType] = useState<string>(nerisRecord?.aid_type ?? '')
@@ -146,6 +147,9 @@ export default function NerisReportClient({
   )
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
+  const [outsideFireAcres, setOutsideFireAcres] = useState<string>(
+    nerisRecord?.outside_fire_acres != null ? String(nerisRecord.outside_fire_acres) : ''
+  )
 
   // Medical module
   const [patientCount, setPatientCount] = useState<string>(
@@ -175,6 +179,9 @@ export default function NerisReportClient({
   const [responseModes, setResponseModes] = useState<Record<string, string>>(
     Object.fromEntries(incidentApparatus.map(a => [a.id, a.response_mode ?? '']))
   )
+  const [staffingCounts, setStaffingCounts] = useState<Record<string, string>>(
+    Object.fromEntries(incidentApparatus.map(a => [a.id, a.staffing_count != null ? String(a.staffing_count) : '']))
+  )
   const [responseModeSaving, setResponseModeSaving] = useState<string | null>(null)
 
   async function handleSave(e: React.FormEvent) {
@@ -186,7 +193,9 @@ export default function NerisReportClient({
       neris_incident_type: nerisType || null,
       property_use: propertyUse || null,
       actions_taken: actionsTaken,
+      no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
       displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
+      outside_fire_acres: outsideFireAcres !== '' ? parseFloat(outsideFireAcres) : null,
       fire_condition_arrival: fireCondition || null,
       building_damage: buildingDamage || null,
       suppression_appliance: suppressionAppliances,
@@ -216,7 +225,23 @@ export default function NerisReportClient({
   async function handleResponseModeChange(apparatusIncidentId: string, mode: string) {
     setResponseModes(prev => ({ ...prev, [apparatusIncidentId]: mode }))
     setResponseModeSaving(apparatusIncidentId)
-    await saveApparatusResponseMode(apparatusIncidentId, mode)
+    const staffingValue = staffingCounts[apparatusIncidentId]
+    await saveApparatusResponseMode(
+      apparatusIncidentId,
+      mode,
+      staffingValue !== '' ? parseInt(staffingValue) : null
+    )
+    setResponseModeSaving(null)
+  }
+
+  async function handleStaffingCountBlur(apparatusIncidentId: string) {
+    setResponseModeSaving(apparatusIncidentId)
+    const staffingValue = staffingCounts[apparatusIncidentId]
+    await saveApparatusResponseMode(
+      apparatusIncidentId,
+      responseModes[apparatusIncidentId] ?? '',
+      staffingValue !== '' ? parseInt(staffingValue) : null
+    )
     setResponseModeSaving(null)
   }
 
@@ -489,6 +514,17 @@ export default function NerisReportClient({
             placeholder="Select actions taken…"
             disabled={isSubmitted}
           />
+          <div>
+            <label className={labelCls}>No-Action Reason <span className="text-zinc-400 font-normal">(if no actions were taken)</span></label>
+            <input
+              type="text"
+              value={noActionReason}
+              onChange={e => setNoActionReason(e.target.value)}
+              disabled={isSubmitted || actionsTaken.length > 0}
+              placeholder="e.g. Cancelled enroute, no emergency found"
+              className={inputCls}
+            />
+          </div>
         </section>
 
         {/* Mutual Aid */}
@@ -563,10 +599,21 @@ export default function NerisReportClient({
                     </p>
                     <p className="text-xs text-zinc-400 capitalize">{APPARATUS_ROLE_LABELS[a.role] ?? a.role}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {responseModeSaving === a.id && (
                       <span className="text-xs text-zinc-400">Saving…</span>
                     )}
+                    <input
+                      type="number"
+                      min={0}
+                      value={staffingCounts[a.id] ?? ''}
+                      onChange={e => setStaffingCounts(prev => ({ ...prev, [a.id]: e.target.value }))}
+                      onBlur={() => handleStaffingCountBlur(a.id)}
+                      disabled={isSubmitted}
+                      placeholder="Staff"
+                      aria-label={`Staffing count for ${a.unit_number}`}
+                      className="w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
                     <select
                       value={responseModes[a.id] ?? ''}
                       onChange={e => handleResponseModeChange(a.id, e.target.value)}
@@ -647,6 +694,22 @@ export default function NerisReportClient({
                 disabled={isSubmitted}
               />
             </div>
+
+            {isOutsideFire && (
+              <div>
+                <label className={labelCls}>Outside Fire Acres Burned</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={outsideFireAcres}
+                  onChange={e => setOutsideFireAcres(e.target.value)}
+                  disabled={isSubmitted}
+                  placeholder="0.00"
+                  className={inputCls}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -872,7 +935,9 @@ export default function NerisReportClient({
                     neris_incident_type: nerisType || null,
                     property_use: propertyUse || null,
                     actions_taken: actionsTaken,
+                    no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
                     displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
+                    outside_fire_acres: outsideFireAcres !== '' ? parseFloat(outsideFireAcres) : null,
                     fire_condition_arrival: fireCondition || null,
                     building_damage: buildingDamage || null,
                     suppression_appliance: suppressionAppliances,

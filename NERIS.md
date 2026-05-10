@@ -117,6 +117,22 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 
 ---
 
+## Phase 3 Data Gap Inventory
+
+| NERIS Field | Applies When | FireOps7 Source | Status | Proposed Storage |
+|---|---|---|---|---|
+| Unit staffing at dispatch | Unit response exists | Not collected per unit | Missing | `incident_apparatus.staffing_count` |
+| Outside fire acres burned | Grass, wildland, other outside fires | Not collected | Missing | `incident_neris.outside_fire_acres` |
+| No-action reason | No actions taken, cancelled, false alarm, good intent | Not collected | Missing | `incident_neris.no_action_reason` |
+| Incident latitude/longitude | Every incident if available | Address only | Partial/API-confirm-needed | Future `incidents` lat/lng fields or location table |
+| Displacement cause | Incidents with displaced persons | Displaced count only | Partial/API-confirm-needed | Future `incident_neris.displacement_cause` |
+| Medical transport details | Medical incidents | Basic disposition only | Partial/API-confirm-needed | Future medical subrecord |
+| Station/unit NERIS IDs | Compatibility and production entity sync | Not collected | Missing | Future station/apparatus NERIS columns |
+
+Phase 3 migration file: `supabase/neris_phase3_data_gaps.sql`.
+
+---
+
 ## Vendor Integration Architecture
 
 NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departments are the **enrollers**.

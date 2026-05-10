@@ -33,7 +33,9 @@ export type NerisRecordInput = {
   neris_incident_type?: string | null
   property_use?: string | null
   actions_taken?: string[] | null
+  no_action_reason?: string | null
   displaced_persons?: number | null
+  outside_fire_acres?: number | null
   fire_condition_arrival?: string | null
   building_damage?: string | null
   suppression_appliance?: string[] | null
@@ -59,6 +61,7 @@ export type NerisRecordInput = {
 export type NerisApparatusInput = {
   id?: string | null
   response_mode?: string | null
+  staffing_count?: number | null
   paged_at?: string | null
   enroute_at?: string | null
   on_scene_at?: string | null
@@ -393,13 +396,16 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     detail: 'NERIS can compute geographic fields when a usable address is supplied; exact API behavior still needs validation.',
   })
 
+  const hasActionsTaken = hasItems(neris.actions_taken)
+  const hasNoActionReason = hasText(neris.no_action_reason)
   add({
     id: 'actions.taken',
     section: 'actions',
-    label: 'Actions taken',
+    label: 'Actions taken or no-action reason',
     severity: 'required',
-    status: completeIf(hasItems(neris.actions_taken)),
+    status: completeIf(hasActionsTaken || hasNoActionReason),
     source: 'neris_report',
+    detail: hasNoActionReason && !hasActionsTaken ? 'No-action reason supplied instead of actions taken.' : undefined,
   })
 
   if (apparatus.length > 0) {
@@ -436,15 +442,18 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     })
   }
 
-  add({
-    id: 'units.staffing',
-    section: 'units',
-    label: 'Unit staffing at dispatch',
-    severity: 'blocked',
-    status: 'blocked',
-    source: 'not_collected',
-    detail: 'FireOps7 tracks personnel on the incident, but does not yet store dispatch staffing per unit.',
-  })
+  if (apparatus.length > 0) {
+    const missingStaffing = apparatus.filter(unit => !hasNumber(unit.staffing_count)).length
+    add({
+      id: 'units.staffing',
+      section: 'units',
+      label: 'Unit staffing at dispatch',
+      severity: 'required',
+      status: completeIf(missingStaffing === 0),
+      source: 'neris_report',
+      detail: missingStaffing > 0 ? `${missingStaffing} unit${missingStaffing === 1 ? '' : 's'} missing staffing count.` : undefined,
+    })
+  }
 
   add({
     id: 'personnel.roster',
@@ -532,10 +541,10 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
         id: 'fire.outside_acres',
         section: 'fire',
         label: 'Outside fire acres burned',
-        severity: 'blocked',
-        status: 'blocked',
-        source: 'not_collected',
-        detail: 'Not currently collected in FireOps7; needed if NERIS validation requires acreage for outside fire types.',
+        severity: 'conditional',
+        status: completeIf(hasNumber(neris.outside_fire_acres)),
+        source: 'neris_report',
+        detail: 'Needed for grass, wildland, and other outside fire types.',
       })
     }
   }

@@ -63,7 +63,9 @@ export async function saveNerisReport(incident_id: string, data: {
   neris_incident_type?: string | null
   property_use?: string | null
   actions_taken?: string[]
+  no_action_reason?: string | null
   displaced_persons?: number | null
+  outside_fire_acres?: number | null
   fire_condition_arrival?: string | null
   building_damage?: string | null
   suppression_appliance?: string[]
@@ -130,13 +132,19 @@ export async function saveNerisReport(incident_id: string, data: {
 }
 
 // ─── Save response mode per apparatus ────────────────────────────────────────
-export async function saveApparatusResponseMode(apparatus_incident_id: string, response_mode: string) {
+export async function saveApparatusResponseMode(
+  apparatus_incident_id: string,
+  response_mode: string,
+  staffing_count?: number | null
+) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can set response mode.' }
   const adminClient = createAdminClient()
+  const updates: Record<string, string | number | null> = { response_mode: response_mode || null }
+  if (staffing_count !== undefined) updates.staffing_count = staffing_count
   const { error: dbErr } = await adminClient
     .from('incident_apparatus')
-    .update({ response_mode })
+    .update(updates)
     .eq('id', apparatus_incident_id)
   if (dbErr) { await logError(dbErr.message, '/incidents/neris'); return { error: dbErr.message } }
   return { success: true }
@@ -196,7 +204,7 @@ export async function submitToNeris(incident_id: string) {
   // Fetch apparatus
   const { data: apparatus } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, paged_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', incident_id)
   const apparatusIds = (apparatus ?? []).map((a: any) => a.apparatus_id).filter(Boolean)
   const { data: apparatusNames } = apparatusIds.length > 0
@@ -235,6 +243,10 @@ export async function submitToNeris(incident_id: string) {
     payload.actions_tactics = {
       actions: neris.actions_taken.map((code: string) => ({ code })),
     }
+  } else if (neris.no_action_reason) {
+    payload.actions_tactics = {
+      no_action_reason: neris.no_action_reason,
+    }
   }
 
   if (neris.aid_type) {
@@ -248,6 +260,7 @@ export async function submitToNeris(incident_id: string) {
     payload.unit_response = apparatus.map((a: any) => ({
       unit_id: unitNumberMap[a.apparatus_id] ?? a.apparatus_id,
       response_mode: a.response_mode ?? undefined,
+      staffing_count: a.staffing_count ?? undefined,
       paged_at: a.paged_at ?? undefined,
       on_scene_at: a.on_scene_at ?? undefined,
       leaving_scene_at: a.leaving_scene_at ?? undefined,
@@ -260,11 +273,12 @@ export async function submitToNeris(incident_id: string) {
   }
 
   // Fire module
-  if (neris.fire_condition_arrival || neris.building_damage || neris.fire_cause_code) {
+  if (neris.fire_condition_arrival || neris.building_damage || neris.fire_cause_code || neris.outside_fire_acres != null) {
     payload.fire = {
       condition_arrival: neris.fire_condition_arrival ?? undefined,
       building_damage: neris.building_damage ?? undefined,
       cause: neris.fire_cause_code ?? undefined,
+      outside_fire_acres: neris.outside_fire_acres ?? undefined,
       suppression_appliances: neris.suppression_appliance ?? undefined,
       floor_of_origin: neris.floor_of_origin ?? undefined,
       room_of_origin: neris.room_of_origin ?? undefined,

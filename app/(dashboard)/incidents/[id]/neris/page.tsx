@@ -46,7 +46,7 @@ export default async function NerisReportPage({
   // Fetch apparatus on this incident (with response_mode)
   const { data: apparatusRaw } = await adminClient
     .from('incident_apparatus')
-    .select('id, apparatus_id, role, response_mode, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
+    .select('id, apparatus_id, role, response_mode, staffing_count, paged_at, enroute_at, on_scene_at, leaving_scene_at, available_at')
     .eq('incident_id', id)
 
   const apparatusIds = (apparatusRaw ?? []).map(a => a.apparatus_id).filter(Boolean)
