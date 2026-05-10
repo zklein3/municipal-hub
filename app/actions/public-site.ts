@@ -53,18 +53,31 @@ export async function toggleEventSeriesPublic(eventSeriesId: string, isPublic: b
 
   const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
   const me = meList?.[0]
-  if (!me?.is_sys_admin) return { error: 'Unauthorized.' }
+  if (!me) return { error: 'Session expired.' }
+
+  // Allow sys admins or department admins for this department
+  if (!me.is_sys_admin) {
+    const { data: deptList } = await adminClient
+      .from('department_personnel')
+      .select('system_role')
+      .eq('personnel_id', me.id)
+      .eq('department_id', departmentId)
+      .eq('active', true)
+    if (deptList?.[0]?.system_role !== 'admin') return { error: 'Only department admins can change event visibility.' }
+  }
 
   const { error: dbErr } = await adminClient
     .from('event_series')
     .update({ is_public: isPublic })
     .eq('id', eventSeriesId)
+    .eq('department_id', departmentId)
 
   if (dbErr) {
-    await logError(dbErr, `/admin/dept/${departmentId}`)
+    await logError(dbErr, `/events`)
     return { error: dbErr.message }
   }
 
+  revalidatePath('/events')
   revalidatePath(`/admin/dept/${departmentId}`)
   return { success: true }
 }
