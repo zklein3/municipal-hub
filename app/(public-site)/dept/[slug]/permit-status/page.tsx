@@ -111,7 +111,7 @@ export default async function PermitStatusPage({
           </div>
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
             Have a <strong>records request</strong> code?{' '}
-            <Link href={`/dept/${slug}/request-status?code=${code.toUpperCase()}`} className="font-semibold underline hover:text-blue-600">
+            <Link href={`/dept/${slug}/request-status?q=${code.toUpperCase()}`} className="font-semibold underline hover:text-blue-600">
               Try the Status Center →
             </Link>
           </div>
