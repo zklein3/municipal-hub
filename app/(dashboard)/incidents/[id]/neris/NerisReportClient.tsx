@@ -374,37 +374,41 @@ export default function NerisReportClient({
             <h2 className="text-sm font-semibold text-zinc-900">NERIS Readiness</h2>
             <p className="text-xs text-zinc-500 mt-1">
               {requirementSummary.readyForLocalCompletion
-                ? 'Local required fields look complete. API validation is still blocked until FSRI enrollment is ready.'
+                ? 'All fillable fields complete — ready to mark for submission.'
                 : 'Required or conditional NERIS fields are still missing.'}
             </p>
           </div>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0 ${
             requirementSummary.readyForLocalCompletion ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
           }`}>
-            {requirementSummary.complete}/{requirementSummary.totalApplicable} complete
+            {requirementSummary.complete}/{requirementSummary.fillable} fields complete
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
             <p className="text-lg font-bold text-zinc-900">{requirementSummary.missing}</p>
             <p className="text-[11px] font-medium text-zinc-500">Missing</p>
           </div>
           <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
-            <p className="text-lg font-bold text-zinc-900">{requirementSummary.blocked}</p>
-            <p className="text-[11px] font-medium text-zinc-500">Blocked</p>
-          </div>
-          <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
             <p className="text-lg font-bold text-zinc-900">{requirementSummary.computed}</p>
-            <p className="text-[11px] font-medium text-zinc-500">Computed</p>
+            <p className="text-[11px] font-medium text-zinc-500">NERIS Computed</p>
           </div>
           <div className="rounded-lg bg-zinc-50 border border-zinc-100 px-2 py-2">
             <p className="text-lg font-bold text-zinc-900">
               {Object.values(requirementSummary.activeModules).filter(Boolean).length}
             </p>
-            <p className="text-[11px] font-medium text-zinc-500">Modules</p>
+            <p className="text-[11px] font-medium text-zinc-500">Modules Active</p>
           </div>
         </div>
+
+        {/* API enrollment — submission prerequisite, not a form field */}
+        {!requirementSummary.readyForApiValidation && (
+          <div className="mt-3 rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-2 flex items-center gap-2">
+            <span className="rounded-full bg-zinc-200 text-zinc-500 text-[10px] font-bold px-1.5 py-0.5">PENDING</span>
+            <p className="text-xs text-zinc-500">Submission requires FSRI enrollment / API authorization — not a form item.</p>
+          </div>
+        )}
 
         <div className="mt-4 divide-y divide-zinc-100 border-t border-zinc-100">
           {requirementSummary.sections.map(section => (

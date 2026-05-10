@@ -93,6 +93,7 @@ export type NerisRequirementSummary = {
   requirements: NerisRequirement[]
   sections: NerisSectionSummary[]
   totalApplicable: number
+  fillable: number
   complete: number
   missing: number
   blocked: number
@@ -610,10 +611,14 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     requirement.status === 'missing' && ['required', 'conditional'].includes(requirement.severity)
   ).length
 
+  // fillable = items a user can actually act on (excludes computed + blocked)
+  const fillable = applicable.filter(r => r.status !== 'computed' && r.status !== 'blocked').length
+
   return {
     requirements,
     sections,
     totalApplicable: applicable.length,
+    fillable,
     complete,
     missing,
     blocked,
