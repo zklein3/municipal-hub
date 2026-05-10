@@ -47,7 +47,7 @@ export async function parseRunSheet(formData: FormData): Promise<{ data?: Parsed
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
         content: [
@@ -61,27 +61,43 @@ export async function parseRunSheet(formData: FormData): Promise<{ data?: Parsed
           } as any,
           {
             type: 'text',
-            text: `Extract incident data from this Central Square CAD CFS (Call for Service) report for a fire department.${apparatusContext}
+            text: `Extract incident data from this Central Square CAD CFS (Call for Service) report.${apparatusContext}
+
+CRITICAL — there are two separate time sections in this report. Use them correctly:
+
+1. The "Response Times" block near the top of the report (Assigned / Enroute / Arrived / Leaving / Completed) belongs to ONE specific primary dispatch unit, often a police or EMS unit. DO NOT use these times for fire department apparatus times.
+
+2. The "Unit Response Times" section near the end of the report lists each unit by identifier with individual timestamped events (e.g. "Enroute", "Arrived", "Leaving Scene to", "Available", "Off Duty"). Use ONLY this section for all apparatus and incident-level times. Some entries list multiple units together (e.g. "WIN11, WIN24 | Leaving Scene to ...") — apply that timestamp to each unit listed.
 
 Return a JSON object with these fields (all optional, omit if not found):
 {
   "cad_number": "the CFS# value",
-  "incident_number": "from the IR / External Agency Numbers section — the entry that does NOT have a PO: (police officer) assignment next to it. This is the fire department's own incident number (e.g. WIN26-0015).",
+  "incident_number": "from IR / External Agency Numbers — the entry WITHOUT a 'PO:' prefix. This is the fire dept's own number (e.g. WIN26-0016).",
   "incident_date": "YYYY-MM-DD",
-  "address": "full incident location address",
-  "incident_type": one of "fire"|"rescue"|"standby"|"mutual_aid"|"special"|"other" — map vehicle/injury/property damage crashes to "rescue", fire calls to "fire",
-  "call_time": "YYYY-MM-DDTHH:mm",
-  "paged_at": "YYYY-MM-DDTHH:mm" — earliest Assign time for this department's units,
-  "first_on_scene_at": "YYYY-MM-DDTHH:mm" — earliest Arrived time for this department's units,
-  "last_leaving_scene_at": "YYYY-MM-DDTHH:mm" — latest Leaving Scene time for this department's units,
-  "in_service_at": "YYYY-MM-DDTHH:mm" — latest Available time for this department's units,
-  "disposition": "primary disposition",
-  "narrative": "1-2 sentence summary of the incident based on the dispatch log",
-  "apparatus": only include this department's units that have Enroute or Arrived times (skip units with only Assign/Off Duty):
-    [{ "unit_number": "plain unit number as listed above", "role": "primary" for first unit or "support" for others, "enroute_at": "YYYY-MM-DDTHH:mm", "on_scene_at": "YYYY-MM-DDTHH:mm", "leaving_scene_at": "YYYY-MM-DDTHH:mm", "available_at": "YYYY-MM-DDTHH:mm" }]
+  "address": "full incident address",
+  "incident_type": one of "fire"|"rescue"|"standby"|"mutual_aid"|"special"|"other" — crashes/injuries map to "rescue",
+  "call_time": "YYYY-MM-DDTHH:mm" — the Call Time field at the top of the report,
+  "paged_at": "YYYY-MM-DDTHH:mm" — earliest Assign timestamp for this department's units in the Unit Response Times section,
+  "first_on_scene_at": "YYYY-MM-DDTHH:mm" — earliest Arrived timestamp for this department's units in Unit Response Times,
+  "last_leaving_scene_at": "YYYY-MM-DDTHH:mm" — latest Leaving Scene timestamp for this department's units,
+  "in_service_at": "YYYY-MM-DDTHH:mm" — latest Available or Off Duty timestamp for this department's units,
+  "disposition": "primary disposition from the top of the report",
+  "narrative": "1-2 sentence summary from the dispatch log comments",
+  "apparatus": [
+    {
+      "unit_number": "plain number exactly as in the department unit list above",
+      "role": "primary" for the first/lead unit, "support" for others,
+      "enroute_at": "YYYY-MM-DDTHH:mm" — from this unit's own Enroute line in Unit Response Times,
+      "on_scene_at": "YYYY-MM-DDTHH:mm" — from this unit's own Arrived line in Unit Response Times,
+      "leaving_scene_at": "YYYY-MM-DDTHH:mm" — from this unit's Leaving Scene line (may be a grouped entry shared with other units),
+      "available_at": "YYYY-MM-DDTHH:mm" — from this unit's Available or Off Duty line
+    }
+  ]
 }
 
-Return only valid JSON, no explanation or markdown.`,
+Only include department units that have an Enroute or Arrived time in Unit Response Times. Units with only Assign or Off Duty (department page identifiers like WINFIRE) are skipped in the apparatus array but their Assign time counts for paged_at.
+
+Return only valid JSON, no markdown or explanation.`,
           },
         ],
       }],

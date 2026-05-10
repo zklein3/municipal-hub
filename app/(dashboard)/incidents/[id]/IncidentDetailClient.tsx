@@ -31,7 +31,7 @@ const APPARATUS_ROLE_LABELS: Record<string, string> = { primary: 'Primary', supp
 
 function formatDT(dt: string | null) {
   if (!dt) return '—'
-  return new Date(dt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return new Date(dt).toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
