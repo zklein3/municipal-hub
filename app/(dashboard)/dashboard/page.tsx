@@ -43,19 +43,22 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const today = new Date().toISOString().split('T')[0]
   const next7 = new Date(); next7.setDate(next7.getDate() + 7)
   const next7str = next7.toISOString().split('T')[0]
+  const next365 = new Date(); next365.setDate(next365.getDate() + 365)
+  const next365str = next365.toISOString().split('T')[0]
 
   const [pendingSetup, instances, trainingEvents] = await Promise.all([
     adminClient.from('department_personnel')
       .select('id')
       .eq('department_id', departmentId)
       .in('signup_status', ['temp_password', 'profile_setup']),
+    // Fetch wide window — special events trimmed after series join
     adminClient.from('event_instances')
       .select('id, series_id, event_date, start_time, location, status')
       .gte('event_date', today)
-      .lte('event_date', next7str)
+      .lte('event_date', next365str)
       .neq('status', 'cancelled')
       .order('event_date', { ascending: true })
-      .limit(5),
+      .limit(50),
     adminClient.from('training_events')
       .select('id, event_date, start_time, topic, hours, location')
       .eq('department_id', departmentId)
@@ -72,7 +75,14 @@ async function getDashboardData(departmentId: string, personnelId: string) {
     : { data: [] }
   const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
 
-  const deptInstances = (instances.data ?? []).filter(i => seriesMap[i.series_id])
+  const deptInstances = (instances.data ?? [])
+    .filter(i => {
+      if (!seriesMap[i.series_id]) return false
+      const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
+      if (!isSpecial && i.event_date > next7str) return false
+      return true
+    })
+    .slice(0, 5)
 
   const instanceIds = deptInstances.map(i => i.id)
   const { data: myAttendance } = instanceIds.length > 0
