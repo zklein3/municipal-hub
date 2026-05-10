@@ -13,6 +13,7 @@ export type NerisRequirementSection =
 
 export type NerisRequirementSeverity = 'required' | 'conditional' | 'recommended' | 'computed' | 'blocked'
 export type NerisRequirementStatus = 'complete' | 'missing' | 'not_applicable' | 'computed' | 'blocked'
+export type NerisSectionStatus = 'complete' | 'needs_info' | 'blocked' | 'not_started'
 
 export type NerisIncidentInput = {
   incident_type?: string | null
@@ -92,6 +93,7 @@ export type NerisRequirement = {
 
 export type NerisRequirementSummary = {
   requirements: NerisRequirement[]
+  sections: NerisSectionSummary[]
   totalApplicable: number
   complete: number
   missing: number
@@ -107,6 +109,48 @@ export type NerisRequirementSummary = {
     mutualAid: boolean
   }
 }
+
+export type NerisSectionSummary = {
+  section: NerisRequirementSection
+  label: string
+  status: NerisSectionStatus
+  requirements: NerisRequirement[]
+  total: number
+  complete: number
+  missing: number
+  blocked: number
+  computed: number
+  requiredMissing: number
+  firstOpenRequirement?: NerisRequirement
+}
+
+export const NERIS_SECTION_LABELS: Record<NerisRequirementSection, string> = {
+  incident: 'Incident',
+  location: 'Location',
+  actions: 'Actions',
+  units: 'Units',
+  personnel: 'Personnel',
+  fire: 'Fire',
+  medical: 'Medical',
+  hazmat: 'Hazmat',
+  rescue: 'Rescue',
+  mutual_aid: 'Mutual Aid',
+  api: 'API',
+}
+
+const NERIS_SECTION_ORDER: NerisRequirementSection[] = [
+  'incident',
+  'location',
+  'actions',
+  'units',
+  'personnel',
+  'fire',
+  'medical',
+  'hazmat',
+  'rescue',
+  'mutual_aid',
+  'api',
+]
 
 const STRUCTURE_FIRE_CODES = new Set([
   'STRUCTURAL_INVOLVEMENT_FIRE',
@@ -180,6 +224,66 @@ function completeIf(condition: boolean): NerisRequirementStatus {
 function hasAnyMarker(code: string | null | undefined, markers: string[]): boolean {
   if (!code) return false
   return markers.some(marker => code.includes(marker))
+}
+
+function getSectionStatus(summary: {
+  complete: number
+  missing: number
+  blocked: number
+  requiredMissing: number
+  total: number
+}): NerisSectionStatus {
+  if (summary.total === 0) return 'not_started'
+  if (summary.blocked > 0) return 'blocked'
+  if (summary.requiredMissing > 0 || summary.missing > 0) return 'needs_info'
+  if (summary.complete > 0) return 'complete'
+  return 'not_started'
+}
+
+export function summarizeNerisRequirementSections(
+  requirements: NerisRequirement[]
+): NerisSectionSummary[] {
+  const sections: NerisSectionSummary[] = []
+
+  for (const section of NERIS_SECTION_ORDER) {
+    const sectionRequirements = requirements.filter(requirement =>
+      requirement.section === section && requirement.status !== 'not_applicable'
+    )
+    if (sectionRequirements.length === 0) continue
+
+    const complete = sectionRequirements.filter(requirement => requirement.status === 'complete').length
+    const missing = sectionRequirements.filter(requirement => requirement.status === 'missing').length
+    const blocked = sectionRequirements.filter(requirement => requirement.status === 'blocked').length
+    const computed = sectionRequirements.filter(requirement => requirement.status === 'computed').length
+    const requiredMissing = sectionRequirements.filter(requirement =>
+      requirement.status === 'missing' && ['required', 'conditional'].includes(requirement.severity)
+    ).length
+    const firstOpenRequirement = sectionRequirements.find(requirement =>
+      requirement.status === 'missing' || requirement.status === 'blocked'
+    )
+
+    sections.push({
+      section,
+      label: NERIS_SECTION_LABELS[section],
+      status: getSectionStatus({
+        complete,
+        missing,
+        blocked,
+        requiredMissing,
+        total: sectionRequirements.length,
+      }),
+      requirements: sectionRequirements,
+      total: sectionRequirements.length,
+      complete,
+      missing,
+      blocked,
+      computed,
+      requiredMissing,
+      firstOpenRequirement,
+    })
+  }
+
+  return sections
 }
 
 export function getNerisActiveModules(context: NerisRequirementContext): NerisRequirementSummary['activeModules'] {
@@ -527,12 +631,14 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   const blocked = applicable.filter(requirement => requirement.status === 'blocked').length
   const computed = applicable.filter(requirement => requirement.status === 'computed').length
   const complete = applicable.filter(requirement => requirement.status === 'complete').length
+  const sections = summarizeNerisRequirementSections(requirements)
   const localBlockingMissing = applicable.filter(requirement =>
     requirement.status === 'missing' && ['required', 'conditional'].includes(requirement.severity)
   ).length
 
   return {
     requirements,
+    sections,
     totalApplicable: applicable.length,
     complete,
     missing,
