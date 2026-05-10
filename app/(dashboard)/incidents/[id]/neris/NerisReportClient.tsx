@@ -55,6 +55,19 @@ function sectionStatusCls(status: string) {
   if (status === 'needs_info') return 'bg-amber-100 text-amber-700'
   return 'bg-zinc-100 text-zinc-500'
 }
+const SECTION_ANCHORS: Record<string, string | null> = {
+  incident: 'neris-section-incident',
+  location: 'neris-section-location',
+  actions: 'neris-section-actions',
+  units: 'neris-section-units',
+  personnel: 'neris-section-personnel',
+  fire: 'neris-section-fire',
+  medical: 'neris-section-medical',
+  hazmat: 'neris-section-hazmat',
+  rescue: 'neris-section-rescue',
+  mutual_aid: 'neris-section-mutual-aid',
+  api: null,
+}
 
 const COVER_TYPE_LABELS: Record<string, string> = {
   fire: 'Fire', rescue: 'Rescue', standby: 'Standby',
@@ -365,6 +378,14 @@ export default function NerisReportClient({
                     {section.computed > 0 ? `${section.computed} computed by NERIS` : 'No open items in this section.'}
                   </p>
                 )}
+                {section.firstOpenRequirement && SECTION_ANCHORS[section.section] && (
+                  <a
+                    href={`#${SECTION_ANCHORS[section.section]}`}
+                    className="mt-2 inline-flex rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50"
+                  >
+                    Go to section
+                  </a>
+                )}
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-sm font-semibold text-zinc-900">{section.complete}/{section.total}</p>
@@ -385,7 +406,7 @@ export default function NerisReportClient({
       <form onSubmit={handleSave} className="space-y-5">
 
         {/* Incident Type */}
-        <section className={sectionCls}>
+        <section id="neris-section-incident" className={`${sectionCls} scroll-mt-6`}>
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-sm font-semibold text-zinc-900">NERIS Incident Type</h2>
             <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -413,7 +434,7 @@ export default function NerisReportClient({
         </section>
 
         {/* Scene Information */}
-        <section className={sectionCls}>
+        <section id="neris-section-location" className={`${sectionCls} scroll-mt-6`}>
           <h2 className="text-sm font-semibold text-zinc-900">Scene Information</h2>
           <div>
             <label className={labelCls}>Property Use</label>
@@ -440,7 +461,7 @@ export default function NerisReportClient({
         </section>
 
         {/* Actions Taken */}
-        <section className={sectionCls}>
+        <section id="neris-section-actions" className={`${sectionCls} scroll-mt-6`}>
           <h2 className="text-sm font-semibold text-zinc-900">Actions Taken on Scene</h2>
           <NerisCombobox
             multiple
@@ -454,7 +475,7 @@ export default function NerisReportClient({
 
         {/* Mutual Aid */}
         {hasMutualAid && (
-          <section className={sectionCls}>
+          <section id="neris-section-mutual-aid" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
               {testingMode && mutualAidRows.length === 0 && !incident.mutual_aid_direction && (
@@ -512,7 +533,7 @@ export default function NerisReportClient({
 
         {/* Apparatus — Response Mode */}
         {incidentApparatus.length > 0 && (
-          <section className={sectionCls}>
+          <section id="neris-section-units" className={`${sectionCls} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Apparatus Response Mode</h2>
             <p className="text-xs text-zinc-400 -mt-1">Set per-unit whether response was emergent or non-emergent.</p>
             <div className="divide-y divide-zinc-100">
@@ -548,7 +569,7 @@ export default function NerisReportClient({
 
         {/* Personnel — read-only */}
         {incidentPersonnel.length > 0 && (
-          <section className={sectionCls}>
+          <section id="neris-section-personnel" className={`${sectionCls} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Personnel on Scene</h2>
             <p className="text-xs text-zinc-400 -mt-1">From cover sheet — flows directly to NERIS payload.</p>
             <div className="flex flex-wrap gap-1.5">
@@ -563,7 +584,7 @@ export default function NerisReportClient({
 
         {/* Fire Module */}
         {isFireType && (
-          <section className={sectionCls}>
+          <section id="neris-section-fire" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Fire Module</h2>
               {testingMode && incident.incident_type !== 'fire' && (
@@ -663,7 +684,7 @@ export default function NerisReportClient({
 
         {/* Medical Module */}
         {isMedicalType && (
-          <section className={sectionCls}>
+          <section id="neris-section-medical" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Medical Module</h2>
               {testingMode && coverType !== 'rescue' && (
@@ -709,7 +730,7 @@ export default function NerisReportClient({
 
         {/* Rescue Module */}
         {isRescueType && (
-          <section className={sectionCls}>
+          <section id="neris-section-rescue" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Rescue Module</h2>
               {testingMode && coverType !== 'rescue' && (
@@ -747,7 +768,7 @@ export default function NerisReportClient({
 
         {/* Hazmat Module */}
         {isHazmatType && (
-          <section className={sectionCls}>
+          <section id="neris-section-hazmat" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Hazmat Module</h2>
               {testingMode && coverType !== 'special' && (
