@@ -34,17 +34,21 @@ export default async function EventsPage() {
     .eq('active', true)
     .order('excuse_name')
 
-  // Fetch instances: next 60 days + last 30 days
+  // Fetch instances: past 30 days + future 365 days (special events show the full year;
+  // other types are trimmed to future 60 days after joining with series data)
   const past30 = new Date()
   past30.setDate(past30.getDate() - 30)
-  const future60 = new Date()
-  future60.setDate(future60.getDate() + 60)
+  const future365 = new Date()
+  future365.setDate(future365.getDate() + 365)
+  const future60cutoff = new Date()
+  future60cutoff.setDate(future60cutoff.getDate() + 60)
+  const future60str = future60cutoff.toISOString().split('T')[0]
 
   const { data: instances } = await adminClient
     .from('event_instances')
     .select('id, series_id, event_date, start_time, location, status, notes, requires_verification')
     .gte('event_date', past30.toISOString().split('T')[0])
-    .lte('event_date', future60.toISOString().split('T')[0])
+    .lte('event_date', future365.toISOString().split('T')[0])
     .order('event_date', { ascending: true })
 
   // Fetch public site status for this department
@@ -65,10 +69,15 @@ export default async function EventsPage() {
         .eq('department_id', department_id)
     : { data: [] }
 
-  // Filter to this department only
+  // Filter to this department only; non-special events trimmed to 60-day future window
   const deptSeriesIds = new Set((seriesData ?? []).map(s => s.id))
-  const deptInstances = (instances ?? []).filter(i => deptSeriesIds.has(i.series_id))
   const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
+  const deptInstances = (instances ?? []).filter(i => {
+    if (!deptSeriesIds.has(i.series_id)) return false
+    const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
+    if (!isSpecial && i.event_date > future60str) return false
+    return true
+  })
 
   const instanceIds = deptInstances.map(i => i.id)
 
