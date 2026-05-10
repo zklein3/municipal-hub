@@ -43,6 +43,18 @@ function formatDT(dt: string | null) {
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
 }
+function sectionStatusLabel(status: string) {
+  if (status === 'complete') return 'Complete'
+  if (status === 'blocked') return 'Blocked'
+  if (status === 'needs_info') return 'Needs Info'
+  return 'Not Started'
+}
+function sectionStatusCls(status: string) {
+  if (status === 'complete') return 'bg-green-100 text-green-700'
+  if (status === 'blocked') return 'bg-red-50 text-red-600'
+  if (status === 'needs_info') return 'bg-amber-100 text-amber-700'
+  return 'bg-zinc-100 text-zinc-500'
+}
 
 const COVER_TYPE_LABELS: Record<string, string> = {
   fire: 'Fire', rescue: 'Rescue', standby: 'Standby',
@@ -298,7 +310,7 @@ export default function NerisReportClient({
       <div className="mb-4 rounded-xl bg-white border border-zinc-200 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">NERIS Requirements Map</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">NERIS Readiness</h2>
             <p className="text-xs text-zinc-500 mt-1">
               {requirementSummary.readyForLocalCompletion
                 ? 'Local required fields look complete. API validation is still blocked until FSRI enrollment is ready.'
@@ -333,23 +345,38 @@ export default function NerisReportClient({
           </div>
         </div>
 
-        <div className="mt-4 space-y-2">
-          {requirementSummary.requirements
-            .filter(req => req.status === 'missing' || req.status === 'blocked')
-            .slice(0, 6)
-            .map(req => (
-              <div key={req.id} className="flex items-start justify-between gap-3 text-xs">
-                <div>
-                  <p className="font-medium text-zinc-800">{req.label}</p>
-                  {req.detail && <p className="text-zinc-400 mt-0.5">{req.detail}</p>}
+        <div className="mt-4 divide-y divide-zinc-100 border-t border-zinc-100">
+          {requirementSummary.sections.map(section => (
+            <div key={section.section} className="flex items-start justify-between gap-4 py-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-zinc-900">{section.label}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${sectionStatusCls(section.status)}`}>
+                    {sectionStatusLabel(section.status)}
+                  </span>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${
-                  req.status === 'blocked' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'
-                }`}>
-                  {req.status === 'blocked' ? 'Blocked' : 'Missing'}
-                </span>
+                {section.firstOpenRequirement ? (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {section.firstOpenRequirement.label}
+                    {section.firstOpenRequirement.detail ? ` — ${section.firstOpenRequirement.detail}` : ''}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {section.computed > 0 ? `${section.computed} computed by NERIS` : 'No open items in this section.'}
+                  </p>
+                )}
               </div>
-            ))}
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-semibold text-zinc-900">{section.complete}/{section.total}</p>
+                <p className="text-[11px] text-zinc-400">
+                  {section.missing > 0 && `${section.missing} missing`}
+                  {section.missing > 0 && section.blocked > 0 && ' · '}
+                  {section.blocked > 0 && `${section.blocked} blocked`}
+                  {section.missing === 0 && section.blocked === 0 && 'complete'}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
