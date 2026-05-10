@@ -44,10 +44,7 @@ export type NerisRecordInput = {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
-  patient_count?: number | null
-  patient_evaluation_care?: string | null
-  patient_improved_status?: string | null
-  medical_disposition?: string | null
+  medical_patients?: { evaluation_care: string; improved_status: string; disposition: string }[] | null
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
   chemical_name?: string | null
@@ -550,29 +547,15 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   }
 
   if (modules.medical) {
+    const patientCount = neris.medical_patients?.length ?? 0
     add({
-      id: 'medical.patient_count',
+      id: 'medical.patients',
       section: 'medical',
-      label: 'Patient count',
+      label: 'At least one patient record',
       severity: 'required',
-      status: completeIf(hasNumber(neris.patient_count)),
+      status: completeIf(patientCount > 0),
       source: 'neris_report',
-    })
-    add({
-      id: 'medical.evaluation_care',
-      section: 'medical',
-      label: 'Patient evaluation / care',
-      severity: 'recommended',
-      status: completeIf(hasText(neris.patient_evaluation_care)),
-      source: 'neris_report',
-    })
-    add({
-      id: 'medical.disposition',
-      section: 'medical',
-      label: 'Medical disposition',
-      severity: 'recommended',
-      status: completeIf(hasText(neris.medical_disposition)),
-      source: 'neris_report',
+      detail: patientCount > 0 ? `${patientCount} patient${patientCount === 1 ? '' : 's'} recorded` : undefined,
     })
   }
 

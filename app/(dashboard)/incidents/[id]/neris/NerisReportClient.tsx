@@ -155,13 +155,16 @@ export default function NerisReportClient({
     nerisRecord?.outside_fire_acres != null ? String(nerisRecord.outside_fire_acres) : ''
   )
 
-  // Medical module
-  const [patientCount, setPatientCount] = useState<string>(
-    nerisRecord?.patient_count != null ? String(nerisRecord.patient_count) : ''
-  )
-  const [patientEvalCare, setPatientEvalCare] = useState<string>(nerisRecord?.patient_evaluation_care ?? '')
-  const [patientStatus, setPatientStatus] = useState<string>(nerisRecord?.patient_improved_status ?? '')
-  const [medicalDisposition, setMedicalDisposition] = useState<string>(nerisRecord?.medical_disposition ?? '')
+  // Medical module — per-patient records
+  type PatientRecord = { _id: string; evaluation_care: string; improved_status: string; disposition: string }
+  const initPatients = (): PatientRecord[] => {
+    const saved = nerisRecord?.medical_patients
+    if (Array.isArray(saved) && saved.length > 0) {
+      return saved.map((p: any, i: number) => ({ _id: String(i), evaluation_care: p.evaluation_care ?? '', improved_status: p.improved_status ?? '', disposition: p.disposition ?? '' }))
+    }
+    return []
+  }
+  const [patients, setPatients] = useState<PatientRecord[]>(initPatients)
 
   // Hazmat module
   const [hazsitDisposition, setHazsitDisposition] = useState<string>(nerisRecord?.hazsit_disposition ?? '')
@@ -208,10 +211,7 @@ export default function NerisReportClient({
       fire_cause_code: fireCauseCode || null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
-      patient_count: patientCount !== '' ? parseInt(patientCount) : null,
-      patient_evaluation_care: patientEvalCare || null,
-      patient_improved_status: patientStatus || null,
-      medical_disposition: medicalDisposition || null,
+      medical_patients: patients.map(p => ({ evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
       hazsit_disposition: hazsitDisposition || null,
       hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
       chemical_name: chemicalName || null,
@@ -806,40 +806,70 @@ export default function NerisReportClient({
                 <span className="text-xs text-amber-600 font-medium">Testing — not a rescue/medical incident</span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Patient Count</label>
-                <input
-                  type="number" min={0} value={patientCount}
-                  onChange={e => setPatientCount(e.target.value)}
-                  disabled={isSubmitted} placeholder="0" className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Patient Status After Intervention</label>
-                <NerisCombobox
-                  groups={toGroups(NERIS_PATIENT_IMPROVED_STATUS, 'Patient Status')}
-                  value={patientStatus} onChange={setPatientStatus}
-                  placeholder="Select status…" disabled={isSubmitted}
-                />
-              </div>
+            <p className="text-xs text-zinc-400 -mt-1">Add one card per patient. Each may have a different evaluation, status, and disposition.</p>
+
+            {patients.length === 0 && (
+              <p className="text-sm text-zinc-400 italic">No patients added yet.</p>
+            )}
+
+            <div className="space-y-4">
+              {patients.map((p, i) => (
+                <div key={p._id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-zinc-800">Patient {i + 1}</p>
+                    {!isSubmitted && (
+                      <button
+                        type="button"
+                        onClick={() => setPatients(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Evaluation / Care</label>
+                    <NerisCombobox
+                      groups={toGroups(NERIS_PATIENT_EVALUATION_CARE, 'Evaluation / Care')}
+                      value={p.evaluation_care}
+                      onChange={val => setPatients(prev => prev.map((x, idx) => idx === i ? { ...x, evaluation_care: val as string } : x))}
+                      placeholder="Select evaluation / care…"
+                      disabled={isSubmitted}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Status After Intervention</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_PATIENT_IMPROVED_STATUS, 'Patient Status')}
+                        value={p.improved_status}
+                        onChange={val => setPatients(prev => prev.map((x, idx) => idx === i ? { ...x, improved_status: val as string } : x))}
+                        placeholder="Select status…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Disposition</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_MEDICAL_DISPOSITION, 'Medical Disposition')}
+                        value={p.disposition}
+                        onChange={val => setPatients(prev => prev.map((x, idx) => idx === i ? { ...x, disposition: val as string } : x))}
+                        placeholder="Select disposition…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className={labelCls}>Patient Evaluation / Care</label>
-              <NerisCombobox
-                groups={toGroups(NERIS_PATIENT_EVALUATION_CARE, 'Evaluation / Care')}
-                value={patientEvalCare} onChange={setPatientEvalCare}
-                placeholder="Select evaluation / care status…" disabled={isSubmitted}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Medical Disposition</label>
-              <NerisCombobox
-                groups={toGroups(NERIS_MEDICAL_DISPOSITION, 'Medical Disposition')}
-                value={medicalDisposition} onChange={setMedicalDisposition}
-                placeholder="Select transport / disposition outcome…" disabled={isSubmitted}
-              />
-            </div>
+
+            {!isSubmitted && (
+              <button
+                type="button"
+                onClick={() => setPatients(prev => [...prev, { _id: String(Date.now()), evaluation_care: '', improved_status: '', disposition: '' }])}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors">
+                + Add Patient
+              </button>
+            )}
           </section>
         )}
 
@@ -980,10 +1010,7 @@ export default function NerisReportClient({
                     fire_cause_code: fireCauseCode || null,
                     aid_type: aidType || null,
                     aid_direction: aidDirection || null,
-                    patient_count: patientCount !== '' ? parseInt(patientCount) : null,
-                    patient_evaluation_care: patientEvalCare || null,
-                    patient_improved_status: patientStatus || null,
-                    medical_disposition: medicalDisposition || null,
+                    medical_patients: patients.map(p => ({ evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
                     hazsit_disposition: hazsitDisposition || null,
                     hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
                     chemical_name: chemicalName || null,

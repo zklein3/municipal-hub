@@ -74,11 +74,8 @@ export async function saveNerisReport(incident_id: string, data: {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
-  // Medical module
-  patient_count?: number | null
-  patient_evaluation_care?: string | null
-  patient_improved_status?: string | null
-  medical_disposition?: string | null
+  // Medical module — per-patient records
+  medical_patients?: { evaluation_care: string; improved_status: string; disposition: string }[] | null
   // Hazmat module
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
@@ -309,13 +306,16 @@ export async function submitToNeris(incident_id: string) {
     }
   }
 
-  // Medical module
-  if (neris.patient_count != null || neris.patient_evaluation_care) {
+  // Medical module — per-patient records
+  const patients = neris.medical_patients ?? []
+  if (patients.length > 0) {
     payload.medical = {
-      patient_count: neris.patient_count ?? undefined,
-      evaluation_care: neris.patient_evaluation_care ?? undefined,
-      improved_status: neris.patient_improved_status ?? undefined,
-      disposition: neris.medical_disposition ?? undefined,
+      patient_count: patients.length,
+      patients: patients.map((p: { evaluation_care: string; improved_status: string; disposition: string }) => ({
+        evaluation_care: p.evaluation_care || undefined,
+        improved_status: p.improved_status || undefined,
+        disposition: p.disposition || undefined,
+      })),
     }
   }
 
