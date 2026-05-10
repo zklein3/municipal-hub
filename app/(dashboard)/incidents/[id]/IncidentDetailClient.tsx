@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   updateIncident, setIncidentStatus,
   addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus,
-  addIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
+  addIncidentPersonnel, updateIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
 } from '@/app/actions/incidents'
 import { addMutualAid, removeMutualAid } from '@/app/actions/iso'
 import { parseRunSheet, type ParsedRunSheet } from '@/app/actions/parse-run-sheet'
@@ -95,6 +95,9 @@ export default function IncidentDetailClient({
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [newPersonnel, setNewPersonnel] = useState({ personnel_id: '', apparatus_id: '', role: 'crew' })
+  const [editingPersonnelId, setEditingPersonnelId] = useState<string | null>(null)
+  const [editingPersonnel, setEditingPersonnel] = useState({ apparatus_id: '', role: 'crew' })
+  const [personnelEditError, setPersonnelEditError] = useState<string | null>(null)
   // Member self-log
   const [confirmingLog, setConfirmingLog] = useState(false)
   const [selfLogRole, setSelfLogRole] = useState('crew')
@@ -219,6 +222,31 @@ export default function IncidentDetailClient({
     })
   }
 
+  function startPersonnelEdit(personnel: PersonnelRow) {
+    setPersonnelEditError(null)
+    setEditingPersonnelId(personnel.id)
+    setEditingPersonnel({
+      apparatus_id: personnel.apparatus_id ?? '',
+      role: personnel.role || 'crew',
+    })
+  }
+
+  async function handleUpdatePersonnel(logId: string) {
+    const fd = new FormData()
+    fd.set('apparatus_id', editingPersonnel.apparatus_id)
+    fd.set('role', editingPersonnel.role)
+    startTransition(async () => {
+      const result = await updateIncidentPersonnel(logId, incident.id, fd)
+      if (result?.error) {
+        setPersonnelEditError(result.error)
+        return
+      }
+      setEditingPersonnelId(null)
+      setPersonnelEditError(null)
+      router.refresh()
+    })
+  }
+
   async function handleAddMutualAid(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setMutualAidError(null)
@@ -241,6 +269,7 @@ export default function IncidentDetailClient({
 
   const alreadyAddedApparatusIds = new Set(incidentApparatus.map(a => a.apparatus_id))
   const alreadyAddedPersonnelIds = new Set(incidentPersonnel.map(p => p.personnel_id))
+  const currentEditingPersonnel = incidentPersonnel.find(p => p.id === editingPersonnelId)
 
   return (
     <div className="max-w-2xl">
@@ -805,6 +834,42 @@ export default function IncidentDetailClient({
           <p className="text-sm text-zinc-400">No personnel logged.</p>
         )}
 
+        {currentEditingPersonnel && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3 mb-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-800">Edit {currentEditingPersonnel.name}</p>
+              <p className="text-xs text-zinc-500">Change role or move this member between POV and an assigned unit.</p>
+            </div>
+            {personnelEditError && <p className="text-xs text-red-600">{personnelEditError}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Role</label>
+                <select value={editingPersonnel.role} onChange={e => setEditingPersonnel(prev => ({ ...prev, role: e.target.value }))} className={inputCls}>
+                  <option value="ic">IC</option>
+                  <option value="driver">Driver</option>
+                  <option value="officer">Officer</option>
+                  <option value="crew">Crew</option>
+                  <option value="ems">EMS</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Apparatus</label>
+                <select value={editingPersonnel.apparatus_id} onChange={e => setEditingPersonnel(prev => ({ ...prev, apparatus_id: e.target.value }))} className={inputCls}>
+                  <option value="">POV / Not on apparatus</option>
+                  {incidentApparatus.map(a => (
+                    <option key={a.apparatus_id} value={a.apparatus_id}>{a.unit_number}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => handleUpdatePersonnel(currentEditingPersonnel.id)} disabled={isPending} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">Save</button>
+              <button type="button" onClick={() => { setEditingPersonnelId(null); setPersonnelEditError(null) }} className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100">Cancel</button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           {incidentPersonnel.filter(p => p.status !== 'pending').map(p => (
             <div key={p.id} className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-3 bg-zinc-50">
@@ -818,8 +883,11 @@ export default function IncidentDetailClient({
                 <p className="text-xs text-zinc-500 uppercase">{ROLE_LABELS[p.role]}{p.apparatus_unit ? ` · ${p.apparatus_unit}` : ' · POV'}</p>
                 {p.rejection_reason && <p className="text-xs text-red-600 mt-0.5">Reason: {p.rejection_reason}</p>}
               </div>
-              {isOfficerOrAbove && (
-                <button onClick={() => handleRemovePersonnel(p.id)} disabled={isPending} className="text-xs text-red-600 hover:underline disabled:opacity-50">Remove</button>
+              {isOfficerOrAbove && canEdit && (
+                <div className="flex gap-3">
+                  <button onClick={() => startPersonnelEdit(p)} disabled={isPending} className="text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-50">Edit</button>
+                  <button onClick={() => handleRemovePersonnel(p.id)} disabled={isPending} className="text-xs text-red-600 hover:underline disabled:opacity-50">Remove</button>
+                </div>
               )}
             </div>
           ))}

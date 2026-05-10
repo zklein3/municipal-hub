@@ -298,6 +298,58 @@ export async function addIncidentPersonnel(incident_id: string, formData: FormDa
   return { success: true }
 }
 
+// ─── Update personnel assignment ─────────────────────────────────────────────
+export async function updateIncidentPersonnel(personnel_log_id: string, incident_id: string, formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const apparatusId = (formData.get('apparatus_id') as string) || null
+  const role = (formData.get('role') as string) || 'crew'
+
+  const { data: incident } = await adminClient
+    .from('incidents')
+    .select('id, department_id')
+    .eq('id', incident_id)
+    .single()
+
+  if (!incident || incident.department_id !== ctx.department_id) return { error: 'Incident not found.' }
+
+  const { data: personnelLog } = await adminClient
+    .from('incident_personnel')
+    .select('id')
+    .eq('id', personnel_log_id)
+    .eq('incident_id', incident_id)
+    .single()
+
+  if (!personnelLog) return { error: 'Personnel record not found.' }
+
+  if (apparatusId) {
+    const { data: apparatusLog } = await adminClient
+      .from('incident_apparatus')
+      .select('id')
+      .eq('incident_id', incident_id)
+      .eq('apparatus_id', apparatusId)
+      .single()
+
+    if (!apparatusLog) return { error: 'That unit is not assigned to this incident yet.' }
+  }
+
+  const { error: dbErr } = await adminClient.from('incident_personnel').update({
+    apparatus_id: apparatusId,
+    role,
+  }).eq('id', personnel_log_id)
+
+  if (dbErr) {
+    await logError('updateIncidentPersonnel', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/incidents/${incident_id}`)
+  revalidatePath(`/incidents/${incident_id}/neris`)
+  return { success: true }
+}
+
 // ─── Member self-log onto an incident ────────────────────────────────────────
 export async function logIncidentAttendance(incident_id: string, role: string) {
   const ctx = await getContext()
