@@ -46,19 +46,14 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const next365 = new Date(); next365.setDate(next365.getDate() + 365)
   const next365str = next365.toISOString().split('T')[0]
 
-  const [pendingSetup, instances, trainingEvents] = await Promise.all([
+  const [pendingSetup, seriesRows, trainingEvents] = await Promise.all([
     adminClient.from('department_personnel')
       .select('id')
       .eq('department_id', departmentId)
       .in('signup_status', ['temp_password', 'profile_setup']),
-    // Fetch wide window — special events trimmed after series join
-    adminClient.from('event_instances')
-      .select('id, series_id, event_date, start_time, location, status')
-      .gte('event_date', today)
-      .lte('event_date', next365str)
-      .neq('status', 'cancelled')
-      .order('event_date', { ascending: true })
-      .limit(50),
+    adminClient.from('event_series')
+      .select('id, title, event_type')
+      .eq('department_id', departmentId),
     adminClient.from('training_events')
       .select('id, event_date, start_time, topic, hours, location')
       .eq('department_id', departmentId)
@@ -68,16 +63,22 @@ async function getDashboardData(departmentId: string, personnelId: string) {
       .limit(5),
   ])
 
-  // Fetch series titles for instances
-  const seriesIds = [...new Set((instances.data ?? []).map(i => i.series_id))]
-  const { data: seriesData } = seriesIds.length > 0
-    ? await adminClient.from('event_series').select('id, title, event_type, department_id').in('id', seriesIds).eq('department_id', departmentId)
-    : { data: [] }
-  const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
+  const seriesMap = Object.fromEntries((seriesRows.data ?? []).map(s => [s.id, s]))
+  const deptSeriesIds = (seriesRows.data ?? []).map(s => s.id)
 
-  const deptInstances = (instances.data ?? [])
+  const { data: instanceData } = deptSeriesIds.length > 0
+    ? await adminClient.from('event_instances')
+      .select('id, series_id, event_date, start_time, location, status')
+      .in('series_id', deptSeriesIds)
+      .gte('event_date', today)
+      .lte('event_date', next365str)
+      .neq('status', 'cancelled')
+      .order('event_date', { ascending: true })
+      .limit(50)
+    : { data: [] }
+
+  const deptInstances = (instanceData ?? [])
     .filter(i => {
-      if (!seriesMap[i.series_id]) return false
       const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
       if (!isSpecial && i.event_date > next7str) return false
       return true
