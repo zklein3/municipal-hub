@@ -49,16 +49,16 @@ export default async function DeptEventsPage({
   const { data: instancesRaw } = seriesIds.length > 0
     ? await adminClient
         .from('event_instances')
-        .select('id, event_series_id, instance_date, status, notes')
-        .in('event_series_id', seriesIds)
-        .gte('instance_date', today)
+        .select('id, series_id, event_date, status, notes')
+        .in('series_id', seriesIds)
+        .gte('event_date', today)
         .neq('status', 'cancelled')
-        .order('instance_date', { ascending: true })
+        .order('event_date', { ascending: true })
         .limit(50)
-    : { data: [] as { id: string; event_series_id: string; instance_date: string; status: string; notes: string | null }[] }
+    : { data: [] as { id: string; series_id: string; event_date: string; status: string; notes: string | null }[] }
 
   const events = (instancesRaw ?? []).map(inst => {
-    const series = seriesMap[inst.event_series_id]
+    const series = seriesMap[inst.series_id]
     return {
       id: inst.id,
       title: series?.title ?? '—',
@@ -67,7 +67,7 @@ export default async function DeptEventsPage({
       event_type: series?.event_type ?? null,
       start_time: series?.start_time ?? null,
       duration_minutes: series?.duration_minutes ?? null,
-      instance_date: inst.instance_date,
+      instance_date: inst.event_date,
       notes: inst.notes ?? null,
     }
   })
