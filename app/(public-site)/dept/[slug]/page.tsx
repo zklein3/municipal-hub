@@ -2,6 +2,19 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
+function formatDate(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  })
+}
+
+function formatTime(t: string | null) {
+  if (!t) return null
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`
+}
+
 export default async function DeptLandingPage({
   params,
 }: {
@@ -20,6 +33,41 @@ export default async function DeptLandingPage({
   if (!dept || !dept.public_site_enabled) notFound()
 
   const base = `/dept/${slug}`
+  const today = new Date().toISOString().split('T')[0]
+
+  // Fetch upcoming public event series
+  const { data: seriesRaw } = await adminClient
+    .from('event_series')
+    .select('id, title, event_type, start_time, duration_minutes, location')
+    .eq('department_id', dept.id)
+    .eq('is_public', true)
+    .eq('active', true)
+
+  const seriesIds = (seriesRaw ?? []).map(s => s.id)
+  const seriesMap = Object.fromEntries((seriesRaw ?? []).map(s => [s.id, s]))
+
+  const { data: instancesRaw } = seriesIds.length > 0
+    ? await adminClient
+        .from('event_instances')
+        .select('id, series_id, event_date, status, notes')
+        .in('series_id', seriesIds)
+        .gte('event_date', today)
+        .neq('status', 'cancelled')
+        .order('event_date', { ascending: true })
+        .limit(5)
+    : { data: [] as { id: string; series_id: string; event_date: string; status: string; notes: string | null }[] }
+
+  const upcomingEvents = (instancesRaw ?? []).map(inst => {
+    const series = seriesMap[inst.series_id]
+    return {
+      id: inst.id,
+      title: series?.title ?? '—',
+      event_type: series?.event_type ?? null,
+      start_time: series?.start_time ?? null,
+      location: series?.location ?? null,
+      event_date: inst.event_date,
+    }
+  })
 
   const hasContact = dept.public_phone || dept.public_email || dept.public_address
 
@@ -71,16 +119,7 @@ export default async function DeptLandingPage({
 
       {/* Quick actions */}
       <h2 className="text-base font-semibold text-zinc-700 mb-3">How Can We Help?</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link
-          href={`${base}/events`}
-          className="rounded-xl bg-white border border-zinc-200 p-6 hover:border-red-300 hover:shadow-md transition-all group"
-        >
-          <div className="text-2xl mb-2">📅</div>
-          <h3 className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors mb-1">Upcoming Events</h3>
-          <p className="text-xs text-zinc-400">View community events and public activities.</p>
-        </Link>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <Link
           href={`${base}/burn-permit`}
           className="rounded-xl bg-white border border-zinc-200 p-6 hover:border-red-300 hover:shadow-md transition-all group"
@@ -99,6 +138,42 @@ export default async function DeptLandingPage({
           <p className="text-xs text-zinc-400">Request incident reports or inspection records.</p>
         </Link>
       </div>
+
+      {/* Upcoming events */}
+      {upcomingEvents.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-zinc-700">Upcoming Events</h2>
+            <Link href={`${base}/events`} className="text-xs text-red-700 hover:underline font-medium">
+              View all →
+            </Link>
+          </div>
+          <div className="flex flex-col gap-3">
+            {upcomingEvents.map(ev => (
+              <div key={ev.id} className="rounded-xl bg-white border border-zinc-200 px-5 py-4 flex items-center gap-4">
+                {/* Date block */}
+                <div className="shrink-0 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-center min-w-[52px]">
+                  <p className="text-xs font-semibold text-red-500 uppercase">
+                    {new Date(ev.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                  </p>
+                  <p className="text-2xl font-bold text-red-800 leading-none">
+                    {new Date(ev.event_date + 'T00:00:00').getDate()}
+                  </p>
+                </div>
+                {/* Details */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900 truncate">{ev.title}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-xs text-zinc-400">
+                    <span>{formatDate(ev.event_date)}</span>
+                    {ev.start_time && <span>{formatTime(ev.start_time)}</span>}
+                    {ev.location && <span>📍 {ev.location}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
