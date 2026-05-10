@@ -119,18 +119,64 @@ export default function IncidentDetailClient({
     setIsParsing(true)
     setImportError(null)
     setImportSuccess(false)
+
     const fd = new FormData()
     fd.set('pdf', file)
+    fd.set('apparatus_units', JSON.stringify(deptApparatus.map(a => a.unit_number)))
     const result = await parseRunSheet(fd)
-    if (result.error) {
-      setImportError(result.error)
-    } else if (result.data) {
-      setImportedData(result.data)
-      if (result.data.incident_type) setIncidentType(result.data.incident_type)
-      setImportSuccess(true)
-      setFormKey(k => k + 1)
+
+    if (result.error) { setImportError(result.error); setIsParsing(false); return }
+    const d = result.data!
+
+    // Build FormData for updateIncident, merging parsed values over existing
+    const ifd = new FormData()
+    ifd.set('incident_number',        d.incident_number        ?? incident.incident_number        ?? '')
+    ifd.set('cad_number',             d.cad_number             ?? incident.cad_number             ?? '')
+    ifd.set('incident_date',          d.incident_date          ?? incident.incident_date)
+    ifd.set('incident_type',          d.incident_type          ?? incident.incident_type)
+    ifd.set('address',                d.address                ?? incident.address                ?? '')
+    ifd.set('disposition',            d.disposition            ?? incident.disposition            ?? '')
+    ifd.set('narrative',              d.narrative              ?? incident.narrative              ?? '')
+    ifd.set('call_time',              d.call_time              ?? incident.call_time              ?? '')
+    ifd.set('paged_at',               d.paged_at               ?? incident.paged_at               ?? '')
+    ifd.set('first_on_scene_at',      d.first_on_scene_at      ?? incident.first_on_scene_at      ?? '')
+    ifd.set('last_leaving_scene_at',  d.last_leaving_scene_at  ?? incident.last_leaving_scene_at  ?? '')
+    ifd.set('in_service_at',          d.in_service_at          ?? incident.in_service_at          ?? '')
+    ifd.set('fire_subtype',           incident.fire_subtype    ?? '')
+    ifd.set('mutual_aid_direction',   incident.mutual_aid_direction ?? '')
+    ifd.set('mutual_aid_department',  incident.mutual_aid_department ?? '')
+    ifd.set('neris_reported',         incident.neris_reported ? 'true' : 'false')
+    await updateIncident(incident.id, ifd)
+
+    if (d.incident_type) setIncidentType(d.incident_type)
+
+    // Write apparatus — update existing rows, add new ones
+    for (const unit of d.apparatus ?? []) {
+      const numericSuffix = unit.unit_number.replace(/^[A-Za-z]+/, '')
+      const deptMatch = deptApparatus.find(a =>
+        a.unit_number.toUpperCase() === unit.unit_number.toUpperCase() ||
+        (numericSuffix && a.unit_number === numericSuffix)
+      )
+      if (!deptMatch) continue
+      const afd = new FormData()
+      afd.set('apparatus_id', deptMatch.id)
+      afd.set('role',              unit.role             || 'primary')
+      afd.set('paged_at',          d.paged_at            || '')
+      afd.set('enroute_at',        unit.enroute_at       || '')
+      afd.set('on_scene_at',       unit.on_scene_at      || '')
+      afd.set('leaving_scene_at',  unit.leaving_scene_at || '')
+      afd.set('available_at',      unit.available_at     || '')
+      const existing = incidentApparatus.find(r => r.apparatus_id === deptMatch.id)
+      if (existing) {
+        await updateIncidentApparatus(existing.id, incident.id, afd)
+      } else {
+        await addIncidentApparatus(incident.id, afd)
+      }
     }
+
+    setImportSuccess(true)
     setIsParsing(false)
+    router.refresh()
   }
 
   async function handleEditSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -305,6 +351,14 @@ export default function IncidentDetailClient({
       </div>
       <div className="flex flex-wrap gap-3 mb-6">
         <button onClick={() => router.push('/incidents')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+        {canEdit && (
+          <label className={`relative cursor-pointer rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium transition-colors shadow-sm ${isParsing ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-700 hover:bg-zinc-50 cursor-pointer'}`}>
+            {isParsing ? 'Reading PDF…' : 'Import Run Sheet'}
+            <input type="file" accept=".pdf,application/pdf" className="sr-only" onChange={handleImport} disabled={isParsing} />
+          </label>
+        )}
+        {importSuccess && <span className="self-center text-xs font-medium text-green-700">✓ Run sheet applied</span>}
+        {importError && <span className="self-center text-xs text-red-600">{importError}</span>}
         {isOfficerOrAbove && (
           <Link
             href={`/incidents/${incident.id}/neris`}
