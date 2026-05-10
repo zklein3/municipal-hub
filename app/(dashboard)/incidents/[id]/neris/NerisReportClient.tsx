@@ -729,49 +729,55 @@ export default function NerisReportClient({
             {incidentApparatus.length > 0 && (
             <div className="divide-y divide-zinc-100">
               {incidentApparatus.map(a => (
-                <div key={a.id} className="flex items-center justify-between py-2.5">
-                  <div>
+                <div key={a.id} className="flex gap-4 py-3 items-stretch">
+                  {/* Left — unit identity */}
+                  <div className="w-36 shrink-0 flex flex-col justify-center">
                     <p className="text-sm font-semibold text-zinc-900">
-                      Unit {a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}
+                      {a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}
                     </p>
-                    <p className="text-xs text-zinc-400 capitalize">{APPARATUS_ROLE_LABELS[a.role] ?? a.role}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <p className="text-xs text-zinc-400 capitalize mt-0.5">{APPARATUS_ROLE_LABELS[a.role] ?? a.role}</p>
                     {responseModeSaving === a.id && (
-                      <span className="text-xs text-zinc-400">Saving…</span>
+                      <span className="text-xs text-zinc-400 mt-1">Saving…</span>
                     )}
-                    <input
-                      type="number"
-                      min={0}
-                      value={staffingCounts[a.id] ?? ''}
-                      onChange={e => setStaffingCounts(prev => ({ ...prev, [a.id]: e.target.value }))}
-                      onBlur={() => handleStaffingCountBlur(a.id)}
-                      disabled={isSubmitted}
-                      placeholder="Staff"
-                      aria-label={`Staffing count for ${a.unit_number}`}
-                      className="w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                    />
-                    <select
-                      value={responseModes[a.id] ?? ''}
-                      onChange={e => handleResponseModeChange(a.id, e.target.value)}
-                      disabled={isSubmitted}
-                      className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                    >
-                      <option value="">Select…</option>
-                      {NERIS_RESPONSE_MODE.map(m => (
-                        <option key={m.code} value={m.code}>{m.label}</option>
-                      ))}
-                    </select>
                   </div>
-                  <div className="mt-2">
-                    <input
-                      type="text"
+
+                  {/* Right — controls stacked top to bottom */}
+                  <div className="flex-1 flex flex-col gap-2">
+                    {/* Staffing + response mode — equal width side by side */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={staffingCounts[a.id] ?? ''}
+                        onChange={e => setStaffingCounts(prev => ({ ...prev, [a.id]: e.target.value }))}
+                        onBlur={() => handleStaffingCountBlur(a.id)}
+                        disabled={isSubmitted}
+                        placeholder="Responders"
+                        aria-label={`Staffing count for ${a.unit_number}`}
+                        className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      />
+                      <select
+                        value={responseModes[a.id] ?? ''}
+                        onChange={e => handleResponseModeChange(a.id, e.target.value)}
+                        disabled={isSubmitted}
+                        className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      >
+                        <option value="">Response status…</option>
+                        {NERIS_RESPONSE_MODE.map(m => (
+                          <option key={m.code} value={m.code}>{m.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Notes — fills remaining vertical space */}
+                    <textarea
                       value={apparatusNotes[a.id] ?? ''}
                       onChange={e => setApparatusNotes(prev => ({ ...prev, [a.id]: e.target.value }))}
                       onBlur={() => handleApparatusNotesBlur(a.id)}
                       disabled={isSubmitted}
-                      placeholder={`Notes for ${a.unit_number} (optional)`}
-                      className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      placeholder="Unit notes…"
+                      rows={3}
+                      className="flex-1 w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 resize-none focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     />
                   </div>
                 </div>
