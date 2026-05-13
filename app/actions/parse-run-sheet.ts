@@ -8,6 +8,9 @@ export type ParsedRunSheet = {
   incident_number?: string
   incident_date?: string
   address?: string
+  city?: string
+  state?: string
+  zip?: string
   incident_type?: string
   call_time?: string
   paged_at?: string
@@ -91,7 +94,10 @@ Return a JSON object (all fields optional, omit if not found):
   "cad_number": "CFS# value",
   "incident_number": "from IR / External Agency Numbers — entry WITHOUT a PO: prefix (e.g. WIN26-0016)",
   "incident_date": "YYYY-MM-DD",
-  "address": "full incident address",
+  "address": "street address only (e.g. '123 Main St')",
+  "city": "city name",
+  "state": "2-letter state code (e.g. 'AZ')",
+  "zip": "5-digit zip code",
   "incident_type": one of "fire"|"rescue"|"standby"|"mutual_aid"|"special"|"other" — crashes/injuries = "rescue",
   "call_time": "YYYY-MM-DDTHH:mm",
   "paged_at": "YYYY-MM-DDTHH:mm",

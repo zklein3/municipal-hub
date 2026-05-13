@@ -11,6 +11,9 @@ type Incident = {
   incident_type: string
   fire_subtype: string | null
   address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
   status: string
   neris_reported: boolean
   created_by: string | null
@@ -76,7 +79,8 @@ export default function IncidentsClient({
       if (
         !i.incident_number?.toLowerCase().includes(q) &&
         !i.cad_number?.toLowerCase().includes(q) &&
-        !i.address?.toLowerCase().includes(q)
+        !i.address?.toLowerCase().includes(q) &&
+        !i.city?.toLowerCase().includes(q)
       ) return false
     }
     return true
@@ -182,7 +186,9 @@ export default function IncidentsClient({
                         {i.fire_subtype ? FIRE_SUBTYPE_LABELS[i.fire_subtype] ?? TYPE_LABELS[i.incident_type] : TYPE_LABELS[i.incident_type]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-600 max-w-[200px] truncate">{i.address || '—'}</td>
+                    <td className="px-4 py-3 text-zinc-600 max-w-[200px] truncate">
+                      {[i.address, i.city, i.state].filter(Boolean).join(', ') || '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${i.status === 'finalized' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                         {i.status === 'finalized' ? 'Finalized' : 'Pending'}

@@ -71,8 +71,8 @@ const SECTION_ANCHORS: Record<string, string | null> = {
   api: null,
 }
 
-// Same marker sets as getNerisActiveModules in lib/neris-requirements.ts — keep in sync
-const FIRE_NERIS_CODES = new Set(['STRUCTURAL_INVOLVEMENT_FIRE','ROOM_AND_CONTENTS_FIRE','CONFINED_COOKING_APPLIANCE_FIRE','CHIMNEY_FIRE','VEGETATION_GRASS_FIRE','WILDFIRE_WILDLAND','WILDFIRE_URBAN_INTERFACE','TRASH_RUBBISH_FIRE','DUMPSTER_OUTDOOR_CONTAINER_FIRE','CONSTRUCTION_WASTE','OUTSIDE_TANK_FIRE','UTILITY_INFRASTRUCTURE_FIRE','OTHER_OUTSIDE_FIRE'])
+// Incident types now use pipe-delimited NERIS format: FIRE||OUTSIDE_FIRE||OTHER_OUTSIDE_FIRE etc.
+// Fire module shows for any FIRE|| type. Other modules use substring markers that still match.
 const MEDICAL_MARKERS = ['CARDIAC','CHEST_PAIN','BREATHING','STROKE','UNCONSCIOUS','CONVULSIONS','DIABETIC','ALLERGIC','OVERDOSE','SICK_CASE','MEDICAL']
 const HAZMAT_MARKERS  = ['GAS_','FUEL_','CARBON_MONOXIDE','HAZMAT','BIOLOGICAL_RELEASE','RADIOACTIVE_RELEASE']
 const RESCUE_MARKERS  = ['RESCUE','EXTRICATION','ENTRAPMENT','WATER','ICE','CONFINED_SPACE','TECHNICAL','ELEVATOR']
@@ -144,7 +144,7 @@ export default function NerisReportClient({
 
   // Module visibility — mirrors getNerisActiveModules, also driven by selected NERIS code
   const codeMatchesAny = (markers: string[]) => markers.some(m => nerisType.includes(m))
-  const isFireType    = testingMode || coverType === 'fire'    || FIRE_NERIS_CODES.has(nerisType)
+  const isFireType    = testingMode || coverType === 'fire'    || nerisType.startsWith('FIRE||')
   const isMedicalType = testingMode || coverType === 'rescue'  || codeMatchesAny(MEDICAL_MARKERS)
   const isHazmatType  = testingMode || coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
   const isRescueType  = testingMode || coverType === 'rescue'  || codeMatchesAny(RESCUE_MARKERS)
@@ -400,7 +400,9 @@ export default function NerisReportClient({
           </div>
           <div>
             <span className="text-zinc-400 text-xs">Address</span>
-            <p className="font-medium text-zinc-800">{incident.address ?? '—'}</p>
+            <p className="font-medium text-zinc-800">
+              {[incident.address, incident.city, incident.state && incident.zip ? `${incident.state} ${incident.zip}` : (incident.state || incident.zip)].filter(Boolean).join(', ') || '—'}
+            </p>
           </div>
           <div>
             <span className="text-zinc-400 text-xs">Call Time</span>

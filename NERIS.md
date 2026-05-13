@@ -1,6 +1,14 @@
 # NERIS Compliance Reference
 
-**Current build status:** Partially unblocked. FireOps7 has NERIS test vendor access, but certified auth mode and enrollment are still pending FSRI confirmation. Keep API auth isolated so Basic vs OAuth is a small env/config change.
+**Current build status:** UNBLOCKED. Auth confirmed as OAuth2 client_credentials (2026-05-13, Conor Brady). Generate `client_id` + `client_secret` under the "Integrations" tab in NERIS web app. See knowledge base: https://neris.fsri.org/articles#integrations
+
+**Compatibility Badge Criteria (confirmed by FSRI):**
+1. `POST /incident` → 200-series response
+2. `PUT` or `PATCH /incident` on a previously POSTed incident → 200-series response
+3. `PUT` or `PATCH /entity` to update an entity record → 200-series response
+4. `POST /entity` to create a station, OR `POST /entity` to create a unit for a station → 200-series response
+
+All 4 must use **OAuth2 client_credentials** auth — this is required for production enrollment.
 
 **Source:** https://github.com/ulfsri/neris-framework
 **API (Production):** https://api.neris.fsri.org/v1 — Swagger: /docs | Redoc: /redoc

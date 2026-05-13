@@ -135,6 +135,9 @@ export default function IncidentDetailClient({
     ifd.set('incident_date',          d.incident_date          ?? incident.incident_date)
     ifd.set('incident_type',          d.incident_type          ?? incident.incident_type)
     ifd.set('address',                d.address                ?? incident.address                ?? '')
+    ifd.set('city',                   d.city                   ?? incident.city                   ?? '')
+    ifd.set('state',                  d.state                  ?? incident.state                  ?? '')
+    ifd.set('zip',                    d.zip                    ?? incident.zip                    ?? '')
     ifd.set('disposition',            d.disposition            ?? incident.disposition            ?? '')
     ifd.set('narrative',              d.narrative              ?? incident.narrative              ?? '')
     ifd.set('call_time',              d.call_time              ?? incident.call_time              ?? '')
@@ -455,8 +458,22 @@ export default function IncidentDetailClient({
               </div>
             )}
             <div>
-              <label className={labelCls}>Address</label>
+              <label className={labelCls}>Street Address</label>
               <input name="address" type="text" defaultValue={importedData?.address ?? incident.address ?? ''} className={inputCls} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-1">
+                <label className={labelCls}>City</label>
+                <input name="city" type="text" defaultValue={importedData?.city ?? incident.city ?? ''} placeholder="Winslow" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>State</label>
+                <input name="state" type="text" defaultValue={importedData?.state ?? incident.state ?? ''} placeholder="AZ" maxLength={2} className={`${inputCls} uppercase`} />
+              </div>
+              <div>
+                <label className={labelCls}>Zip</label>
+                <input name="zip" type="text" defaultValue={importedData?.zip ?? incident.zip ?? ''} placeholder="86047" maxLength={5} className={inputCls} />
+              </div>
             </div>
             <div>
               <label className={labelCls}>Disposition</label>
@@ -527,7 +544,14 @@ export default function IncidentDetailClient({
               <div><p className="text-zinc-400 text-xs">Date</p><p className="text-zinc-800 font-medium">{formatDate(incident.incident_date)}</p></div>
               {incident.incident_number && <div><p className="text-zinc-400 text-xs">Incident #</p><p className="text-zinc-800 font-medium">{incident.incident_number}</p></div>}
               {incident.cad_number && <div><p className="text-zinc-400 text-xs">CAD #</p><p className="text-zinc-800 font-medium">{incident.cad_number}</p></div>}
-              {incident.address && <div className="col-span-2"><p className="text-zinc-400 text-xs">Address</p><p className="text-zinc-800 font-medium">{incident.address}</p></div>}
+              {(incident.address || incident.city) && (
+                <div className="col-span-2">
+                  <p className="text-zinc-400 text-xs">Address</p>
+                  <p className="text-zinc-800 font-medium">
+                    {[incident.address, incident.city, incident.state && incident.zip ? `${incident.state} ${incident.zip}` : (incident.state || incident.zip)].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              )}
               {incident.mutual_aid_direction && <div><p className="text-zinc-400 text-xs">Mutual Aid</p><p className="text-zinc-800 font-medium capitalize">{incident.mutual_aid_direction} — {incident.mutual_aid_department}</p></div>}
               {incident.disposition && <div className="col-span-2"><p className="text-zinc-400 text-xs">Disposition</p><p className="text-zinc-800 font-medium">{incident.disposition}</p></div>}
               {incident.narrative && <div className="col-span-2"><p className="text-zinc-400 text-xs">Narrative</p><p className="text-zinc-700">{incident.narrative}</p></div>}

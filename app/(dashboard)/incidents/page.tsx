@@ -31,7 +31,7 @@ export default async function IncidentsPage() {
 
   const { data: incidents } = await adminClient
     .from('incidents')
-    .select('id, incident_number, cad_number, incident_date, incident_type, fire_subtype, address, status, neris_reported, created_by, created_at')
+    .select('id, incident_number, cad_number, incident_date, incident_type, fire_subtype, address, city, state, zip, status, neris_reported, created_by, created_at')
     .eq('department_id', department_id)
     .gte('incident_date', since.toISOString().split('T')[0])
     .order('incident_date', { ascending: false })

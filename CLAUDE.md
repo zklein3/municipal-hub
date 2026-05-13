@@ -88,21 +88,39 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### NERIS API Integration (UNBLOCKED — waiting on auth confirmation)
-Credentials received from Conor Brady (FSRI). Vendor ID: `VN03615504`, Test Dept: `FD35049607`.
-Auth confirmed as HTTP Basic — username `VN03615504`, password from portal. Awaiting Conor's reply on whether Basic is certified or if OAuth2 is required before finalizing.
-Once confirmed: add `NERIS_VENDOR_ID`, `NERIS_TEST_DEPT_ID`, `NERIS_AUTH_MODE=basic`, `NERIS_VENDOR_PASSWORD` to `.env.local`, run `npm run neris:smoke`, then compatibility badge work against FD35049607.
-**TODO(api-review) in `app/actions/neris.ts`:** verify `patients[]` / `victims[]` field names and partial-module acceptance against openapi.json once live.
+### NERIS Incident Submission — PHASE 1 COMPLETE ✅ (2026-05-13)
+Core submission flow working end-to-end against NERIS test API (FD35049607). Badge criteria all passed.
 
-### Asset Storage + Inspection Reconciliation — Resume at Phase 4
-Phases 1–3 done. Key files: `app/(dashboard)/inspections/run/InspectionRunClient.tsx`, `app/actions/equipment.ts` (`moveAssetToApparatus`).
-- Phase 4: session-close reconciliation — compare apparatus-assigned assets vs. selected; show unaccounted, default to move-to-storage
-- Phase 5: move unaccounted asset to storage → `item_assets.apparatus_id = null` + log
-- Phase 6: `/equipment/storage` — stored/unassigned assets, apparatus-assigned assets, manual move controls
-- Phase 7: apparatus asset summary — expected qty vs. assigned, shortage/surplus indicators
-- Phase 8: permissions (admins create/retire/override; officers move; members only via inspection)
-- Phase 9: movement history by asset/apparatus/item/user/source
-- Phase 10: safety rules — no silent auto-reassign, don't block inspection for unresolved reconciliation
+**What works:** OAuth2 client_credentials auth, POST /incident with base/dispatch/incident_types/actions_tactics. Submitting locks the incident and sets `status = 'finalized'` + `neris_reported = true`.
+
+**Key confirmed field names (live API):**
+- Incident types: pipe-delimited e.g. `FIRE||STRUCTURE_FIRE||STRUCTURAL_INVOLVEMENT_FIRE`
+- Action codes: pipe-delimited e.g. `EMERGENCY_MEDICAL_CARE||PROVIDE_BASIC_LIFE_SUPPORT`
+- `actions_tactics.action_noaction` = discriminated union — `{ type: 'ACTION', actions: [...] }` or `{ type: 'NOACTION', reason: '...' }`
+- `dispatch`: `call_create`, `call_answered`, `call_arrival` (all = call_time), `location: { state }`, `unit_responses: [{ reported_id_unit }]`
+- `base`: `department_neris_id`, `incident_number`, `location: { state }`
+
+**Test dept:** Fremont Fire Test Dept (FFTD) has `neris_entity_id = 'FD35049607'` — use `test.admin@fireops7.com` to test submissions.
+
+**NERIS module data still TODO** (next session — add back one section at a time, test against FFTD):
+- `locations` — property use, displaced persons (field names unknown, stripped)
+- `fire` — condition arrival, building damage, cause, acres, suppression (field names unverified)
+- `medical` / `rescue` — patients/victims (field names unknown, stripped)
+- `hazmat` — disposition, chemical (field names unknown, stripped)
+- `narrative` — top-level key unknown
+- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unknown
+
+**Env vars in `.env.local`:** `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`, `NERIS_TEST_DEPT_ID=FD35049607`, `NERIS_USE_TEST=true`
+
+### Asset Storage + Inspection — COMPLETE ✅
+All 10 phases done (2026-05-11). Key files: `app/(dashboard)/inspections/`, `app/actions/equipment.ts`, `app/(dashboard)/equipment/storage/`, `app/(dashboard)/equipment/movement-log/`.
+- Session flow: stays open until closed, multi-user claim/release, Resume Session with progress badge, Abandon (officer+)
+- Reconciliation scoped to completed compartments only; assets auto-assign from storage during inspection
+- "Not present" slot marking for missing assets during inspection
+- `/equipment/storage` shows quantity items + unassigned tracked assets, manual assign for officers+
+- `/equipment/movement-log` — movement history with search + source filter
+- Apparatus equipment page shows assigned vs expected count per tracked item
+- Dept-configurable session timeout via Dept Admin → Inspections
 
 ### Permit Approval Email (blocked)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function. Blocked until `fireops7.com` verified in Resend post-Wix migration.
@@ -131,6 +149,8 @@ Action: `app/actions/parse-run-sheet.ts` | Model: Claude Haiku | Key: `ANTHROPIC
 **Timestamp storage:** All times stored as local values with no timezone conversion — Supabase timezone = UTC. `formatDT` uses `timeZone: 'UTC'` to prevent CDT→UTC shift on display. Never instruct Claude to convert times to UTC.
 
 **Re-import on existing incidents:** "Import Run Sheet" button on incident detail page (`app/(dashboard)/incidents/[id]/IncidentDetailClient.tsx`) — overwrites incident fields and upserts apparatus rows in place.
+
+**Address fields (2026-05-13):** `incidents` table now has separate `address` (street), `city`, `state`, `zip` columns. Parser extracts each separately. NERIS uses `incident.state` directly — no regex parsing.
 
 ---
 

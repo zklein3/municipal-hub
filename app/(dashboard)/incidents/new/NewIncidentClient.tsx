@@ -59,6 +59,9 @@ export default function NewIncidentClient({
   const [cadNumber, setCadNumber] = useState('')
   const [incidentDate, setIncidentDate] = useState('')
   const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [zip, setZip] = useState('')
   const [disposition, setDisposition] = useState('')
   const [narrative, setNarrative] = useState('')
 
@@ -129,6 +132,9 @@ export default function NewIncidentClient({
     if (d.cad_number)           setCadNumber(d.cad_number)
     if (d.incident_date)        setIncidentDate(d.incident_date)
     if (d.address)              setAddress(d.address)
+    if (d.city)                 setCity(d.city)
+    if (d.state)                setState(d.state)
+    if (d.zip)                  setZip(d.zip)
     if (d.incident_type)        setIncidentType(d.incident_type)
     if (d.call_time)            setIncidentCallTime(d.call_time)
     if (d.paged_at)             setIncidentPaged(d.paged_at)
@@ -286,8 +292,22 @@ export default function NewIncidentClient({
           )}
 
           <div>
-            <label className={labelCls}>Address</label>
-            <input name="address" type="text" placeholder="123 Main St, Winslow" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} />
+            <label className={labelCls}>Street Address</label>
+            <input name="address" type="text" placeholder="123 Main St" value={address} onChange={e => setAddress(e.target.value)} className={inputCls} />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-1">
+              <label className={labelCls}>City</label>
+              <input name="city" type="text" placeholder="Winslow" value={city} onChange={e => setCity(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>State</label>
+              <input name="state" type="text" placeholder="AZ" maxLength={2} value={state} onChange={e => setState(e.target.value.toUpperCase())} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Zip</label>
+              <input name="zip" type="text" placeholder="86047" maxLength={5} value={zip} onChange={e => setZip(e.target.value)} className={inputCls} />
+            </div>
           </div>
 
           <div>

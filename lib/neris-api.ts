@@ -120,6 +120,51 @@ export async function nerisCreateStation(
   return { neris_id: data.neris_id ?? data.id ?? '' }
 }
 
+// PATCH an existing incident. Used for NERIS compatibility badge criterion #2.
+export async function nerisUpdateIncident(
+  nerisEntityId: string,
+  nerisIncidentId: string,
+  payload: object
+): Promise<void> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${BASE_URL}/incident/${nerisEntityId}/${nerisIncidentId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const msg = body?.detail ?? body?.message ?? `Incident update failed (${res.status})`
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+  }
+}
+
+// PATCH the entity record for a department. Used for NERIS compatibility badge criterion #3.
+export async function nerisUpdateEntity(
+  nerisEntityId: string,
+  payload: object
+): Promise<void> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${BASE_URL}/entity/${nerisEntityId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const msg = body?.detail ?? body?.message ?? `Entity update failed (${res.status})`
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+  }
+}
+
 // POST a unit to a station. Used for NERIS compatibility checks.
 export async function nerisCreateUnit(
   nerisEntityId: string,
