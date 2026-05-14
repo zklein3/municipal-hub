@@ -112,3 +112,39 @@ export async function addFireSchoolBottle(formData: FormData) {
   revalidatePath('/fire-school/bottles')
   return { success: true }
 }
+
+// ─── Update bottle ────────────────────────────────────────────────────────────
+export async function updateFireSchoolBottle(bottleId: string, formData: FormData) {
+  const adminClient = createAdminClient()
+
+  const department_name = formData.get('department_name') as string
+  const psi = formData.get('psi') as string
+  const cylinder_type = formData.get('cylinder_type') as string
+  const manufacture_date = formData.get('manufacture_date') as string
+  const last_requal_date = formData.get('last_requal_date') as string
+  const requal_interval_years = formData.get('requal_interval_years') as string
+  const service_life_years = formData.get('service_life_years') as string
+  const requires_service_life = formData.get('requires_service_life') === 'true'
+  const active = formData.get('active') === 'true'
+
+  const { error } = await adminClient
+    .from('fire_school_bottles')
+    .update({
+      department_name: department_name || null,
+      psi: psi ? parseInt(psi) : null,
+      cylinder_type: cylinder_type || null,
+      manufacture_date: manufacture_date || null,
+      last_requal_date: last_requal_date || null,
+      requal_interval_years: requal_interval_years ? parseInt(requal_interval_years) : null,
+      service_life_years: service_life_years ? parseInt(service_life_years) : null,
+      requires_service_life,
+      active,
+    })
+    .eq('bottle_id', bottleId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/fire-school/bottles')
+  revalidatePath('/fire-school')
+  return { success: true }
+}

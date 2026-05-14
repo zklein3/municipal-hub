@@ -41,3 +41,11 @@ body {
     -webkit-text-fill-color: #a1a1aa !important;
   }
 }
+
+@media print {
+  @page { margin: 0.6in; }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -6,10 +6,11 @@ import { checkBottle, logFill } from '@/app/actions/fire-school'
 import QRScanner from '@/components/QRScanner'
 
 const CYLINDER_TYPE_LABELS: Record<string, string> = {
-  composite_15: 'Composite (15yr)',
-  composite_30: 'Composite (30yr)',
-  steel: 'Steel',
-  aluminum: 'Aluminum',
+  composite_15: 'Carbon Fiber (15yr)',
+  composite_30: 'Next-Gen Composite (30yr)',
+  hoop_wrapped: 'Hoop-Wrapped (15yr)',
+  steel:        'Steel',
+  aluminum:     'Aluminum',
 }
 
 interface Bottle {
@@ -254,6 +255,14 @@ function FillStationContent() {
                   </div>
                 )}
 
+                <div className="flex justify-end mb-3">
+                  <a
+                    href={`/fire-school/bottles?edit=${result.bottle.bottle_id}`}
+                    className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors"
+                  >
+                    Edit this bottle →
+                  </a>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <DetailField
                     label="PSI"
