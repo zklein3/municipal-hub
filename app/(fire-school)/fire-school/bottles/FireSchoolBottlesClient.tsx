@@ -164,6 +164,7 @@ export default function FireSchoolBottlesClient({
   prefillEditBottleId?: string | null
 }) {
   const [showForm, setShowForm]             = useState(!!prefillBottleId)
+  const [formKey, setFormKey]               = useState(0)
   const [addError, setAddError]             = useState<string | null>(null)
   const [success, setSuccess]               = useState<string | null>(null)
   const [addedBottleId, setAddedBottleId]   = useState<string | null>(null)
@@ -261,7 +262,15 @@ export default function FireSchoolBottlesClient({
             Report
           </a>
           <button
-            onClick={() => { setShowForm(!showForm); setAddError(null); setSuccess(null) }}
+            onClick={() => {
+              if (!showForm) {
+                setSelectedType('composite_15')
+                setFormKey(k => k + 1)
+                setAddError(null)
+                setSuccess(null)
+              }
+              setShowForm(!showForm)
+            }}
             className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-700 transition-colors"
           >
             {showForm ? 'Cancel' : '+ Add'}
@@ -289,11 +298,11 @@ export default function FireSchoolBottlesClient({
           {addError && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{addError}</div>
           )}
-          <form action={handleAdd} className="flex flex-col gap-4">
+          <form key={formKey} action={handleAdd} autoComplete="off" className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="sm:w-36">
                 <label className="mb-1 block text-sm font-medium text-zinc-700">Bottle ID <span className="text-red-500">*</span></label>
-                <input name="bottle_id" type="text" required
+                <input name="bottle_id" type="text" required autoComplete="off"
                   defaultValue={prefillBottleId ?? ''}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   placeholder="B-0001" />
