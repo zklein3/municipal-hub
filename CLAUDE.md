@@ -88,79 +88,34 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### NERIS Incident Submission — PHASE 1 COMPLETE ✅ (2026-05-13)
-Core submission flow working end-to-end against NERIS test API (FD35049607). Badge criteria all passed.
+### 1. NERIS — Add Env Vars to Vercel ⚠️ USER ACTION REQUIRED
+NERIS submission works locally but fails on live site — env vars not in Vercel.
+Add these in Vercel dashboard → Project Settings → Environment Variables:
+- `NERIS_CLIENT_ID` — from NERIS Integrations tab
+- `NERIS_CLIENT_SECRET` — from NERIS Integrations tab
+- `NERIS_USE_TEST=true` — remove/set false for production submissions
+- `NERIS_TEST_DEPT_ID=FD35049607` — FSRI test dept (dev only)
 
-**What works:** OAuth2 client_credentials auth, POST /incident with base/dispatch/incident_types/actions_tactics. Submitting locks the incident and sets `status = 'finalized'` + `neris_reported = true`.
+### 2. NERIS — Remaining Modules
+Core submission complete. Modules confirmed + wired: locations, fire, narrative.
+Still TODO (field names unverified, stripped from payload):
+- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unknown
+- `medical` / `rescue` — patient/victim fields unknown
+- `hazmat` — disposition, chemical fields unknown
 
-**Key confirmed field names (live API):**
-- Incident types: pipe-delimited e.g. `FIRE||STRUCTURE_FIRE||STRUCTURAL_INVOLVEMENT_FIRE`
-- Action codes: pipe-delimited e.g. `EMERGENCY_MEDICAL_CARE||PROVIDE_BASIC_LIFE_SUPPORT`
-- `actions_tactics.action_noaction` = discriminated union — `{ type: 'ACTION', actions: [...] }` or `{ type: 'NOACTION', reason: '...' }`
-- `dispatch`: `call_create`, `call_answered`, `call_arrival` (all = call_time), `location: { state }`, `unit_responses: [{ reported_id_unit }]`
-- `base`: `department_neris_id`, `incident_number`, `location: { state }`
+Test dept: `neris_entity_id = 'FD35049607'`, use `test.admin@fireops7.com`.
+See `NERIS.md` for full field reference and payload builder notes.
+Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
 
-**Test dept:** Fremont Fire Test Dept (FFTD) has `neris_entity_id = 'FD35049607'` — use `test.admin@fireops7.com` to test submissions.
+### 3. Permit Approval Email (blocked)
+Blocked until `fireops7.com` verified in Resend post-Wix migration.
+Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
-**NERIS module data still TODO** (add back one section at a time, test against FFTD):
-- ✅ `locations` — `base.location_use.use_type` (property use), `base.displacement_count` (displaced persons), `base.location.street/postal_code` — confirmed + wired (2026-05-15)
-- ✅ `fire` — `fire_detail.location_detail` (STRUCTURE or OUTSIDE discriminated by incident type), `arrival_condition`, `damage_type`, `cause`, `floor_of_origin`, `room_of_origin_type`, `acres_burned`, `suppression_appliances` — confirmed + wired (2026-05-15)
-- ✅ `narrative` — `base.outcome_narrative` (falls back to cover sheet narrative), `base.impediment_narrative` (new optional field) — confirmed + wired (2026-05-15)
-- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unverified
-- `medical` / `rescue` — patients/victims (field names unknown, stripped)
-- `hazmat` — disposition, chemical (field names unknown, stripped)
+### 4. Officer Sub-Menu
+Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-**Env vars in `.env.local`:** `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`, `NERIS_TEST_DEPT_ID=FD35049607`, `NERIS_USE_TEST=true`
-
-### Asset Storage + Inspection — COMPLETE ✅
-All 10 phases done (2026-05-11). Key files: `app/(dashboard)/inspections/`, `app/actions/equipment.ts`, `app/(dashboard)/equipment/storage/`, `app/(dashboard)/equipment/movement-log/`.
-- Session flow: stays open until closed, multi-user claim/release, Resume Session with progress badge, Abandon (officer+)
-- Reconciliation scoped to completed compartments only; assets auto-assign from storage during inspection
-- "Not present" slot marking for missing assets during inspection
-- `/equipment/storage` shows quantity items + unassigned tracked assets, manual assign for officers+
-- `/equipment/movement-log` — movement history with search + source filter
-- Apparatus equipment page shows assigned vs expected count per tracked item
-- Dept-configurable session timeout via Dept Admin → Inspections
-
-### Fuel Logging — BUILD NEXT
-Track apparatus fuel usage with receipt scanning. Two entry points + a report.
-
-**DB table: `apparatus_fuel_logs`**
-```
-id, department_id, apparatus_id, logged_by_personnel_id
-fuel_date (date), gallons (numeric), cost_per_gallon (numeric), total_cost (numeric)
-fuel_type (diesel | gasoline | other), odometer (integer, optional)
-vendor (text, optional), notes (text, optional), created_at
-```
-
-**Receipt parsing:** Claude Haiku extracts gallons, price/gallon, total, vendor, date from a receipt photo. Action: `app/actions/parse-fuel-receipt.ts`. Model + key same as run sheet parser (`ANTHROPIC_API_KEY`, `claude-haiku-*`). User uploads/photos receipt → fields pre-fill → user confirms + saves.
-
-**Entry point 1 — Apparatus detail page** (`/equipment/[id]`)
-- Add "Fuel Log" button in the action row (next to Inventory Storage)
-- Opens `/equipment/[id]/fuel` — list of fuel entries for that apparatus + Add Entry button with receipt scan
-
-**Entry point 2 — Dashboard**
-- Add a "Log Fuel" quick-action card on the dashboard (all roles)
-- Apparatus picker dropdown → same receipt scan + form flow
-- Shows last 5 fuel entries dept-wide as a mini feed
-
-**Report: `/reports/fuel`**
-- Filter by apparatus and/or date range
-- Summary: total gallons, total cost, cost per apparatus
-- Breakdown table: date / apparatus / vendor / gallons / cost
-- Print-ready
-
-### Permit Approval Email (blocked)
-Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function. Blocked until `fireops7.com` verified in Resend post-Wix migration.
-
-### Officer Sub-Menu
-Officers need elevated access similar to admin hub but scoped to operational functions. Not yet designed.
-
-### Personnel Page — Officer Inline Edit (lower priority)
-Officers see Add button on `/personnel` but no inline edit per card. Detail page works for now.
-
-### Module / Feature Flag System (design ready, after storage)
-Bundles: A = Operations, B = ISO, C = Public, D = Medical (future). `module_operations` + `module_iso` already in DB and nav-gated. Remaining: sys admin toggle UI, plan presets, demo dept gets everything on.
+### 5. Module / Feature Flag System
+`module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
 
@@ -172,59 +127,13 @@ Action: `app/actions/parse-run-sheet.ts` | Model: Claude Haiku | Key: `ANTHROPIC
 2. `Response Times` block — dept-level: `Assigned` → `paged_at`, `Arrived` → `first_on_scene_at`, `Leaving` → `last_leaving_scene_at`
 3. `Unit Response Times` section — per-vehicle: `Enroute`, `Arrived`, `Leaving Scene`, `Available`/`Off Duty`
 
-**Unit number matching:** CAD uses 3-letter agency prefix (e.g. `WIN11`); DB stores plain number (`11`). Parser is given the dept's unit list; Claude returns plain numbers. Client-side fallback strips alpha prefix before matching.
+**Unit number matching:** CAD uses 3-letter agency prefix (e.g. `WIN11`); DB stores plain number (`11`). Parser given dept's unit list; Claude returns plain numbers. Client-side fallback strips alpha prefix before matching.
 
 **Timestamp storage:** All times stored as local values with no timezone conversion — Supabase timezone = UTC. `formatDT` uses `timeZone: 'UTC'` to prevent CDT→UTC shift on display. Never instruct Claude to convert times to UTC.
 
 **Re-import on existing incidents:** "Import Run Sheet" button on incident detail page (`app/(dashboard)/incidents/[id]/IncidentDetailClient.tsx`) — overwrites incident fields and upserts apparatus rows in place.
 
-**Address fields (2026-05-13):** `incidents` table now has separate `address` (street), `city`, `state`, `zip` columns. Parser extracts each separately. NERIS uses `incident.state` directly — no regex parsing.
-
-### Fire School Module — COMPLETE ✅ (2026-05-14)
-Built and deployed as a standalone public site (`/fire-school/*`) for SCBA cylinder fill station operations at fire school events. No login required.
-
-**What's live:**
-- `/fire-school` — Fill station: scan QR or enter bottle ID, shows go/no-go with bottle detail, logs fill
-- `/fire-school/bottles` — Bottle roster: add, edit (inline), status badges, mobile card layout + desktop table, Print Report + Print QR Label per bottle
-- `/fire-school/fill-log` — Full fill history log
-- `/print/fire-school-report` — Printable PDF report: summary stats (total/in-spec/out-of-spec/total fills), full roster table with out-of-spec rows highlighted red, sorted OOS first
-
-**Cylinder types (DOT/NFPA compliant):**
-| Type | DB value | Service Life | Hydro Interval |
-|------|----------|-------------|----------------|
-| Carbon Fiber/Composite | `composite_15` | 15 yr | 5 yr |
-| Next-Gen Composite | `composite_30` | 30 yr | 5 yr |
-| Hoop-Wrapped/Fiberglass | `hoop_wrapped` | 15 yr | 3 yr |
-| Steel | `steel` | None | 5 yr |
-| Aluminum | `aluminum` | None | 5 yr |
-
-**Key technical notes:**
-- Type selection auto-locks hydro interval + service life in the add/edit form — user can't enter wrong combo
-- QR codes encode `https://www.fireops7.com/fire-school?scan=BOTTLE_ID` — works with native camera and in-app scanner
-- `export const dynamic = 'force-dynamic'` required on fill-log and report pages or Vercel caches them
-- Print button must be an isolated `'use client'` component — inline `<style>` JSX causes hydration failure that kills button interactivity
-- DB tables: `fire_school_bottles`, `fire_school_fill_logs`
-
----
-
-## Business Model — Next Focus 🔜
-
-FireOps7 is currently free. Goal: transition to a paid SaaS model. Need to design pricing, feature gating, and the upgrade/billing flow.
-
-**Context for this conversation:**
-- Platform serves fire departments of varying sizes (volunteer to career)
-- Current module bundles already defined in DB: `module_operations`, `module_iso` (flags per dept)
-- Module/feature flag system is designed but sys admin toggle UI not yet built
-- Demo dept gets everything on; plan presets (A/B/C/D bundles) are designed in MODULES.md
-
-**Questions to work through:**
-- What is the pricing model? (per dept flat rate / per seat / per module bundle / tiered)
-- What is free forever vs. paid? (e.g. fire school fill station is likely always free as a public good)
-- How does a department admin sign up and pay? (Stripe integration, billing portal)
-- What happens when a dept doesn't pay — graceful degradation vs. hard lock?
-- How do we handle volunteer depts with no budget vs. career depts?
-- Who is the buyer — fire chief, department admin, municipality?
-- Is there a grant/SAFER angle given the NERIS compliance features?
+**Address fields:** `incidents` table has separate `address`, `city`, `state`, `zip` columns. Parser extracts each separately. NERIS uses `incident.state` directly.
 
 ---
 

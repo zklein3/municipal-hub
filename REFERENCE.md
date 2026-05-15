@@ -35,16 +35,20 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `/apparatus`, `/apparatus/[id]` — apparatus list + detail (still exists, not in nav)
 - `/stations`, `/stations/[id]` — stations list + detail (still exists, not in nav)
 - `/equipment/[id]` — manage items per apparatus (assign/remove/move), reached via apparatus detail
-- `/equipment/[id]/[compartment_id]` — compartment detail; Back uses `?from` param; Move + Remove for all roles
+- `/equipment/[id]/[compartment_id]` — compartment detail; Back uses `?from` param; QR code auto-assigned on first open; Print QR always available
+- `/equipment/[id]/fuel` — fuel log for a specific apparatus; receipt scan pre-fills fields
+- `/equipment/storage` — dept-wide storage view: quantity items + unassigned tracked assets
+- `/equipment/movement-log` — movement history with search + source filter
 - `/equipment/assets` — dept-wide asset roster (Inspections nav group, officer+)
-- `/inspections` — landing page: stations → apparatus cards → compartments (View / Inspect / Daily Check)
+- `/inspections` — landing page: stations → apparatus cards → compartments (Scan QR / View / Inspect / Daily Check)
 - `/inspections/run`, `/inspections/apparatus/[id]` — inspection run + session flow
-- `/scan` — QR code lookup + redirect
+- `/scan` — QR code lookup + redirect; compartment scans → `/inspections/run`; supports `?next=` post-login redirect
+- `/fuel` — dept-wide fuel log + add entry (dashboard quick-action)
 - `/events`, `/events/new`
 - `/training` — nav label "Certifications"
 - `/announcements` — unread badge
 - `/incidents`, `/incidents/[id]`, `/incidents/new`
-- `/reports/inspections`, `/reports/inventory`, `/reports/training`, `/reports/attendance`, `/reports/my-activity`
+- `/reports/inspections`, `/reports/inventory`, `/reports/training`, `/reports/attendance`, `/reports/my-activity`, `/reports/fuel`
 - `/iso/hoses`, `/iso/hydrants`, `/iso/report`
 - `/inbox` — burn permits + records requests (officers/admins)
 - `/admin/departments`, `/admin/users`, `/admin/logs`
@@ -83,6 +87,8 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `app/actions/iso.ts` — upsertApparatusIsoSpecs, hose/hydrant/mutual aid actions
 - `app/actions/users.ts` — createDeptMember
 - `app/actions/fire-school.ts` — checkBottle, logFill, addFireSchoolBottle
+- `app/actions/parse-fuel-receipt.ts` — Claude Haiku vision, extracts gallons/price/vendor/date from receipt photo
+- `app/actions/fuel.ts` — saveFuelEntry, getFuelEntries
 - `app/actions/public-site.ts` — savePublicSiteSettings, toggleEventSeriesPublic, submitBurnPermit, submitRecordRequest, updateBurnPermitStatus, updateRecordRequestStatus, savePermitOfficerSignature, savePermitApplicantSignature
 
 ## Supabase Edge Functions
