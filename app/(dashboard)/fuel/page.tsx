@@ -31,7 +31,7 @@ export default async function FuelPage() {
 
   const { data: logsRaw } = await adminClient
     .from('apparatus_fuel_logs')
-    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, odometer, vendor, notes, logged_by_personnel_id')
+    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
     .eq('department_id', department_id)
     .order('fuel_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -58,6 +58,7 @@ export default async function FuelPage() {
     total_cost: l.total_cost,
     fuel_type: l.fuel_type,
     odometer: l.odometer,
+    engine_hours: l.engine_hours,
     vendor: l.vendor,
     notes: l.notes,
     logged_by_name: l.logged_by_personnel_id ? (personnelMap[l.logged_by_personnel_id] ?? null) : null,

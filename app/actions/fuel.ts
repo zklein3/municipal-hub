@@ -37,6 +37,7 @@ export async function logFuel(formData: FormData) {
   const total_cost = formData.get('total_cost') as string
   const fuel_type = formData.get('fuel_type') as string || 'diesel'
   const odometer = formData.get('odometer') as string
+  const engine_hours = formData.get('engine_hours') as string
   const vendor = formData.get('vendor') as string
   const notes = formData.get('notes') as string
 
@@ -54,6 +55,7 @@ export async function logFuel(formData: FormData) {
     total_cost: total_cost ? parseFloat(total_cost) : null,
     fuel_type,
     odometer: odometer ? parseInt(odometer) : null,
+    engine_hours: engine_hours ? parseFloat(engine_hours) : null,
     vendor: vendor || null,
     notes: notes || null,
   })

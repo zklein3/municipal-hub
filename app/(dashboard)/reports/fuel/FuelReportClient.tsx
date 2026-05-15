@@ -14,6 +14,7 @@ interface FuelEntry {
   total_cost: number | null
   fuel_type: string
   odometer: number | null
+  engine_hours: number | null
   vendor: string | null
   notes: string | null
   logged_by_name: string | null
@@ -149,6 +150,7 @@ export default function FuelReportClient({
                 <div className="flex gap-4 mt-0.5 text-xs text-zinc-500 flex-wrap">
                   {entry.vendor && <span>{entry.vendor}</span>}
                   {entry.odometer && <span>{entry.odometer.toLocaleString()} mi</span>}
+                  {entry.engine_hours && <span>{entry.engine_hours} hrs</span>}
                   {entry.logged_by_name && <span>by {entry.logged_by_name}</span>}
                 </div>
               </div>

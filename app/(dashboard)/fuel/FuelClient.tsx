@@ -17,6 +17,7 @@ interface FuelEntry {
   total_cost: number | null
   fuel_type: string
   odometer: number | null
+  engine_hours: number | null
   vendor: string | null
   notes: string | null
   logged_by_name: string | null
@@ -59,6 +60,7 @@ export default function FuelClient({
     total_cost: string
     fuel_type: string
     odometer: string
+    engine_hours: string
     vendor: string
     notes: string
   }>({
@@ -69,6 +71,7 @@ export default function FuelClient({
     total_cost: '',
     fuel_type: 'diesel',
     odometer: '',
+    engine_hours: '',
     vendor: '',
     notes: '',
   })
@@ -123,7 +126,7 @@ export default function FuelClient({
     if (result?.error) { setError(result.error); setLoading(false); return }
     setSuccess('Fuel entry saved.')
     setShowForm(false)
-    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', odometer: '', vendor: '', notes: '', fuel_date: today }))
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today }))
     router.refresh()
     setLoading(false)
   }
@@ -217,12 +220,12 @@ export default function FuelClient({
                   onChange={e => setForm(p => ({ ...p, gallons: e.target.value }))} required className={inputCls} placeholder="25.431" />
               </div>
               <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Price/Gal</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Price/Gal <span className="text-zinc-400 font-normal">(optional)</span></label>
                 <input type="number" step="0.001" min="0" value={form.cost_per_gallon}
                   onChange={e => autoCalc('cost_per_gallon', e.target.value)} className={inputCls} placeholder="3.459" />
               </div>
               <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Total $</label>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Total $ <span className="text-zinc-400 font-normal">(optional)</span></label>
                 <input type="number" step="0.01" min="0" value={form.total_cost}
                   onChange={e => autoCalc('total_cost', e.target.value)} className={inputCls} placeholder="87.95" />
               </div>
@@ -233,9 +236,13 @@ export default function FuelClient({
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Vendor</label>
                 <input type="text" value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} className={inputCls} placeholder="Casey's General Store" />
               </div>
-              <div className="w-32">
+              <div className="w-28">
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Odometer</label>
                 <input type="number" min="0" value={form.odometer} onChange={e => setForm(p => ({ ...p, odometer: e.target.value }))} className={inputCls} placeholder="12500" />
+              </div>
+              <div className="w-28">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Eng. Hours</label>
+                <input type="number" step="0.1" min="0" value={form.engine_hours} onChange={e => setForm(p => ({ ...p, engine_hours: e.target.value }))} className={inputCls} placeholder="1250.5" />
               </div>
             </div>
 
@@ -279,6 +286,7 @@ export default function FuelClient({
                     {entry.total_cost && <span className="font-semibold text-zinc-700">${entry.total_cost.toFixed(2)}</span>}
                     {entry.vendor && <span>{entry.vendor}</span>}
                     {entry.odometer && <span>{entry.odometer.toLocaleString()} mi</span>}
+                    {entry.engine_hours && <span>{entry.engine_hours} hrs</span>}
                   </div>
                   {entry.notes && <p className="text-xs text-zinc-400 mt-0.5 italic">{entry.notes}</p>}
                   {entry.logged_by_name && <p className="text-xs text-zinc-400 mt-0.5">Logged by {entry.logged_by_name}</p>}
