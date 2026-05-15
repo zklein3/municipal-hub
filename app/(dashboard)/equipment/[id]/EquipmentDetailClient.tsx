@@ -329,17 +329,6 @@ export default function EquipmentDetailClient({
                           placeholder="1"
                         />
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-xs text-zinc-500 mb-0.5">Min Qty</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={minQty}
-                          onChange={e => setMinQty(e.target.value)}
-                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                          placeholder="0"
-                        />
-                      </div>
                       <button
                         onClick={() => handleAssign(c.id)}
                         disabled={!selectedItem || loading}
