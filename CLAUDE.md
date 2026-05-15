@@ -152,6 +152,52 @@ Action: `app/actions/parse-run-sheet.ts` | Model: Claude Haiku | Key: `ANTHROPIC
 
 **Address fields (2026-05-13):** `incidents` table now has separate `address` (street), `city`, `state`, `zip` columns. Parser extracts each separately. NERIS uses `incident.state` directly — no regex parsing.
 
+### Fire School Module — COMPLETE ✅ (2026-05-14)
+Built and deployed as a standalone public site (`/fire-school/*`) for SCBA cylinder fill station operations at fire school events. No login required.
+
+**What's live:**
+- `/fire-school` — Fill station: scan QR or enter bottle ID, shows go/no-go with bottle detail, logs fill
+- `/fire-school/bottles` — Bottle roster: add, edit (inline), status badges, mobile card layout + desktop table, Print Report + Print QR Label per bottle
+- `/fire-school/fill-log` — Full fill history log
+- `/print/fire-school-report` — Printable PDF report: summary stats (total/in-spec/out-of-spec/total fills), full roster table with out-of-spec rows highlighted red, sorted OOS first
+
+**Cylinder types (DOT/NFPA compliant):**
+| Type | DB value | Service Life | Hydro Interval |
+|------|----------|-------------|----------------|
+| Carbon Fiber/Composite | `composite_15` | 15 yr | 5 yr |
+| Next-Gen Composite | `composite_30` | 30 yr | 5 yr |
+| Hoop-Wrapped/Fiberglass | `hoop_wrapped` | 15 yr | 3 yr |
+| Steel | `steel` | None | 5 yr |
+| Aluminum | `aluminum` | None | 5 yr |
+
+**Key technical notes:**
+- Type selection auto-locks hydro interval + service life in the add/edit form — user can't enter wrong combo
+- QR codes encode `https://www.fireops7.com/fire-school?scan=BOTTLE_ID` — works with native camera and in-app scanner
+- `export const dynamic = 'force-dynamic'` required on fill-log and report pages or Vercel caches them
+- Print button must be an isolated `'use client'` component — inline `<style>` JSX causes hydration failure that kills button interactivity
+- DB tables: `fire_school_bottles`, `fire_school_fill_logs`
+
+---
+
+## Business Model — Next Focus 🔜
+
+FireOps7 is currently free. Goal: transition to a paid SaaS model. Need to design pricing, feature gating, and the upgrade/billing flow.
+
+**Context for this conversation:**
+- Platform serves fire departments of varying sizes (volunteer to career)
+- Current module bundles already defined in DB: `module_operations`, `module_iso` (flags per dept)
+- Module/feature flag system is designed but sys admin toggle UI not yet built
+- Demo dept gets everything on; plan presets (A/B/C/D bundles) are designed in MODULES.md
+
+**Questions to work through:**
+- What is the pricing model? (per dept flat rate / per seat / per module bundle / tiered)
+- What is free forever vs. paid? (e.g. fire school fill station is likely always free as a public good)
+- How does a department admin sign up and pay? (Stripe integration, billing portal)
+- What happens when a dept doesn't pay — graceful degradation vs. hard lock?
+- How do we handle volunteer depts with no budget vs. career depts?
+- Who is the buyer — fire chief, department admin, municipality?
+- Is there a grant/SAFER angle given the NERIS compliance features?
+
 ---
 
 ## NERIS Compliance Reference → see `NERIS.md`
