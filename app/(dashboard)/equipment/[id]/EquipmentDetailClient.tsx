@@ -300,11 +300,11 @@ export default function EquipmentDetailClient({
               {/* Add Item Form */}
               {assigningTo === c.id && isOfficerOrAbove && (
                 <div className="px-5 py-4 border-b border-zinc-100 bg-red-50">
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-2">
                     <select
                       value={selectedItem}
                       onChange={e => setSelectedItem(e.target.value)}
-                      className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     >
                       <option value="">Select item...</option>
                       {itemsByCategory.map(cat => (
@@ -317,33 +317,37 @@ export default function EquipmentDetailClient({
                         </optgroup>
                       ))}
                     </select>
-                    <div className="w-20">
-                      <input
-                        type="number"
-                        min="1"
-                        value={quantity}
-                        onChange={e => setQuantity(e.target.value)}
-                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                        placeholder="Qty"
-                      />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-zinc-500 mb-0.5">Expected Qty</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={quantity}
+                          onChange={e => setQuantity(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-zinc-500 mb-0.5">Min Qty</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={minQty}
+                          onChange={e => setMinQty(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                          placeholder="0"
+                        />
+                      </div>
+                      <button
+                        onClick={() => handleAssign(c.id)}
+                        disabled={!selectedItem || loading}
+                        className="self-end rounded-lg bg-red-700 px-5 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                      >
+                        {loading ? '...' : 'Add'}
+                      </button>
                     </div>
-                    <div className="w-20">
-                      <input
-                        type="number"
-                        min="0"
-                        value={minQty}
-                        onChange={e => setMinQty(e.target.value)}
-                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                        placeholder="Min"
-                      />
-                    </div>
-                    <button
-                      onClick={() => handleAssign(c.id)}
-                      disabled={!selectedItem || loading}
-                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
-                    >
-                      {loading ? '...' : 'Add'}
-                    </button>
                   </div>
                 </div>
               )}
