@@ -104,7 +104,7 @@ Core submission flow working end-to-end against NERIS test API (FD35049607). Bad
 
 **NERIS module data still TODO** (add back one section at a time, test against FFTD):
 - ✅ `locations` — `base.location_use.use_type` (property use), `base.displacement_count` (displaced persons), `base.location.street/postal_code` — confirmed + wired (2026-05-15)
-- `fire` — **START HERE NEXT SESSION** — fetch field names from openapi.json at https://api-test.neris.fsri.org/v1/openapi.json, look for `mod_fire` or fire module schema. Fields to map: fire condition on arrival, building damage, fire cause, suppression appliance, floor of origin, room of origin, acres burned. All already saved in `incident_neris` table — just need confirmed API field names to wire into `buildNerisPayload` in `app/actions/neris.ts`. Same approach as locations: fetch spec → confirm names → add to payload → test against FFTD (`test.admin@fireops7.com`).
+- ✅ `fire` — `fire_detail.location_detail` (STRUCTURE or OUTSIDE discriminated by incident type), `arrival_condition`, `damage_type`, `cause`, `floor_of_origin`, `room_of_origin_type`, `acres_burned`, `suppression_appliances` — confirmed + wired (2026-05-15)
 - `narrative` — top-level key unknown, stripped
 - `unit_responses` timing — `enroute_at`/`on_scene_at` field names unverified
 - `medical` / `rescue` — patients/victims (field names unknown, stripped)

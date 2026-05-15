@@ -246,8 +246,43 @@ function buildNerisPayload(
     }
   }
 
+  // ── Fire module (confirmed 2026-05-15) ──────────────────────────────────────
+  // Only included when incident type contains FIRE.
+  // location_detail is discriminated by type: "STRUCTURE" or "OUTSIDE".
+  const incidentTypeStr: string = neris?.neris_incident_type ?? ''
+  const isFire = incidentTypeStr.startsWith('FIRE')
+  if (isFire) {
+    const isOutside = incidentTypeStr.includes('OUTSIDE_FIRE')
+
+    const locationDetail: Record<string, unknown> = {
+      type: isOutside ? 'OUTSIDE' : 'STRUCTURE',
+    }
+
+    if (isOutside) {
+      if (neris?.fire_cause_code) locationDetail.cause = neris.fire_cause_code
+      if (neris?.outside_fire_acres != null) locationDetail.acres_burned = neris.outside_fire_acres
+    } else {
+      if (neris?.fire_condition_arrival) locationDetail.arrival_condition = neris.fire_condition_arrival
+      if (neris?.building_damage) locationDetail.damage_type = neris.building_damage
+      if (neris?.fire_cause_code) locationDetail.cause = neris.fire_cause_code
+      if (neris?.floor_of_origin != null) locationDetail.floor_of_origin = neris.floor_of_origin
+      if (neris?.room_of_origin) locationDetail.room_of_origin_type = neris.room_of_origin
+    }
+
+    const fireDetail: Record<string, unknown> = {
+      location_detail: locationDetail,
+    }
+
+    if (neris?.suppression_appliance?.length > 0) {
+      fireDetail.suppression_appliances = neris.suppression_appliance
+    }
+
+    payload.fire_detail = fireDetail
+  }
+
   // TODO(api-review): narrative — top-level key unknown, stripped until confirmed
-  // TODO(api-review): fire, medical, rescue, hazmat, aids — field names need verification
+  // TODO(api-review): unit_responses timing — enroute_at/on_scene_at field names unverified
+  // TODO(api-review): medical, rescue, hazmat — field names need verification
 
   return payload
 }

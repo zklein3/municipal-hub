@@ -119,6 +119,15 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 | Postal code | `base.location.postal_code` | `incidents.zip` | ✅ 2026-05-15 |
 | Property use | `base.location_use.use_type` | `incident_neris.property_use` | ✅ 2026-05-15 |
 | Displaced persons | `base.displacement_count` | `incident_neris.displaced_persons` | ✅ 2026-05-15 |
+| Fire module key | `fire_detail` | — | ✅ 2026-05-15 |
+| Fire type discriminator | `fire_detail.location_detail.type` | "STRUCTURE" or "OUTSIDE" based on incident type | ✅ 2026-05-15 |
+| Condition on arrival | `fire_detail.location_detail.arrival_condition` | `incident_neris.fire_condition_arrival` | ✅ 2026-05-15 |
+| Building damage | `fire_detail.location_detail.damage_type` | `incident_neris.building_damage` | ✅ 2026-05-15 |
+| Fire cause | `fire_detail.location_detail.cause` | `incident_neris.fire_cause_code` | ✅ 2026-05-15 |
+| Floor of origin | `fire_detail.location_detail.floor_of_origin` | `incident_neris.floor_of_origin` | ✅ 2026-05-15 |
+| Room of origin | `fire_detail.location_detail.room_of_origin_type` | `incident_neris.room_of_origin` | ✅ 2026-05-15 |
+| Acres burned | `fire_detail.location_detail.acres_burned` | `incident_neris.outside_fire_acres` | ✅ 2026-05-15 |
+| Suppression appliances | `fire_detail.suppression_appliances[]` | `incident_neris.suppression_appliance[]` | ✅ 2026-05-15 |
 | Narrative | unknown | `incident_neris.neris_narrative` | ❌ Unconfirmed |
 | Unit enroute time | unknown | `incident_apparatus.enroute_at` | ❌ Unconfirmed |
 | Unit on-scene time | unknown | `incident_apparatus.on_scene_at` | ❌ Unconfirmed |
