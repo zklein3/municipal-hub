@@ -122,7 +122,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   // Fetch ISO specs
   const { data: isoSpecsList } = await adminClient
     .from('apparatus_iso_specs')
-    .select('pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_load_notes')
+    .select('pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
     .eq('apparatus_id', id)
   const isoSpecs = isoSpecsList?.[0] ?? null
 

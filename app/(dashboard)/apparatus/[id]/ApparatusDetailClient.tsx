@@ -66,12 +66,14 @@ interface Apparatus {
   station: { id: string; station_name: string; station_number: string | null } | null
 }
 
+type HoseLoad = { diameter_in: number; length_ft: number }
+
 type IsoSpecs = {
   pump_rating_gpm: number | null
   tank_capacity_gal: number | null
   foam_capacity_gal: number | null
   aerial_length_ft: number | null
-  hose_load_notes: string | null
+  hose_loads: HoseLoad[] | null
 } | null
 
 export default function ApparatusDetailClient({
@@ -104,6 +106,7 @@ export default function ApparatusDetailClient({
   const [isoError, setIsoError] = useState<string | null>(null)
   const [isoSuccess, setIsoSuccess] = useState<string | null>(null)
   const [isoLoading, setIsoLoading] = useState(false)
+  const [hoseLoads, setHoseLoads] = useState<HoseLoad[]>(isoSpecs?.hose_loads ?? [])
 
   async function handleSubmit(formData: FormData) {
     setError(null); setSuccess(null); setLoading(true)
@@ -127,6 +130,7 @@ export default function ApparatusDetailClient({
   async function handleIsoSubmit(formData: FormData) {
     setIsoError(null); setIsoSuccess(null); setIsoLoading(true)
     formData.set('apparatus_id', apparatus.id)
+    formData.set('hose_loads', JSON.stringify(hoseLoads))
     const result = await upsertApparatusIsoSpecs(formData)
     if (result?.error) setIsoError(result.error)
     else setIsoSuccess('ISO specs saved.')
@@ -438,10 +442,50 @@ export default function ApparatusDetailClient({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">Hose Load Notes</label>
-              <textarea name="hose_load_notes" rows={2} defaultValue={isoSpecs?.hose_load_notes ?? ''}
-                placeholder="e.g. 200ft 1.75in preconnect, 400ft 2.5in supply line..."
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-zinc-700">Hose Loads</label>
+                <button
+                  type="button"
+                  onClick={() => setHoseLoads(prev => [...prev, { diameter_in: 1.75, length_ft: 0 }])}
+                  className="flex items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
+                >
+                  + Add Hose Load
+                </button>
+              </div>
+              {hoseLoads.length === 0 ? (
+                <p className="text-xs text-zinc-400">No hose loads added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {hoseLoads.map((load, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <select
+                        value={load.diameter_in}
+                        onChange={e => setHoseLoads(prev => prev.map((l, j) => j === i ? { ...l, diameter_in: parseFloat(e.target.value) } : l))}
+                        className="rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      >
+                        {[1, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6].map(d => (
+                          <option key={d} value={d}>{d}&quot;</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        value={load.length_ft || ''}
+                        onChange={e => setHoseLoads(prev => prev.map((l, j) => j === i ? { ...l, length_ft: parseInt(e.target.value) || 0 } : l))}
+                        placeholder="Length (ft)"
+                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setHoseLoads(prev => prev.filter((_, j) => j !== i))}
+                        className="text-zinc-400 hover:text-red-600 text-xl leading-none px-1 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <button type="submit" disabled={isoLoading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
