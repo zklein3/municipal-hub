@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import QRScanner from '@/components/QRScanner'
 
 interface Compartment {
   id: string
@@ -27,6 +30,14 @@ interface StationGroup {
 }
 
 export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[] }) {
+  const router = useRouter()
+  const [scannerOpen, setScannerOpen] = useState(false)
+
+  function handleScan(raw: string) {
+    setScannerOpen(false)
+    router.push(`/scan?code=${encodeURIComponent(raw)}&from=/inspections`)
+  }
+
   // Group by station
   const stationMap = new Map<string | null, StationGroup>()
 
@@ -63,10 +74,31 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Inspections</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Select an apparatus to begin an inspection or daily check</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Inspections</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Select an apparatus to begin an inspection or daily check</p>
+        </div>
+        <button
+          onClick={() => setScannerOpen(true)}
+          className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5"
+        >
+          <span>📷</span> Scan QR
+        </button>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="text-sm font-semibold text-zinc-900 mb-4">Scan Compartment QR Code</h2>
+            <QRScanner
+              onScan={handleScan}
+              onClose={() => setScannerOpen(false)}
+              hint="Point camera at a compartment QR label"
+            />
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-8">
         {stations.map(station => (

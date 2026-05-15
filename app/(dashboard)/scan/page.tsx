@@ -6,9 +6,10 @@ import Link from 'next/link'
 export default async function ScanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; code?: string }>
+  searchParams: Promise<{ type?: string; code?: string; from?: string }>
 }) {
-  const { type, code } = await searchParams
+  const { type, code, from } = await searchParams
+  const fromParam = from ? `?from=${encodeURIComponent(from)}` : ''
 
   const supabase = await createClient()
   const adminClient = createAdminClient()
@@ -47,7 +48,7 @@ export default async function ScanPage({
       .eq('qr_code', code)
       .eq('department_id', department_id)
       .limit(1)
-    if (data?.[0]) redirect(`/equipment/${data[0].id}`)
+    if (data?.[0]) redirect(`/equipment/${data[0].id}${fromParam}`)
   }
 
   // Try compartment (qr_code field) — verify it belongs to this dept via apparatus
@@ -64,7 +65,7 @@ export default async function ScanPage({
         .eq('id', compData[0].apparatus_id)
         .eq('department_id', department_id)
         .limit(1)
-      if (appData?.[0]) redirect(`/equipment/${compData[0].apparatus_id}/${compData[0].id}`)
+      if (appData?.[0]) redirect(`/equipment/${compData[0].apparatus_id}/${compData[0].id}${fromParam}`)
     }
   }
 
@@ -76,7 +77,7 @@ export default async function ScanPage({
       .eq('asset_tag', code)
       .eq('department_id', department_id)
       .limit(1)
-    if (data?.[0]) redirect(`/equipment/assets?search=${encodeURIComponent(code)}`)
+    if (data?.[0]) redirect(`/equipment/assets?search=${encodeURIComponent(code)}${from ? '&from=' + encodeURIComponent(from) : ''}`)
   }
 
   return (
