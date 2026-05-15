@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { addFireSchoolBottle, updateFireSchoolBottle } from '@/app/actions/fire-school'
 import QrPrintLabel from '@/components/QrPrintLabel'
+import QRScanner from '@/components/QRScanner'
 
 const CYLINDER_TYPES = [
   { value: 'composite_15', label: 'Carbon Fiber/Composite (15yr)' },
@@ -171,6 +172,35 @@ export default function FireSchoolBottlesClient({
   const [addedDeptName, setAddedDeptName]   = useState<string | null>(null)
   const [addLoading, setAddLoading]         = useState(false)
   const [selectedType, setSelectedType]     = useState('composite_15')
+  const [scannerOpen, setScannerOpen]       = useState(false)
+  const [scannedBottleId, setScannedBottleId] = useState<string | null>(null)
+  const bottleIdRef = useRef<HTMLInputElement>(null)
+
+  const extractBottleId = useCallback((raw: string): string => {
+    const trimmed = raw.trim()
+    if (!trimmed.includes('://') && !trimmed.includes('scan=')) return trimmed.toUpperCase()
+    try {
+      const url = new URL(trimmed)
+      const scanParam = url.searchParams.get('scan')
+      if (scanParam?.trim()) return scanParam.trim().toUpperCase()
+      const pathParts = url.pathname.split('/').filter(Boolean)
+      const last = pathParts[pathParts.length - 1]
+      if (last) return last.trim().toUpperCase()
+    } catch { /* fall through */ }
+    const match = trimmed.match(/[?&]scan=([^&]+)/i)
+    if (match?.[1]) {
+      try { return decodeURIComponent(match[1]).trim().toUpperCase() } catch { return match[1].trim().toUpperCase() }
+    }
+    return trimmed.toUpperCase()
+  }, [])
+
+  function handleScan(raw: string) {
+    setScannerOpen(false)
+    const id = extractBottleId(raw)
+    setScannedBottleId(id)
+    // Focus bottle ID field after scan
+    setTimeout(() => bottleIdRef.current?.focus(), 50)
+  }
 
   const [editingBottleId, setEditingBottleId]     = useState<string | null>(prefillEditBottleId ?? null)
   const [editSelectedType, setEditSelectedType]   = useState('composite_15')
@@ -265,6 +295,8 @@ export default function FireSchoolBottlesClient({
             onClick={() => {
               if (!showForm) {
                 setSelectedType('composite_15')
+                setScannedBottleId(null)
+                setScannerOpen(false)
                 setFormKey(k => k + 1)
                 setAddError(null)
                 setSuccess(null)
@@ -298,14 +330,33 @@ export default function FireSchoolBottlesClient({
           {addError && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{addError}</div>
           )}
+          {/* QR Scanner */}
+          {scannerOpen && (
+            <div className="mb-4">
+              <QRScanner
+                onScan={handleScan}
+                onClose={() => setScannerOpen(false)}
+                hint="Point camera at bottle QR label"
+              />
+            </div>
+          )}
+
           <form key={formKey} action={handleAdd} autoComplete="off" className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="sm:w-36">
                 <label className="mb-1 block text-sm font-medium text-zinc-700">Bottle ID <span className="text-red-500">*</span></label>
+                <div className="flex gap-2">
                 <input name="bottle_id" type="text" required autoComplete="off"
-                  defaultValue={prefillBottleId ?? ''}
+                  ref={bottleIdRef}
+                  defaultValue={scannedBottleId ?? prefillBottleId ?? ''}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono uppercase focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                   placeholder="B-0001" />
+                <button type="button" onClick={() => setScannerOpen(s => !s)}
+                  className="shrink-0 rounded-lg border border-zinc-300 px-2.5 py-2 text-sm hover:bg-zinc-50 transition-colors"
+                  title="Scan QR code">
+                  📷
+                </button>
+                </div>
               </div>
               <div className="flex-1">
                 <label className="mb-1 block text-sm font-medium text-zinc-700">Department / Owner</label>
