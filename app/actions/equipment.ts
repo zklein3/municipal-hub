@@ -317,14 +317,6 @@ export async function removeItemFromCompartment(location_standard_id: string) {
   const ctx = await getContext()
   if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
-  const { data: standard } = await adminClient
-    .from('item_location_standards')
-    .select('expected_quantity')
-    .eq('id', location_standard_id)
-    .single()
-  if (standard && standard.expected_quantity > 0) {
-    return { error: 'Move quantity to storage before removing this item from the compartment.' }
-  }
   const { error } = await adminClient
     .from('item_location_standards')
     .update({ active: false })
@@ -417,16 +409,21 @@ export async function moveQuantityToStorage(location_standard_id: string, quanti
 
   const { data: standards } = await adminClient
     .from('item_location_standards')
-    .select('id, item_id, expected_quantity, apparatus_compartment_id')
+    .select('id, item_id, expected_quantity, minimum_quantity, apparatus_compartment_id')
     .eq('id', location_standard_id)
     .eq('active', true)
   const standard = standards?.[0]
   if (!standard) return { error: 'Item assignment not found.' }
   if (quantity > standard.expected_quantity) return { error: 'Cannot move more than the current compartment quantity.' }
 
+  const newQty = standard.expected_quantity - quantity
+  const compartmentUpdate: Record<string, unknown> = { expected_quantity: newQty }
+  if (standard.minimum_quantity != null && newQty < standard.minimum_quantity) {
+    compartmentUpdate.minimum_quantity = null
+  }
   const { error: compartmentErr } = await adminClient
     .from('item_location_standards')
-    .update({ expected_quantity: standard.expected_quantity - quantity })
+    .update(compartmentUpdate)
     .eq('id', location_standard_id)
   if (compartmentErr) { await logError(compartmentErr.message, '/equipment'); return { error: compartmentErr.message } }
 

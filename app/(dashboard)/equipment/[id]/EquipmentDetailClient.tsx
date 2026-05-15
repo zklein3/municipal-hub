@@ -84,6 +84,7 @@ export default function EquipmentDetailClient({
   backHref?: string
 }) {
   const router = useRouter()
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
   const [assigningTo, setAssigningTo] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -137,7 +138,7 @@ export default function EquipmentDetailClient({
     const min = minDraft !== '' ? parseInt(minDraft) : undefined
     const result = await updateItemQuantity(locationId, qty, min)
     if (result?.error) setError(result.error)
-    else setEditingQty(null)
+    else { setEditingQty(null); router.refresh() }
     setLoading(false)
   }
 
@@ -146,6 +147,7 @@ export default function EquipmentDetailClient({
     setLoading(true)
     const result = await removeItemFromCompartment(locationId)
     if (result?.error) setError(result.error)
+    else router.refresh()
     setLoading(false)
   }
 
@@ -425,13 +427,31 @@ export default function EquipmentDetailClient({
                             >
                               Move
                             </button>
-                            <button
-                              onClick={() => handleRemove(item.id)}
-                              disabled={loading}
-                              className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
-                            >
-                              Remove
-                            </button>
+                            {confirmRemoveId === item.id ? (
+                              <>
+                                <button
+                                  onClick={() => { handleRemove(item.id); setConfirmRemoveId(null) }}
+                                  disabled={loading}
+                                  className="text-xs text-red-600 hover:text-red-800 font-semibold disabled:opacity-50"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setConfirmRemoveId(null)}
+                                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmRemoveId(item.id)}
+                                disabled={loading}
+                                className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
+                              >
+                                Remove
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
