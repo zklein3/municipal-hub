@@ -1,0 +1,78 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { logError } from '@/lib/logger'
+import { revalidatePath } from 'next/cache'
+
+async function getContext() {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return null
+  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  return {
+    me,
+    department_id: myDept?.department_id ?? null,
+    system_role: myDept?.system_role ?? null,
+    isAdmin: myDept?.system_role === 'admin' || me.is_sys_admin,
+    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
+  }
+}
+
+// ─── Log Fuel Entry ───────────────────────────────────────────────────────────
+export async function logFuel(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  const adminClient = createAdminClient()
+
+  const apparatus_id = formData.get('apparatus_id') as string
+  const fuel_date = formData.get('fuel_date') as string
+  const gallons = formData.get('gallons') as string
+  const cost_per_gallon = formData.get('cost_per_gallon') as string
+  const total_cost = formData.get('total_cost') as string
+  const fuel_type = formData.get('fuel_type') as string || 'diesel'
+  const odometer = formData.get('odometer') as string
+  const vendor = formData.get('vendor') as string
+  const notes = formData.get('notes') as string
+
+  if (!apparatus_id) return { error: 'Apparatus is required.' }
+  if (!fuel_date) return { error: 'Date is required.' }
+  if (!gallons || parseFloat(gallons) <= 0) return { error: 'Gallons must be greater than 0.' }
+
+  const { error } = await adminClient.from('apparatus_fuel_logs').insert({
+    department_id: ctx.department_id,
+    apparatus_id,
+    logged_by_personnel_id: ctx.me.id,
+    fuel_date,
+    gallons: parseFloat(gallons),
+    cost_per_gallon: cost_per_gallon ? parseFloat(cost_per_gallon) : null,
+    total_cost: total_cost ? parseFloat(total_cost) : null,
+    fuel_type,
+    odometer: odometer ? parseInt(odometer) : null,
+    vendor: vendor || null,
+    notes: notes || null,
+  })
+
+  if (error) { await logError(error.message, '/fuel'); return { error: error.message } }
+  revalidatePath('/fuel')
+  revalidatePath(`/equipment`)
+  revalidatePath('/reports/fuel')
+  return { success: true }
+}
+
+// ─── Delete Fuel Entry ────────────────────────────────────────────────────────
+export async function deleteFuelEntry(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can delete fuel entries.' }
+  const adminClient = createAdminClient()
+  const { error } = await adminClient.from('apparatus_fuel_logs').delete().eq('id', id).eq('department_id', ctx.department_id!)
+  if (error) { await logError(error.message, '/fuel'); return { error: error.message } }
+  revalidatePath('/fuel')
+  revalidatePath('/reports/fuel')
+  return { success: true }
+}

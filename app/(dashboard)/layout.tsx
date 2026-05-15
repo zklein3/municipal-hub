@@ -90,11 +90,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     { items: [{ href: '/inspections', label: 'Inspections' }] },
+    { items: [{ href: '/fuel', label: 'Fuel Log' }] },
     {
       label: 'Reports',
       items: [
         { href: '/reports/my-activity', label: 'My Activity' },
         ...(isOfficerOrAbove ? [{ href: '/reports/inventory-status', label: 'Inventory Status' }] : []),
+        ...(isOfficerOrAbove ? [{ href: '/reports/fuel', label: 'Fuel Report' }] : []),
       ],
     },
   ]

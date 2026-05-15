@@ -208,21 +208,21 @@ export default async function DashboardPage() {
     { href: '/apparatus',         label: 'Apparatus',    desc: 'Vehicles and units' },
     { href: '/events',            label: 'Events',       desc: 'Log attendance' },
     { href: '/inspections',       label: 'Inspections',  desc: 'Run equipment checks' },
-    { href: '/reports/inspections', label: 'Reports',   desc: 'Inspection & attendance' },
+    { href: '/fuel',              label: 'Fuel Log',     desc: 'Log apparatus fuel' },
   ] : isOfficerOrAbove ? [
     { href: '/personnel',         label: 'Personnel',    desc: 'Department roster' },
     { href: '/apparatus',         label: 'Apparatus',    desc: 'Vehicles and units' },
     { href: '/events',            label: 'Events',       desc: 'Log attendance' },
     { href: '/inspections',       label: 'Inspections',  desc: 'Run equipment checks' },
-    { href: '/incidents',         label: 'Incidents',    desc: 'Log and manage incidents' },
+    { href: '/fuel',              label: 'Fuel Log',     desc: 'Log apparatus fuel' },
     { href: '/reports/attendance', label: 'Reports',    desc: 'Attendance & activity' },
   ] : [
     { href: '/events',            label: 'Events',       desc: 'Log attendance' },
     { href: '/training',          label: 'Certifications', desc: 'Courses & certifications' },
     { href: '/inspections',       label: 'Inspections',  desc: 'Run equipment checks' },
+    { href: '/fuel',              label: 'Fuel Log',     desc: 'Log apparatus fuel' },
     { href: '/reports/my-activity', label: 'My Activity', desc: 'Your attendance & records' },
     { href: '/personnel',         label: 'Personnel',    desc: 'Department roster' },
-    { href: '/apparatus',         label: 'Apparatus',    desc: 'Vehicles and units' },
   ]
 
   return (

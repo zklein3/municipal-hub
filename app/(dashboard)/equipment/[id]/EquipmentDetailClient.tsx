@@ -231,6 +231,12 @@ export default function EquipmentDetailClient({
         >
           Inventory Storage →
         </Link>
+        <Link
+          href={`/equipment/${apparatus.id}/fuel`}
+          className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+        >
+          Fuel Log →
+        </Link>
       </div>
 
       {error && (
