@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import ReportView from './ReportView'
 
+export const dynamic = 'force-dynamic'
+
 const CYLINDER_TYPE_LABELS: Record<string, string> = {
   composite_15: 'Carbon Fiber (15yr)',
   composite_30: 'Next-Gen Composite (30yr)',
