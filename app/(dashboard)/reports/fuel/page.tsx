@@ -34,7 +34,7 @@ export default async function FuelReportPage({
 
   let query = adminClient
     .from('apparatus_fuel_logs')
-    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
+    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
     .eq('department_id', department_id)
     .order('fuel_date', { ascending: false })
 
@@ -64,6 +64,8 @@ export default async function FuelReportPage({
     cost_per_gallon: l.cost_per_gallon,
     total_cost: l.total_cost,
     fuel_type: l.fuel_type,
+    fuel_system: l.fuel_system,
+    aux_description: l.aux_description,
     odometer: l.odometer,
     engine_hours: l.engine_hours,
     vendor: l.vendor,

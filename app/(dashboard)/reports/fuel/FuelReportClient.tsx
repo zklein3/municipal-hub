@@ -13,6 +13,8 @@ interface FuelEntry {
   cost_per_gallon: number | null
   total_cost: number | null
   fuel_type: string
+  fuel_system: string
+  aux_description: string | null
   odometer: number | null
   engine_hours: number | null
   vendor: string | null
@@ -146,6 +148,11 @@ export default function FuelReportClient({
                   <span className={`text-xs rounded-full px-2 py-0.5 ${entry.fuel_type === 'diesel' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
                     {entry.fuel_type}
                   </span>
+                  {entry.fuel_system === 'auxiliary' && (
+                    <span className="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">
+                      Aux{entry.aux_description ? ` — ${entry.aux_description}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-4 mt-0.5 text-xs text-zinc-500 flex-wrap">
                   {entry.vendor && <span>{entry.vendor}</span>}

@@ -16,6 +16,8 @@ interface FuelEntry {
   cost_per_gallon: number | null
   total_cost: number | null
   fuel_type: string
+  fuel_system: string
+  aux_description: string | null
   odometer: number | null
   engine_hours: number | null
   vendor: string | null
@@ -59,6 +61,8 @@ export default function FuelClient({
     cost_per_gallon: string
     total_cost: string
     fuel_type: string
+    fuel_system: string
+    aux_description: string
     odometer: string
     engine_hours: string
     vendor: string
@@ -70,6 +74,8 @@ export default function FuelClient({
     cost_per_gallon: '',
     total_cost: '',
     fuel_type: 'diesel',
+    fuel_system: 'main',
+    aux_description: '',
     odometer: '',
     engine_hours: '',
     vendor: '',
@@ -126,7 +132,7 @@ export default function FuelClient({
     if (result?.error) { setError(result.error); setLoading(false); return }
     setSuccess('Fuel entry saved.')
     setShowForm(false)
-    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today }))
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today }))
     router.refresh()
     setLoading(false)
   }
@@ -213,6 +219,24 @@ export default function FuelClient({
               </div>
             </div>
 
+            {/* Fuel system */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Fuel System</label>
+                <select value={form.fuel_system} onChange={e => setForm(p => ({ ...p, fuel_system: e.target.value, aux_description: '' }))} className={inputCls}>
+                  <option value="main">Main Tank</option>
+                  <option value="auxiliary">Auxiliary System</option>
+                </select>
+              </div>
+              {form.fuel_system === 'auxiliary' && (
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">System Name</label>
+                  <input type="text" value={form.aux_description} onChange={e => setForm(p => ({ ...p, aux_description: e.target.value }))}
+                    className={inputCls} placeholder="e.g. Grass pump, Generator" />
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Gallons <span className="text-red-500">*</span></label>
@@ -236,10 +260,12 @@ export default function FuelClient({
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Vendor</label>
                 <input type="text" value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} className={inputCls} placeholder="Casey's General Store" />
               </div>
-              <div className="w-28">
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Odometer</label>
-                <input type="number" min="0" value={form.odometer} onChange={e => setForm(p => ({ ...p, odometer: e.target.value }))} className={inputCls} placeholder="12500" />
-              </div>
+              {form.fuel_system === 'main' && (
+                <div className="w-28">
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Odometer</label>
+                  <input type="number" min="0" value={form.odometer} onChange={e => setForm(p => ({ ...p, odometer: e.target.value }))} className={inputCls} placeholder="12500" />
+                </div>
+              )}
               <div className="w-28">
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Eng. Hours</label>
                 <input type="number" step="0.1" min="0" value={form.engine_hours} onChange={e => setForm(p => ({ ...p, engine_hours: e.target.value }))} className={inputCls} placeholder="1250.5" />
@@ -279,6 +305,11 @@ export default function FuelClient({
                     <span className={`text-xs rounded-full px-2 py-0.5 ${entry.fuel_type === 'diesel' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
                       {entry.fuel_type}
                     </span>
+                    {entry.fuel_system === 'auxiliary' && (
+                      <span className="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">
+                        Aux{entry.aux_description ? ` — ${entry.aux_description}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-4 mt-0.5 text-xs text-zinc-500 flex-wrap">
                     <span className="font-semibold text-zinc-700">{entry.gallons.toFixed(3)} gal</span>
