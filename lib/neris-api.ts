@@ -8,6 +8,8 @@ const BASE_URL = process.env.NERIS_USE_TEST === 'true'
   ? 'https://api-test.neris.fsri.org/v1'
   : 'https://api.neris.fsri.org/v1'
 
+const TIMEOUT_MS = 20000 // 20 second timeout on all NERIS API calls
+
 type NerisAuthHeaders = {
   Authorization: string
 }
@@ -26,6 +28,7 @@ async function getOAuthToken(): Promise<string> {
     },
     body: 'grant_type=client_credentials',
     cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.text()
@@ -65,6 +68,7 @@ export async function nerisValidateIncident(
     },
     body: JSON.stringify(payload),
     cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (res.status === 204) return { ok: true }
   const body = await res.json().catch(() => ({}))
@@ -86,6 +90,7 @@ export async function nerisSubmitIncident(
     },
     body: JSON.stringify(payload),
     cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -111,6 +116,7 @@ export async function nerisCreateStation(
     },
     body: JSON.stringify(payload),
     cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -135,6 +141,7 @@ export async function nerisUpdateIncident(
     },
     body: JSON.stringify(payload),
     cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

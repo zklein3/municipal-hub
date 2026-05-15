@@ -423,7 +423,13 @@ export async function submitToNeris(incident_id: string) {
   const payload = buildNerisPayload(incident, neris, apparatus ?? [], personnelByApparatus, unitNumberMap, nerisEntityId)
 
   // Validate first
-  const validation = await nerisValidateIncident(nerisEntityId, payload)
+  let validation: { ok: boolean; error?: string }
+  try {
+    validation = await nerisValidateIncident(nerisEntityId, payload)
+  } catch (err: any) {
+    await logError(err.message, '/incidents/neris/validate')
+    return { error: `NERIS connection failed: ${err.message}` }
+  }
   if (!validation.ok) return { error: `NERIS validation failed: ${validation.error}` }
 
   // Submit
