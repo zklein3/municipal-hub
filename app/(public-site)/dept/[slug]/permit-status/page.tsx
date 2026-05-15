@@ -176,8 +176,20 @@ export default async function PermitStatusPage({
             </div>
           </div>
 
-          {/* Approved — signature flow */}
+          {/* Approved — signature flow (not shown if expired) */}
           {permit.status === 'approved' && (() => {
+            const isExpired = !!permit.permit_expiry_date &&
+              new Date(permit.permit_expiry_date + 'T23:59:59') < new Date()
+
+            if (isExpired) {
+              return (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-5 py-4 text-center">
+                  <p className="text-sm font-semibold text-red-800">This permit has expired</p>
+                  <p className="text-xs text-red-600 mt-1">Expired {formatDate(permit.permit_expiry_date)}. Contact the department if you need a renewal.</p>
+                </div>
+              )
+            }
+
             const applicantDone = !!(permit.applicant_signed_at || permit.applicant_acknowledged_at)
 
             // Officer hasn't signed yet
