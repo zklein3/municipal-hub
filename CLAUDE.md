@@ -122,6 +122,34 @@ All 10 phases done (2026-05-11). Key files: `app/(dashboard)/inspections/`, `app
 - Apparatus equipment page shows assigned vs expected count per tracked item
 - Dept-configurable session timeout via Dept Admin → Inspections
 
+### Fuel Logging — BUILD NEXT
+Track apparatus fuel usage with receipt scanning. Two entry points + a report.
+
+**DB table: `apparatus_fuel_logs`**
+```
+id, department_id, apparatus_id, logged_by_personnel_id
+fuel_date (date), gallons (numeric), cost_per_gallon (numeric), total_cost (numeric)
+fuel_type (diesel | gasoline | other), odometer (integer, optional)
+vendor (text, optional), notes (text, optional), created_at
+```
+
+**Receipt parsing:** Claude Haiku extracts gallons, price/gallon, total, vendor, date from a receipt photo. Action: `app/actions/parse-fuel-receipt.ts`. Model + key same as run sheet parser (`ANTHROPIC_API_KEY`, `claude-haiku-*`). User uploads/photos receipt → fields pre-fill → user confirms + saves.
+
+**Entry point 1 — Apparatus detail page** (`/equipment/[id]`)
+- Add "Fuel Log" button in the action row (next to Inventory Storage)
+- Opens `/equipment/[id]/fuel` — list of fuel entries for that apparatus + Add Entry button with receipt scan
+
+**Entry point 2 — Dashboard**
+- Add a "Log Fuel" quick-action card on the dashboard (all roles)
+- Apparatus picker dropdown → same receipt scan + form flow
+- Shows last 5 fuel entries dept-wide as a mini feed
+
+**Report: `/reports/fuel`**
+- Filter by apparatus and/or date range
+- Summary: total gallons, total cost, cost per apparatus
+- Breakdown table: date / apparatus / vendor / gallons / cost
+- Print-ready
+
 ### Permit Approval Email (blocked)
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function. Blocked until `fireops7.com` verified in Resend post-Wix migration.
 
