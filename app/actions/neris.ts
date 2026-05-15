@@ -251,9 +251,12 @@ function buildNerisPayload(
   // Only included when incident type contains FIRE.
   // location_detail is discriminated by type: "STRUCTURE" or "OUTSIDE".
   const incidentTypeStr: string = neris?.neris_incident_type ?? ''
-  const isFire = incidentTypeStr.startsWith('FIRE')
+  const isFire = incidentTypeStr.startsWith('FIRE') || incident?.incident_type === 'fire'
   if (isFire) {
-    const isOutside = incidentTypeStr.includes('OUTSIDE_FIRE')
+    // Discriminate OUTSIDE vs STRUCTURE — use NERIS type string first, fall back to fire_subtype
+    const outsideSubtypes = ['grass', 'wildland', 'other_fire']
+    const isOutside = incidentTypeStr.includes('OUTSIDE_FIRE') ||
+      outsideSubtypes.includes(incident?.fire_subtype ?? '')
 
     const locationDetail: Record<string, unknown> = {
       type: isOutside ? 'OUTSIDE' : 'STRUCTURE',
