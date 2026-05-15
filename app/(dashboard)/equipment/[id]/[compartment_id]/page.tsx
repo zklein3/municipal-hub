@@ -188,12 +188,20 @@ export default async function CompartmentPage({
     }
   })
 
-  const currentQrCode = compLink.qr_code ?? null
-
   const apparatusBase = apparatus.qr_code ?? apparatus.unit_number
   const suggestedQrCode = compName?.compartment_code
     ? `${apparatusBase}-${compName.compartment_code}`.toUpperCase()
     : null
+
+  // Auto-assign suggested code on first open so Print QR always works
+  let currentQrCode = compLink.qr_code ?? null
+  if (!currentQrCode && suggestedQrCode) {
+    await adminClient
+      .from('apparatus_compartments')
+      .update({ qr_code: suggestedQrCode })
+      .eq('id', compartment_id)
+    currentQrCode = suggestedQrCode
+  }
 
   async function handleSetQrCode(formData: FormData): Promise<void> {
     'use server'
