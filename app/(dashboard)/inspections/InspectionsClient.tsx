@@ -35,7 +35,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
 
   function handleScan(raw: string) {
     setScannerOpen(false)
-    router.push(`/scan?code=${encodeURIComponent(raw)}&from=/inspections`)
+    router.push(`/scan?code=${encodeURIComponent(raw)}`)
   }
 
   // Group by station

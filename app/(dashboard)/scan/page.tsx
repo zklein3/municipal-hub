@@ -65,7 +65,7 @@ export default async function ScanPage({
         .eq('id', compData[0].apparatus_id)
         .eq('department_id', department_id)
         .limit(1)
-      if (appData?.[0]) redirect(`/equipment/${compData[0].apparatus_id}/${compData[0].id}${fromParam}`)
+      if (appData?.[0]) redirect(`/inspections/run?apparatus_id=${compData[0].apparatus_id}&compartment_id=${compData[0].id}`)
     }
   }
 
