@@ -188,7 +188,7 @@ export default function FuelClient({
               {scanning ? 'Scanning…' : '📷 Scan Receipt'}
             </button>
             <p className="text-xs text-zinc-400">Photo a receipt to auto-fill fields</p>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScan} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleScan} />
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
