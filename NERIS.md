@@ -128,7 +128,8 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 | Room of origin | `fire_detail.location_detail.room_of_origin_type` | `incident_neris.room_of_origin` | ✅ 2026-05-15 |
 | Acres burned | `fire_detail.location_detail.acres_burned` | `incident_neris.outside_fire_acres` | ✅ 2026-05-15 |
 | Suppression appliances | `fire_detail.suppression_appliances[]` | `incident_neris.suppression_appliance[]` | ✅ 2026-05-15 |
-| Narrative | unknown | `incident_neris.neris_narrative` | ❌ Unconfirmed |
+| Outcome narrative | `base.outcome_narrative` | `incident_neris.neris_narrative` (falls back to `incidents.narrative`) | ✅ 2026-05-15 |
+| Impediment narrative | `base.impediment_narrative` | `incident_neris.impediment_narrative` | ✅ 2026-05-15 |
 | Unit enroute time | unknown | `incident_apparatus.enroute_at` | ❌ Unconfirmed |
 | Unit on-scene time | unknown | `incident_apparatus.on_scene_at` | ❌ Unconfirmed |
 

@@ -105,7 +105,7 @@ Core submission flow working end-to-end against NERIS test API (FD35049607). Bad
 **NERIS module data still TODO** (add back one section at a time, test against FFTD):
 - ✅ `locations` — `base.location_use.use_type` (property use), `base.displacement_count` (displaced persons), `base.location.street/postal_code` — confirmed + wired (2026-05-15)
 - ✅ `fire` — `fire_detail.location_detail` (STRUCTURE or OUTSIDE discriminated by incident type), `arrival_condition`, `damage_type`, `cause`, `floor_of_origin`, `room_of_origin_type`, `acres_burned`, `suppression_appliances` — confirmed + wired (2026-05-15)
-- `narrative` — top-level key unknown, stripped
+- ✅ `narrative` — `base.outcome_narrative` (falls back to cover sheet narrative), `base.impediment_narrative` (new optional field) — confirmed + wired (2026-05-15)
 - `unit_responses` timing — `enroute_at`/`on_scene_at` field names unverified
 - `medical` / `rescue` — patients/victims (field names unknown, stripped)
 - `hazmat` — disposition, chemical (field names unknown, stripped)

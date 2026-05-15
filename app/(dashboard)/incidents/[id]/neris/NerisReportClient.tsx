@@ -158,6 +158,7 @@ export default function NerisReportClient({
   const [propertyUse, setPropertyUse] = useState<string>(nerisRecord?.property_use ?? '')
   const [propertyNormalUse, setPropertyNormalUse] = useState<string>(nerisRecord?.property_normal_use ?? '')
   const [nerisNarrative, setNerisNarrative] = useState<string>(nerisRecord?.neris_narrative ?? '')
+  const [impedimentNarrative, setImpedimentNarrative] = useState<string>(nerisRecord?.impediment_narrative ?? '')
   const [displacedPersons, setDisplacedPersons] = useState<string>(
     nerisRecord?.displaced_persons != null ? String(nerisRecord.displaced_persons) : ''
   )
@@ -229,6 +230,7 @@ export default function NerisReportClient({
       property_use: propertyUse || null,
       property_normal_use: propertyNormalUse || null,
       neris_narrative: nerisNarrative || null,
+      impediment_narrative: impedimentNarrative || null,
       actions_taken: actionsTaken,
       no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
       displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
@@ -582,6 +584,19 @@ export default function NerisReportClient({
                 <span className="font-medium text-zinc-500">Cover sheet: </span>{incident.narrative}
               </p>
             )}
+          </div>
+          <div>
+            <label className={labelCls}>
+              Impediment Narrative <span className="text-zinc-400 font-normal text-xs">— optional obstacles or challenges on scene</span>
+            </label>
+            <textarea
+              rows={2}
+              value={impedimentNarrative}
+              onChange={e => setImpedimentNarrative(e.target.value)}
+              disabled={isSubmitted}
+              placeholder="Optional — describe any obstacles that impacted the incident response…"
+              className={inputCls}
+            />
           </div>
         </section>
 
@@ -1211,6 +1226,7 @@ export default function NerisReportClient({
                     property_use: propertyUse || null,
       property_normal_use: propertyNormalUse || null,
       neris_narrative: nerisNarrative || null,
+      impediment_narrative: impedimentNarrative || null,
                     actions_taken: actionsTaken,
                     no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
                     displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,

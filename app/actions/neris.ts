@@ -64,6 +64,7 @@ export async function saveNerisReport(incident_id: string, data: {
   property_use?: string | null
   property_normal_use?: string | null
   neris_narrative?: string | null
+  impediment_narrative?: string | null
   actions_taken?: string[]
   no_action_reason?: string | null
   displaced_persons?: number | null
@@ -280,7 +281,13 @@ function buildNerisPayload(
     payload.fire_detail = fireDetail
   }
 
-  // TODO(api-review): narrative — top-level key unknown, stripped until confirmed
+  // ── Narrative fields (confirmed 2026-05-15) ──────────────────────────────────
+  // outcome_narrative = NERIS-specific narrative, falls back to cover sheet narrative
+  // impediment_narrative = optional obstacles field
+  const outcomeNarrative = neris?.neris_narrative || incident?.narrative || null
+  if (outcomeNarrative) base.outcome_narrative = outcomeNarrative
+  if (neris?.impediment_narrative) base.impediment_narrative = neris.impediment_narrative
+
   // TODO(api-review): unit_responses timing — enroute_at/on_scene_at field names unverified
   // TODO(api-review): medical, rescue, hazmat — field names need verification
 
