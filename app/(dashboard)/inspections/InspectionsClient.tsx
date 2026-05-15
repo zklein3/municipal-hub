@@ -35,6 +35,19 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
 
   function handleScan(raw: string) {
     setScannerOpen(false)
+    try {
+      const url = new URL(raw)
+      const code = url.searchParams.get('code')
+      const type = url.searchParams.get('type')
+      if (code) {
+        const params = new URLSearchParams({ code })
+        if (type) params.set('type', type)
+        router.push(`/scan?${params.toString()}`)
+        return
+      }
+    } catch {
+      // not a URL — fall through and treat as raw code
+    }
     router.push(`/scan?code=${encodeURIComponent(raw)}`)
   }
 
