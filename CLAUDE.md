@@ -107,14 +107,27 @@ Test dept: `neris_entity_id = 'FD35049607'`, use `test.admin@fireops7.com`.
 See `NERIS.md` for full field reference and payload builder notes.
 Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
 
-### 3. Permit Approval Email (blocked)
+### 3. ISO Apparatus Hose Load — Structured Format
+Replace `apparatus_iso_specs.hose_load_notes` (free text) with structured hose load rows.
+
+**DB change:** Add `hose_loads jsonb` column to `apparatus_iso_specs` (array of `{diameter_in: number, length_ft: number}`). Drop or ignore `hose_load_notes` going forward.
+
+**UI (ISO report / apparatus specs form):**
+- Replace the notes textarea with a list of existing hose loads + an "+ Add Hose Load" button
+- Each row: diameter dropdown (1, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6 in) + length field (ft) + remove (×) button
+- Save persists the full array via `upsertApparatusIsoSpecs` action
+- Display in ISO report: list each load as e.g. "2.5" × 200 ft"
+
+**Key files:** `app/(dashboard)/iso/` pages, `app/actions/iso.ts` → `upsertApparatusIsoSpecs`
+
+### 5. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
-### 4. Officer Sub-Menu
+### 6. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 5. Module / Feature Flag System
+### 7. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
