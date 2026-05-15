@@ -9,6 +9,8 @@ import { redirect } from 'next/navigation'
 export async function signIn(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
+  const rawNext = formData.get('next') as string | null
+  const next = rawNext?.startsWith('/') ? rawNext : '/dashboard'
 
   const supabase = await createClient()
 
@@ -42,7 +44,7 @@ export async function signIn(formData: FormData) {
     case 'denied':
       redirect('/denied')
     case 'active':
-      redirect('/dashboard')
+      redirect(next)
     default:
       redirect('/dashboard')
   }

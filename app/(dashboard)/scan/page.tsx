@@ -15,7 +15,10 @@ export default async function ScanPage({
   const adminClient = createAdminClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect(`/login`)
+  if (!user) {
+    const scanPath = `/scan?${new URLSearchParams({ ...(type ? { type } : {}), ...(code ? { code } : {}) }).toString()}`
+    redirect(`/login?next=${encodeURIComponent(scanPath)}`)
+  }
 
   const { data: meList } = await adminClient
     .from('personnel')
