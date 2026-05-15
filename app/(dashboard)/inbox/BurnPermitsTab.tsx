@@ -167,7 +167,8 @@ export default function BurnPermitsTab({
               new Date(permit.permit_expiry_date + 'T23:59:59') < new Date()
 
             return (
-              <div key={permit.id} className={`rounded-xl bg-white overflow-hidden border ${isExpired ? 'border-red-200' : 'border-zinc-200'}`}>
+              <div key={permit.id} className={`rounded-xl bg-white overflow-hidden border ${isExpired ? 'border-red-400' : 'border-zinc-200'}`}>
+                {isExpired && <div className="h-1 bg-red-400 w-full" />}
                 {/* Card header */}
                 <div className="px-5 py-4">
                   <div className="flex items-start justify-between gap-4">
@@ -183,7 +184,7 @@ export default function BurnPermitsTab({
                       <p className="text-xs text-zinc-500">🔥 Burn date: <span className="font-medium text-zinc-700">{formatDate(permit.burn_date)}</span></p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-                      {permit.status === 'approved' && (
+                      {permit.status === 'approved' && !isExpired && (
                         officerSignedAt[permit.id] ? (
                           <span className="text-xs font-semibold text-green-600">Officer Signed ✓</span>
                         ) : (
@@ -204,6 +205,9 @@ export default function BurnPermitsTab({
                         >
                           Print ↗
                         </a>
+                      )}
+                      {isExpired && (
+                        <span className="text-xs text-red-500 font-medium">Expired {formatDate(permit.permit_expiry_date)}</span>
                       )}
                       <button onClick={() => openExpand(permit.id)}
                         className="text-xs font-semibold text-zinc-500 hover:text-zinc-700">
