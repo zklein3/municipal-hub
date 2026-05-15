@@ -100,14 +100,28 @@ All live in `/core_schemas/value_sets/csv/` in the repo.
 
 ## Build Plan
 
-1. **Download value set CSVs** — seed key ones into a static lookup file or `neris_value_sets` table
-2. **Replace incident type dropdown** — NERIS numeric codes with friendly labels; keep current type as a fallback mapping
-3. **Add property use field** — required for most incidents, dropdown from `type_location_use.csv`
-4. **Add actions taken** — multi-select from `type_action_tactic.csv`
-5. **Add displaced persons count** — integer field
-6. **Expand fire module** — match `mod_fire.csv`: arrival condition, building damage, suppression details, floor/room of origin
-7. **Add NERIS API submission** — POST to `api.neris.fsri.org/v1`, replace `neris_reported` checkbox with actual confirmation
-8. **Nebraska-specific** — check with Nebraska State Fire Marshal for any state-layer requirements on top of NERIS core
+1. ✅ **Locations module** — `base.location_use.use_type` (property use), `base.displacement_count` (displaced persons), `base.location.street/postal_code` — confirmed from openapi.json 2026-05-15, wired into payload builder
+2. **Fire module** — `mod_fire.csv` fields: arrival condition, building damage, cause, suppression method, floor/room of origin — field names need verification against openapi.json
+3. **Unit response timing** — `enroute_at`/`on_scene_at` field names unverified, stripped from payload
+4. **Narrative** — top-level key unknown, stripped from payload
+5. **Medical / rescue / hazmat** — module field names unverified, stripped from payload
+6. **Nebraska-specific** — check with Nebraska State Fire Marshal for any state-layer requirements on top of NERIS core
+
+## Confirmed Field Names (from openapi.json, api-test.neris.fsri.org)
+
+| NERIS Field | Path in Payload | FireOps7 Source | Confirmed |
+|---|---|---|---|
+| Incident type | `incident_types[].type` | `incident_neris.neris_incident_type` | ✅ 2026-05-13 |
+| Actions taken | `actions_tactics.action_noaction.actions[]` | `incident_neris.actions_taken[]` | ✅ 2026-05-13 |
+| No-action reason | `actions_tactics.action_noaction.reason` | `incident_neris.no_action_reason` | ✅ 2026-05-13 |
+| State | `base.location.state` + `dispatch.location.state` | `incidents.state` | ✅ 2026-05-13 |
+| Street address | `base.location.street` | `incidents.address` | ✅ 2026-05-15 |
+| Postal code | `base.location.postal_code` | `incidents.zip` | ✅ 2026-05-15 |
+| Property use | `base.location_use.use_type` | `incident_neris.property_use` | ✅ 2026-05-15 |
+| Displaced persons | `base.displacement_count` | `incident_neris.displaced_persons` | ✅ 2026-05-15 |
+| Narrative | unknown | `incident_neris.neris_narrative` | ❌ Unconfirmed |
+| Unit enroute time | unknown | `incident_apparatus.enroute_at` | ❌ Unconfirmed |
+| Unit on-scene time | unknown | `incident_apparatus.on_scene_at` | ❌ Unconfirmed |
 
 ---
 

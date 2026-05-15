@@ -102,13 +102,13 @@ Core submission flow working end-to-end against NERIS test API (FD35049607). Bad
 
 **Test dept:** Fremont Fire Test Dept (FFTD) has `neris_entity_id = 'FD35049607'` — use `test.admin@fireops7.com` to test submissions.
 
-**NERIS module data still TODO** (next session — add back one section at a time, test against FFTD):
-- `locations` — property use, displaced persons (field names unknown, stripped)
-- `fire` — condition arrival, building damage, cause, acres, suppression (field names unverified)
+**NERIS module data still TODO** (add back one section at a time, test against FFTD):
+- ✅ `locations` — `base.location_use.use_type` (property use), `base.displacement_count` (displaced persons), `base.location.street/postal_code` — confirmed + wired (2026-05-15)
+- `fire` — condition arrival, building damage, cause, acres, suppression (field names unverified against openapi.json)
 - `medical` / `rescue` — patients/victims (field names unknown, stripped)
 - `hazmat` — disposition, chemical (field names unknown, stripped)
-- `narrative` — top-level key unknown
-- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unknown
+- `narrative` — top-level key unknown, stripped
+- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unverified
 
 **Env vars in `.env.local`:** `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`, `NERIS_TEST_DEPT_ID=FD35049607`, `NERIS_USE_TEST=true`
 

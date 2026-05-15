@@ -175,7 +175,11 @@ function getIncidentState(incident: any): string | null {
 
 // ─── Shared payload builder — used by both preview and submit ─────────────────
 // Payload structure confirmed against live NERIS test API during badge test (2026-05-13).
-// Module field names (fire/medical/hazmat/rescue) need end-to-end verification.
+// locations module field names confirmed from openapi.json (2026-05-15):
+//   base.location = { state, street, postal_code }
+//   base.location_use.use_type = property use code (pipe-delimited e.g. "RESIDENTIAL||...")
+//   base.displacement_count = integer
+// Module field names (fire/medical/hazmat/rescue) still need verification.
 function buildNerisPayload(
   incident: any,
   neris: any,
@@ -185,14 +189,30 @@ function buildNerisPayload(
   nerisEntityId: string,
 ): Record<string, unknown> {
   const state = getIncidentState(incident)
-  const location = state ? { state } : {}
+
+  // Build location object — include address components if available
+  const location: Record<string, unknown> = {}
+  if (state) location.state = state
+  if (incident.address) location.street = incident.address
+  if (incident.zip) location.postal_code = incident.zip
+
+  // Build base object
+  const base: Record<string, unknown> = {
+    department_neris_id: nerisEntityId,
+    incident_number: incident.incident_number ?? incident.id,
+    location,
+  }
+
+  // ── Locations module (confirmed 2026-05-15) ──────────────────────────────
+  if (neris?.property_use) {
+    base.location_use = { use_type: neris.property_use }
+  }
+  if (neris?.displaced_persons != null && neris.displaced_persons > 0) {
+    base.displacement_count = neris.displaced_persons
+  }
 
   const payload: Record<string, unknown> = {
-    base: {
-      department_neris_id: nerisEntityId,
-      incident_number: incident.incident_number ?? incident.id,
-      location,
-    },
+    base,
     dispatch: {
       internal_id: incident.incident_number ?? incident.id,
       call_create: incident.call_time ?? `${incident.incident_date}T00:00:00Z`,
@@ -226,10 +246,8 @@ function buildNerisPayload(
     }
   }
 
-  // TODO(api-review): narrative field name/location unknown — stripped until confirmed
-
-  // TODO(api-review): locations, fire, medical, rescue, hazmat, aids
-  // module field names need verification against NERIS openapi.json — stripped until confirmed.
+  // TODO(api-review): narrative — top-level key unknown, stripped until confirmed
+  // TODO(api-review): fire, medical, rescue, hazmat, aids — field names need verification
 
   return payload
 }
