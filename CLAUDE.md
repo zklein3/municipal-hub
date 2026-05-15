@@ -127,14 +127,14 @@ Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
 
 **Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`, `app/(dashboard)/apparatus/[id]/ApparatusDetailClient.tsx`
 
-### 5. Permit Approval Email (blocked)
+### 4. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
-### 6. Officer Sub-Menu
+### 5. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 7. Module / Feature Flag System
+### 6. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
