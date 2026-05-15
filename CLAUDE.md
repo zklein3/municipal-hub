@@ -107,18 +107,25 @@ Test dept: `neris_entity_id = 'FD35049607'`, use `test.admin@fireops7.com`.
 See `NERIS.md` for full field reference and payload builder notes.
 Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
 
-### 3. ISO Apparatus Hose Load — Structured Format
-Replace `apparatus_iso_specs.hose_load_notes` (free text) with structured hose load rows.
+### 3. ISO Hose — Single Inventory Model ✳️ ARCHITECTURE DECISION
+`hoses` table is the single source of truth for all hose inventory, location, and testing.
 
-**DB change:** Add `hose_loads jsonb` column to `apparatus_iso_specs` (array of `{diameter_in: number, length_ft: number}`). Drop or ignore `hose_load_notes` going forward.
+**Location (mutually exclusive):**
+- `apparatus_id` set → loaded on that truck
+- `station_id` set → in storage at a station (field not yet added)
+- All hose can be tested regardless of location
 
-**UI (ISO report / apparatus specs form):**
-- Replace the notes textarea with a list of existing hose loads + an "+ Add Hose Load" button
-- Each row: diameter dropdown (1, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6 in) + length field (ft) + remove (×) button
-- Save persists the full array via `upsertApparatusIsoSpecs` action
-- Display in ISO report: list each load as e.g. "2.5" × 200 ft"
+**DB changes needed:**
+- Add `station_id` to `hoses` table (migration)
+- Drop `apparatus_iso_specs.hose_loads` jsonb column (built 2026-05-15 but now redundant — individual hose records give same info)
+- Remove `hose_loads` from apparatus specs form and `upsertApparatusIsoSpecs` action
+- Apparatus specs form keeps: pump rating, tank, foam, aerial only
 
-**Key files:** `app/(dashboard)/iso/` pages, `app/actions/iso.ts` → `upsertApparatusIsoSpecs`
+**Hose add/edit form:** apparatus OR station picker, enforced mutually exclusive
+
+**ISO report:** sum hose records by diameter, split on-apparatus vs in-storage → total must account for every foot in the system
+
+**Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`, `app/(dashboard)/apparatus/[id]/ApparatusDetailClient.tsx`
 
 ### 5. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
