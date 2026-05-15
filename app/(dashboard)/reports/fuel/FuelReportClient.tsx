@@ -79,18 +79,27 @@ export default function FuelReportClient({
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6 print:hidden">
-        <input type="date" value={filters.from} onChange={e => applyFilter('from', e.target.value)}
-          className={inputCls} placeholder="From" />
-        <input type="date" value={filters.to} onChange={e => applyFilter('to', e.target.value)}
-          className={inputCls} placeholder="To" />
-        <select value={filters.apparatusId} onChange={e => applyFilter('apparatusId', e.target.value)} className={inputCls}>
-          <option value="">All Apparatus</option>
-          {apparatus.map(a => (
-            <option key={a.id} value={a.id}>{a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}</option>
-          ))}
-        </select>
-        {(filters.from || filters.to || filters.apparatusId) && (
-          <button onClick={() => router.push(pathname)} className="text-sm text-red-600 hover:text-red-800 font-medium">Clear</button>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-zinc-500">Start Date</label>
+          <input type="date" value={filters.from} onChange={e => applyFilter('from', e.target.value)} className={inputCls} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-zinc-500">End Date</label>
+          <input type="date" value={filters.to} onChange={e => applyFilter('to', e.target.value)} className={inputCls} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-zinc-500">Apparatus</label>
+          <select value={filters.apparatusId} onChange={e => applyFilter('apparatusId', e.target.value)} className={inputCls}>
+            <option value="">All Apparatus</option>
+            {apparatus.map(a => (
+              <option key={a.id} value={a.id}>{a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}</option>
+            ))}
+          </select>
+        </div>
+        {filters.apparatusId && (
+          <div className="flex items-end">
+            <button onClick={() => router.push(pathname)} className="text-sm text-red-600 hover:text-red-800 font-medium pb-2">Clear Filters</button>
+          </div>
         )}
       </div>
 

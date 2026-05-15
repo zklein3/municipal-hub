@@ -8,7 +8,14 @@ export default async function FuelReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; apparatusId?: string }>
 }) {
-  const { from, to, apparatusId } = await searchParams
+  const { from: fromParam, to: toParam, apparatusId } = await searchParams
+
+  // Default to current month when no dates provided
+  const now = new Date()
+  const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const defaultTo = now.toISOString().split('T')[0]
+  const from = fromParam || defaultFrom
+  const to = toParam || defaultTo
   const supabase = await createClient()
   const adminClient = createAdminClient()
 
@@ -77,7 +84,7 @@ export default async function FuelReportPage({
     <FuelReportClient
       entries={entries}
       apparatus={apparatusRaw ?? []}
-      filters={{ from: from ?? '', to: to ?? '', apparatusId: apparatusId ?? '' }}
+      filters={{ from, to, apparatusId: apparatusId ?? '' }}
     />
   )
 }
