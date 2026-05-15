@@ -119,19 +119,31 @@ export default async function PermitStatusPage({
       ) : (
         <div className="flex flex-col gap-4">
           {/* Status card */}
-          <div className={`rounded-xl border p-5 ${STATUS_STYLES[permit.status] ?? 'bg-zinc-50 border-zinc-200'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Permit Status</p>
-              <span className="text-xs font-mono opacity-60">{permit.confirmation_code}</span>
-            </div>
-            <p className="text-2xl font-bold">{STATUS_LABELS[permit.status] ?? permit.status}</p>
-            {permit.status === 'pending' && (
-              <p className="text-xs mt-1 opacity-70">Your permit is being reviewed by the department. Check back soon.</p>
-            )}
-            {permit.status === 'denied' && permit.reviewer_notes && (
-              <p className="text-xs mt-2 opacity-80"><strong>Note from department:</strong> {permit.reviewer_notes}</p>
-            )}
-          </div>
+          {(() => {
+            const isExpired = permit.status === 'approved' &&
+              !!permit.permit_expiry_date &&
+              new Date(permit.permit_expiry_date + 'T23:59:59') < new Date()
+            const cardStyle = isExpired ? 'bg-red-100 text-red-800 border-red-200' : (STATUS_STYLES[permit.status] ?? 'bg-zinc-50 border-zinc-200')
+            const label = isExpired ? 'Expired' : (STATUS_LABELS[permit.status] ?? permit.status)
+            return (
+              <div className={`rounded-xl border p-5 ${cardStyle}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Permit Status</p>
+                  <span className="text-xs font-mono opacity-60">{permit.confirmation_code}</span>
+                </div>
+                <p className="text-2xl font-bold">{label}</p>
+                {isExpired && (
+                  <p className="text-xs mt-1 opacity-80">This permit expired on {formatDate(permit.permit_expiry_date)}. Contact the department if you need a renewal.</p>
+                )}
+                {permit.status === 'pending' && (
+                  <p className="text-xs mt-1 opacity-70">Your permit is being reviewed by the department. Check back soon.</p>
+                )}
+                {permit.status === 'denied' && permit.reviewer_notes && (
+                  <p className="text-xs mt-2 opacity-80"><strong>Note from department:</strong> {permit.reviewer_notes}</p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Permit details */}
           <div className="rounded-xl bg-white border border-zinc-200 p-5">

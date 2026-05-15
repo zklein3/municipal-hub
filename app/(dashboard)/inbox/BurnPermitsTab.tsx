@@ -162,17 +162,20 @@ export default function BurnPermitsTab({
           {filtered.map(permit => {
             const isExpanded = expandedId === permit.id
             const isPending = permit.status === 'pending'
+            const isExpired = permit.status === 'approved' &&
+              !!permit.permit_expiry_date &&
+              new Date(permit.permit_expiry_date + 'T23:59:59') < new Date()
 
             return (
-              <div key={permit.id} className="rounded-xl bg-white border border-zinc-200 overflow-hidden">
+              <div key={permit.id} className={`rounded-xl bg-white overflow-hidden border ${isExpired ? 'border-red-200' : 'border-zinc-200'}`}>
                 {/* Card header */}
                 <div className="px-5 py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="text-sm font-bold text-zinc-900">{permit.contact_name}</p>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${STATUS_STYLES[permit.status]}`}>
-                          {permit.status}
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${isExpired ? 'bg-red-100 text-red-700' : STATUS_STYLES[permit.status]}`}>
+                          {isExpired ? 'Expired' : permit.status}
                         </span>
                         <span className="text-xs font-mono text-zinc-400">{permit.confirmation_code}</span>
                       </div>
