@@ -189,10 +189,12 @@ export async function submitUserReport(formData: FormData) {
 // ─── Save raw QR scan for format analysis ────────────────────────────────────
 export async function saveQrDebugScan(rawValue: string) {
   const admin = createAdminClient()
-  const { error: dbErr } = await admin
+  const { data, error: dbErr } = await admin
     .from('qr_debug_scans')
     .insert({ raw_value: rawValue })
+    .select()
 
-  if (dbErr) return { error: 'Failed to save scan.' }
+  if (dbErr) return { error: dbErr.message }
+  if (!data || data.length === 0) return { error: 'Insert returned no rows.' }
   return { success: true }
 }
