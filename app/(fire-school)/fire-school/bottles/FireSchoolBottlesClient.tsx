@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { addFireSchoolBottle, updateFireSchoolBottle, reassignBottleId, logFill } from '@/app/actions/fire-school'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import QRScanner from '@/components/QRScanner'
@@ -541,8 +541,8 @@ export default function FireSchoolBottlesClient({
               const status = getStatus(bottle)
               const isEditing = editingBottleId === bottle.bottle_id
               return (
-                <>
-                  <tr key={bottle.id} className={`hover:bg-zinc-50 ${isEditing ? 'bg-orange-50' : ''}`}>
+                <React.Fragment key={bottle.id}>
+                  <tr className={`hover:bg-zinc-50 ${isEditing ? 'bg-orange-50' : ''}`}>
                     <td className="px-4 py-3 font-mono font-bold text-zinc-900">{bottle.bottle_id}</td>
                     <td className="px-4 py-3 text-zinc-500">{bottle.department_name ?? '—'}</td>
                     <td className="px-4 py-3 text-zinc-500">{bottle.cylinder_type ? CYLINDER_TYPE_LABELS[bottle.cylinder_type] ?? bottle.cylinder_type : '—'}</td>
@@ -585,7 +585,7 @@ export default function FireSchoolBottlesClient({
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               )
             })}
           </tbody>
