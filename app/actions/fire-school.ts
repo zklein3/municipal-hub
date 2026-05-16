@@ -62,12 +62,10 @@ export async function logFill(bottleId: string, notes?: string) {
       filled_at: new Date().toISOString(),
     })
     .select('id')
-    .single()
 
   if (error) return { error: error.message }
 
-  revalidatePath('/fire-school')
-  return { success: true, fillId: data.id as string }
+  return { success: true, fillId: data?.[0]?.id as string ?? null }
 }
 
 // ─── Add bottle ───────────────────────────────────────────────────────────────
