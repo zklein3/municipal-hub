@@ -146,6 +146,17 @@ export async function reassignBottleId(currentId: string, newId: string) {
   return { success: true }
 }
 
+// ─── Verify fill ─────────────────────────────────────────────────────────────
+export async function verifyFill(fillId: string) {
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
+    .from('fire_school_fill_logs')
+    .update({ verified_at: new Date().toISOString() })
+    .eq('id', fillId)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
 // ─── Update bottle ────────────────────────────────────────────────────────────
 export async function updateFireSchoolBottle(bottleId: string, formData: FormData) {
   const adminClient = createAdminClient()

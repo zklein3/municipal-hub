@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { verifyFill } from '@/app/actions/fire-school'
 import { TZ_KEY, TZ_DEFAULT } from '../settings/page'
 
 interface FillLog {
@@ -10,12 +11,14 @@ interface FillLog {
   filled_at: string
   fill_result: string
   notes: string | null
+  verified_at: string | null
 }
 
 export default function FillLogClient({ logs: initialLogs }: { logs: FillLog[] }) {
   const [logs, setLogs] = useState<FillLog[]>(initialLogs)
   const [timezone, setTimezone] = useState(TZ_DEFAULT)
   const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const [verifying, setVerifying] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem(TZ_KEY)
@@ -45,23 +48,49 @@ export default function FillLogClient({ logs: initialLogs }: { logs: FillLog[] }
           }, 3000)
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'fire_school_fill_logs' },
+        payload => {
+          const updated = payload.new as FillLog
+          setLogs(prev => prev.map(l => l.id === updated.id ? updated : l))
+        }
+      )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [])
+
+  async function handleVerify(id: string) {
+    setVerifying(id)
+    await verifyFill(id)
+    setVerifying(null)
+  }
+
+  function fmt(ts: string) {
+    return new Date(ts).toLocaleString('en-US', {
+      timeZone: timezone,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
 
   return (
     <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-x-auto">
       {logs.length === 0 ? (
         <div className="px-6 py-12 text-center text-sm text-zinc-400">No fills logged yet.</div>
       ) : (
-        <table className="w-full text-sm min-w-[480px]">
+        <table className="w-full text-sm min-w-[560px]">
           <thead className="bg-zinc-50 border-b border-zinc-200">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Bottle ID</th>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Date &amp; Time</th>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Result</th>
               <th className="px-4 py-3 text-left font-semibold text-zinc-600">Notes</th>
+              <th className="px-4 py-3 text-left font-semibold text-zinc-600">Verified</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -73,22 +102,28 @@ export default function FillLogClient({ logs: initialLogs }: { logs: FillLog[] }
                 }`}
               >
                 <td className="px-4 py-3 font-mono font-bold text-zinc-900">{log.bottle_id}</td>
-                <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">
-                  {new Date(log.filled_at).toLocaleString('en-US', {
-                    timeZone: timezone,
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </td>
+                <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">{fmt(log.filled_at)}</td>
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">
                     {log.fill_result}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{log.notes ?? '—'}</td>
+                <td className="px-4 py-3">
+                  {log.verified_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                      ✓ {fmt(log.verified_at)}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleVerify(log.id)}
+                      disabled={verifying === log.id}
+                      className="rounded-lg bg-orange-600 px-3 py-1 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                    >
+                      {verifying === log.id ? '...' : 'Verify'}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
