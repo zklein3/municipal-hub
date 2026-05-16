@@ -34,7 +34,6 @@ export default function QRScanner({
   useEffect(() => { return () => stop() }, [stop])
 
   useEffect(() => {
-    // BarcodeDetector is native on Chrome/Android — far better focus handling than jsQR
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const NativeDetector = (typeof window !== 'undefined' && 'BarcodeDetector' in window)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,19 +80,19 @@ export default function QRScanner({
         scanningRef.current = true
 
         try {
-          // Primary: native BarcodeDetector (Chrome Android handles focus/exposure natively)
+          // Primary: native BarcodeDetector — any non-null rawValue counts
           if (detector) {
             const codes = await detector.detect(video)
-            if (codes.length > 0 && codes[0].rawValue?.trim()) {
+            if (codes.length > 0 && codes[0].rawValue != null) {
               detectedRef.current = true
+              onScanRef.current(codes[0].rawValue) // callback before stop
               stop()
-              onScanRef.current(codes[0].rawValue.trim())
               return
             }
           }
         } catch { /* fall through to jsQR */ }
 
-        // Fallback: jsQR
+        // Fallback: jsQR — any non-null data counts
         try {
           const ctx = canvas.getContext('2d')
           if (ctx) {
@@ -102,10 +101,10 @@ export default function QRScanner({
             ctx.drawImage(video, 0, 0)
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
             const code = jsQR(imageData.data, imageData.width, imageData.height)
-            if (code?.data?.trim()) {
+            if (code?.data != null) {
               detectedRef.current = true
+              onScanRef.current(code.data) // callback before stop
               stop()
-              onScanRef.current(code.data.trim())
               return
             }
           }
@@ -132,11 +131,8 @@ export default function QRScanner({
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-3">
           {error}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-        >
+        <button type="button" onClick={onClose}
+          className="w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200">
           Close
         </button>
       </div>
@@ -148,15 +144,10 @@ export default function QRScanner({
       <div className="rounded-xl border border-zinc-200 bg-zinc-950 p-3">
         <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-lg" />
         <canvas ref={canvasRef} className="hidden" />
-        {hint && (
-          <p className="mt-2 text-center text-xs text-zinc-300">{hint}</p>
-        )}
+        {hint && <p className="mt-2 text-center text-xs text-zinc-300">{hint}</p>}
       </div>
-      <button
-        type="button"
-        onClick={() => { stop(); onClose() }}
-        className="mt-3 w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200"
-      >
+      <button type="button" onClick={() => { stop(); onClose() }}
+        className="mt-3 w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200">
         Cancel
       </button>
     </div>
