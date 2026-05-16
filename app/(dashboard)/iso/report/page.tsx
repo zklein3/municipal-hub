@@ -133,14 +133,6 @@ export default async function IsoReportPage() {
         .in('id', attendeeIds)
     : { data: [] as { id: string; first_name: string; last_name: string }[] }
 
-  // Mutual aid (last 12 months)
-  const { data: mutualAidRaw } = await adminClient
-    .from('incident_mutual_aid')
-    .select('id, external_department_name, role, apparatus_description, personnel_count, created_at')
-    .eq('department_id', department_id)
-    .order('created_at', { ascending: false })
-    .limit(20)
-
   // Hose inventory summary — total owned from hoses table, on-truck from hose_loads
   type HoseLoad = { diameter_in: number; length_ft: number }
   const ownedByDiameter = new Map<number, number>()
@@ -510,26 +502,6 @@ export default async function IsoReportPage() {
           </div>
         )}
 
-        {/* Incident mutual aid activity — secondary */}
-        {(mutualAidRaw ?? []).length > 0 && (
-          <div className="mt-5 pt-4 border-t border-zinc-100">
-            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Recent Response Activity</p>
-            <div className="flex flex-col gap-1.5">
-              {(mutualAidRaw ?? []).map(m => (
-                <div key={m.id} className="flex items-start gap-3 text-xs py-1.5 border-b border-zinc-50 last:border-0">
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                    {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
-                  </span>
-                  <div className="min-w-0">
-                    <span className="font-medium text-zinc-800">{m.external_department_name}</span>
-                    {m.apparatus_description && <span className="text-zinc-400 ml-2">· {m.apparatus_description}</span>}
-                    <p className="text-zinc-400 mt-0.5">{formatDate(m.created_at.slice(0, 10))}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
     </div>
   )
