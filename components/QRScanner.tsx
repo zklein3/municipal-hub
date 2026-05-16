@@ -18,6 +18,7 @@ export default function QRScanner({
   const streamRef = useRef<MediaStream | null>(null)
   const frameRef = useRef<number | null>(null)
   const detectedRef = useRef(false)
+  const scanningRef = useRef(false)
   const onScanRef = useRef(onScan)
   useEffect(() => { onScanRef.current = onScan }, [onScan])
 
@@ -33,6 +34,17 @@ export default function QRScanner({
   useEffect(() => { return () => stop() }, [stop])
 
   useEffect(() => {
+    // BarcodeDetector is native on Chrome/Android — far better focus handling than jsQR
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const NativeDetector = (typeof window !== 'undefined' && 'BarcodeDetector' in window)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? (window as any).BarcodeDetector
+      : null
+    let detector: { detect: (src: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> } | null = null
+    if (NativeDetector) {
+      try { detector = new NativeDetector({ formats: ['qr_code'] }) } catch { /* unsupported */ }
+    }
+
     async function start() {
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
         setError('Camera access is not available on this browser.')
@@ -64,9 +76,25 @@ export default function QRScanner({
         return
       }
 
-      const loop = () => {
-        if (detectedRef.current) return
-        if (video.readyState >= 2) {
+      const tryDecode = async () => {
+        if (detectedRef.current || scanningRef.current || video.readyState < 2) return
+        scanningRef.current = true
+
+        try {
+          // Primary: native BarcodeDetector (Chrome Android handles focus/exposure natively)
+          if (detector) {
+            const codes = await detector.detect(video)
+            if (codes.length > 0 && codes[0].rawValue?.trim()) {
+              detectedRef.current = true
+              stop()
+              onScanRef.current(codes[0].rawValue.trim())
+              return
+            }
+          }
+        } catch { /* fall through to jsQR */ }
+
+        // Fallback: jsQR
+        try {
           const ctx = canvas.getContext('2d')
           if (ctx) {
             canvas.width = video.videoWidth
@@ -81,7 +109,14 @@ export default function QRScanner({
               return
             }
           }
-        }
+        } catch { /* ignore */ }
+
+        scanningRef.current = false
+      }
+
+      const loop = () => {
+        if (detectedRef.current) return
+        tryDecode()
         frameRef.current = requestAnimationFrame(loop)
       }
 
