@@ -207,6 +207,19 @@ export default function FireSchoolBottlesClient({
   const [editError, setEditError]                 = useState<string | null>(null)
   const [editLoading, setEditLoading]             = useState(false)
 
+  const [deptSearch, setDeptSearch]               = useState('')
+
+  const filteredBottles = deptSearch.trim()
+    ? bottles.filter(b => {
+        const q = deptSearch.toLowerCase().trim()
+        return (
+          b.bottle_id.toLowerCase().includes(q) ||
+          (b.department_name?.toLowerCase().includes(q) ?? false) ||
+          (b.cylinder_type?.toLowerCase().includes(q) ?? false)
+        )
+      })
+    : bottles
+
   const [reassignFromId, setReassignFromId]       = useState<string | null>(null)
   const [reassignNewId, setReassignNewId]         = useState('')
   const [reassignLoading, setReassignLoading]     = useState(false)
@@ -426,9 +439,23 @@ export default function FireSchoolBottlesClient({
         </div>
       )}
 
+      {/* ── Search ──────────────────────────────────────────────────────────── */}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={deptSearch}
+          onChange={e => setDeptSearch(e.target.value)}
+          placeholder="Search by bottle ID, department, or cylinder type..."
+          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+        />
+        {deptSearch.trim() && (
+          <p className="mt-1 text-xs text-zinc-400">{filteredBottles.length} of {bottles.length} bottles</p>
+        )}
+      </div>
+
       {/* ── Mobile card list ─────────────────────────────────────────────────── */}
       <div className="sm:hidden space-y-3">
-        {bottles.map(bottle => {
+        {filteredBottles.map(bottle => {
           const status = getStatus(bottle)
           const isEditing = editingBottleId === bottle.bottle_id
           return (
@@ -493,7 +520,7 @@ export default function FireSchoolBottlesClient({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
-            {bottles.map(bottle => {
+            {filteredBottles.map(bottle => {
               const status = getStatus(bottle)
               const isEditing = editingBottleId === bottle.bottle_id
               return (
