@@ -101,6 +101,31 @@ export default async function IsoReportPage() {
 
   const testedHydrantIds = new Set((recentFlowTests ?? []).map(t => t.hydrant_id))
 
+  // Training hours (last 12 months)
+  const { data: trainingEvents } = await adminClient
+    .from('training_events')
+    .select('id, topic, event_date, hours')
+    .eq('department_id', department_id)
+    .gte('event_date', oneYearAgoStr)
+    .order('event_date', { ascending: false })
+
+  const trainingEventIds = (trainingEvents ?? []).map(e => e.id)
+  const { data: trainingAttendance } = trainingEventIds.length > 0
+    ? await adminClient
+        .from('training_event_attendance')
+        .select('event_id, personnel_id')
+        .in('event_id', trainingEventIds)
+        .eq('status', 'verified')
+    : { data: [] as { event_id: string; personnel_id: string }[] }
+
+  const attendeeIds = [...new Set((trainingAttendance ?? []).map(a => a.personnel_id))]
+  const { data: attendeePersonnel } = attendeeIds.length > 0
+    ? await adminClient
+        .from('personnel')
+        .select('id, first_name, last_name')
+        .in('id', attendeeIds)
+    : { data: [] as { id: string; first_name: string; last_name: string }[] }
+
   // Mutual aid (last 12 months)
   const { data: mutualAidRaw } = await adminClient
     .from('incident_mutual_aid')
@@ -134,6 +159,23 @@ export default async function IsoReportPage() {
     return { diameter: d, owned, onTruck, inStorage, gap: inStorage < 0 }
   })
 
+  // Training summary calculations
+  const eventHoursMap = Object.fromEntries((trainingEvents ?? []).map(e => [e.id, parseFloat(e.hours) || 0]))
+  const personnelNameMap = Object.fromEntries((attendeePersonnel ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
+  const hoursByPersonnel = new Map<string, number>()
+  for (const a of trainingAttendance ?? []) {
+    const hrs = eventHoursMap[a.event_id] ?? 0
+    hoursByPersonnel.set(a.personnel_id, (hoursByPersonnel.get(a.personnel_id) ?? 0) + hrs)
+  }
+  const trainingRoster = [...hoursByPersonnel.entries()]
+    .map(([id, hours]) => ({ id, name: personnelNameMap[id] ?? '—', hours }))
+    .sort((a, b) => b.hours - a.hours)
+  const totalTrainingEvents = (trainingEvents ?? []).length
+  const totalTrainingHours = (trainingEvents ?? []).reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0)
+  const avgHoursPerMember = trainingRoster.length > 0
+    ? Math.round((trainingRoster.reduce((s, r) => s + r.hours, 0) / trainingRoster.length) * 10) / 10
+    : 0
+
   const isoApparatus = (allApparatus ?? []).filter(a => !a.exclude_from_iso)
   const excludedApparatus = (allApparatus ?? []).filter(a => a.exclude_from_iso)
   const totalApparatus = isoApparatus.length
@@ -161,7 +203,7 @@ export default async function IsoReportPage() {
         <StatCard label="Apparatus Specs" value={`${specsComplete}/${totalApparatus}`} sub="ISO specs entered" />
         <StatCard label="Hose Test Rate" value={hosesTestedPct != null ? `${hosesTestedPct}%` : '—'} sub="tested past 12 months" />
         <StatCard label="Hydrant Flow Rate" value={hydrantsTestedPct != null ? `${hydrantsTestedPct}%` : '—'} sub="tested past 12 months" />
-        <StatCard label="Mutual Aid Logged" value={(mutualAidRaw ?? []).length} sub="recent entries" />
+        <StatCard label="Training Hours" value={totalTrainingHours} sub={`${totalTrainingEvents} events · past 12 months`} />
       </div>
 
       {/* Apparatus specs table */}
@@ -353,6 +395,54 @@ export default async function IsoReportPage() {
               )
             })}
           </div>
+        )}
+      </section>
+
+      {/* Training Hours */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Training Hours (Past 12 Months)</h2>
+          <Link href="/training" className="text-xs text-red-700 hover:underline font-medium">Manage →</Link>
+        </div>
+        {totalTrainingEvents === 0 ? (
+          <p className="text-sm text-zinc-400">No training events logged in the past 12 months.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+                <p className="text-2xl font-bold text-zinc-900">{totalTrainingEvents}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Events</p>
+              </div>
+              <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+                <p className="text-2xl font-bold text-zinc-900">{totalTrainingHours}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Total Hours</p>
+              </div>
+              <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+                <p className="text-2xl font-bold text-zinc-900">{avgHoursPerMember}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Avg / Member</p>
+              </div>
+            </div>
+            {trainingRoster.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-zinc-400 border-b border-zinc-100">
+                      <th className="pb-2 font-medium pr-4">Member</th>
+                      <th className="pb-2 font-medium text-right">Hours (12 mo)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50">
+                    {trainingRoster.map(r => (
+                      <tr key={r.id}>
+                        <td className="py-2 pr-4 text-zinc-800 font-medium">{r.name}</td>
+                        <td className="py-2 text-right font-semibold text-zinc-900">{r.hours} hrs</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </section>
 
