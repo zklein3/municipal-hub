@@ -144,6 +144,26 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - Middleware bypasses auth for `/dept/*`
 - Events: `event_series.is_public = true` required (toggled from `/events` manage panel)
 
+## Accountability Module — Future Build (not started)
+
+Standalone personnel accountability system using Salamander QR cards + temp cards. See CLAUDE.md → "Salamander QR Card Integration" for QR format details.
+
+**Concept:** Scene accountability officer runs this on a tablet. People scan in/out. PAR button snapshots the roster. Works independent of incident reporting.
+
+**Check-in methods:** Salamander QR card | Temp card (pre-printed, handed to visitors/mutual aid) | Manual name entry
+
+**Temp cards:** Print laminated QR badges (TEMP-001…TEMP-020). Hand out to people without cards. Scan → assign to a person. Scan out → card returns to available. Unreturned cards flagged at event close.
+
+**Tables to build:**
+- `accountability_events` — scene/event, optional `incident_id` link, status (active/closed)
+- `accountability_roster` — person on scene: `personnel_id` (nullable), raw name/dept, assignment, status (on_scene/staged/rehab/released), check-in/out times
+- `accountability_pars` — PAR timestamp + roster snapshot (jsonb)
+- `accountability_temp_cards` — card inventory: code, status (available/checked_out/retired), current assignee
+
+**Routes:** `/accountability` list → `/accountability/[id]` main board → `/accountability/[id]/scan` full-screen tablet scan mode → `/accountability/temp-cards` inventory + QR print
+
+**Open questions before building:** assignment list (fixed ICS divisions or free text?), who can run it (officers only?), linking to incidents (optional or required?).
+
 ## Test Data (Winslow Fire)
 - Engine 32 → D1 (Scott Air Pack ×2, Bottle ×2, Halligan ×1) + P1 (Chainsaw ×1)
 - Assets: Chainsaw 1, Scott Air Pack 1, Scott Air Pack 2, B-0001, B-0002
