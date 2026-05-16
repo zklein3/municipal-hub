@@ -76,6 +76,7 @@ export default function PersonnelProfileClient({
   const [qrResult, setQrResult] = useState<string | null>(null)
   const [qrSaving, setQrSaving] = useState(false)
   const [qrSaved, setQrSaved] = useState(false)
+  const [qrSaveError, setQrSaveError] = useState<string | null>(null)
 
   const canEditProfile = isMe || isOfficerOrAbove
 
@@ -310,15 +311,20 @@ export default function PersonnelProfileClient({
             className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 resize-y focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
           />
 
+          {qrSaveError && (
+            <p className="mt-2 text-sm text-red-600">{qrSaveError}</p>
+          )}
           <button
             type="button"
             disabled={qrSaving || qrSaved || !qrResult?.trim()}
             onClick={async () => {
               if (!qrResult?.trim()) return
               setQrSaving(true)
-              await saveQrDebugScan(qrResult)
+              setQrSaveError(null)
+              const res = await saveQrDebugScan(qrResult)
               setQrSaving(false)
-              setQrSaved(true)
+              if (res?.error) setQrSaveError(res.error)
+              else setQrSaved(true)
             }}
             className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
           >

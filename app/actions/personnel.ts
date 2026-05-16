@@ -188,13 +188,10 @@ export async function submitUserReport(formData: FormData) {
 
 // ─── Save raw QR scan for format analysis ────────────────────────────────────
 export async function saveQrDebugScan(rawValue: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
   const admin = createAdminClient()
   const { error: dbErr } = await admin
     .from('qr_debug_scans')
-    .insert({ raw_value: rawValue, scanned_by: user?.id ?? null })
+    .insert({ raw_value: rawValue })
 
   if (dbErr) return { error: 'Failed to save scan.' }
   return { success: true }
