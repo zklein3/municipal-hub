@@ -274,68 +274,65 @@ export default function PersonnelProfileClient({
       {isMe && (
         <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-6 mb-6">
           <h2 className="text-base font-semibold text-zinc-900 mb-1">QR Code Scanner</h2>
-          <p className="text-xs text-zinc-400 mb-4">Scan any QR code to inspect the raw data.</p>
+          <p className="text-xs text-zinc-400 mb-4">Scan a QR code or paste the string directly — then save to the database.</p>
+
+          {qrScannerOpen && (
+            <div className="mb-4">
+              <QRScanner
+                onScan={raw => {
+                  setQrResult(raw)
+                  setQrScannerOpen(false)
+                  setQrSaved(false)
+                }}
+                onClose={() => setQrScannerOpen(false)}
+                hint="Point the camera at any QR code"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">QR String</span>
+            {qrResult && (
+              <button
+                type="button"
+                onClick={() => { setQrResult(null); setQrSaved(false) }}
+                className="text-xs text-zinc-400 hover:text-zinc-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <textarea
+            value={qrResult ?? ''}
+            onChange={e => { setQrResult(e.target.value); setQrSaved(false) }}
+            rows={6}
+            placeholder="Paste a QR string here, or use Scan / Take Photo below..."
+            className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 resize-y focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+
+          <button
+            type="button"
+            disabled={qrSaving || qrSaved || !qrResult?.trim()}
+            onClick={async () => {
+              if (!qrResult?.trim()) return
+              setQrSaving(true)
+              await saveQrDebugScan(qrResult)
+              setQrSaving(false)
+              setQrSaved(true)
+            }}
+            className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+          >
+            {qrSaved ? '✓ Saved to Database' : qrSaving ? 'Saving...' : 'Save to Database'}
+          </button>
 
           {!qrScannerOpen && (
             <button
               type="button"
-              onClick={() => setQrScannerOpen(true)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              onClick={() => { setQrScannerOpen(true); setQrSaved(false) }}
+              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
             >
               Scan QR Code
             </button>
-          )}
-
-          {qrScannerOpen && (
-            <QRScanner
-              onScan={raw => {
-                setQrResult(raw)
-                setQrScannerOpen(false)
-              }}
-              onClose={() => setQrScannerOpen(false)}
-              hint="Point the camera at any QR code"
-            />
-          )}
-
-          {qrResult !== null && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Raw Result</span>
-                <button
-                  type="button"
-                  onClick={() => { setQrResult(null); setQrSaved(false) }}
-                  className="text-xs text-zinc-400 hover:text-zinc-600"
-                >
-                  Clear
-                </button>
-              </div>
-              <textarea
-                readOnly
-                value={qrResult}
-                rows={6}
-                className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 resize-y focus:outline-none"
-              />
-              <button
-                type="button"
-                disabled={qrSaving || qrSaved}
-                onClick={async () => {
-                  setQrSaving(true)
-                  await saveQrDebugScan(qrResult)
-                  setQrSaving(false)
-                  setQrSaved(true)
-                }}
-                className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
-              >
-                {qrSaved ? '✓ Saved to Database' : qrSaving ? 'Saving...' : 'Save to Database'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setQrScannerOpen(true); setQrSaved(false) }}
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
-              >
-                Scan Another
-              </button>
-            </div>
           )}
         </div>
       )}
