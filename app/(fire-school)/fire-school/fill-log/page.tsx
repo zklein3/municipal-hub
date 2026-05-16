@@ -35,7 +35,7 @@ export default async function FireSchoolFillLogPage() {
                 <tr key={log.id} className="hover:bg-zinc-50">
                   <td className="px-4 py-3 font-mono font-bold text-zinc-900">{log.bottle_id}</td>
                   <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">
-                    {new Date(log.filled_at).toLocaleString()}
+                    {new Date(log.filled_at).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">
