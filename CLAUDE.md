@@ -107,25 +107,41 @@ Test dept: `neris_entity_id = 'FD35049607'`, use `test.admin@fireops7.com`.
 See `NERIS.md` for full field reference and payload builder notes.
 Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
 
-### 3. ISO Hose — Single Inventory Model ✳️ ARCHITECTURE DECISION
-`hoses` table is the single source of truth for all hose inventory, location, and testing.
+### 3. ISO Hose — Build Plan ✳️ ARCHITECTURE LOCKED
 
-**Location (mutually exclusive):**
-- `apparatus_id` set → loaded on that truck
-- `station_id` set → in storage at a station (field not yet added)
-- All hose can be tested regardless of location
+**Two parallel systems — no overlap:**
 
-**DB changes needed:**
-- Add `station_id` to `hoses` table (migration)
-- Drop `apparatus_iso_specs.hose_loads` jsonb column (built 2026-05-15 but now redundant — individual hose records give same info)
-- Remove `hose_loads` from apparatus specs form and `upsertApparatusIsoSpecs` action
-- Apparatus specs form keeps: pump rating, tank, foam, aerial only
+**A) `hoses` table — inventory + testing only**
+- Tracks physical hose sections (H-0001, H-0002, etc.) by diameter and length
+- No location field — we don't track which truck a specific hose is on
+- Annual pressure tests logged per section via `hose_tests` table
+- No DB changes needed to `hoses` table
 
-**Hose add/edit form:** apparatus OR station picker, enforced mutually exclusive
+**B) `apparatus_iso_specs.hose_loads` — per-truck load spec (already built 2026-05-15)**
+- Engine 32: 500ft of 3", 300ft of 1.75" (not linked to specific hose IDs)
+- This is the source for on-truck totals in the ISO report
+- No changes needed — keep as-is
 
-**ISO report:** sum hose records by diameter, split on-apparatus vs in-storage → total must account for every foot in the system
+**ISO Report hose section (to build):**
+- Total owned per diameter: sum from `hoses` table (what the dept owns)
+- On trucks per diameter: sum `hose_loads` across all apparatus specs
+- In storage = Total owned − On trucks (simple calculation)
 
-**Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`, `app/(dashboard)/apparatus/[id]/ApparatusDetailClient.tsx`
+Example output:
+| Diameter | Total Owned | On Trucks | In Storage |
+|---|---|---|---|
+| 3" | 1,000 ft | 500 ft | 500 ft |
+| 1.75" | 500 ft | 500 ft | 0 ft |
+
+**Hose testing session (to build):**
+- Header set once: date, pressure used (PSI), duration (min, default 5), tester (auto from login)
+- List of all active hoses with NFPA 1962 required PSI shown per diameter:
+  - Attack hose (1"–3"): 300 PSI required
+  - Supply hose (4"–6"): 200 PSI required
+- Tester marks each hose Pass / Fail; failure reason field appears on Fail
+- Submit creates one `hose_test` record per hose with shared session params + individual result
+
+**Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`
 
 ### 4. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
