@@ -115,6 +115,26 @@ export default async function IsoReportPage() {
     member: (deptPersonnel ?? []).filter(p => p.system_role === 'member').length,
   }
 
+  // Training certifications
+  const { data: certsRaw } = await adminClient
+    .from('member_certifications')
+    .select('personnel_id, cert_name, expiration_date, active')
+    .eq('department_id', department_id)
+    .eq('active', true)
+
+  // Group by cert_name — count holders and expired
+  const certMap = new Map<string, { total: number; expired: number }>()
+  const today = new Date()
+  for (const c of certsRaw ?? []) {
+    const name = c.cert_name ?? 'Unknown'
+    const isExpired = c.expiration_date ? new Date(c.expiration_date + 'T00:00:00') < today : false
+    const existing = certMap.get(name) ?? { total: 0, expired: 0 }
+    certMap.set(name, { total: existing.total + 1, expired: existing.expired + (isExpired ? 1 : 0) })
+  }
+  const certSummary = [...certMap.entries()]
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.total - a.total)
+
   // Pre-plans
   const { data: preplans } = await adminClient
     .from('iso_preplans')
@@ -520,6 +540,43 @@ export default async function IsoReportPage() {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      {/* Training Certifications */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Training Certifications</h2>
+          <Link href="/training" className="text-xs text-red-700 hover:underline font-medium">Manage →</Link>
+        </div>
+        {certSummary.length === 0 ? (
+          <p className="text-sm text-zinc-400">No certifications on file.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-zinc-400 border-b border-zinc-100">
+                  <th className="pb-2 font-medium pr-4">Certification</th>
+                  <th className="pb-2 font-medium pr-4 text-right">Members Certified</th>
+                  <th className="pb-2 font-medium text-right">Expired</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {certSummary.map(c => (
+                  <tr key={c.name}>
+                    <td className="py-2 pr-4 font-medium text-zinc-800">{c.name}</td>
+                    <td className="py-2 pr-4 text-right font-semibold text-zinc-900">{c.total}</td>
+                    <td className="py-2 text-right">
+                      {c.expired > 0
+                        ? <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 font-medium">{c.expired}</span>
+                        : <span className="text-zinc-400">—</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

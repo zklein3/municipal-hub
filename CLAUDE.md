@@ -167,19 +167,41 @@ Current: manual entry by user (Phase 1, built 2026-05-16).
 
 **Key files when building:** `app/(dashboard)/iso/mutual-aid/`, `app/actions/iso.ts` → mutual aid actions, `iso_mutual_aid_agreements` table.
 
-### 6. ISO — Aerial Testing (deferred — build when dept has aerial apparatus)
+### 6. ISO — Configurable Single-Page Report Builder (next ISO phase)
+All current ISO report sections on one print-ready page. Admin controls which sections appear and their date ranges/filters.
+
+**Sections to include:**
+- Apparatus specs + pump test status
+- Personnel & staffing
+- Training hours (configurable date range — default 12 months)
+- Training certifications breakdown
+- Hose inventory summary + test compliance
+- Hydrant flow test compliance
+- Mutual aid agreements with apparatus
+- Pre-fire plans list
+
+**Admin controls per section:**
+- Show/hide toggle per section
+- Date range override (e.g. change training window from 12 to 24 months)
+- Dept name / ISO audit date / auditor name fields for the report header
+
+**Output:** Single scrollable page with print stylesheet — `window.print()` produces a clean multi-page PDF matching ISO audit format.
+
+**Route:** `/iso/report/print` or a print mode toggle on `/iso/report`.
+
+### 7. ISO — Aerial Testing (deferred — build when dept has aerial apparatus)
 Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload per apparatus.
 Only relevant for depts with aerial apparatus — skip until needed.
 Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, apparatus detail page.
 
-### 7. Permit Approval Email (blocked)
+### 9. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
-### 8. Officer Sub-Menu
+### 10. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 9. Module / Feature Flag System
+### 11. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
