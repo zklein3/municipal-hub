@@ -158,14 +158,23 @@ Current state: hose inventory, hose testing, hydrant tests all gated behind `mod
 
 **Why deferred:** Continue building ISO features as-is under the current gate. Change the gating in one pass once ISO section is feature-complete.
 
-### 5. Permit Approval Email (blocked)
+### 5. ISO Mutual Aid — Data Entry Roadmap (future phases)
+Current: manual entry by user (Phase 1, built 2026-05-16).
+
+**Phase 2 — Partner link:** Generate a shareable URL the dept admin emails to the M/A department. Partner fills out their apparatus specs (pump, tank, hose loads) via a public form (no login). Submits → populates the agreement record. Same pattern as burn permit public form.
+
+**Phase 3 — System-to-system:** If the M/A department also uses FireOps7, their apparatus ISO specs (`apparatus_iso_specs.hose_loads`, pump rating, tank) can be pulled directly from their dept record. Admin links agreements by selecting the partner dept from a FireOps7 dept lookup instead of entering manually. Data stays live — if partner updates their specs, it reflects automatically.
+
+**Key files when building:** `app/(dashboard)/iso/mutual-aid/`, `app/actions/iso.ts` → mutual aid actions, `iso_mutual_aid_agreements` table.
+
+### 6. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
 ### 5. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 6. Module / Feature Flag System
+### 7. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
