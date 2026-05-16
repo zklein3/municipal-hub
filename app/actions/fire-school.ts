@@ -53,7 +53,7 @@ export async function checkBottle(bottleId: string) {
 export async function logFill(bottleId: string, notes?: string) {
   const adminClient = createAdminClient()
 
-  const { error } = await adminClient
+  const { data, error } = await adminClient
     .from('fire_school_fill_logs')
     .insert({
       bottle_id: bottleId,
@@ -61,11 +61,13 @@ export async function logFill(bottleId: string, notes?: string) {
       notes: notes || null,
       filled_at: new Date().toISOString(),
     })
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
 
   revalidatePath('/fire-school')
-  return { success: true }
+  return { success: true, fillId: data.id as string }
 }
 
 // ─── Add bottle ───────────────────────────────────────────────────────────────

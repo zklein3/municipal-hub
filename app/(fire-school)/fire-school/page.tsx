@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { checkBottle, logFill } from '@/app/actions/fire-school'
+import { checkBottle, logFill, verifyFill } from '@/app/actions/fire-school'
 import QRScanner from '@/components/QRScanner'
 
 const CYLINDER_TYPE_LABELS: Record<string, string> = {
@@ -48,6 +48,9 @@ function FillStationContent() {
   const [logged, setLogged] = useState(false)
   const [notes, setNotes] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [lastFillId, setLastFillId] = useState<string | null>(null)
+  const [verified, setVerified] = useState(false)
+  const [verifying, setVerifying] = useState(false)
 
   const extractBottleIdFromScan = useCallback((raw: string): string => {
     const trimmed = raw.trim()
@@ -101,6 +104,8 @@ function FillStationContent() {
       if (res.success) {
         setLogged(true)
         setNotes('')
+        setLastFillId(res.fillId ?? null)
+        setVerified(false)
       }
     } finally {
       setLogging(false)
@@ -113,6 +118,8 @@ function FillStationContent() {
     setLogged(false)
     setNotes('')
     setScannerOpen(false)
+    setLastFillId(null)
+    setVerified(false)
     router.replace('/fire-school')
   }
 
@@ -339,11 +346,31 @@ function FillStationContent() {
 
       {logged && (
         <div className="rounded-xl bg-white shadow-sm border border-green-200 p-8 text-center">
-          <div className="text-5xl mb-4">✅</div>
+          <div className="text-5xl mb-4">{verified ? '✅' : '📋'}</div>
           <h2 className="text-xl font-bold text-zinc-900 mb-1">Fill Logged!</h2>
           <p className="text-sm text-zinc-500 mb-6">
             Fill recorded for <span className="font-mono font-bold">{result?.bottle?.bottle_id}</span>
           </p>
+
+          {lastFillId && (
+            <button
+              onClick={async () => {
+                setVerifying(true)
+                await verifyFill(lastFillId)
+                setVerified(true)
+                setVerifying(false)
+              }}
+              disabled={verified || verifying}
+              className={`w-full rounded-lg px-4 py-3 text-base font-bold mb-3 transition-colors ${
+                verified
+                  ? 'bg-green-100 text-green-700 cursor-default'
+                  : 'bg-green-600 text-white hover:bg-green-700 disabled:opacity-50'
+              }`}
+            >
+              {verified ? '✓ Fill Verified' : verifying ? 'Verifying...' : 'Verify Fill'}
+            </button>
+          )}
+
           <button
             onClick={handleReset}
             className="w-full rounded-lg bg-orange-600 px-4 py-3 text-base font-bold text-white hover:bg-orange-700"
