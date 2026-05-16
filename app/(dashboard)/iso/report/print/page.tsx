@@ -175,6 +175,37 @@ export default async function PrintReportPage({
     .from('iso_preplans').select('id, location_name, address, surveyed_date')
     .eq('department_id', department_id).order('location_name')
 
+  // ── Response times ────────────────────────────────────────────────────────
+  const { data: incidentsRaw } = await adminClient
+    .from('incidents')
+    .select('id, incident_number, incident_type, call_time, paged_at, first_on_scene_at, address, city')
+    .eq('department_id', department_id)
+    .gte('call_time', cutoffStr)
+    .not('call_time', 'is', null)
+    .not('first_on_scene_at', 'is', null)
+    .order('call_time', { ascending: false })
+
+  function diffMinutes(a: string, b: string): number {
+    return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000)
+  }
+
+  const responseRuns = (incidentsRaw ?? []).map(i => ({
+    incident_number: i.incident_number,
+    incident_type: i.incident_type,
+    call_time: i.call_time,
+    address: [i.address, i.city].filter(Boolean).join(', ') || '—',
+    dispatch_min: i.paged_at ? diffMinutes(i.call_time, i.paged_at) : null,
+    response_min: diffMinutes(i.call_time, i.first_on_scene_at),
+    travel_min: i.paged_at ? diffMinutes(i.paged_at, i.first_on_scene_at) : null,
+  }))
+
+  const avgResponseMin = responseRuns.length > 0
+    ? Math.round(responseRuns.reduce((s, r) => s + r.response_min, 0) / responseRuns.length * 10) / 10
+    : null
+  const avgDispatchMin = responseRuns.filter(r => r.dispatch_min !== null).length > 0
+    ? Math.round(responseRuns.filter(r => r.dispatch_min !== null).reduce((s, r) => s + r.dispatch_min!, 0) / responseRuns.filter(r => r.dispatch_min !== null).length * 10) / 10
+    : null
+
   // ── Mutual aid ────────────────────────────────────────────────────────────
   const { data: mutualAid } = await adminClient
     .from('iso_mutual_aid_agreements')
@@ -210,6 +241,7 @@ export default async function PrintReportPage({
       certSummary={certSummary}
       preplans={preplans ?? []}
       mutualAid={(mutualAid ?? []).filter(a => a.active)}
+      responseTimes={{ runs: responseRuns, avgResponseMin, avgDispatchMin, total: responseRuns.length }}
     />
   )
 }

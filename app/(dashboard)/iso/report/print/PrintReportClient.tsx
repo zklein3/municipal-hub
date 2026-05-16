@@ -15,6 +15,7 @@ type ActiveHose = { id: string; hose_identifier: string; hose_type: string; diam
 type Hydrant = { id: string; hydrant_number: string; location_description: string | null; out_of_service: boolean; tested: boolean; last_flow: { test_date: string; flow_gpm: number | null } | null }
 type MutualAidApp = { identifier: string; pump_gpm: number | null; tank_gal: number | null; hose_loads: { diameter_in: number; length_ft: number }[] }
 type MutualAid = { id: string; partner_department: string; agreement_type: string; expiration_date: string | null; apparatus: MutualAidApp[] }
+type ResponseRun = { incident_number: string | null; incident_type: string | null; call_time: string; address: string; dispatch_min: number | null; response_min: number; travel_min: number | null }
 
 function fmtDate(d: string | null) {
   if (!d) return '—'
@@ -32,7 +33,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 export default function PrintReportClient({
   deptName, months, generatedAt,
   apparatus, staffing, hoseInventory, activeHoses,
-  hydrants, training, certSummary, preplans, mutualAid,
+  hydrants, training, certSummary, preplans, mutualAid, responseTimes,
 }: {
   deptName: string
   months: number
@@ -46,6 +47,7 @@ export default function PrintReportClient({
   certSummary: { name: string; total: number; expired: number }[]
   preplans: { id: string; location_name: string; address: string | null; surveyed_date: string | null }[]
   mutualAid: MutualAid[]
+  responseTimes: { runs: ResponseRun[]; avgResponseMin: number | null; avgDispatchMin: number | null; total: number }
 }) {
   const router = useRouter()
   const [auditDate, setAuditDate] = useState('')
@@ -53,7 +55,8 @@ export default function PrintReportClient({
   const [selectedMonths, setSelectedMonths] = useState(months)
   const [sections, setSections] = useState({
     apparatus: true, staffing: true, training: true, certifications: true,
-    hoseInventory: true, hoseTesting: true, hydrants: true, preplans: true, mutualAid: true,
+    hoseInventory: true, hoseTesting: true, hydrants: true, preplans: true,
+    mutualAid: true, responseTimes: true,
   })
 
   function toggleSection(key: keyof typeof sections) {
@@ -128,7 +131,8 @@ export default function PrintReportClient({
                  key === 'hoseInventory' ? 'Hose Inventory' :
                  key === 'hoseTesting' ? 'Hose Testing' :
                  key === 'hydrants' ? 'Hydrants' :
-                 key === 'preplans' ? 'Pre-Fire Plans' : 'Mutual Aid'}
+                 key === 'preplans' ? 'Pre-Fire Plans' :
+                 key === 'mutualAid' ? 'Mutual Aid' : 'Response Times'}
               </button>
             ))}
           </div>
@@ -434,6 +438,59 @@ export default function PrintReportClient({
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Response Times */}
+        {sections.responseTimes && (
+          <div className="print:break-inside-avoid">
+            <SectionHeading>Response Times ({months}-Month Period)</SectionHeading>
+            {responseTimes.total === 0 ? (
+              <p className="text-xs text-zinc-400 mb-2">No incidents with complete response time data in this period.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="border border-zinc-200 rounded p-3 text-center">
+                    <p className="text-2xl font-bold">{responseTimes.total}</p>
+                    <p className="text-xs text-zinc-500">Incidents</p>
+                  </div>
+                  <div className="border border-zinc-200 rounded p-3 text-center">
+                    <p className="text-2xl font-bold">{responseTimes.avgResponseMin != null ? `${responseTimes.avgResponseMin} min` : '—'}</p>
+                    <p className="text-xs text-zinc-500">Avg Total Response</p>
+                  </div>
+                  <div className="border border-zinc-200 rounded p-3 text-center">
+                    <p className="text-2xl font-bold">{responseTimes.avgDispatchMin != null ? `${responseTimes.avgDispatchMin} min` : '—'}</p>
+                    <p className="text-xs text-zinc-500">Avg Dispatch Time</p>
+                  </div>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-zinc-100">
+                      <th className="px-2 py-1.5 font-semibold text-left">Incident #</th>
+                      <th className="px-2 py-1.5 font-semibold text-left">Date</th>
+                      <th className="px-2 py-1.5 font-semibold text-left">Type</th>
+                      <th className="px-2 py-1.5 font-semibold text-left">Location</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Dispatch</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Travel</th>
+                      <th className="px-2 py-1.5 font-semibold text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {responseTimes.runs.map((r, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-zinc-50'}>
+                        <td className="px-2 py-1.5 font-mono font-bold">{r.incident_number ?? '—'}</td>
+                        <td className="px-2 py-1.5">{new Date(r.call_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td className="px-2 py-1.5 capitalize">{r.incident_type ?? '—'}</td>
+                        <td className="px-2 py-1.5">{r.address}</td>
+                        <td className="px-2 py-1.5 text-right">{r.dispatch_min != null ? `${r.dispatch_min} min` : '—'}</td>
+                        <td className="px-2 py-1.5 text-right">{r.travel_min != null ? `${r.travel_min} min` : '—'}</td>
+                        <td className="px-2 py-1.5 text-right font-semibold">{r.response_min} min</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         )}
 
