@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { addFireSchoolBottle, updateFireSchoolBottle, reassignBottleId } from '@/app/actions/fire-school'
+import { addFireSchoolBottle, updateFireSchoolBottle, reassignBottleId, logFill } from '@/app/actions/fire-school'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import QRScanner from '@/components/QRScanner'
 
@@ -208,6 +208,8 @@ export default function FireSchoolBottlesClient({
   const [editLoading, setEditLoading]             = useState(false)
 
   const [deptSearch, setDeptSearch]               = useState('')
+  const [fillLoadingId, setFillLoadingId]         = useState<string | null>(null)
+  const [fillSuccessId, setFillSuccessId]         = useState<string | null>(null)
 
   const filteredBottles = deptSearch.trim()
     ? bottles.filter(b => {
@@ -225,6 +227,14 @@ export default function FireSchoolBottlesClient({
   const [reassignLoading, setReassignLoading]     = useState(false)
   const [reassignError, setReassignError]         = useState<string | null>(null)
   const [reassignScanOpen, setReassignScanOpen]   = useState(false)
+
+  async function handleLogFill(bottleId: string) {
+    setFillLoadingId(bottleId)
+    await logFill(bottleId)
+    setFillLoadingId(null)
+    setFillSuccessId(bottleId)
+    setTimeout(() => setFillSuccessId(null), 2000)
+  }
 
   function startEdit(bottle: Bottle) {
     setEditingBottleId(bottle.bottle_id)
@@ -475,6 +485,13 @@ export default function FireSchoolBottlesClient({
                 </div>
                 <div className="flex items-center gap-4 pt-2 border-t border-zinc-100">
                   <button
+                    onClick={() => handleLogFill(bottle.bottle_id)}
+                    disabled={!bottle.active || fillLoadingId === bottle.bottle_id}
+                    className={`text-sm font-semibold transition-colors disabled:opacity-40 ${fillSuccessId === bottle.bottle_id ? 'text-green-600' : 'text-green-700 hover:text-green-900'}`}
+                  >
+                    {fillSuccessId === bottle.bottle_id ? '✓ Logged' : fillLoadingId === bottle.bottle_id ? '...' : 'Log Fill'}
+                  </button>
+                  <button
                     onClick={() => isEditing ? cancelEdit() : startEdit(bottle)}
                     className="text-sm font-medium text-orange-600 hover:text-orange-800"
                   >
@@ -538,6 +555,13 @@ export default function FireSchoolBottlesClient({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleLogFill(bottle.bottle_id)}
+                          disabled={!bottle.active || fillLoadingId === bottle.bottle_id}
+                          className={`text-xs font-semibold transition-colors disabled:opacity-40 print:hidden ${fillSuccessId === bottle.bottle_id ? 'text-green-600' : 'text-green-700 hover:text-green-900'}`}
+                        >
+                          {fillSuccessId === bottle.bottle_id ? '✓ Logged' : fillLoadingId === bottle.bottle_id ? '...' : 'Log Fill'}
+                        </button>
                         <QrPrintLabel
                           code={bottle.bottle_id}
                           type="bottle"
