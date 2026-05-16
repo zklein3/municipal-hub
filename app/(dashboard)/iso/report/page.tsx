@@ -51,7 +51,7 @@ export default async function IsoReportPage() {
 
   const { data: isoSpecs } = await adminClient
     .from('apparatus_iso_specs')
-    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_load_notes')
+    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
     .eq('department_id', department_id)
 
   const isoSpecMap = Object.fromEntries((isoSpecs ?? []).map(s => [s.apparatus_id, s]))
@@ -95,6 +95,31 @@ export default async function IsoReportPage() {
     .eq('department_id', department_id)
     .order('created_at', { ascending: false })
     .limit(20)
+
+  // Hose inventory summary — total owned from hoses table, on-truck from hose_loads
+  type HoseLoad = { diameter_in: number; length_ft: number }
+  const ownedByDiameter = new Map<number, number>()
+  for (const h of hoses ?? []) {
+    if (h.diameter_in && h.length_ft) {
+      ownedByDiameter.set(h.diameter_in, (ownedByDiameter.get(h.diameter_in) ?? 0) + h.length_ft)
+    }
+  }
+  const onTruckByDiameter = new Map<number, number>()
+  for (const spec of isoSpecs ?? []) {
+    const loads = spec.hose_loads as HoseLoad[] | null
+    for (const load of loads ?? []) {
+      if (load.diameter_in && load.length_ft) {
+        onTruckByDiameter.set(load.diameter_in, (onTruckByDiameter.get(load.diameter_in) ?? 0) + load.length_ft)
+      }
+    }
+  }
+  const allDiameters = [...new Set([...ownedByDiameter.keys(), ...onTruckByDiameter.keys()])].sort((a, b) => a - b)
+  const hoseInventory = allDiameters.map(d => {
+    const owned = ownedByDiameter.get(d) ?? 0
+    const onTruck = onTruckByDiameter.get(d) ?? 0
+    const inStorage = owned - onTruck
+    return { diameter: d, owned, onTruck, inStorage, gap: inStorage < 0 }
+  })
 
   const isoApparatus = (allApparatus ?? []).filter(a => !a.exclude_from_iso)
   const excludedApparatus = (allApparatus ?? []).filter(a => a.exclude_from_iso)
@@ -189,6 +214,63 @@ export default async function IsoReportPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      {/* Hose Inventory Summary */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Hose Inventory Summary</h2>
+          <Link href="/iso/hoses" className="text-xs text-red-700 hover:underline font-medium">Manage →</Link>
+        </div>
+        {hoseInventory.length === 0 ? (
+          <p className="text-sm text-zinc-400">No hose data entered yet. <Link href="/iso/hoses" className="text-red-600 hover:underline">Add hoses →</Link></p>
+        ) : (
+          <>
+            {hoseInventory.some(h => h.gap) && (
+              <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                ⚠ Some diameters show more hose on trucks than in the inventory. Add hose records to close the gap.
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-zinc-400 border-b border-zinc-100">
+                    <th className="pb-2 font-medium pr-4">Diameter</th>
+                    <th className="pb-2 font-medium pr-4 text-right">Total Owned</th>
+                    <th className="pb-2 font-medium pr-4 text-right">On Trucks</th>
+                    <th className="pb-2 font-medium pr-4 text-right">In Storage</th>
+                    <th className="pb-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {hoseInventory.map(h => (
+                    <tr key={h.diameter}>
+                      <td className="py-2 pr-4 font-medium text-zinc-800">{h.diameter}&quot;</td>
+                      <td className="py-2 pr-4 text-zinc-600 text-right">{h.owned > 0 ? `${h.owned} ft` : '—'}</td>
+                      <td className="py-2 pr-4 text-zinc-600 text-right">{h.onTruck > 0 ? `${h.onTruck} ft` : '—'}</td>
+                      <td className="py-2 pr-4 text-right">
+                        {h.gap ? (
+                          <span className="text-amber-600 font-medium">—</span>
+                        ) : (
+                          <span className="text-zinc-600">{h.inStorage > 0 ? `${h.inStorage} ft` : '0 ft'}</span>
+                        )}
+                      </td>
+                      <td className="py-2">
+                        {h.gap ? (
+                          <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Inventory incomplete</span>
+                        ) : h.owned === 0 ? (
+                          <span className="rounded-full bg-zinc-100 text-zinc-400 px-2 py-0.5 font-medium">No inventory</span>
+                        ) : (
+                          <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 font-medium">OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
