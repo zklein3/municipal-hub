@@ -36,7 +36,7 @@
 - Public Inbox — burn permits + records tabs, pending count badge
 - Login show/hide password toggle
 - BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
-- Fire School — QR scanning, bottle tracking, fill log
+- Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
 
@@ -95,6 +95,12 @@ Items flagged during development — address during next cleanup pass:
 
 ### Fire School (public, no auth)
 - `fire_school_bottles`, `fire_school_fill_logs`
+- `fire_school_fill_logs.verified_at` — timestamptz, null = unverified
+- Realtime enabled on `fire_school_fill_logs` (supabase_realtime publication)
+- Anon SELECT policy on `fire_school_fill_logs` (required for realtime subscription)
+
+### Debug / Scratch
+- `qr_debug_scans` — raw QR scan strings for format analysis. RLS disabled. Not for production use.
 
 ### Key Fields Added Over Time
 - `apparatus.qr_code`, `apparatus.exclude_from_iso`
@@ -111,6 +117,16 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-05-16 — Fire School Realtime + Verification + QR Research
+- Fire school settings page (`/fire-school/settings`) — timezone selector saved to localStorage per device, drives fill log timestamp display
+- Fill log converted to Supabase Realtime — new fills appear instantly on tablet without reload, new rows flash green for 3s, pulsing Live badge in header
+- Fill verification added — `verified_at` column on `fire_school_fill_logs`; Verify button on tablet fill log row; Verify button on fill station success screen for single-operator use
+- Unverified fill prompt — scanning a bottle that has an unverified fill shows an amber banner with Verify/Skip before the normal fill flow
+- QR scanner improvements — native BarcodeDetector API (Chrome/Android) as primary with jsQR fallback; Take Photo button uses native camera for full-res still decode (solves dense/proprietary QR codes)
+- Salamander personnel accountability QR format decoded — binary payload with readable fields: LASTNAME*FIRSTNAME, dept name after ESC char, title, cert codes. Stored in `qr_debug_scans` for reference.
+- Accountability module architecture documented in REFERENCE.md — full standalone PAR system with temp cards, planned for future build
+- Kiosk/movement tracking concept documented in CLAUDE.md — deferred, build accountability first
 
 ### 2026-05-06 — Admin Hub + Unified Nav + ISO
 - Equipment hub (`/dept-admin/setup`): wizard → plain tabs (Stations/Apparatus/Compartments/Items/Assets), Personnel tab removed
