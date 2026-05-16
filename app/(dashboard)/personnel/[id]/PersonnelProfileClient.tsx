@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword } from '@/app/actions/personnel'
+import QRScanner from '@/components/QRScanner'
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -70,6 +71,9 @@ export default function PersonnelProfileClient({
   const [pwError, setPwError] = useState<string | null>(null)
   const [pwSuccess, setPwSuccess] = useState<string | null>(null)
   const [pwLoading, setPwLoading] = useState(false)
+
+  const [qrScannerOpen, setQrScannerOpen] = useState(false)
+  const [qrResult, setQrResult] = useState<string | null>(null)
 
   const canEditProfile = isMe || isOfficerOrAbove
 
@@ -263,6 +267,63 @@ export default function PersonnelProfileClient({
           </div>
         )}
       </div>
+
+      {/* ── QR Code Scanner ──────────────────────────────────────────────── */}
+      {isMe && (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-6 mb-6">
+          <h2 className="text-base font-semibold text-zinc-900 mb-1">QR Code Scanner</h2>
+          <p className="text-xs text-zinc-400 mb-4">Scan any QR code to inspect the raw data.</p>
+
+          {!qrScannerOpen && (
+            <button
+              type="button"
+              onClick={() => setQrScannerOpen(true)}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              Scan QR Code
+            </button>
+          )}
+
+          {qrScannerOpen && (
+            <QRScanner
+              onScan={raw => {
+                setQrResult(raw)
+                setQrScannerOpen(false)
+              }}
+              onClose={() => setQrScannerOpen(false)}
+              hint="Point the camera at any QR code"
+            />
+          )}
+
+          {qrResult !== null && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Raw Result</span>
+                <button
+                  type="button"
+                  onClick={() => setQrResult(null)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  Clear
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={qrResult}
+                rows={6}
+                className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 resize-y focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setQrScannerOpen(true)}
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+              >
+                Scan Another
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Change Password — own profile only ───────────────────────────── */}
       {isMe && (

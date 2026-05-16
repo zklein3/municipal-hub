@@ -20,6 +20,9 @@ export default function FireSchoolLayout({ children }: { children: React.ReactNo
             <Link href="/fire-school/fill-log" className="rounded-lg px-3 py-1.5 text-sm font-medium text-orange-100 hover:bg-orange-700 hover:text-white transition-colors">
               Log
             </Link>
+            <Link href="/fire-school/settings" className="rounded-lg px-3 py-1.5 text-sm font-medium text-orange-100 hover:bg-orange-700 hover:text-white transition-colors">
+              ⚙
+            </Link>
           </nav>
         </div>
       </header>
