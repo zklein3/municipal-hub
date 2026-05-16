@@ -554,7 +554,7 @@ export default function FireSchoolBottlesClient({
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center justify-start gap-x-3 gap-y-1.5">
+                      <div className="flex flex-col items-start gap-1">
                         <button
                           onClick={() => handleLogFill(bottle.bottle_id)}
                           disabled={!bottle.active || fillLoadingId === bottle.bottle_id}
