@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { TZ_KEY, TZ_DEFAULT } from '../settings/page'
 
 interface FillLog {
@@ -11,12 +12,42 @@ interface FillLog {
   notes: string | null
 }
 
-export default function FillLogClient({ logs }: { logs: FillLog[] }) {
+export default function FillLogClient({ logs: initialLogs }: { logs: FillLog[] }) {
+  const [logs, setLogs] = useState<FillLog[]>(initialLogs)
   const [timezone, setTimezone] = useState(TZ_DEFAULT)
+  const [newIds, setNewIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const stored = localStorage.getItem(TZ_KEY)
     if (stored) setTimezone(stored)
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('fill_log_live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'fire_school_fill_logs' },
+        payload => {
+          const incoming = payload.new as FillLog
+          setLogs(prev => {
+            if (prev.some(l => l.id === incoming.id)) return prev
+            return [incoming, ...prev]
+          })
+          setNewIds(prev => new Set(prev).add(incoming.id))
+          setTimeout(() => {
+            setNewIds(prev => {
+              const next = new Set(prev)
+              next.delete(incoming.id)
+              return next
+            })
+          }, 3000)
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   return (
@@ -35,7 +66,12 @@ export default function FillLogClient({ logs }: { logs: FillLog[] }) {
           </thead>
           <tbody className="divide-y divide-zinc-100">
             {logs.map(log => (
-              <tr key={log.id} className="hover:bg-zinc-50">
+              <tr
+                key={log.id}
+                className={`transition-colors duration-1000 ${
+                  newIds.has(log.id) ? 'bg-green-50' : 'hover:bg-zinc-50'
+                }`}
+              >
                 <td className="px-4 py-3 font-mono font-bold text-zinc-900">{log.bottle_id}</td>
                 <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">
                   {new Date(log.filled_at).toLocaleString('en-US', {
