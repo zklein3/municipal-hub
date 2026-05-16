@@ -1,0 +1,215 @@
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+import PrintReportClient from './PrintReportClient'
+
+export default async function PrintReportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ months?: string }>
+}) {
+  const { months: monthsParam } = await searchParams
+  const months = Math.min(Math.max(parseInt(monthsParam ?? '12') || 12, 6), 36)
+
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) redirect('/login')
+
+  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept) redirect('/dashboard')
+
+  const { data: deptData } = await adminClient.from('departments').select('name, module_iso').eq('id', myDept.department_id).single()
+  if (!deptData?.module_iso) redirect('/dashboard')
+
+  const department_id = myDept.department_id
+  const deptName = deptData.name ?? 'Fire Department'
+
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - months)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+  const today = new Date()
+
+  // ── Apparatus ──────────────────────────────────────────────────────────────
+  const { data: allApparatus } = await adminClient
+    .from('apparatus').select('id, unit_number, apparatus_name, make, model, model_year, exclude_from_iso')
+    .eq('department_id', department_id).eq('active', true).order('unit_number')
+
+  const { data: isoSpecs } = await adminClient
+    .from('apparatus_iso_specs')
+    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
+    .eq('department_id', department_id)
+
+  const { data: pumpTestsRaw } = await adminClient
+    .from('apparatus_pump_tests').select('apparatus_id, test_date, passed')
+    .eq('department_id', department_id).order('test_date', { ascending: false })
+
+  const isoSpecMap = Object.fromEntries((isoSpecs ?? []).map(s => [s.apparatus_id, s]))
+  const pumpTestMap: Record<string, { test_date: string; passed: boolean }> = {}
+  for (const t of pumpTestsRaw ?? []) {
+    if (!pumpTestMap[t.apparatus_id]) pumpTestMap[t.apparatus_id] = { test_date: t.test_date, passed: t.passed }
+  }
+
+  const isoApparatus = (allApparatus ?? []).filter(a => !a.exclude_from_iso).map(a => ({
+    id: a.id,
+    unit_number: a.unit_number,
+    apparatus_name: a.apparatus_name,
+    make: a.make,
+    model: a.model,
+    model_year: a.model_year,
+    spec: isoSpecMap[a.id] ?? null,
+    pumpTest: pumpTestMap[a.id] ?? null,
+  }))
+
+  // ── Hoses ─────────────────────────────────────────────────────────────────
+  const { data: hoses } = await adminClient
+    .from('hoses').select('id, hose_identifier, hose_type, diameter_in, length_ft, status')
+    .eq('department_id', department_id).neq('status', 'retired')
+
+  const { data: recentHoseTests } = await adminClient
+    .from('hose_tests').select('hose_id, test_date, passed')
+    .eq('department_id', department_id).gte('test_date', cutoffStr)
+    .order('test_date', { ascending: false })
+
+  const testedHoseIds = new Set((recentHoseTests ?? []).map(t => t.hose_id))
+  const failedHoseIds = new Set((recentHoseTests ?? []).filter(t => !t.passed).map(t => t.hose_id))
+  const activeHoses = (hoses ?? []).filter(h => h.status === 'in_service')
+
+  // Hose inventory summary
+  type HoseLoad = { diameter_in: number; length_ft: number }
+  const ownedByDiam = new Map<number, number>()
+  for (const h of hoses ?? []) {
+    if (h.diameter_in && h.length_ft) ownedByDiam.set(h.diameter_in, (ownedByDiam.get(h.diameter_in) ?? 0) + h.length_ft)
+  }
+  const onTruckByDiam = new Map<number, number>()
+  for (const spec of isoSpecs ?? []) {
+    for (const load of (spec.hose_loads as HoseLoad[] | null) ?? []) {
+      if (load.diameter_in && load.length_ft) onTruckByDiam.set(load.diameter_in, (onTruckByDiam.get(load.diameter_in) ?? 0) + load.length_ft)
+    }
+  }
+  const allDiameters = [...new Set([...ownedByDiam.keys(), ...onTruckByDiam.keys()])].sort((a, b) => a - b)
+  const hoseInventory = allDiameters.map(d => {
+    const owned = ownedByDiam.get(d) ?? 0
+    const onTruck = onTruckByDiam.get(d) ?? 0
+    return { diameter: d, owned, onTruck, inStorage: owned - onTruck, gap: owned - onTruck < 0 }
+  })
+
+  // ── Hydrants ──────────────────────────────────────────────────────────────
+  const { data: hydrants } = await adminClient
+    .from('hydrants').select('id, hydrant_number, location_description, out_of_service')
+    .eq('department_id', department_id)
+
+  const { data: recentFlowTests } = await adminClient
+    .from('hydrant_flow_tests').select('hydrant_id, test_date, flow_gpm')
+    .eq('department_id', department_id).gte('test_date', cutoffStr)
+    .order('test_date', { ascending: false })
+
+  const testedHydrantIds = new Set((recentFlowTests ?? []).map(t => t.hydrant_id))
+  const latestFlowMap: Record<string, { test_date: string; flow_gpm: number | null }> = {}
+  for (const t of recentFlowTests ?? []) {
+    if (!latestFlowMap[t.hydrant_id]) latestFlowMap[t.hydrant_id] = { test_date: t.test_date, flow_gpm: t.flow_gpm }
+  }
+
+  // ── Staffing ──────────────────────────────────────────────────────────────
+  const { data: deptPersonnel } = await adminClient
+    .from('department_personnel').select('system_role')
+    .eq('department_id', department_id).eq('active', true)
+
+  const staffing = {
+    total: (deptPersonnel ?? []).length,
+    admin: (deptPersonnel ?? []).filter(p => p.system_role === 'admin').length,
+    officer: (deptPersonnel ?? []).filter(p => p.system_role === 'officer').length,
+    member: (deptPersonnel ?? []).filter(p => p.system_role === 'member').length,
+  }
+
+  // ── Training hours ────────────────────────────────────────────────────────
+  const { data: trainingEvents } = await adminClient
+    .from('training_events').select('id, topic, event_date, hours')
+    .eq('department_id', department_id).gte('event_date', cutoffStr)
+    .order('event_date', { ascending: false })
+
+  const trainingEventIds = (trainingEvents ?? []).map(e => e.id)
+  const { data: trainingAttendance } = trainingEventIds.length > 0
+    ? await adminClient.from('training_event_attendance')
+        .select('event_id, personnel_id').in('event_id', trainingEventIds).eq('status', 'verified')
+    : { data: [] as { event_id: string; personnel_id: string }[] }
+
+  const attendeeIds = [...new Set((trainingAttendance ?? []).map(a => a.personnel_id))]
+  const { data: attendeePersonnel } = attendeeIds.length > 0
+    ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', attendeeIds)
+    : { data: [] as { id: string; first_name: string; last_name: string }[] }
+
+  const eventHoursMap = Object.fromEntries((trainingEvents ?? []).map(e => [e.id, parseFloat(e.hours) || 0]))
+  const personnelNameMap = Object.fromEntries((attendeePersonnel ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
+  const hoursByPersonnel = new Map<string, number>()
+  for (const a of trainingAttendance ?? []) {
+    hoursByPersonnel.set(a.personnel_id, (hoursByPersonnel.get(a.personnel_id) ?? 0) + (eventHoursMap[a.event_id] ?? 0))
+  }
+  const trainingRoster = [...hoursByPersonnel.entries()]
+    .map(([id, hours]) => ({ name: personnelNameMap[id] ?? '—', hours }))
+    .sort((a, b) => b.hours - a.hours)
+  const totalTrainingHours = (trainingEvents ?? []).reduce((s, e) => s + (parseFloat(e.hours) || 0), 0)
+
+  // ── Certifications ────────────────────────────────────────────────────────
+  const { data: certsRaw } = await adminClient
+    .from('member_certifications').select('cert_name, expiration_date')
+    .eq('department_id', department_id).eq('active', true)
+
+  const certMap = new Map<string, { total: number; expired: number }>()
+  for (const c of certsRaw ?? []) {
+    const name = c.cert_name ?? 'Unknown'
+    const isExpired = c.expiration_date ? new Date(c.expiration_date + 'T00:00:00') < today : false
+    const e = certMap.get(name) ?? { total: 0, expired: 0 }
+    certMap.set(name, { total: e.total + 1, expired: e.expired + (isExpired ? 1 : 0) })
+  }
+  const certSummary = [...certMap.entries()].map(([name, s]) => ({ name, ...s })).sort((a, b) => b.total - a.total)
+
+  // ── Pre-plans ─────────────────────────────────────────────────────────────
+  const { data: preplans } = await adminClient
+    .from('iso_preplans').select('id, location_name, address, surveyed_date')
+    .eq('department_id', department_id).order('location_name')
+
+  // ── Mutual aid ────────────────────────────────────────────────────────────
+  const { data: mutualAid } = await adminClient
+    .from('iso_mutual_aid_agreements')
+    .select('id, partner_department, agreement_type, effective_date, expiration_date, active, apparatus')
+    .eq('department_id', department_id).order('partner_department')
+
+  return (
+    <PrintReportClient
+      deptName={deptName}
+      months={months}
+      generatedAt={new Date().toISOString()}
+      apparatus={isoApparatus}
+      staffing={staffing}
+      hoseInventory={hoseInventory}
+      activeHoses={activeHoses.map(h => ({
+        id: h.id,
+        hose_identifier: h.hose_identifier,
+        hose_type: h.hose_type,
+        diameter_in: h.diameter_in,
+        length_ft: h.length_ft,
+        tested: testedHoseIds.has(h.id),
+        failed: failedHoseIds.has(h.id),
+      }))}
+      hydrants={(hydrants ?? []).map(h => ({
+        id: h.id,
+        hydrant_number: h.hydrant_number,
+        location_description: h.location_description,
+        out_of_service: h.out_of_service,
+        tested: testedHydrantIds.has(h.id),
+        last_flow: latestFlowMap[h.id] ?? null,
+      }))}
+      training={{ events: (trainingEvents ?? []).length, hours: totalTrainingHours, roster: trainingRoster }}
+      certSummary={certSummary}
+      preplans={preplans ?? []}
+      mutualAid={(mutualAid ?? []).filter(a => a.active)}
+    />
+  )
+}
