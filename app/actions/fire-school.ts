@@ -113,6 +113,39 @@ export async function addFireSchoolBottle(formData: FormData) {
   return { success: true }
 }
 
+// ─── Reassign bottle ID ───────────────────────────────────────────────────────
+export async function reassignBottleId(currentId: string, newId: string) {
+  const adminClient = createAdminClient()
+  const oldId = currentId.toUpperCase().trim()
+  const nextId = newId.toUpperCase().trim()
+
+  if (!nextId) return { error: 'New ID is required.' }
+  if (oldId === nextId) return { error: 'New ID must be different from the current ID.' }
+
+  const { data: existing } = await adminClient
+    .from('fire_school_bottles')
+    .select('id')
+    .eq('bottle_id', nextId)
+  if (existing?.[0]) return { error: `Bottle ${nextId} already exists in the system.` }
+
+  const { error: bottleErr } = await adminClient
+    .from('fire_school_bottles')
+    .update({ bottle_id: nextId, updated_at: new Date().toISOString() })
+    .eq('bottle_id', oldId)
+  if (bottleErr) return { error: bottleErr.message }
+
+  // Update all fill logs so history carries over
+  const { error: logsErr } = await adminClient
+    .from('fire_school_fill_logs')
+    .update({ bottle_id: nextId })
+    .eq('bottle_id', oldId)
+  if (logsErr) return { error: logsErr.message }
+
+  revalidatePath('/fire-school/bottles')
+  revalidatePath('/fire-school/fill-log')
+  return { success: true }
+}
+
 // ─── Update bottle ────────────────────────────────────────────────────────────
 export async function updateFireSchoolBottle(bottleId: string, formData: FormData) {
   const adminClient = createAdminClient()

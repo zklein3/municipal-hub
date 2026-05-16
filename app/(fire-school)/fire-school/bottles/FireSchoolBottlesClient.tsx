@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { addFireSchoolBottle, updateFireSchoolBottle } from '@/app/actions/fire-school'
+import { addFireSchoolBottle, updateFireSchoolBottle, reassignBottleId } from '@/app/actions/fire-school'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import QRScanner from '@/components/QRScanner'
 
@@ -206,6 +206,12 @@ export default function FireSchoolBottlesClient({
   const [editSelectedType, setEditSelectedType]   = useState('composite_15')
   const [editError, setEditError]                 = useState<string | null>(null)
   const [editLoading, setEditLoading]             = useState(false)
+
+  const [reassignFromId, setReassignFromId]       = useState<string | null>(null)
+  const [reassignNewId, setReassignNewId]         = useState('')
+  const [reassignLoading, setReassignLoading]     = useState(false)
+  const [reassignError, setReassignError]         = useState<string | null>(null)
+  const [reassignScanOpen, setReassignScanOpen]   = useState(false)
 
   function startEdit(bottle: Bottle) {
     setEditingBottleId(bottle.bottle_id)
@@ -447,6 +453,12 @@ export default function FireSchoolBottlesClient({
                   >
                     {isEditing ? 'Cancel Edit' : 'Edit'}
                   </button>
+                  <button
+                    onClick={() => { setReassignFromId(bottle.bottle_id); setReassignNewId(''); setReassignError(null) }}
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    Reassign ID
+                  </button>
                   <QrPrintLabel
                     code={bottle.bottle_id}
                     type="bottle"
@@ -528,6 +540,74 @@ export default function FireSchoolBottlesClient({
           </tbody>
         </table>
       </div>
+
+      {/* Reassign ID Modal */}
+      {reassignFromId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Reassign Bottle ID</h2>
+            <p className="text-sm text-zinc-500 mb-4">
+              Moving all data from <span className="font-mono font-bold text-zinc-800">{reassignFromId}</span> to a new ID. Fill history transfers automatically.
+            </p>
+            {reassignError && (
+              <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{reassignError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-zinc-600 mb-1">New Bottle ID</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={reassignNewId}
+                  onChange={e => setReassignNewId(e.target.value.toUpperCase())}
+                  placeholder="e.g. 44"
+                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setReassignScanOpen(true)}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+                >
+                  📷
+                </button>
+              </div>
+              {reassignScanOpen && (
+                <div className="mt-3">
+                  <QRScanner
+                    onScan={raw => { setReassignNewId(extractBottleId(raw)); setReassignScanOpen(false) }}
+                    onClose={() => setReassignScanOpen(false)}
+                    hint="Scan the new QR sticker"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (!reassignNewId.trim()) { setReassignError('New ID is required.'); return }
+                  setReassignLoading(true)
+                  setReassignError(null)
+                  const result = await reassignBottleId(reassignFromId, reassignNewId)
+                  if (result?.error) { setReassignError(result.error); setReassignLoading(false); return }
+                  setReassignFromId(null)
+                  setReassignNewId('')
+                  setReassignLoading(false)
+                  window.location.reload()
+                }}
+                disabled={reassignLoading || !reassignNewId.trim()}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {reassignLoading ? 'Reassigning...' : `Reassign to ${reassignNewId || '…'}`}
+              </button>
+              <button
+                onClick={() => { setReassignFromId(null); setReassignNewId(''); setReassignError(null) }}
+                className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
