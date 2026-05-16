@@ -237,3 +237,34 @@ Action: `app/actions/parse-run-sheet.ts` | Model: Claude Haiku | Key: `ANTHROPIC
 ---
 
 ## NERIS Compliance Reference → see `NERIS.md`
+
+---
+
+## Salamander QR Card Integration — Architecture Notes
+
+Salamander personnel accountability cards encode binary data with readable text fields embedded. Format confirmed via live scan (2026-05-16).
+
+**Confirmed parseable fields:**
+- Name: `LASTNAME*FIRSTNAME` pattern (separated by `*`, with a control char between `*` and first name)
+- Department: text following ESC character (`\x1B`)
+- Title/Role: text near end of payload after cert block
+- Certifications: uppercase codes (ACLS, FFII, EMT_P, etc.) separated by control characters
+
+**Debug table:** `qr_debug_scans` — raw scan strings saved here for analysis. RLS disabled (debug only).
+
+**Parser to build:** `lib/salamander.ts` → `parseSalamanderQR(raw: string)` returns `{ firstName, lastName, department, title, certs[] } | null`
+
+### Use Case A — Incident Accountability (PAR)
+Scan cards at incident scenes to track who is on scene, by assignment.
+- New `incident_accountability` table: `incident_id`, `personnel_id` (nullable — mutual aid may not be in system), `raw_name`, `raw_dept`, `assignment`, `checked_in_at`, `checked_out_at`, `status` (on_scene | staged | released)
+- Tab on incident detail page: "Accountability" — scan or manual entry, live roster, PAR timestamp button
+- Must handle mutual aid personnel (not in personnel table) — store raw name/dept from QR
+- PAR check logs a timestamped snapshot of everyone currently on scene
+
+### Use Case B — Kiosk Login / Movement Tracking (future)
+Dedicated `/kiosk` page on a shared station tablet. Scan card → identifies who is at the station. Three options discussed:
+- **Option A (preferred for stations):** QR identifies person → short-lived device session token in DB → no full Supabase auth needed
+- **Option B:** Device pre-logged in as kiosk account → QR scan logs activity for that person
+- **Option C:** QR finds email in personnel → sends Supabase magic link to phone
+
+Decision deferred. Build incident accountability first, then revisit kiosk/movement.
