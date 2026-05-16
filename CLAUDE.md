@@ -167,14 +167,19 @@ Current: manual entry by user (Phase 1, built 2026-05-16).
 
 **Key files when building:** `app/(dashboard)/iso/mutual-aid/`, `app/actions/iso.ts` → mutual aid actions, `iso_mutual_aid_agreements` table.
 
-### 6. Permit Approval Email (blocked)
+### 6. ISO — Aerial Testing (deferred — build when dept has aerial apparatus)
+Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload per apparatus.
+Only relevant for depts with aerial apparatus — skip until needed.
+Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, apparatus detail page.
+
+### 7. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
-### 5. Officer Sub-Menu
+### 8. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 7. Module / Feature Flag System
+### 9. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---

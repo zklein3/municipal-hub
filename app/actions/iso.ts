@@ -184,6 +184,69 @@ export async function toggleMutualAidAgreement(id: string, active: boolean) {
   return { success: true }
 }
 
+// ─── Pre-Plans ───────────────────────────────────────────────────────────────
+
+export async function savePreplan(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const id = (formData.get('id') as string) || null
+  const location_name = (formData.get('location_name') as string)?.trim()
+  const address = (formData.get('address') as string)?.trim() || null
+  const surveyed_date = (formData.get('surveyed_date') as string) || null
+  const notes = (formData.get('notes') as string)?.trim() || null
+  const file = formData.get('document') as File | null
+
+  if (!location_name) return { error: 'Location name is required.' }
+
+  const adminClient = createAdminClient()
+  let document_path: string | null = null
+
+  if (file && file.size > 0) {
+    const ext = file.name.split('.').pop() ?? 'pdf'
+    const path = `preplans/${ctx.department_id}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await adminClient.storage
+      .from('documents')
+      .upload(path, file, { contentType: file.type || 'application/pdf' })
+    if (uploadErr) { await logError(uploadErr.message, '/iso/preplans'); return { error: 'Document upload failed.' } }
+    document_path = path
+  }
+
+  if (id) {
+    const update: Record<string, unknown> = { location_name, address, surveyed_date, notes, updated_at: new Date().toISOString() }
+    if (document_path) update.document_path = document_path
+    const { error: dbErr } = await adminClient.from('iso_preplans').update(update).eq('id', id).eq('department_id', ctx.department_id)
+    if (dbErr) { await logError(dbErr.message, '/iso/preplans'); return { error: dbErr.message } }
+  } else {
+    const { error: dbErr } = await adminClient.from('iso_preplans').insert({
+      department_id: ctx.department_id, location_name, address, surveyed_date, notes,
+      document_path, created_by: ctx.me.id,
+    })
+    if (dbErr) { await logError(dbErr.message, '/iso/preplans'); return { error: dbErr.message } }
+  }
+
+  revalidatePath('/iso/preplans')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
+export async function deletePreplan(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('iso_preplans').delete().eq('id', id).eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, '/iso/preplans'); return { error: dbErr.message } }
+  revalidatePath('/iso/preplans')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
+export async function getPreplanDocUrl(document_path: string): Promise<string | null> {
+  const adminClient = createAdminClient()
+  const { data } = await adminClient.storage.from('documents').createSignedUrl(document_path, 3600)
+  return data?.signedUrl ?? null
+}
+
 // ─── Pump Tests ──────────────────────────────────────────────────────────────
 
 export async function savePumpTest(formData: FormData) {

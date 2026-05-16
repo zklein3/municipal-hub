@@ -101,6 +101,27 @@ export default async function IsoReportPage() {
 
   const testedHydrantIds = new Set((recentFlowTests ?? []).map(t => t.hydrant_id))
 
+  // Staffing
+  const { data: deptPersonnel } = await adminClient
+    .from('department_personnel')
+    .select('personnel_id, system_role')
+    .eq('department_id', department_id)
+    .eq('active', true)
+
+  const staffingTotal = (deptPersonnel ?? []).length
+  const staffingByRole = {
+    admin: (deptPersonnel ?? []).filter(p => p.system_role === 'admin').length,
+    officer: (deptPersonnel ?? []).filter(p => p.system_role === 'officer').length,
+    member: (deptPersonnel ?? []).filter(p => p.system_role === 'member').length,
+  }
+
+  // Pre-plans
+  const { data: preplans } = await adminClient
+    .from('iso_preplans')
+    .select('id, location_name, address, surveyed_date')
+    .eq('department_id', department_id)
+    .order('location_name')
+
   // Mutual aid agreements
   const { data: mutualAidAgreements } = await adminClient
     .from('iso_mutual_aid_agreements')
@@ -198,12 +219,11 @@ export default async function IsoReportPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-8">
         <StatCard label="Apparatus Specs" value={`${specsComplete}/${totalApparatus}`} sub="ISO specs entered" />
-        <StatCard label="Hose Test Rate" value={hosesTestedPct != null ? `${hosesTestedPct}%` : '—'} sub="tested past 12 months" />
-        <StatCard label="Hydrant Flow Rate" value={hydrantsTestedPct != null ? `${hydrantsTestedPct}%` : '—'} sub="tested past 12 months" />
+        <StatCard label="Active Personnel" value={staffingTotal} sub={`${staffingByRole.officer} officers · ${staffingByRole.member} members`} />
         <StatCard label="Training Hours" value={totalTrainingHours} sub={`${totalTrainingEvents} events · past 12 months`} />
-        <StatCard label="Mutual Aid Agreements" value={(mutualAidAgreements ?? []).filter(a => a.active).length} sub="active agreements" />
+        <StatCard label="Mutual Aid" value={(mutualAidAgreements ?? []).filter(a => a.active).length} sub="active agreements" />
       </div>
 
       {/* Apparatus specs table */}
@@ -274,6 +294,63 @@ export default async function IsoReportPage() {
                         Excluded
                       </span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Staffing */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Personnel &amp; Staffing</h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+            <p className="text-2xl font-bold text-zinc-900">{staffingTotal}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Total Active</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+            <p className="text-2xl font-bold text-zinc-900">{staffingByRole.admin}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Admins</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+            <p className="text-2xl font-bold text-zinc-900">{staffingByRole.officer}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Officers</p>
+          </div>
+          <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3 text-center">
+            <p className="text-2xl font-bold text-zinc-900">{staffingByRole.member}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Members</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Pre-Fire Plans */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Pre-Fire Plans</h2>
+          <Link href="/iso/preplans" className="text-xs text-red-700 hover:underline font-medium">Manage →</Link>
+        </div>
+        {(preplans ?? []).length === 0 ? (
+          <p className="text-sm text-zinc-400">No pre-fire plans on file. <Link href="/iso/preplans" className="text-red-600 hover:underline">Add plans →</Link></p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-zinc-400 border-b border-zinc-100">
+                  <th className="pb-2 font-medium pr-4">Location</th>
+                  <th className="pb-2 font-medium pr-4">Address</th>
+                  <th className="pb-2 font-medium">Date Surveyed</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50">
+                {(preplans ?? []).map(p => (
+                  <tr key={p.id}>
+                    <td className="py-2 pr-4 font-medium text-zinc-800">{p.location_name}</td>
+                    <td className="py-2 pr-4 text-zinc-500">{p.address ?? '—'}</td>
+                    <td className="py-2 text-zinc-500">{p.surveyed_date ? formatDate(p.surveyed_date) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
