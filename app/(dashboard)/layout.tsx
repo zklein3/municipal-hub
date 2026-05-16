@@ -112,6 +112,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...(moduleIso ? [
       { href: '/iso/hoses', label: 'Hose Inventory' },
       { href: '/iso/hydrants', label: 'Hydrants' },
+      { href: '/iso/mutual-aid', label: 'Mutual Aid' },
       { href: '/iso/report', label: 'ISO Report' },
     ] : []),
     ...(publicSiteEnabled ? [{ href: '/dept-admin/public-inbox', label: 'Public Inbox' }] : []),

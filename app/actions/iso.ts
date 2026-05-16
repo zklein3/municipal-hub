@@ -96,6 +96,94 @@ export async function submitHoseTestSession(
   return { success: true, count: rows.length }
 }
 
+// ─── Mutual Aid Agreements ───────────────────────────────────────────────────
+
+type MAAApparatus = {
+  identifier: string
+  pump_gpm: number | null
+  tank_gal: number | null
+  hose_loads: { diameter_in: number; length_ft: number }[]
+}
+
+export async function createMutualAidAgreement(
+  fields: {
+    partner_department: string
+    agreement_type: string
+    effective_date: string | null
+    expiration_date: string | null
+    notes: string | null
+    apparatus: MAAApparatus[]
+  }
+) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('iso_mutual_aid_agreements').insert({
+    department_id: ctx.department_id,
+    partner_department: fields.partner_department,
+    agreement_type: fields.agreement_type,
+    effective_date: fields.effective_date || null,
+    expiration_date: fields.expiration_date || null,
+    notes: fields.notes || null,
+    apparatus: fields.apparatus,
+    created_by: ctx.me.id,
+  })
+  if (dbErr) { await logError(dbErr.message, '/iso/mutual-aid'); return { error: dbErr.message } }
+  revalidatePath('/iso/mutual-aid')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
+export async function updateMutualAidAgreement(
+  id: string,
+  fields: {
+    partner_department: string
+    agreement_type: string
+    effective_date: string | null
+    expiration_date: string | null
+    notes: string | null
+    apparatus: MAAApparatus[]
+  }
+) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('iso_mutual_aid_agreements')
+    .update({
+      partner_department: fields.partner_department,
+      agreement_type: fields.agreement_type,
+      effective_date: fields.effective_date || null,
+      expiration_date: fields.expiration_date || null,
+      notes: fields.notes || null,
+      apparatus: fields.apparatus,
+    })
+    .eq('id', id)
+    .eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, '/iso/mutual-aid'); return { error: dbErr.message } }
+  revalidatePath('/iso/mutual-aid')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
+export async function toggleMutualAidAgreement(id: string, active: boolean) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('iso_mutual_aid_agreements')
+    .update({ active })
+    .eq('id', id)
+    .eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, '/iso/mutual-aid'); return { error: dbErr.message } }
+  revalidatePath('/iso/mutual-aid')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
 // ─── Pump Tests ──────────────────────────────────────────────────────────────
 
 export async function savePumpTest(formData: FormData) {

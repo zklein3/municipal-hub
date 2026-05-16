@@ -101,6 +101,13 @@ export default async function IsoReportPage() {
 
   const testedHydrantIds = new Set((recentFlowTests ?? []).map(t => t.hydrant_id))
 
+  // Mutual aid agreements
+  const { data: mutualAidAgreements } = await adminClient
+    .from('iso_mutual_aid_agreements')
+    .select('id, partner_department, agreement_type, effective_date, expiration_date, active, apparatus')
+    .eq('department_id', department_id)
+    .order('partner_department')
+
   // Training hours (last 12 months)
   const { data: trainingEvents } = await adminClient
     .from('training_events')
@@ -199,11 +206,12 @@ export default async function IsoReportPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 mb-8">
         <StatCard label="Apparatus Specs" value={`${specsComplete}/${totalApparatus}`} sub="ISO specs entered" />
         <StatCard label="Hose Test Rate" value={hosesTestedPct != null ? `${hosesTestedPct}%` : '—'} sub="tested past 12 months" />
         <StatCard label="Hydrant Flow Rate" value={hydrantsTestedPct != null ? `${hydrantsTestedPct}%` : '—'} sub="tested past 12 months" />
         <StatCard label="Training Hours" value={totalTrainingHours} sub={`${totalTrainingEvents} events · past 12 months`} />
+        <StatCard label="Mutual Aid Agreements" value={(mutualAidAgreements ?? []).filter(a => a.active).length} sub="active agreements" />
       </div>
 
       {/* Apparatus specs table */}
@@ -446,26 +454,80 @@ export default async function IsoReportPage() {
         )}
       </section>
 
-      {/* Mutual aid log */}
-      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-8">
-        <h2 className="text-sm font-semibold text-zinc-900 mb-4">Mutual Aid Log</h2>
-        {(mutualAidRaw ?? []).length === 0 ? (
-          <p className="text-sm text-zinc-400">No mutual aid entries. Log entries from the Incidents page.</p>
+      {/* Mutual Aid Agreements */}
+      <section className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid Agreements</h2>
+          <Link href="/iso/mutual-aid" className="text-xs text-red-700 hover:underline font-medium">Manage →</Link>
+        </div>
+        {(mutualAidAgreements ?? []).filter(a => a.active).length === 0 ? (
+          <p className="text-sm text-zinc-400">No mutual aid agreements on file. <Link href="/iso/mutual-aid" className="text-red-600 hover:underline">Add agreements →</Link></p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {(mutualAidRaw ?? []).map(m => (
-              <div key={m.id} className="flex items-start gap-3 text-xs py-1.5 border-b border-zinc-50 last:border-0">
-                <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                  {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
-                </span>
-                <div className="min-w-0">
-                  <span className="font-medium text-zinc-800">{m.external_department_name}</span>
-                  {m.apparatus_description && <span className="text-zinc-400 ml-2">· {m.apparatus_description}</span>}
-                  {m.personnel_count != null && <span className="text-zinc-400 ml-2">· {m.personnel_count} personnel</span>}
-                  <p className="text-zinc-400 mt-0.5">{formatDate(m.created_at.slice(0, 10))}</p>
+          <div className="flex flex-col gap-5">
+            {(mutualAidAgreements ?? []).filter(a => a.active).map(a => {
+              type MAAApp = { identifier: string; pump_gpm: number | null; tank_gal: number | null; hose_loads: { diameter_in: number; length_ft: number }[] }
+              const apparatus = (a.apparatus ?? []) as MAAApp[]
+              const expiring = a.expiration_date && new Date(a.expiration_date + 'T00:00:00') <= new Date(new Date().setDate(new Date().getDate() + 90))
+              return (
+                <div key={a.id}>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <p className="text-sm font-semibold text-zinc-900">{a.partner_department}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${a.agreement_type === 'automatic_aid' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-600'}`}>
+                      {a.agreement_type === 'automatic_aid' ? 'Automatic Aid' : a.agreement_type === 'mutual_aid' ? 'Mutual Aid' : 'Other'}
+                    </span>
+                    {expiring && <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">Expiring Soon</span>}
+                    {a.expiration_date && <span className="text-xs text-zinc-400">Expires {formatDate(a.expiration_date)}</span>}
+                  </div>
+                  {apparatus.length === 0 ? (
+                    <p className="text-xs text-zinc-400">No apparatus recorded.</p>
+                  ) : (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-zinc-400 border-b border-zinc-100">
+                          <th className="pb-1.5 font-medium pr-4">Apparatus</th>
+                          <th className="pb-1.5 font-medium pr-4">Pump (GPM)</th>
+                          <th className="pb-1.5 font-medium pr-4">Tank (gal)</th>
+                          <th className="pb-1.5 font-medium">Hose</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-50">
+                        {apparatus.map((app, i) => (
+                          <tr key={i}>
+                            <td className="py-1.5 pr-4 font-medium text-zinc-800">{app.identifier || '—'}</td>
+                            <td className="py-1.5 pr-4 text-zinc-600">{app.pump_gpm ?? '—'}</td>
+                            <td className="py-1.5 pr-4 text-zinc-600">{app.tank_gal ?? '—'}</td>
+                            <td className="py-1.5 text-zinc-500">
+                              {(app.hose_loads ?? []).length === 0 ? '—' : app.hose_loads.map(h => `${h.length_ft}ft ${h.diameter_in}"`).join(', ')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
+          </div>
+        )}
+
+        {/* Incident mutual aid activity — secondary */}
+        {(mutualAidRaw ?? []).length > 0 && (
+          <div className="mt-5 pt-4 border-t border-zinc-100">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Recent Response Activity</p>
+            <div className="flex flex-col gap-1.5">
+              {(mutualAidRaw ?? []).map(m => (
+                <div key={m.id} className="flex items-start gap-3 text-xs py-1.5 border-b border-zinc-50 last:border-0">
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                    {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
+                  </span>
+                  <div className="min-w-0">
+                    <span className="font-medium text-zinc-800">{m.external_department_name}</span>
+                    {m.apparatus_description && <span className="text-zinc-400 ml-2">· {m.apparatus_description}</span>}
+                    <p className="text-zinc-400 mt-0.5">{formatDate(m.created_at.slice(0, 10))}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
