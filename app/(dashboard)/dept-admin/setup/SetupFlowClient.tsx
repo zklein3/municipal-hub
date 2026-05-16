@@ -38,6 +38,7 @@ export default function SetupFlowClient({
   templates,
   steps,
   departmentId,
+  moduleIso,
 }: {
   department: { id: string; name: string }
   stations: any[]
@@ -55,6 +56,7 @@ export default function SetupFlowClient({
   templates: any[]
   steps: any[]
   departmentId: string
+  moduleIso: boolean
 }) {
   const [activeTab, setActiveTab] = useState('stations')
 
@@ -119,6 +121,7 @@ export default function SetupFlowClient({
               stations={stations}
               apparatusTypes={apparatusTypes}
               departmentId={departmentId}
+              moduleIso={moduleIso}
               {...helpProps}
             />
           )}

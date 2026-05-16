@@ -30,7 +30,7 @@ export default async function SetupPage() {
   // Fetch department name
   const { data: deptData } = await adminClient
     .from('departments')
-    .select('id, name')
+    .select('id, name, module_iso')
     .eq('id', department_id)
     .single()
   const department = { id: deptData?.id ?? department_id, name: deptData?.name ?? 'Your Department' }
@@ -177,6 +177,7 @@ export default async function SetupPage() {
       templates={templates ?? []}
       steps={steps ?? []}
       departmentId={department_id}
+      moduleIso={deptData?.module_iso ?? false}
     />
   )
 }

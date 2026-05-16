@@ -139,6 +139,7 @@ export default function ApparatusStep({
   stations,
   apparatusTypes,
   departmentId,
+  moduleIso,
   showHelp,
   helpResetKey,
 }: {
@@ -146,6 +147,7 @@ export default function ApparatusStep({
   stations: Station[]
   apparatusTypes: ApparatusType[]
   departmentId: string
+  moduleIso: boolean
   showHelp: boolean
   helpResetKey: number
 }) {
@@ -280,12 +282,14 @@ export default function ApparatusStep({
                     >
                       Load
                     </Link>
-                    <Link
-                      href={`/apparatus/${a.id}`}
-                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-                    >
-                      ISO Specs
-                    </Link>
+                    {moduleIso && (
+                      <Link
+                        href={`/apparatus/${a.id}`}
+                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                      >
+                        ISO Specs
+                      </Link>
+                    )}
                     <button
                       onClick={() => { setEditingId(a.id); setShowForm(false); setError(null) }}
                       className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
