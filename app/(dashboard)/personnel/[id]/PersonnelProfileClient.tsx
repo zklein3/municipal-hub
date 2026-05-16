@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword } from '@/app/actions/personnel'
+import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, saveQrDebugScan } from '@/app/actions/personnel'
 import QRScanner from '@/components/QRScanner'
 
 const US_STATES = [
@@ -74,6 +74,8 @@ export default function PersonnelProfileClient({
 
   const [qrScannerOpen, setQrScannerOpen] = useState(false)
   const [qrResult, setQrResult] = useState<string | null>(null)
+  const [qrSaving, setQrSaving] = useState(false)
+  const [qrSaved, setQrSaved] = useState(false)
 
   const canEditProfile = isMe || isOfficerOrAbove
 
@@ -301,7 +303,7 @@ export default function PersonnelProfileClient({
                 <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Raw Result</span>
                 <button
                   type="button"
-                  onClick={() => setQrResult(null)}
+                  onClick={() => { setQrResult(null); setQrSaved(false) }}
                   className="text-xs text-zinc-400 hover:text-zinc-600"
                 >
                   Clear
@@ -315,7 +317,20 @@ export default function PersonnelProfileClient({
               />
               <button
                 type="button"
-                onClick={() => setQrScannerOpen(true)}
+                disabled={qrSaving || qrSaved}
+                onClick={async () => {
+                  setQrSaving(true)
+                  await saveQrDebugScan(qrResult)
+                  setQrSaving(false)
+                  setQrSaved(true)
+                }}
+                className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+              >
+                {qrSaved ? '✓ Saved to Database' : qrSaving ? 'Saving...' : 'Save to Database'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setQrScannerOpen(true); setQrSaved(false) }}
                 className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
               >
                 Scan Another
