@@ -13,12 +13,14 @@ export default function QRScanner({
   hint?: string
 }) {
   const [error, setError] = useState('')
+  const [photoError, setPhotoError] = useState('')
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const frameRef = useRef<number | null>(null)
   const detectedRef = useRef(false)
   const scanningRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const onScanRef = useRef(onScan)
   useEffect(() => { onScanRef.current = onScan }, [onScan])
 
@@ -49,7 +51,6 @@ export default function QRScanner({
         setError('Camera access is not available on this browser.')
         return
       }
-
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -67,9 +68,7 @@ export default function QRScanner({
       if (!video || !canvas) return
 
       video.srcObject = stream
-      try {
-        await video.play()
-      } catch {
+      try { await video.play() } catch {
         setError('Unable to start camera preview.')
         stop()
         return
@@ -80,19 +79,17 @@ export default function QRScanner({
         scanningRef.current = true
 
         try {
-          // Primary: native BarcodeDetector — any non-null rawValue counts
           if (detector) {
             const codes = await detector.detect(video)
             if (codes.length > 0 && codes[0].rawValue != null) {
               detectedRef.current = true
-              onScanRef.current(codes[0].rawValue) // callback before stop
+              onScanRef.current(codes[0].rawValue)
               stop()
               return
             }
           }
-        } catch { /* fall through to jsQR */ }
+        } catch { /* fall through */ }
 
-        // Fallback: jsQR — any non-null data counts
         try {
           const ctx = canvas.getContext('2d')
           if (ctx) {
@@ -103,7 +100,7 @@ export default function QRScanner({
             const code = jsQR(imageData.data, imageData.width, imageData.height)
             if (code?.data != null) {
               detectedRef.current = true
-              onScanRef.current(code.data) // callback before stop
+              onScanRef.current(code.data)
               stop()
               return
             }
@@ -118,12 +115,44 @@ export default function QRScanner({
         tryDecode()
         frameRef.current = requestAnimationFrame(loop)
       }
-
       frameRef.current = requestAnimationFrame(loop)
     }
 
     start()
   }, [stop])
+
+  // Decode a full-resolution photo captured via the native camera app
+  function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoError('')
+
+    const reader = new FileReader()
+    reader.onload = evt => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(img, 0, 0)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const code = jsQR(imageData.data, imageData.width, imageData.height)
+        if (code?.data != null) {
+          detectedRef.current = true
+          stop()
+          onScanRef.current(code.data)
+        } else {
+          setPhotoError('No QR code found in the photo. Try better lighting or move closer.')
+          // reset so they can try again
+          if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+      }
+      img.src = evt.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
 
   if (error) {
     return (
@@ -131,9 +160,16 @@ export default function QRScanner({
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-3">
           {error}
         </div>
+        {/* Still offer photo capture even if live stream fails */}
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+          onChange={handlePhotoCapture} className="hidden" />
+        <button type="button" onClick={() => fileInputRef.current?.click()}
+          className="w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 mb-2">
+          Take Photo Instead
+        </button>
         <button type="button" onClick={onClose}
           className="w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200">
-          Close
+          Cancel
         </button>
       </div>
     )
@@ -146,8 +182,23 @@ export default function QRScanner({
         <canvas ref={canvasRef} className="hidden" />
         {hint && <p className="mt-2 text-center text-xs text-zinc-300">{hint}</p>}
       </div>
+
+      {/* Hidden native camera input — full-res photo → jsQR */}
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+        onChange={handlePhotoCapture} className="hidden" />
+
+      {photoError && (
+        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {photoError}
+        </div>
+      )}
+
+      <button type="button" onClick={() => fileInputRef.current?.click()}
+        className="mt-3 w-full rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-700">
+        Take Photo to Scan
+      </button>
       <button type="button" onClick={() => { stop(); onClose() }}
-        className="mt-3 w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200">
+        className="mt-2 w-full rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200">
         Cancel
       </button>
     </div>
