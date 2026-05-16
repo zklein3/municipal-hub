@@ -54,6 +54,48 @@ export async function upsertApparatusIsoSpecs(formData: FormData) {
   return { success: true }
 }
 
+// ─── Hose Test Session ────────────────────────────────────────────────────────
+
+type HoseTestResult = {
+  hose_id: string
+  passed: boolean
+  failure_reason: string | null
+}
+
+export async function submitHoseTestSession(
+  test_date: string,
+  test_pressure_psi: number,
+  duration_min: number,
+  results: HoseTestResult[]
+) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  if (!results.length) return { error: 'No hoses to record.' }
+
+  const adminClient = createAdminClient()
+  const rows = results.map(r => ({
+    hose_id: r.hose_id,
+    department_id: ctx.department_id!,
+    test_date,
+    tested_by: ctx.me.id,
+    test_pressure_psi,
+    duration_min,
+    passed: r.passed,
+    failure_reason: r.failure_reason || null,
+    notes: null,
+  }))
+
+  const { error: dbErr } = await adminClient.from('hose_tests').insert(rows)
+  if (dbErr) {
+    await logError('submitHoseTestSession', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/iso/hoses')
+  revalidatePath('/iso/report')
+  return { success: true, count: rows.length }
+}
+
 // ─── Pump Tests ──────────────────────────────────────────────────────────────
 
 export async function savePumpTest(formData: FormData) {

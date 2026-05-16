@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createHose, updateHose, addHoseTest, removeHose } from '@/app/actions/iso'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -135,6 +136,12 @@ export default function HosesClient({
           >
             + Add Hose
           </button>
+          <Link
+            href="/iso/hoses/session"
+            className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors shadow-sm"
+          >
+            Run Test Session
+          </Link>
         </div>
       )}
 
