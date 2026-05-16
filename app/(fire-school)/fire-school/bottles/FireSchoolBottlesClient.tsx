@@ -464,7 +464,7 @@ export default function FireSchoolBottlesClient({
       </div>
 
       {/* ── Mobile card list ─────────────────────────────────────────────────── */}
-      <div className="sm:hidden space-y-3">
+      <div className="md:hidden space-y-3">
         {filteredBottles.map(bottle => {
           const status = getStatus(bottle)
           const isEditing = editingBottleId === bottle.bottle_id
@@ -523,7 +523,7 @@ export default function FireSchoolBottlesClient({
       </div>
 
       {/* ── Desktop table ────────────────────────────────────────────────────── */}
-      <div className="hidden sm:block rounded-xl bg-white shadow-sm border border-zinc-200 overflow-x-auto">
+      <div className="hidden md:block rounded-xl bg-white shadow-sm border border-zinc-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 border-b border-zinc-200">
             <tr>
