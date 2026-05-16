@@ -143,7 +143,22 @@ Example output:
 
 **Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`
 
-### 4. Permit Approval Email (blocked)
+### 4. ISO Module — Gating Architecture Decision ✳️ FUTURE REFACTOR
+Current state: hose inventory, hose testing, hydrant tests all gated behind `module_iso`.
+
+**Agreed architecture (build now as ISO, refactor gating later):**
+- **Base platform (no gate):** Data collection — apparatus specs, pump tests (NFPA 1911), hose inventory/testing (NFPA 1962), hydrant flow tests. Departments need this regardless of ISO — it's NFPA compliance.
+- **ISO module only:** `/iso/report` — the compiled audit-ready report. This is the reporting layer that justifies the module gate.
+
+**What changes when we refactor:**
+- Move hose/hydrant pages out of ISO nav into a general Compliance section (main nav)
+- Only `/iso/report` stays behind `module_iso`
+- ISO Specs button on apparatus (feeds the report) stays gated
+- Data collected before module upgrade automatically populates the report
+
+**Why deferred:** Continue building ISO features as-is under the current gate. Change the gating in one pass once ISO section is feature-complete.
+
+### 5. Permit Approval Email (blocked)
 Blocked until `fireops7.com` verified in Resend post-Wix migration.
 Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
 
