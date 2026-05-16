@@ -126,6 +126,13 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .eq('apparatus_id', id)
   const isoSpecs = isoSpecsList?.[0] ?? null
 
+  // Fetch pump tests
+  const { data: pumpTests } = await adminClient
+    .from('apparatus_pump_tests')
+    .select('id, test_date, vendor, passed, notes, document_path, created_at')
+    .eq('apparatus_id', id)
+    .order('test_date', { ascending: false })
+
   // Build clean apparatus object
   const apparatusWithRefs = {
     ...apparatus,
@@ -144,6 +151,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       isOfficerOrAbove={isOfficerOrAbove}
       departmentId={myDept.department_id}
       isoSpecs={isoSpecs}
+      pumpTests={pumpTests ?? []}
     />
   )
 }

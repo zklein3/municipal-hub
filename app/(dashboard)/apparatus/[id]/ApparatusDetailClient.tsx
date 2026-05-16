@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { updateApparatus } from '@/app/actions/apparatus'
 import { assignCompartmentToApparatus, removeCompartmentFromApparatus } from '@/app/actions/compartments'
-import { upsertApparatusIsoSpecs } from '@/app/actions/iso'
+import { upsertApparatusIsoSpecs, savePumpTest, getPumpTestDocUrl } from '@/app/actions/iso'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import BackButton from '@/components/BackButton'
 
@@ -68,6 +69,16 @@ interface Apparatus {
 
 type HoseLoad = { diameter_in: number; length_ft: number }
 
+type PumpTest = {
+  id: string
+  test_date: string
+  vendor: string
+  passed: boolean
+  notes: string | null
+  document_path: string | null
+  created_at: string
+}
+
 type IsoSpecs = {
   pump_rating_gpm: number | null
   tank_capacity_gal: number | null
@@ -86,6 +97,7 @@ export default function ApparatusDetailClient({
   isOfficerOrAbove,
   departmentId,
   isoSpecs,
+  pumpTests,
 }: {
   apparatus: Apparatus
   stations: Station[]
@@ -96,7 +108,9 @@ export default function ApparatusDetailClient({
   isOfficerOrAbove: boolean
   departmentId: string
   isoSpecs: IsoSpecs
+  pumpTests: PumpTest[]
 }) {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -107,6 +121,11 @@ export default function ApparatusDetailClient({
   const [isoSuccess, setIsoSuccess] = useState<string | null>(null)
   const [isoLoading, setIsoLoading] = useState(false)
   const [hoseLoads, setHoseLoads] = useState<HoseLoad[]>(isoSpecs?.hose_loads ?? [])
+  const [showPumpForm, setShowPumpForm] = useState(false)
+  const [pumpLoading, setPumpLoading] = useState(false)
+  const [pumpError, setPumpError] = useState<string | null>(null)
+  const [pumpSuccess, setPumpSuccess] = useState<string | null>(null)
+  const [pumpPassed, setPumpPassed] = useState(true)
 
   async function handleSubmit(formData: FormData) {
     setError(null); setSuccess(null); setLoading(true)
@@ -135,6 +154,30 @@ export default function ApparatusDetailClient({
     if (result?.error) setIsoError(result.error)
     else setIsoSuccess('ISO specs saved.')
     setIsoLoading(false)
+  }
+
+  async function handlePumpTestSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setPumpError(null); setPumpSuccess(null); setPumpLoading(true)
+    const form = e.currentTarget
+    const formData = new FormData(form)
+    formData.set('apparatus_id', apparatus.id)
+    formData.set('passed', String(pumpPassed))
+    const result = await savePumpTest(formData)
+    if (result?.error) setPumpError(result.error)
+    else {
+      setPumpSuccess('Pump test saved.')
+      setShowPumpForm(false)
+      setPumpPassed(true)
+      form.reset()
+      router.refresh()
+    }
+    setPumpLoading(false)
+  }
+
+  async function handleViewDoc(path: string) {
+    const url = await getPumpTestDocUrl(path)
+    if (url) window.open(url, '_blank')
   }
 
   async function handleRemoveCompartment(compartmentId: string) {
@@ -492,6 +535,108 @@ export default function ApparatusDetailClient({
               {isoLoading ? 'Saving...' : 'Save ISO Specs'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Pump Tests */}
+      {isOfficerOrAbove && (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mt-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-zinc-900">Pump Tests (NFPA 1911)</h2>
+            {!showPumpForm && (
+              <button
+                onClick={() => { setShowPumpForm(true); setPumpError(null); setPumpSuccess(null) }}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
+              >
+                + Add Test
+              </button>
+            )}
+          </div>
+
+          {pumpSuccess && <Alert type="success" message={pumpSuccess} />}
+          {pumpError && <Alert type="error" message={pumpError} />}
+
+          {showPumpForm && (
+            <form onSubmit={handlePumpTestSubmit} className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-zinc-50 border border-zinc-200">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">Test Date</label>
+                  <input name="test_date" type="date" required
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">Vendor / Tester</label>
+                  <input name="vendor" type="text" required placeholder="Company name"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Result</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setPumpPassed(true)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${pumpPassed ? 'bg-green-600 text-white border-green-600' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+                    Pass
+                  </button>
+                  <button type="button" onClick={() => setPumpPassed(false)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${!pumpPassed ? 'bg-red-600 text-white border-red-600' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+                    Fail
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Notes (optional)</label>
+                <input name="notes" type="text" placeholder="Any notes about the test"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600">Test Sheet (PDF or image)</label>
+                <input name="document" type="file" accept=".pdf,.jpg,.jpeg,.png"
+                  className="w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-red-700 hover:file:bg-red-100" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="submit" disabled={pumpLoading}
+                  className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                  {pumpLoading ? 'Saving...' : 'Save Test'}
+                </button>
+                <button type="button" onClick={() => setShowPumpForm(false)}
+                  className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+
+          {pumpTests.length === 0 ? (
+            <p className="text-sm text-zinc-400">No pump tests recorded yet.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-zinc-100">
+              {pumpTests.map(t => (
+                <div key={t.id} className="flex items-center justify-between py-3 gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${t.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {t.passed ? 'Pass' : 'Fail'}
+                      </span>
+                      <span className="text-sm font-medium text-zinc-800">{t.vendor}</span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {new Date(t.test_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {t.notes && ` · ${t.notes}`}
+                    </p>
+                  </div>
+                  {t.document_path && (
+                    <button
+                      onClick={() => handleViewDoc(t.document_path!)}
+                      className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                    >
+                      View Doc
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -54,7 +54,20 @@ export default async function IsoReportPage() {
     .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
     .eq('department_id', department_id)
 
+  // Latest pump test per apparatus
+  const { data: pumpTestsRaw } = await adminClient
+    .from('apparatus_pump_tests')
+    .select('apparatus_id, test_date, passed')
+    .eq('department_id', department_id)
+    .order('test_date', { ascending: false })
+
   const isoSpecMap = Object.fromEntries((isoSpecs ?? []).map(s => [s.apparatus_id, s]))
+
+  // Latest pump test per apparatus (first row per apparatus_id since ordered desc)
+  const pumpTestMap: Record<string, { test_date: string; passed: boolean }> = {}
+  for (const t of pumpTestsRaw ?? []) {
+    if (!pumpTestMap[t.apparatus_id]) pumpTestMap[t.apparatus_id] = { test_date: t.test_date, passed: t.passed }
+  }
 
   // Hose stats
   const { data: hoses } = await adminClient
@@ -168,7 +181,8 @@ export default async function IsoReportPage() {
                   <th className="pb-2 font-medium pr-4">Pump (GPM)</th>
                   <th className="pb-2 font-medium pr-4">Tank (gal)</th>
                   <th className="pb-2 font-medium pr-4">Aerial (ft)</th>
-                  <th className="pb-2 font-medium">ISO Specs</th>
+                  <th className="pb-2 font-medium pr-4">ISO Specs</th>
+                  <th className="pb-2 font-medium">Pump Test</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
@@ -185,10 +199,19 @@ export default async function IsoReportPage() {
                       <td className="py-2 pr-4 text-zinc-600">{spec?.pump_rating_gpm ?? '—'}</td>
                       <td className="py-2 pr-4 text-zinc-600">{spec?.tank_capacity_gal ?? '—'}</td>
                       <td className="py-2 pr-4 text-zinc-600">{spec?.aerial_length_ft ?? '—'}</td>
-                      <td className="py-2">
+                      <td className="py-2 pr-4">
                         <span className={`rounded-full px-2 py-0.5 font-medium ${spec ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
                           {spec ? 'Complete' : 'Missing'}
                         </span>
+                      </td>
+                      <td className="py-2">
+                        {(() => {
+                          const pt = pumpTestMap[a.id]
+                          if (!pt) return <span className="rounded-full px-2 py-0.5 font-medium bg-zinc-100 text-zinc-400">No record</span>
+                          const overdue = new Date(pt.test_date + 'T00:00:00') < new Date(new Date().setFullYear(new Date().getFullYear() - 1))
+                          if (overdue) return <span className="rounded-full px-2 py-0.5 font-medium bg-yellow-100 text-yellow-700">Overdue</span>
+                          return <span className={`rounded-full px-2 py-0.5 font-medium ${pt.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{pt.passed ? 'Pass' : 'Fail'} · {formatDate(pt.test_date)}</span>
+                        })()}
                       </td>
                     </tr>
                   )

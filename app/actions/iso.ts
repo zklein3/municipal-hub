@@ -54,6 +54,67 @@ export async function upsertApparatusIsoSpecs(formData: FormData) {
   return { success: true }
 }
 
+// ─── Pump Tests ──────────────────────────────────────────────────────────────
+
+export async function savePumpTest(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const apparatus_id = formData.get('apparatus_id') as string
+  const test_date = formData.get('test_date') as string
+  const vendor = (formData.get('vendor') as string)?.trim()
+  const passed = formData.get('passed') === 'true'
+  const notes = (formData.get('notes') as string)?.trim() || null
+  const file = formData.get('document') as File | null
+
+  if (!apparatus_id || !test_date || !vendor) return { error: 'Date and vendor are required.' }
+
+  const adminClient = createAdminClient()
+  let document_path: string | null = null
+
+  if (file && file.size > 0) {
+    const ext = file.name.split('.').pop() ?? 'pdf'
+    const path = `pump-tests/${apparatus_id}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await adminClient.storage
+      .from('documents')
+      .upload(path, file, { contentType: file.type || 'application/pdf' })
+    if (uploadErr) {
+      await logError(uploadErr.message, '/apparatus')
+      return { error: 'Document upload failed.' }
+    }
+    document_path = path
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('apparatus_pump_tests')
+    .insert({
+      apparatus_id,
+      department_id: ctx.department_id,
+      test_date,
+      vendor,
+      passed,
+      notes,
+      document_path,
+      logged_by_personnel_id: ctx.me.id,
+    })
+
+  if (dbErr) {
+    await logError(dbErr.message, '/apparatus')
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/apparatus/${apparatus_id}`)
+  return { success: true }
+}
+
+export async function getPumpTestDocUrl(document_path: string): Promise<string | null> {
+  const adminClient = createAdminClient()
+  const { data } = await adminClient.storage
+    .from('documents')
+    .createSignedUrl(document_path, 3600)
+  return data?.signedUrl ?? null
+}
+
 // ─── Hoses ────────────────────────────────────────────────────────────────────
 
 export async function createHose(formData: FormData) {
