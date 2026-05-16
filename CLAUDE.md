@@ -201,7 +201,19 @@ Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Func
 ### 10. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 11. Module / Feature Flag System
+### 11. Timezone Setting per Department
+All timestamps currently display in UTC on Vercel (server-rendered). Fire school fill log hardcoded to `America/Chicago` as a temporary fix.
+
+**Build:**
+- Add `timezone` column to `departments` table (text, default `'America/Chicago'`)
+- Dept admin can select timezone in dept settings (dropdown of IANA tz names — US zones at minimum)
+- Pass `timezone` through server layouts wherever timestamps are displayed
+- Replace all `'America/Chicago'` hardcodes with dept timezone
+- Fire school: use a system-level default timezone setting (no dept context) or read from a config table
+
+**Key files when building:** `departments` table, `app/(dashboard)/dept-admin/`, all pages using `toLocaleString()` or `formatDT()`.
+
+### 12. Module / Feature Flag System
 `module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
 
 ---
