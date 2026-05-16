@@ -46,7 +46,18 @@ export async function checkBottle(bottleId: string) {
     }
   }
 
-  return { found: true, bottle, fillable: true, reason: null }
+  // Check for unverified fill
+  const { data: unverified } = await adminClient
+    .from('fire_school_fill_logs')
+    .select('id, filled_at')
+    .eq('bottle_id', bottleId.toUpperCase().trim())
+    .is('verified_at', null)
+    .order('filled_at', { ascending: false })
+    .limit(1)
+
+  const unverifiedFill = unverified?.[0] ?? null
+
+  return { found: true, bottle, fillable: true, reason: null, unverifiedFill }
 }
 
 // ─── Log a fill ───────────────────────────────────────────────────────────────
