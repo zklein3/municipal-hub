@@ -24,19 +24,21 @@ export default async function TrainingPage() {
   // My enrollments
   const { data: enrollments } = await adminClient
     .from('course_enrollments')
-    .select('id, certification_type_id, status, enrolled_at')
+    .select('id, certification_type_id, status, enrolled_at, training_date, session_logged_at, session_status')
     .eq('personnel_id', me.id)
     .eq('department_id', department_id)
 
-  // Cert types
-  const certTypeIds = [...new Set((enrollments ?? []).map(e => e.certification_type_id))]
-  const { data: certTypes } = certTypeIds.length > 0
-    ? await adminClient.from('certification_types').select('id, cert_name, issuing_body, does_expire, expiration_interval_months, is_structured_course').in('id', certTypeIds)
-    : { data: [] }
+  // Cert types — all dept cert types (needed for event cert links too)
+  const { data: certTypes } = await adminClient
+    .from('certification_types')
+    .select('id, cert_name, issuing_body, does_expire, expiration_interval_months, is_structured_course')
+    .eq('department_id', department_id)
+    .eq('active', true)
 
   // Units
-  const { data: units } = certTypeIds.length > 0
-    ? await adminClient.from('certification_course_units').select('id, certification_type_id, unit_title, unit_description, required_hours, sort_order, active').in('certification_type_id', certTypeIds).eq('active', true).order('sort_order')
+  const allCertTypeIds = (certTypes ?? []).map(c => c.id)
+  const { data: units } = allCertTypeIds.length > 0
+    ? await adminClient.from('certification_course_units').select('id, certification_type_id, unit_title, unit_description, required_hours, sort_order, active').in('certification_type_id', allCertTypeIds).eq('active', true).order('sort_order')
     : { data: [] }
 
   // My progress
@@ -60,7 +62,7 @@ export default async function TrainingPage() {
 
   const { data: allTrainingEvents } = await adminClient
     .from('training_events')
-    .select('id, event_date, start_time, topic, hours, location, description, requires_verification')
+    .select('id, event_date, start_time, topic, hours, location, description, requires_verification, certification_type_id')
     .eq('department_id', department_id)
     .gte('event_date', past30.toISOString().split('T')[0])
     .lte('event_date', future60.toISOString().split('T')[0])

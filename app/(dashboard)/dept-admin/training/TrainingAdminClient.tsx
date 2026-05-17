@@ -7,6 +7,7 @@ import {
   createCourseUnit, updateCourseUnit,
   enrollMember, updateEnrollmentStatus,
   verifyProgress, verifyTrainingAttendance,
+  verifyEnrollmentSession,
   createTrainingEvent, logTrainingAttendance,
   createDirectCertification,
 } from '@/app/actions/training'
@@ -20,6 +21,7 @@ interface CertType { id: string; cert_name: string; issuing_body: string | null;
 interface Unit { id: string; certification_type_id: string; unit_title: string; unit_description: string | null; required_hours: number | null; sort_order: number; active: boolean }
 interface Enrollment { id: string; personnel_id: string; certification_type_id: string; status: string; enrolled_at: string; name: string }
 interface PendingProgress { id: string; enrollment_id: string; unit_id: string; personnel_id: string; hours_submitted: number | null; completed_date: string | null; notes: string | null; status: string; submitted_at: string; name: string }
+interface PendingSession { id: string; personnel_id: string; certification_type_id: string; training_date: string | null; session_logged_at: string | null; name: string }
 interface Personnel { id: string; name: string }
 interface PendingAttendance { id: string; personnel_id: string; name: string; submitted_at: string }
 interface TrainingEvent {
@@ -31,10 +33,11 @@ interface TrainingEvent {
 }
 
 export default function TrainingAdminClient({
-  certTypes, units, enrollments, pendingProgress, allPersonnel, trainingEvents, departmentId,
+  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, departmentId,
 }: {
   certTypes: CertType[]; units: Unit[]; enrollments: Enrollment[]
-  pendingProgress: PendingProgress[]; allPersonnel: Personnel[]
+  pendingProgress: PendingProgress[]; pendingSessions: PendingSession[]
+  allPersonnel: Personnel[]
   trainingEvents: TrainingEvent[]; departmentId: string
 }) {
   const router = useRouter()
@@ -96,7 +99,7 @@ export default function TrainingAdminClient({
     return acc
   }, {})
 
-  const totalPending = pendingProgress.length
+  const totalPending = pendingProgress.length + pendingSessions.length
   const totalPendingAttendance = trainingEvents.reduce((sum, e) => sum + e.pending_attendance.length, 0)
 
   const TABS: { key: Tab; label: string }[] = [
@@ -349,6 +352,11 @@ export default function TrainingAdminClient({
                         <p className="text-xs text-zinc-400 mt-1">No structured courses set up yet. Add one in Cert Types with the "Structured course" option checked.</p>
                       )}
                     </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Training Date</label>
+                      <input name="training_date" type="date" className={inputCls} />
+                      <p className="text-xs text-zinc-400 mt-1">Member can log attendance after this date.</p>
+                    </div>
                     <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Enroll'}</button>
                   </form>
                 </>
@@ -438,10 +446,40 @@ export default function TrainingAdminClient({
 
       {/* ── PENDING COURSE PROGRESS ─────────────────────────────────────────── */}
       {tab === 'pending' && (
-        <div>
-          {pendingProgress.length === 0 ? (
+        <div className="flex flex-col gap-4">
+          {/* Pending simple cert sessions */}
+          {pendingSessions.length > 0 && (
+            <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+              <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-200">
+                <p className="text-sm font-semibold text-zinc-900">Cert Session Attendance</p>
+                <p className="text-xs text-zinc-400">{pendingSessions.length} pending</p>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {pendingSessions.map(s => {
+                  const cert = certTypes.find(c => c.id === s.certification_type_id)
+                  return (
+                    <div key={s.id} className="flex items-center px-5 py-4 gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900">{s.name}</p>
+                        <p className="text-xs text-zinc-500">{cert?.cert_name ?? '—'}</p>
+                        {s.session_logged_at && <p className="text-xs text-zinc-400">Logged {new Date(s.session_logged_at).toLocaleDateString()}</p>}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => wrap(() => verifyEnrollmentSession(s.id, 'verified'))} disabled={loading}
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">Approve</button>
+                        <button onClick={() => wrap(() => verifyEnrollmentSession(s.id, 'rejected'))} disabled={loading}
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">Reject</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {pendingProgress.length === 0 && pendingSessions.length === 0 ? (
             <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">No pending submissions.</div>
-          ) : (
+          ) : pendingProgress.length > 0 ? (
             <div className="flex flex-col gap-3">
               {Object.entries(pendingByCert).map(([certId, submissions]) => {
                 const cert = certTypes.find(c => c.id === certId)
@@ -488,7 +526,7 @@ export default function TrainingAdminClient({
                 )
               })}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -523,6 +561,14 @@ export default function TrainingAdminClient({
                     <p className="text-xs text-zinc-400">When checked, member self-reported attendance must be approved by an officer.</p>
                   </div>
                 </label>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">Issues Certification (optional)</label>
+                  <select name="certification_type_id" className={inputCls}>
+                    <option value="">None — attendance only</option>
+                    {certTypes.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.cert_name}</option>)}
+                  </select>
+                  <p className="text-xs text-zinc-400 mt-1">When set, verified attendance automatically issues this cert to each member.</p>
+                </div>
                 <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Create Event'}</button>
               </form>
             </div>

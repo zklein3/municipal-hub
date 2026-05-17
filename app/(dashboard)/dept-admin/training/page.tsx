@@ -44,8 +44,18 @@ export default async function TrainingAdminPage() {
     ? await adminClient.from('member_course_progress').select('id, enrollment_id, unit_id, personnel_id, hours_submitted, completed_date, notes, status, submitted_at').in('enrollment_id', enrollmentIds).eq('status', 'pending')
     : { data: [] }
 
+  // Pending simple cert sessions (no units, member logged session)
+  const { data: pendingSessionsRaw } = certTypeIds.length > 0
+    ? await adminClient
+        .from('course_enrollments')
+        .select('id, personnel_id, certification_type_id, training_date, session_logged_at')
+        .in('certification_type_id', certTypeIds)
+        .eq('department_id', department_id)
+        .eq('session_status', 'pending')
+    : { data: [] }
+
   // Personnel names
-  const personnelIds = [...new Set([...(enrollmentsRaw ?? []).map(e => e.personnel_id), ...(pendingProgress ?? []).map(p => p.personnel_id)])]
+  const personnelIds = [...new Set([...(enrollmentsRaw ?? []).map(e => e.personnel_id), ...(pendingProgress ?? []).map(p => p.personnel_id), ...(pendingSessionsRaw ?? []).map(p => p.personnel_id)])]
   const { data: personnelRaw } = personnelIds.length > 0
     ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', personnelIds)
     : { data: [] }
@@ -108,6 +118,7 @@ export default async function TrainingAdminPage() {
       units={units ?? []}
       enrollments={(enrollmentsRaw ?? []).map(e => ({ ...e, name: personnelNameMap[e.personnel_id] ?? '—' }))}
       pendingProgress={(pendingProgress ?? []).map(p => ({ ...p, name: personnelNameMap[p.personnel_id] ?? '—' }))}
+      pendingSessions={(pendingSessionsRaw ?? []).map(s => ({ ...s, name: personnelNameMap[s.personnel_id] ?? '—' }))}
       allPersonnel={allPersonnel}
       trainingEvents={(trainingEvents ?? []).map(e => ({
         ...e,

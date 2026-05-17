@@ -109,6 +109,7 @@ export async function enrollMember(formData: FormData) {
     certification_type_id: formData.get('certification_type_id') as string,
     department_id: ctx.department_id,
     enrolled_by: ctx.me.id,
+    training_date: (formData.get('training_date') as string) || null,
     status: 'active',
   }, { onConflict: 'personnel_id,certification_type_id' })
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
@@ -169,6 +170,13 @@ export async function verifyTrainingAttendance(attendance_id: string, action: 'v
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
   const adminClient = createAdminClient()
   const now = new Date().toISOString()
+
+  const { data: attList } = await adminClient
+    .from('training_event_attendance')
+    .select('event_id, personnel_id')
+    .eq('id', attendance_id)
+  const att = attList?.[0]
+
   const { error } = await adminClient.from('training_event_attendance').update({
     status: action,
     verified_by: ctx.me.id,
@@ -176,6 +184,134 @@ export async function verifyTrainingAttendance(attendance_id: string, action: 'v
     rejection_reason: action === 'rejected' ? (rejection_reason || null) : null,
   }).eq('id', attendance_id)
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
+
+  // Auto-create cert if event is linked to a cert type
+  if (action === 'verified' && att) {
+    await issueCertFromEvent(adminClient, att.event_id, att.personnel_id, ctx.department_id!, now)
+  }
+
+  revalidatePath('/dept-admin/training')
+  revalidatePath('/training')
+  return { success: true }
+}
+
+async function issueCertFromEvent(adminClient: ReturnType<typeof createAdminClient>, event_id: string, personnel_id: string, department_id: string, now: string) {
+  const { data: evtList } = await adminClient
+    .from('training_events')
+    .select('certification_type_id, event_date')
+    .eq('id', event_id)
+  const evt = evtList?.[0]
+  if (!evt?.certification_type_id) return
+
+  const { data: ct } = await adminClient
+    .from('certification_types')
+    .select('cert_name, issuing_body, does_expire, expiration_interval_months')
+    .eq('id', evt.certification_type_id)
+    .single()
+  if (!ct) return
+
+  const issued_date = evt.event_date
+  const expiration_date = ct.does_expire && ct.expiration_interval_months
+    ? (() => { const d = new Date(issued_date); d.setMonth(d.getMonth() + ct.expiration_interval_months!); return d.toISOString().split('T')[0] })()
+    : null
+
+  // Don't duplicate — check if cert already exists for this event
+  const { data: existing } = await adminClient
+    .from('member_certifications')
+    .select('id')
+    .eq('personnel_id', personnel_id)
+    .eq('certification_type_id', evt.certification_type_id)
+    .eq('source', 'training_event')
+    .gte('created_at', new Date(now).toISOString().slice(0, 10) + 'T00:00:00Z')
+  if (existing?.length) return
+
+  await adminClient.from('member_certifications').insert({
+    personnel_id,
+    department_id,
+    certification_type_id: evt.certification_type_id,
+    cert_name: ct.cert_name,
+    issuing_body: ct.issuing_body,
+    issued_date,
+    expiration_date,
+    source: 'training_event',
+    active: true,
+    created_at: now,
+  })
+}
+
+// ─── MEMBER: Log simple cert session (no units) ──────────────────────────────
+export async function logCertSession(enrollment_id: string) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  const adminClient = createAdminClient()
+
+  const { data: enList } = await adminClient
+    .from('course_enrollments')
+    .select('personnel_id, status')
+    .eq('id', enrollment_id)
+  const en = enList?.[0]
+  if (en?.personnel_id !== ctx.me.id) return { error: 'Not your enrollment.' }
+  if (en?.status !== 'active') return { error: 'Enrollment is not active.' }
+
+  const { error } = await adminClient
+    .from('course_enrollments')
+    .update({ session_logged_at: new Date().toISOString(), session_status: 'pending' })
+    .eq('id', enrollment_id)
+
+  if (error) { await logError(error.message, '/training'); return { error: error.message } }
+  revalidatePath('/training')
+  return { success: true }
+}
+
+// ─── OFFICER: Verify simple cert session → auto-issue cert ───────────────────
+export async function verifyEnrollmentSession(enrollment_id: string, action: 'verified' | 'rejected') {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  const adminClient = createAdminClient()
+  const now = new Date().toISOString()
+
+  const { data: enList } = await adminClient
+    .from('course_enrollments')
+    .select('personnel_id, certification_type_id, department_id, training_date, session_logged_at')
+    .eq('id', enrollment_id)
+  const en = enList?.[0]
+  if (!en) return { error: 'Enrollment not found.' }
+
+  const { error } = await adminClient
+    .from('course_enrollments')
+    .update({ session_status: action })
+    .eq('id', enrollment_id)
+  if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
+
+  if (action === 'verified') {
+    const { data: ct } = await adminClient
+      .from('certification_types')
+      .select('cert_name, issuing_body, does_expire, expiration_interval_months')
+      .eq('id', en.certification_type_id)
+      .single()
+
+    if (ct) {
+      const issued_date = en.training_date ?? now.split('T')[0]
+      const expiration_date = ct.does_expire && ct.expiration_interval_months
+        ? (() => { const d = new Date(issued_date); d.setMonth(d.getMonth() + ct.expiration_interval_months!); return d.toISOString().split('T')[0] })()
+        : null
+
+      await adminClient.from('member_certifications').insert({
+        personnel_id: en.personnel_id,
+        department_id: en.department_id,
+        certification_type_id: en.certification_type_id,
+        cert_name: ct.cert_name,
+        issuing_body: ct.issuing_body,
+        issued_date,
+        expiration_date,
+        source: 'course_completion',
+        active: true,
+        created_by: ctx.me.id,
+      })
+      await adminClient.from('course_enrollments').update({ status: 'completed' }).eq('id', enrollment_id)
+    }
+  }
+
   revalidatePath('/dept-admin/training')
   revalidatePath('/training')
   return { success: true }
@@ -235,6 +371,7 @@ export async function createTrainingEvent(formData: FormData) {
     hours: parseFloat(formData.get('hours') as string) || null,
     location: (formData.get('location') as string) || null,
     requires_verification,
+    certification_type_id: (formData.get('certification_type_id') as string) || null,
     created_by: ctx.me.id,
   }).select('id').single()
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
@@ -266,6 +403,12 @@ export async function logTrainingAttendance(event_id: string, personnel_ids: str
   }))
   const { error } = await adminClient.from('training_event_attendance').upsert(records, { onConflict: 'event_id,personnel_id', ignoreDuplicates: true })
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
+
+  // Auto-issue certs if event has a cert type
+  for (const pid of personnel_ids) {
+    await issueCertFromEvent(adminClient, event_id, pid, ctx.department_id!, now)
+  }
+
   revalidatePath('/dept-admin/training')
   revalidatePath('/training')
   return { success: true }
