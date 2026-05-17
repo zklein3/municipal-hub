@@ -89,3 +89,36 @@ export async function saveNerisEntityId(departmentId: string, nerisEntityId: str
   revalidatePath(`/admin/dept/${departmentId}`)
   return { success: true }
 }
+
+export async function saveDeptAdminNerisEntityId(departmentId: string, nerisEntityId: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Not authenticated.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel')
+    .select('department_id, system_role')
+    .eq('personnel_id', me.id)
+    .eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) return { error: 'Only admins can update NERIS settings.' }
+  if (myDept.department_id !== departmentId) return { error: 'Department mismatch.' }
+
+  const { data: deptList } = await adminClient.from('departments').select('module_neris').eq('id', departmentId)
+  if (!deptList?.[0]?.module_neris) return { error: 'NERIS is not enabled for this department.' }
+
+  const { error } = await adminClient
+    .from('departments')
+    .update({ neris_entity_id: nerisEntityId || null })
+    .eq('id', departmentId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dept-admin/neris')
+  return { success: true }
+}

@@ -119,6 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       { href: '/iso/report', label: 'ISO Report' },
     ] : []),
     ...(publicSiteEnabled ? [{ href: '/dept-admin/public-inbox', label: 'Public Inbox' }] : []),
+    ...(moduleNeris ? [{ href: '/dept-admin/neris', label: 'NERIS Settings' }] : []),
   ] : []
 
   const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'

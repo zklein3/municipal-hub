@@ -571,7 +571,6 @@ export default function SysAdminDeptClient({
           moduleIso={dept.module_iso}
           moduleNeris={dept.module_neris}
           publicSiteEnabled={dept.public_site_enabled}
-          nerisEntityId={dept.neris_entity_id ?? null}
         />
       )}
     </div>
