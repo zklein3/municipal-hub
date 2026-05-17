@@ -186,11 +186,25 @@ export async function createDirectCertification(formData: FormData) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
   const adminClient = createAdminClient()
+
+  const personnelId = formData.get('personnel_id') as string
+  const certTypeId = (formData.get('certification_type_id') as string) || null
+  let certName = (formData.get('cert_name') as string)?.trim()
+
+  if (!personnelId) return { error: 'Member is required.' }
+
+  // Fall back to cert type name if custom name not entered
+  if (!certName && certTypeId) {
+    const { data: ct } = await adminClient.from('certification_types').select('cert_name').eq('id', certTypeId).single()
+    certName = ct?.cert_name ?? ''
+  }
+  if (!certName) return { error: 'Certification name is required.' }
+
   const { error } = await adminClient.from('member_certifications').insert({
-    personnel_id: formData.get('personnel_id') as string,
+    personnel_id: personnelId,
     department_id: ctx.department_id,
-    certification_type_id: (formData.get('certification_type_id') as string) || null,
-    cert_name: formData.get('cert_name') as string,
+    certification_type_id: certTypeId,
+    cert_name: certName,
     issuing_body: (formData.get('issuing_body') as string) || null,
     cert_number: (formData.get('cert_number') as string) || null,
     issued_date: (formData.get('issued_date') as string) || null,
