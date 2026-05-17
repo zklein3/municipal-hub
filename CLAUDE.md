@@ -88,6 +88,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### 0. ⚠️ DELETE B-0075 BEFORE CLOSING — TEST BOTTLE IN SYSTEM
+B-0075 was added 2026-05-17 for demo/play. Must be removed before end of day so it doesn't appear in reports.
+Run this before closing:
+```sql
+DELETE FROM fire_school_fill_logs WHERE bottle_id = 'B-0075';
+DELETE FROM fire_school_bottles WHERE bottle_id = 'B-0075';
+```
+Or just tell Claude and it will run it via Supabase MCP.
+
 ### 1. NERIS — Add Env Vars to Vercel ⚠️ USER ACTION REQUIRED
 NERIS submission works locally but fails on live site — env vars not in Vercel.
 Add these in Vercel dashboard → Project Settings → Environment Variables:
