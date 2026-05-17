@@ -435,6 +435,9 @@ export default function TrainingAdminClient({
                       {en.status === 'active' && (
                         <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'withdrawn'))} className="text-xs text-zinc-400 hover:text-red-600">Withdraw</button>
                       )}
+                      {en.status === 'withdrawn' && (
+                        <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'active'))} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-enroll</button>
+                      )}
                     </div>
                   )
                 })}
