@@ -41,11 +41,13 @@ export default function NewIncidentClient({
   personnel,
   myPersonnelId,
   myName,
+  moduleNeris,
 }: {
   apparatus: Apparatus[]
   personnel: Personnel[]
   myPersonnelId: string
   myName: string
+  moduleNeris: boolean
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -320,16 +322,18 @@ export default function NewIncidentClient({
             <textarea name="narrative" rows={3} placeholder="Brief description of the incident…" value={narrative} onChange={e => setNarrative(e.target.value)} className={inputCls} />
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="neris_reported"
-              checked={nerisReported}
-              onChange={e => setNerisReported(e.target.checked)}
-              className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-            />
-            <label htmlFor="neris_reported" className="text-sm text-zinc-700">Reported to NERIS</label>
-          </div>
+          {!moduleNeris && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="neris_reported"
+                checked={nerisReported}
+                onChange={e => setNerisReported(e.target.checked)}
+                className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+              />
+              <label htmlFor="neris_reported" className="text-sm text-zinc-700">Reported to NERIS</label>
+            </div>
+          )}
         </section>
 
         {/* Incident Times */}

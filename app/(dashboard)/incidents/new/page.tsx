@@ -20,6 +20,9 @@ export default async function NewIncidentPage() {
 
   const department_id = myDept.department_id
 
+  const { data: deptFlagsList } = await adminClient.from('departments').select('module_neris').eq('id', department_id)
+  const moduleNeris = deptFlagsList?.[0]?.module_neris ?? false
+
   // Apparatus list
   const { data: apparatus } = await adminClient
     .from('apparatus')
@@ -48,6 +51,7 @@ export default async function NewIncidentPage() {
       personnel={personnel}
       myPersonnelId={me.id}
       myName={`${me.first_name} ${me.last_name}`}
+      moduleNeris={moduleNeris}
     />
   )
 }

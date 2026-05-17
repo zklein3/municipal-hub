@@ -485,10 +485,12 @@ export default function IncidentDetailClient({
               <label className={labelCls}>Narrative</label>
               <textarea name="narrative" rows={3} defaultValue={importedData?.narrative ?? incident.narrative ?? ''} className={inputCls} />
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="edit_neris" checked={nerisReported} onChange={e => setNerisReported(e.target.checked)} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-              <label htmlFor="edit_neris" className="text-sm text-zinc-700">Reported to NERIS</label>
-            </div>
+            {!moduleNeris && (
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="edit_neris" checked={nerisReported} onChange={e => setNerisReported(e.target.checked)} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                <label htmlFor="edit_neris" className="text-sm text-zinc-700">Reported to NERIS</label>
+              </div>
+            )}
           </section>
 
           <section className="rounded-xl bg-white border border-zinc-200 p-5 space-y-4">
