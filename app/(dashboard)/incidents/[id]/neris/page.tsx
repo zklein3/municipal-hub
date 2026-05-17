@@ -118,13 +118,24 @@ export default async function NerisReportPage({
     .eq('incident_id', id)
     .maybeSingle()
 
+  const { data: deptList } = await adminClient
+    .from('departments')
+    .select('neris_entity_id')
+    .eq('id', myDept.department_id)
+  const nerisEntityId = deptList?.[0]?.neris_entity_id ?? null
+  const apiEnrollmentReady = !!(
+    nerisEntityId &&
+    process.env.NERIS_CLIENT_ID &&
+    process.env.NERIS_CLIENT_SECRET
+  )
+
   const requirementSummary = evaluateNerisRequirements({
     incident,
     nerisRecord: nerisRecord ?? null,
     incidentApparatus,
     incidentPersonnel,
     mutualAidRows: mutualAidRows ?? [],
-    apiEnrollmentReady: false,
+    apiEnrollmentReady,
   })
 
   return (
