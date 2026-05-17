@@ -105,24 +105,21 @@ Built 2026-05-17. User is playing with flow before proposing further changes.
 - No expiry notification for certs approaching expiration
 - Admin has no read-only view of a member's full cert history
 
-### 2. NERIS — Add Env Vars to Vercel ⚠️ USER ACTION REQUIRED
-NERIS submission works locally but fails on live site — env vars not in Vercel.
-Add these in Vercel dashboard → Project Settings → Environment Variables:
-- `NERIS_CLIENT_ID` — from NERIS Integrations tab
-- `NERIS_CLIENT_SECRET` — from NERIS Integrations tab
-- `NERIS_USE_TEST=true` — remove/set false for production submissions
-- `NERIS_TEST_DEPT_ID=FD35049607` — FSRI test dept (dev only)
+### 2. NERIS — Live on Vercel, First Submission Complete ✅ (2026-05-17)
+First live NERIS submission: `FD35049607|WIN26-0017|1779004260` — rescue call, Fremont Fire Test Dept.
 
-### 2. NERIS — Remaining Modules
-Core submission complete. Modules confirmed + wired: locations, fire, narrative.
-Still TODO (field names unverified, stripped from payload):
-- `unit_responses` timing — `enroute_at`/`on_scene_at` field names unknown
-- `medical` / `rescue` — patient/victim fields unknown
-- `hazmat` — disposition, chemical fields unknown
+**What's done:**
+- `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`, `NERIS_USE_TEST=true` in Vercel env vars
+- `module_neris` flag per department (DB column, sys admin toggle, dept admin entity ID field)
+- `neris_entity_id = FD35049607` set for Fremont Fire Test Dept — only dept with NERIS on
+- Property use codes fixed to pipe-delimited format (`RESIDENTIAL||ATTACHED_SINGLE_FAMILY_DWELLING`)
+- `apiEnrollmentReady` now checks real conditions (entity ID + env vars) instead of hardcoded false
+- Medical/rescue section renamed "Medical / Rescue — Patients & Victims" (was confusingly "Persons on Scene")
 
-Test dept: `neris_entity_id = 'FD35049607'`, use `test.admin@fireops7.com`.
-See `NERIS.md` for full field reference and payload builder notes.
-Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
+**Next: run more calls through to verify all modules work end-to-end**
+- Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
+- Test with: `test.admin@fireops7.com` (Fremont Fire Test Dept)
+- See `NERIS.md` for full field reference
 
 ### 3. ISO Hose — Build Plan ✳️ ARCHITECTURE LOCKED
 
