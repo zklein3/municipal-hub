@@ -277,10 +277,14 @@ export async function submitInspection(payload: {
     }
 
     if (payload.session_compartment_id) {
-      await completeCompartmentInSession(payload.session_compartment_id)
+      const completeRes = await completeCompartmentInSession(payload.session_compartment_id)
+      if (completeRes?.error) {
+        await logError(completeRes.error, '/inspections/run')
+        return { error: completeRes.error }
+      }
     }
 
-    revalidatePath('/inspections')
+    revalidatePath('/inspections', 'layout')
     return { success: true }
   } catch (e: any) {
     await logError(e?.message ?? 'Unknown error', '/inspections/run')
@@ -301,6 +305,13 @@ export async function getOrCreateInspectionSession(apparatus_id: string) {
 
   const now = new Date().toISOString()
 
+  // Read department's configured session duration
+  const { data: deptList } = await adminClient
+    .from('departments')
+    .select('inspection_session_duration_hours')
+    .eq('id', ctx.department_id)
+  const durationHours = deptList?.[0]?.inspection_session_duration_hours ?? 12
+
   const { data: existing } = await adminClient
     .from('inspection_sessions')
     .select('*')
@@ -318,9 +329,10 @@ export async function getOrCreateInspectionSession(apparatus_id: string) {
   }
 
   if (!session) {
+    const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString()
     const { data: newSession, error: sessionErr } = await adminClient
       .from('inspection_sessions')
-      .insert({ apparatus_id, department_id: ctx.department_id, started_by: user.id })
+      .insert({ apparatus_id, department_id: ctx.department_id, started_by: user.id, expires_at: expiresAt })
       .select('*')
       .single()
     if (sessionErr) { await logError(sessionErr.message, '/inspections/apparatus'); return { error: sessionErr.message } }
@@ -447,7 +459,7 @@ export async function reopenCompartment(session_compartment_id: string) {
     .eq('id', row.session_id)
     .eq('status', 'completed')
 
-  revalidatePath('/inspections/apparatus')
+  revalidatePath('/inspections', 'layout')
   return { success: true }
 }
 
@@ -483,7 +495,7 @@ export async function completeCompartmentInSession(session_compartment_id: strin
       .eq('id', row.session_id)
   }
 
-  revalidatePath('/inspections/apparatus')
+  revalidatePath('/inspections', 'layout')
   return { success: true }
 }
 
@@ -515,8 +527,72 @@ export async function releaseCompartment(session_compartment_id: string) {
     .eq('status', 'in_progress')
 
   if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
-  revalidatePath('/inspections/apparatus')
+  revalidatePath('/inspections', 'layout')
   return { success: true }
+}
+
+// ─── Session Reconciliation ───────────────────────────────────────────────────
+export async function getSessionReconciliation(session_id: string, apparatus_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authenticated.' }
+  const adminClient = createAdminClient()
+
+  // Only reconcile compartments that were actually completed this session
+  const { data: completedComps } = await adminClient
+    .from('inspection_session_compartments')
+    .select('compartment_id')
+    .eq('session_id', session_id)
+    .eq('status', 'completed')
+
+  const completedCompIds = (completedComps ?? []).map(c => c.compartment_id)
+  if (completedCompIds.length === 0) return { unaccounted: [] }
+
+  // Item types expected in those compartments
+  const { data: standards } = await adminClient
+    .from('item_location_standards')
+    .select('item_id')
+    .in('apparatus_compartment_id', completedCompIds)
+    .eq('active', true)
+
+  const scopedItemIds = [...new Set((standards ?? []).map(s => s.item_id))]
+  if (scopedItemIds.length === 0) return { unaccounted: [] }
+
+  // Assets of those item types assigned to this apparatus
+  const { data: assignedAssets } = await adminClient
+    .from('item_assets')
+    .select('id, asset_tag, serial_number, item_id')
+    .eq('apparatus_id', apparatus_id)
+    .eq('active', true)
+    .in('item_id', scopedItemIds)
+
+  if (!assignedAssets || assignedAssets.length === 0) return { unaccounted: [] }
+
+  // Assets confirmed during this session
+  const { data: inspectedLogs } = await adminClient
+    .from('item_asset_inspection_logs')
+    .select('asset_id')
+    .eq('inspection_session_id', session_id)
+
+  const inspectedIds = new Set((inspectedLogs ?? []).map(l => l.asset_id))
+  const unaccounted = assignedAssets.filter(a => !inspectedIds.has(a.id))
+
+  if (unaccounted.length === 0) return { unaccounted: [] }
+
+  const itemIds = [...new Set(unaccounted.map(a => a.item_id))]
+  const { data: items } = await adminClient
+    .from('items')
+    .select('id, item_name')
+    .in('id', itemIds)
+  const itemMap = new Map((items ?? []).map(i => [i.id, i.item_name]))
+
+  return {
+    unaccounted: unaccounted.map(a => ({
+      id: a.id,
+      asset_tag: a.asset_tag,
+      serial_number: a.serial_number as string | null,
+      item_name: itemMap.get(a.item_id) ?? 'Unknown',
+    })),
+  }
 }
 
 // ─── Close Session (officer/admin) ────────────────────────────────────────────
@@ -536,6 +612,6 @@ export async function closeInspectionSession(session_id: string) {
     .eq('id', session_id)
 
   if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
-  revalidatePath('/inspections/apparatus')
+  revalidatePath('/inspections', 'layout')
   return { success: true }
 }

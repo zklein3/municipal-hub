@@ -71,6 +71,38 @@ export default async function InspectionsPage() {
     return acc
   }, {})
 
+  // Fetch any in-progress sessions for this department's apparatus
+  const { data: activeSessions } = appIds.length > 0
+    ? await adminClient
+        .from('inspection_sessions')
+        .select('id, apparatus_id')
+        .eq('department_id', myDept.department_id)
+        .eq('status', 'in_progress')
+        .in('apparatus_id', appIds)
+    : { data: [] }
+
+  const activeSessionIds = (activeSessions ?? []).map(s => s.id)
+  const { data: sessionCompartments } = activeSessionIds.length > 0
+    ? await adminClient
+        .from('inspection_session_compartments')
+        .select('session_id, compartment_id, status')
+        .in('session_id', activeSessionIds)
+    : { data: [] }
+
+  const sessionByApparatus = Object.fromEntries(
+    (activeSessions ?? []).map(s => {
+      const comps = (sessionCompartments ?? []).filter(c => c.session_id === s.id)
+      return [s.apparatus_id, {
+        session_id: s.id,
+        done: comps.filter(c => c.status === 'completed').length,
+        total: comps.length,
+        completedCompartmentIds: new Set(
+          comps.filter(c => c.status === 'completed').map(c => c.compartment_id)
+        ),
+      }]
+    })
+  )
+
   // Build apparatus with compartments
   const apparatus = (apparatusRaw ?? []).map((a: { id: string; unit_number: string; apparatus_name: string | null; station_id: string | null; apparatus_type_id: string | null }) => {
     const comps = (compartmentLinks ?? [])
@@ -95,6 +127,14 @@ export default async function InspectionsPage() {
       type_name: a.apparatus_type_id ? typeMap[a.apparatus_type_id] ?? null : null,
       station: a.station_id ? stationMap[a.station_id] ?? null : null,
       compartments: comps,
+      activeSession: sessionByApparatus[a.id]
+        ? {
+            session_id: sessionByApparatus[a.id].session_id,
+            done: sessionByApparatus[a.id].done,
+            total: sessionByApparatus[a.id].total,
+            completedCompartmentIds: sessionByApparatus[a.id].completedCompartmentIds,
+          }
+        : null,
     }
   })
 

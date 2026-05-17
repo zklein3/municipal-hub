@@ -6,6 +6,7 @@ import {
   removeFromInventory,
   setDepartmentQuantity,
   setStoragePar,
+  assignStorageAssetToApparatus,
 } from '@/app/actions/equipment'
 
 interface StorageItem {
@@ -27,24 +28,47 @@ interface ApparatusOption {
   compartments: { id: string; compartment_code: string; compartment_name: string | null }[]
 }
 
+interface StorageAsset {
+  id: string
+  asset_tag: string
+  serial_number: string | null
+  status: string
+}
+
+interface StorageAssetGroup {
+  item_id: string
+  item_name: string
+  category_name: string
+  assets: StorageAsset[]
+}
+
 type ModalType = 'add' | 'remove' | 'dept-qty' | 'storage-par' | null
 
 export default function StorageClient({
   items: initialItems,
+  storageAssetGroups: initialAssetGroups,
   allApparatus,
   isAdmin,
   isOfficerOrAbove,
 }: {
   items: StorageItem[]
+  storageAssetGroups: StorageAssetGroup[]
   allApparatus: ApparatusOption[]
   isAdmin: boolean
   isOfficerOrAbove: boolean
 }) {
   const [items, setItems] = useState(initialItems)
+  const [assetGroups, setAssetGroups] = useState(initialAssetGroups)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [activeItem, setActiveItem] = useState<StorageItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Tracked asset assignment state
+  const [assigningAsset, setAssigningAsset] = useState<StorageAsset & { item_name: string } | null>(null)
+  const [assignApparatusId, setAssignApparatusId] = useState('')
+  const [assignLoading, setAssignLoading] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   // Add to compartment state
   const [addApparatusId, setAddApparatusId] = useState('')
@@ -159,6 +183,21 @@ export default function StorageClient({
   }
 
   const addApparatus = allApparatus.find(a => a.id === addApparatusId)
+
+  async function handleAssignAsset() {
+    if (!assigningAsset || !assignApparatusId) return
+    setAssignLoading(true)
+    setAssignError(null)
+    const result = await assignStorageAssetToApparatus(assigningAsset.id, assignApparatusId)
+    if (result?.error) { setAssignError(result.error); setAssignLoading(false); return }
+    setAssetGroups(prev => prev
+      .map(g => ({ ...g, assets: g.assets.filter(a => a.id !== assigningAsset.id) }))
+      .filter(g => g.assets.length > 0)
+    )
+    setAssigningAsset(null)
+    setAssignApparatusId('')
+    setAssignLoading(false)
+  }
 
   if (items.length === 0) {
     return (
@@ -301,6 +340,96 @@ export default function StorageClient({
           )
         })}
       </div>
+
+      {/* Tracked Assets — In Storage */}
+      {assetGroups.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-3">Tracked Assets — Unassigned</h2>
+          <div className="flex flex-col gap-3">
+            {assetGroups.map(group => (
+              <div key={group.item_id} className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900">{group.item_name}</p>
+                    {group.category_name && <p className="text-xs text-zinc-400">{group.category_name}</p>}
+                  </div>
+                  <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-semibold">
+                    {group.assets.length} unassigned
+                  </span>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {group.assets.map(asset => (
+                    <div key={asset.id} className="flex items-center justify-between px-4 py-3 gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-900">{asset.asset_tag}</p>
+                        {asset.serial_number && (
+                          <p className="text-xs text-zinc-400">S/N: {asset.serial_number}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${
+                          asset.status === 'IN SERVICE' ? 'bg-green-100 text-green-700' :
+                          asset.status === 'OUT OF SERVICE' ? 'bg-red-100 text-red-700' :
+                          'bg-zinc-100 text-zinc-500'
+                        }`}>{asset.status}</span>
+                        {isOfficerOrAbove && (
+                          <button
+                            onClick={() => { setAssigningAsset({ ...asset, item_name: group.item_name }); setAssignApparatusId(''); setAssignError(null) }}
+                            className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+                          >
+                            Assign to Apparatus
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Assign Asset to Apparatus modal */}
+      {assigningAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-semibold text-zinc-900 mb-1">Assign to Apparatus</h2>
+            <p className="text-sm text-zinc-500 mb-4">{assigningAsset.asset_tag} — {assigningAsset.item_name}</p>
+            {assignError && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{assignError}</div>}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-zinc-600 mb-1">Apparatus</label>
+              <select
+                value={assignApparatusId}
+                onChange={e => setAssignApparatusId(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              >
+                <option value="">Select apparatus...</option>
+                {allApparatus.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.unit_number}{a.apparatus_name ? ` — ${a.apparatus_name}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleAssignAsset}
+                disabled={assignLoading || !assignApparatusId}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+              >
+                {assignLoading ? 'Assigning...' : 'Assign'}
+              </button>
+              <button
+                onClick={() => setAssigningAsset(null)}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add to Compartment modal */}
       {activeModal === 'add' && activeItem && (

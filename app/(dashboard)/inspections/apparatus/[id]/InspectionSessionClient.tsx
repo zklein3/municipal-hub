@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession } from '@/app/actions/inspections'
+import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
+import { moveAssetsToStorage } from '@/app/actions/equipment'
 
 interface SessionCompartment {
   id: string
@@ -20,6 +21,13 @@ interface Session {
   status: string
   started_at: string
   expires_at: string
+}
+
+interface ReconciliationAsset {
+  id: string
+  asset_tag: string
+  serial_number: string | null
+  item_name: string
 }
 
 export default function InspectionSessionClient({
@@ -40,9 +48,36 @@ export default function InspectionSessionClient({
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [reconciliation, setReconciliation] = useState<ReconciliationAsset[] | null>(null)
+  const [keepOnApparatus, setKeepOnApparatus] = useState<Set<string>>(new Set())
+  const [loadingRecon, setLoadingRecon] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [abandonConfirm, setAbandonConfirm] = useState(false)
+
   const done = compartments.filter(c => c.status === 'completed').length
   const total = compartments.length
-  const sessionComplete = session.status === 'completed' || done === total
+  const sessionClosed = session.status === 'completed'
+  const sessionAllDone = total > 0 && done === total
+
+  // Auto-load reconciliation when all compartments are done
+  useEffect(() => {
+    if (sessionAllDone && !sessionClosed && isOfficerOrAdmin && reconciliation === null && !loadingRecon) {
+      loadReconciliation()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function loadReconciliation() {
+    setLoadingRecon(true)
+    setError(null)
+    const res = await getSessionReconciliation(session.id, apparatus_id)
+    setLoadingRecon(false)
+    if ('error' in res) {
+      setError(res.error as string)
+      return
+    }
+    setReconciliation(res.unaccounted)
+  }
 
   async function handleInspect(sc: SessionCompartment) {
     setLoadingId(sc.id)
@@ -80,12 +115,47 @@ export default function InspectionSessionClient({
     })
   }
 
-  async function handleCloseSession() {
+  async function handleAbandon() {
     setError(null)
-    startTransition(async () => {
-      const res = await closeInspectionSession(session.id)
-      if (res?.error) setError(res.error)
-      router.refresh()
+    setClosing(true)
+    const closeRes = await closeInspectionSession(session.id)
+    if (closeRes?.error) {
+      setError(closeRes.error)
+      setClosing(false)
+      setAbandonConfirm(false)
+      return
+    }
+    router.replace('/inspections')
+  }
+
+  async function doConfirmClose() {
+    setClosing(true)
+    setError(null)
+    const current = reconciliation ?? []
+    const toStorage = current.filter(a => !keepOnApparatus.has(a.id)).map(a => a.id)
+    if (toStorage.length > 0) {
+      const moveRes = await moveAssetsToStorage(toStorage)
+      if (moveRes?.error) {
+        setError(moveRes.error)
+        setClosing(false)
+        return
+      }
+    }
+    const closeRes = await closeInspectionSession(session.id)
+    if (closeRes?.error) {
+      setError(closeRes.error)
+      setClosing(false)
+      return
+    }
+    router.replace('/inspections')
+  }
+
+  function toggleKeep(assetId: string) {
+    setKeepOnApparatus(prev => {
+      const next = new Set(prev)
+      if (next.has(assetId)) next.delete(assetId)
+      else next.add(assetId)
+      return next
     })
   }
 
@@ -103,12 +173,6 @@ export default function InspectionSessionClient({
           {done} / {total} complete
         </span>
       </div>
-
-      {sessionComplete && (
-        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm font-medium text-green-700">
-          Session complete — all compartments inspected.
-        </div>
-      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -185,18 +249,122 @@ export default function InspectionSessionClient({
         ))}
       </div>
 
-      {/* Officer/Admin controls */}
-      {isOfficerOrAdmin && !sessionComplete && (
-        <div className="flex justify-end pt-2">
+      {/* Reconciliation panel — all compartments done, assets to resolve */}
+      {isOfficerOrAdmin && !sessionClosed && reconciliation !== null && reconciliation.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Asset Reconciliation</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              {reconciliation.length} asset{reconciliation.length !== 1 ? 's' : ''} assigned to this apparatus
+              {reconciliation.length !== 1 ? ' were' : ' was'} not confirmed during this inspection.
+              Choose what to do with each before closing.
+            </p>
+          </div>
+
+          <div className="divide-y divide-amber-200 rounded-lg border border-amber-200 bg-white overflow-hidden">
+            {reconciliation.map(asset => {
+              const keep = keepOnApparatus.has(asset.id)
+              return (
+                <div key={asset.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-zinc-900">{asset.asset_tag}</p>
+                    <p className="text-xs text-zinc-500">
+                      {asset.item_name}{asset.serial_number ? ` · S/N: ${asset.serial_number}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex rounded-lg border border-zinc-200 overflow-hidden shrink-0 text-xs font-semibold">
+                    <button
+                      onClick={() => keep && toggleKeep(asset.id)}
+                      className={`px-3 py-1.5 transition-colors ${!keep ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                    >
+                      To Storage
+                    </button>
+                    <button
+                      onClick={() => !keep && toggleKeep(asset.id)}
+                      className={`px-3 py-1.5 border-l border-zinc-200 transition-colors ${keep ? 'bg-zinc-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                    >
+                      Keep on Unit
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
           <button
-            onClick={handleCloseSession}
-            disabled={isPending}
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+            onClick={doConfirmClose}
+            disabled={closing}
+            className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
           >
-            Close Session
+            {closing ? 'Closing…' : (() => {
+              const toStorage = reconciliation.filter(a => !keepOnApparatus.has(a.id)).length
+              return toStorage > 0 ? `Move ${toStorage} to Storage & Close Session` : 'Close Session'
+            })()}
           </button>
         </div>
       )}
+
+      {/* Loading reconciliation */}
+      {isOfficerOrAdmin && !sessionClosed && loadingRecon && (
+        <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-500 text-center">
+          Checking asset reconciliation…
+        </div>
+      )}
+
+      {/* All done, no unaccounted assets — confirm close */}
+      {isOfficerOrAdmin && !sessionClosed && sessionAllDone && reconciliation !== null && reconciliation.length === 0 && (
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={doConfirmClose}
+            disabled={closing}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+          >
+            {closing ? 'Closing…' : 'Close Session'}
+          </button>
+        </div>
+      )}
+
+      {/* Bottom bar — back link for everyone, abandon for officers only */}
+      <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
+        <button
+          onClick={() => router.push('/inspections')}
+          className="text-sm text-zinc-500 hover:text-zinc-800 transition-colors"
+        >
+          ← Back to Inspections
+        </button>
+
+        {isOfficerOrAdmin && !sessionClosed && !sessionAllDone && (
+          <>
+            {!abandonConfirm ? (
+              <button
+                onClick={() => setAbandonConfirm(true)}
+                className="text-xs text-zinc-400 hover:text-red-600 underline transition-colors"
+              >
+                Abandon Session
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                <p className="text-xs text-red-800">
+                  Close with {total - done} compartment{total - done !== 1 ? 's' : ''} incomplete?
+                </p>
+                <button
+                  onClick={handleAbandon}
+                  disabled={closing}
+                  className="rounded bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  {closing ? 'Closing…' : 'Yes, Abandon'}
+                </button>
+                <button
+                  onClick={() => setAbandonConfirm(false)}
+                  className="text-xs text-zinc-500 hover:text-zinc-700 underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

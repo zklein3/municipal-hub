@@ -183,7 +183,7 @@ export default function AssetRosterClient({
           <QRScanButton hint="Scan an apparatus or compartment QR label" />
           {isAdmin && (
             <Link
-              href="/dept-admin/items?tab=assets"
+              href="/dept-admin/setup"
               className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 transition-colors"
             >
               Manage Assets

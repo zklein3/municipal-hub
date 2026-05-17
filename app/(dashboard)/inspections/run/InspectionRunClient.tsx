@@ -87,9 +87,24 @@ export default function InspectionRunClient({
   const [confirmedReassigns, setConfirmedReassigns] = useState<string[]>([])
   const [reassigning, setReassigning] = useState(false)
 
+  const [missingSlots, setMissingSlots] = useState<Record<string, boolean[]>>({})
+  const [missingNotes, setMissingNotes] = useState<Record<string, string[]>>({})
+
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function isSlotMissing(locationId: string, slotIndex: number) {
+    return missingSlots[locationId]?.[slotIndex] ?? false
+  }
+
+  function markSlotMissing(locationId: string, slotIndex: number, missing: boolean) {
+    setMissingSlots(prev => {
+      const current = [...(prev[locationId] ?? [])]
+      current[slotIndex] = missing
+      return { ...prev, [locationId]: current }
+    })
+  }
 
   function setPresence(location_standard_id: string, item_id: string, field: keyof PresenceResponse, value: unknown) {
     setPresenceResponses(prev => ({
@@ -136,6 +151,7 @@ export default function InspectionRunClient({
         if (resp?.present === undefined) return false
       } else {
         for (let i = 0; i < item.expected_quantity; i++) {
+          if (isSlotMissing(item.location_standard_id, i)) continue
           const asset = getAssetForSlot(item, i)
           if (!asset) return false
           const template = getTemplate(item, asset.id)
@@ -165,6 +181,15 @@ export default function InspectionRunClient({
       for (const item of checklistItems) {
         if (hasInspection(item)) {
           for (let i = 0; i < item.expected_quantity; i++) {
+            if (isSlotMissing(item.location_standard_id, i)) {
+              presenceChecks.push({
+                location_standard_id: item.location_standard_id,
+                item_id: item.item_id,
+                present: false,
+                notes: missingNotes[item.location_standard_id]?.[i] || undefined,
+              })
+              continue
+            }
             const asset = getAssetForSlot(item, i)
             if (!asset) continue
             const template = getTemplate(item, asset.id)
@@ -188,12 +213,19 @@ export default function InspectionRunClient({
         asset_inspections: assetInspections,
         presence_checks: presenceChecks,
       })
-      if (result?.error) setError(result.error)
-      else setSubmitted(true)
+      if (result?.error) {
+        setError(result.error)
+        setSubmitting(false)
+      } else if (inspectionSessionId) {
+        router.replace(`/inspections/apparatus/${apparatus.id}`)
+      } else {
+        setSubmitted(true)
+        setSubmitting(false)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Submission failed.')
+      setSubmitting(false)
     }
-    setSubmitting(false)
   }
 
   if (submitted) {
@@ -206,17 +238,10 @@ export default function InspectionRunClient({
             Compartment {compartment.code} on Unit {apparatus.unit_number} has been inspected.
           </p>
           <div className="flex gap-3">
-            {inspectionSessionId ? (
-              <button onClick={() => router.push(`/inspections/apparatus/${apparatus.id}`)}
-                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
-                Back to Session
-              </button>
-            ) : (
-              <button onClick={() => router.push('/inspections')}
-                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
-                Inspect Another
-              </button>
-            )}
+            <button onClick={() => router.push('/inspections')}
+              className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
+              Inspect Another
+            </button>
             <button onClick={() => router.push('/dashboard')}
               className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
               Dashboard
@@ -338,9 +363,42 @@ export default function InspectionRunClient({
 
                         {/* Asset selector */}
                         <div className="mb-4">
-                          <label className="mb-1.5 block text-sm font-medium text-zinc-700">
-                            Which {item.item_name} is present?
-                          </label>
+                          {isSlotMissing(item.location_standard_id, slotIndex) ? (
+                            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-semibold text-red-800">⚠ {item.item_name} — Not Present</p>
+                                <button
+                                  onClick={() => markSlotMissing(item.location_standard_id, slotIndex, false)}
+                                  className="text-xs text-zinc-500 hover:text-zinc-700 underline"
+                                >
+                                  Undo
+                                </button>
+                              </div>
+                              <textarea
+                                rows={2}
+                                value={missingNotes[item.location_standard_id]?.[slotIndex] ?? ''}
+                                onChange={e => setMissingNotes(prev => {
+                                  const current = [...(prev[item.location_standard_id] ?? [])]
+                                  current[slotIndex] = e.target.value
+                                  return { ...prev, [item.location_standard_id]: current }
+                                })}
+                                placeholder="Notes — where is it, who has it? (optional)"
+                                className={`${inputCls} resize-none`}
+                              />
+                            </div>
+                          ) : (
+                          <>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-sm font-medium text-zinc-700">
+                              Which {item.item_name} is present?
+                            </label>
+                            <button
+                              onClick={() => markSlotMissing(item.location_standard_id, slotIndex, true)}
+                              className="text-xs text-zinc-400 hover:text-red-600 underline transition-colors"
+                            >
+                              Not present
+                            </button>
+                          </div>
                           {availableAssets.length === 0 ? (
                             <p className="text-sm text-zinc-400">No assets found. Add assets in Dept Admin → Items.</p>
                           ) : (
@@ -355,6 +413,11 @@ export default function InspectionRunClient({
                                   setPendingReassign({ locationId: item.location_standard_id, slotIndex, assetId, assetLabel: label })
                                 } else {
                                   setAssetForSlot(item.location_standard_id, slotIndex, assetId)
+                                  if (!picked?.apparatus_id) {
+                                    moveAssetToApparatus(assetId, apparatus.id).then(res => {
+                                      if (res?.error) setError(res.error)
+                                    })
+                                  }
                                 }
                               }}
                               className={inputCls}>
@@ -417,6 +480,8 @@ export default function InspectionRunClient({
                                 </button>
                               </div>
                             </div>
+                          )}
+                          </>
                           )}
                         </div>
 

@@ -74,8 +74,25 @@ export default async function EquipmentDetailPage({
   // Fetch item details
   const itemIds = (locationStandards ?? []).map(ls => ls.item_id).filter(Boolean)
   const { data: itemData } = itemIds.length > 0
-    ? await adminClient.from('items').select('id, item_name, item_description, category_id, requires_inspection').in('id', itemIds)
+    ? await adminClient.from('items').select('id, item_name, item_description, category_id, requires_inspection, tracks_assets').in('id', itemIds)
     : { data: [] }
+
+  // For tracked-asset items, fetch how many are assigned to this apparatus
+  const trackedItemIds = (itemData ?? []).filter((i: { tracks_assets: boolean }) => i.tracks_assets).map((i: { id: string }) => i.id)
+  const { data: assignedAssetsRaw } = trackedItemIds.length > 0
+    ? await adminClient
+        .from('item_assets')
+        .select('id, item_id')
+        .eq('apparatus_id', id)
+        .eq('active', true)
+        .neq('status', 'RETIRED')
+        .in('item_id', trackedItemIds)
+    : { data: [] }
+
+  const assignedCountByItem = (assignedAssetsRaw ?? []).reduce<Record<string, number>>((acc, a) => {
+    acc[a.item_id] = (acc[a.item_id] ?? 0) + 1
+    return acc
+  }, {})
 
   const categoryIds = (itemData ?? []).map(i => i.category_id).filter(Boolean)
   const { data: categoryData } = categoryIds.length > 0
@@ -157,9 +174,11 @@ export default async function EquipmentDetailPage({
           item_name: itemMap[ls.item_id]?.item_name ?? '—',
           category_name: categoryMap[itemMap[ls.item_id]?.category_id] ?? '—',
           requires_inspection: itemMap[ls.item_id]?.requires_inspection ?? false,
+          tracks_assets: itemMap[ls.item_id]?.tracks_assets ?? false,
           expected_quantity: ls.expected_quantity,
           minimum_quantity: ls.minimum_quantity,
           notes: ls.notes,
+          assigned_count: itemMap[ls.item_id]?.tracks_assets ? (assignedCountByItem[ls.item_id] ?? 0) : null,
         }))
 
       return {

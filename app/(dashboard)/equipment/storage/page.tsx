@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import BackButton from '@/components/BackButton'
 import StorageClient from './StorageClient'
 
@@ -23,7 +24,7 @@ export default async function StoragePage() {
   const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
   const department_id = myDept.department_id
 
-  // Items — quantity-tracked only
+  // Items — quantity-tracked
   const { data: itemsRaw } = await adminClient
     .from('items')
     .select('id, item_name, category_id, department_quantity')
@@ -32,12 +33,52 @@ export default async function StoragePage() {
     .eq('tracks_quantity', true)
     .order('item_name')
 
-  // Categories flat
-  const categoryIds = [...new Set((itemsRaw ?? []).map(i => i.category_id).filter(Boolean))]
-  const { data: categoriesRaw } = categoryIds.length > 0
-    ? await adminClient.from('item_categories').select('id, category_name').in('id', categoryIds)
+  // Items — asset-tracked
+  const { data: trackedItemsRaw } = await adminClient
+    .from('items')
+    .select('id, item_name, category_id')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .eq('tracks_assets', true)
+    .order('item_name')
+
+  // Categories flat (both item types)
+  const allCategoryIds = [...new Set([
+    ...(itemsRaw ?? []).map(i => i.category_id),
+    ...(trackedItemsRaw ?? []).map(i => i.category_id),
+  ].filter(Boolean))]
+  const { data: categoriesRaw } = allCategoryIds.length > 0
+    ? await adminClient.from('item_categories').select('id, category_name').in('id', allCategoryIds)
     : { data: [] }
   const categoryMap = Object.fromEntries((categoriesRaw ?? []).map(c => [c.id, c.category_name]))
+
+  // Tracked assets currently in storage (apparatus_id IS NULL)
+  const trackedItemIds = (trackedItemsRaw ?? []).map(i => i.id)
+  const { data: storageAssetsRaw } = trackedItemIds.length > 0
+    ? await adminClient
+        .from('item_assets')
+        .select('id, item_id, asset_tag, serial_number, status')
+        .eq('department_id', department_id)
+        .eq('active', true)
+        .is('apparatus_id', null)
+        .neq('status', 'RETIRED')
+        .in('item_id', trackedItemIds)
+        .order('asset_tag')
+    : { data: [] }
+
+  const storageAssetGroups = (trackedItemsRaw ?? [])
+    .map(item => ({
+      item_id: item.id,
+      item_name: item.item_name,
+      category_name: categoryMap[item.category_id] ?? '',
+      assets: (storageAssetsRaw ?? []).filter(a => a.item_id === item.id).map(a => ({
+        id: a.id,
+        asset_tag: a.asset_tag,
+        serial_number: a.serial_number as string | null,
+        status: a.status,
+      })),
+    }))
+    .filter(g => g.assets.length > 0)
 
   // Storage records
   const { data: storageRaw } = await adminClient
@@ -147,12 +188,19 @@ export default async function StoragePage() {
         </div>
       )}
 
-      <div className="mb-5">
+      <div className="mb-5 flex gap-3">
         <BackButton href="/equipment" />
+        <Link
+          href="/equipment/movement-log"
+          className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+        >
+          Movement Log →
+        </Link>
       </div>
 
       <StorageClient
         items={storageItems}
+        storageAssetGroups={storageAssetGroups}
         allApparatus={allApparatus}
         isAdmin={isAdmin}
         isOfficerOrAbove={isOfficerOrAbove}

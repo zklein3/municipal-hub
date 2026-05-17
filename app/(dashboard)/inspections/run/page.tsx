@@ -83,6 +83,16 @@ export default async function InspectionRunPage({
         .neq('status', 'RETIRED')
     : { data: [] }
 
+  // Exclude assets already confirmed in earlier compartments this session
+  let usedAssetIds = new Set<string>()
+  if (session_id && assetItemIds.length > 0) {
+    const { data: usedLogs } = await adminClient
+      .from('item_asset_inspection_logs')
+      .select('asset_id')
+      .eq('inspection_session_id', session_id)
+    usedAssetIds = new Set((usedLogs ?? []).map(l => l.asset_id))
+  }
+
   // For each asset-tracked item, fetch its inspection templates + steps
   const { data: templates } = assetItemIds.length > 0
     ? await adminClient
@@ -108,7 +118,7 @@ export default async function InspectionRunPage({
     const item = itemMap[ls.item_id]
     if (!item) return null
 
-    const itemAssets = (assets ?? []).filter(a => a.item_id === ls.item_id)
+    const itemAssets = (assets ?? []).filter(a => a.item_id === ls.item_id && !usedAssetIds.has(a.id))
     const itemTemplates = (templates ?? []).filter(t => t.item_id === ls.item_id)
 
     return {
