@@ -34,7 +34,8 @@ interface Dept {
   public_phone: string | null; public_email: string | null; public_address: string | null
   public_tagline: string | null; public_about: string | null
   burn_permit_restrictions: string | null; burn_permit_county_info: string | null
-  module_operations: boolean; module_iso: boolean
+  module_operations: boolean; module_iso: boolean; module_neris: boolean
+  neris_entity_id: string | null
 }
 interface EventSeries { id: string; title: string; event_type: string | null; is_public: boolean; active: boolean }
 interface PersonnelRecord {
@@ -568,7 +569,9 @@ export default function SysAdminDeptClient({
           departmentId={departmentId}
           moduleOperations={dept.module_operations}
           moduleIso={dept.module_iso}
+          moduleNeris={dept.module_neris}
           publicSiteEnabled={dept.public_site_enabled}
+          nerisEntityId={dept.neris_entity_id ?? null}
         />
       )}
     </div>

@@ -57,6 +57,7 @@ export default function IncidentDetailClient({
   myPersonnelId,
   mutualAid,
   nerisRecord,
+  moduleNeris,
 }: {
   incident: any
   incidentApparatus: ApparatusRow[]
@@ -69,6 +70,7 @@ export default function IncidentDetailClient({
   myPersonnelId: string
   mutualAid: MutualAidRow[]
   nerisRecord: { id: string; neris_status: string; completed_at: string | null; neris_submission_id: string | null } | null
+  moduleNeris: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -362,7 +364,7 @@ export default function IncidentDetailClient({
         )}
         {importSuccess && <span className="self-center text-xs font-medium text-green-700">✓ Run sheet applied</span>}
         {importError && <span className="self-center text-xs text-red-600">{importError}</span>}
-        {isOfficerOrAbove && (
+        {isOfficerOrAbove && moduleNeris && (
           <Link
             href={`/incidents/${incident.id}/neris`}
             className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors shadow-sm inline-flex items-center gap-2"

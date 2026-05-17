@@ -42,6 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let publicSiteEnabled = false
   let moduleOperations = false
   let moduleIso = false
+  let moduleNeris = false
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
     const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }] = await Promise.all([
@@ -53,7 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       isOfficerOrAbove
         ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
         : Promise.resolve({ data: [] }),
-      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso').eq('id', user.department_id).single(),
+      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris').eq('id', user.department_id).single(),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
@@ -61,6 +62,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
     moduleOperations = (deptFlags as any)?.module_operations ?? false
     moduleIso = (deptFlags as any)?.module_iso ?? false
+    moduleNeris = (deptFlags as any)?.module_neris ?? false
   }
 
   const navGroups: NavGroup[] = isSysAdmin ? [

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { updateDepartmentModules } from '@/app/actions/departments'
+import { updateDepartmentModules, saveNerisEntityId } from '@/app/actions/departments'
 
 interface Bundle {
-  key: 'module_operations' | 'module_iso' | 'public_site_enabled'
+  key: 'module_operations' | 'module_iso' | 'module_neris' | 'public_site_enabled'
   label: string
   description: string
   features: string[]
@@ -15,20 +15,28 @@ export default function ModulesTab({
   departmentId,
   moduleOperations,
   moduleIso,
+  moduleNeris,
   publicSiteEnabled,
+  nerisEntityId: initialEntityId,
 }: {
   departmentId: string
   moduleOperations: boolean
   moduleIso: boolean
+  moduleNeris: boolean
   publicSiteEnabled: boolean
+  nerisEntityId: string | null
 }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [state, setState] = useState({
     module_operations: moduleOperations,
     module_iso: moduleIso,
+    module_neris: moduleNeris,
     public_site_enabled: publicSiteEnabled,
   })
+  const [entityId, setEntityId] = useState(initialEntityId ?? '')
+  const [entityIdSaving, setEntityIdSaving] = useState(false)
+  const [entityIdSaved, setEntityIdSaved] = useState(false)
 
   async function handleToggle(key: Bundle['key']) {
     setSaving(key)
@@ -43,13 +51,33 @@ export default function ModulesTab({
     setSaving(null)
   }
 
+  async function handleSaveEntityId() {
+    setEntityIdSaving(true)
+    setEntityIdSaved(false)
+    const result = await saveNerisEntityId(departmentId, entityId.trim())
+    if (result?.error) {
+      setError(result.error)
+    } else {
+      setEntityIdSaved(true)
+      setTimeout(() => setEntityIdSaved(false), 3000)
+    }
+    setEntityIdSaving(false)
+  }
+
   const bundles: Bundle[] = [
     {
       key: 'module_operations',
       label: 'Bundle A — Operations',
       description: 'Incident reporting, run sheet PDF import, and NERIS API submission.',
-      features: ['Incident log & reporting', 'Run sheet PDF import (AI-parsed)', 'NERIS compliance & API submission', 'Incident-level apparatus & personnel tracking'],
+      features: ['Incident log & reporting', 'Run sheet PDF import (AI-parsed)', 'Incident-level apparatus & personnel tracking'],
       enabled: state.module_operations,
+    },
+    {
+      key: 'module_neris',
+      label: 'NERIS Reporting',
+      description: 'NERIS compliance API submission. Requires Bundle A and a valid NERIS Entity ID.',
+      features: ['NERIS incident submission', 'Pre-submission validation', 'Submission status tracking'],
+      enabled: state.module_neris,
     },
     {
       key: 'module_iso',
@@ -116,6 +144,24 @@ export default function ModulesTab({
                   </li>
                 ))}
               </ul>
+              {bundle.key === 'module_neris' && (
+                <div className="mt-4 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={entityId}
+                    onChange={e => setEntityId(e.target.value)}
+                    placeholder="NERIS Entity ID (e.g. FD35049607)"
+                    className="w-64 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <button
+                    onClick={handleSaveEntityId}
+                    disabled={entityIdSaving}
+                    className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 transition-colors"
+                  >
+                    {entityIdSaving ? 'Saving…' : entityIdSaved ? 'Saved!' : 'Save'}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${

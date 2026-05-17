@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 export async function createDepartment(formData: FormData) {
@@ -33,9 +34,37 @@ export async function toggleDepartment(id: string, active: boolean) {
   return { success: true }
 }
 
+export async function saveDeptInspectionSettings(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Not authenticated.' }
+
+  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) return { error: 'Only admins can change inspection settings.' }
+
+  const hours = parseInt(formData.get('inspection_session_duration_hours') as string)
+  if (!hours || hours < 1) return { error: 'Duration must be at least 1 hour.' }
+  if (hours > 8760) return { error: 'Duration cannot exceed 8760 hours (1 year).' }
+
+  const { error } = await adminClient
+    .from('departments')
+    .update({ inspection_session_duration_hours: hours })
+    .eq('id', myDept.department_id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/dept-admin/inspections')
+  return { success: true }
+}
+
 export async function updateDepartmentModules(
   departmentId: string,
-  modules: { module_operations?: boolean; module_iso?: boolean; public_site_enabled?: boolean }
+  modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; public_site_enabled?: boolean }
 ) {
   const supabase = await createClient()
   const { error } = await supabase
@@ -46,5 +75,17 @@ export async function updateDepartmentModules(
   if (error) return { error: error.message }
   revalidatePath(`/admin/dept/${departmentId}`)
   revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function saveNerisEntityId(departmentId: string, nerisEntityId: string) {
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
+    .from('departments')
+    .update({ neris_entity_id: nerisEntityId || null })
+    .eq('id', departmentId)
+
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/dept/${departmentId}`)
   return { success: true }
 }

@@ -107,12 +107,12 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     .eq('incident_id', id)
     .order('created_at')
 
-  // NERIS record (if started)
-  const { data: nerisRecord } = await adminClient
-    .from('incident_neris')
-    .select('id, neris_status, completed_at, neris_submission_id')
-    .eq('incident_id', id)
-    .maybeSingle()
+  // NERIS record (if started) + dept NERIS flag
+  const [{ data: nerisRecord }, { data: deptFlagsList }] = await Promise.all([
+    adminClient.from('incident_neris').select('id, neris_status, completed_at, neris_submission_id').eq('incident_id', id).maybeSingle(),
+    adminClient.from('departments').select('module_neris').eq('id', department_id),
+  ])
+  const moduleNeris = deptFlagsList?.[0]?.module_neris ?? false
 
   return (
     <IncidentDetailClient
@@ -135,6 +135,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       myPersonnelId={me.id}
       mutualAid={mutualAid ?? []}
       nerisRecord={nerisRecord ?? null}
+      moduleNeris={moduleNeris}
     />
   )
 }
