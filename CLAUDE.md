@@ -88,16 +88,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### 0. ⚠️ DELETE B-0075 BEFORE CLOSING — TEST BOTTLE IN SYSTEM
-B-0075 was added 2026-05-17 for demo/play. Must be removed before end of day so it doesn't appear in reports.
-Run this before closing:
-```sql
-DELETE FROM fire_school_fill_logs WHERE bottle_id = 'B-0075';
-DELETE FROM fire_school_bottles WHERE bottle_id = 'B-0075';
-```
-Or just tell Claude and it will run it via Supabase MCP.
+### 1. Training — Resume After User Testing ✳️ IN PROGRESS
+Built 2026-05-17. User is playing with flow before proposing further changes.
 
-### 1. NERIS — Add Env Vars to Vercel ⚠️ USER ACTION REQUIRED
+**What's working:**
+- Unified member training page (My Training list + My Certifications)
+- Simple cert: assign → training date → member logs attendance → officer verifies → cert issued → member signs
+- Training event with cert type: bulk log attendance → cert auto-issued to all
+- Direct cert entry (admin): picks cert type or enters custom name, dates, cert number
+- Dept-wide enrollment: "Assign to All Active Members" toggle
+- Cert signatures on all records (CertSignaturePadModal)
+
+**Known gaps to revisit after testing:**
+- Training event cert issuance deduplication (same-day check only — may double-issue if event re-verified)
+- No way to edit a cert record after entry (wrong date, cert number, etc.)
+- No expiry notification for certs approaching expiration
+- Admin has no read-only view of a member's full cert history
+
+### 2. NERIS — Add Env Vars to Vercel ⚠️ USER ACTION REQUIRED
 NERIS submission works locally but fails on live site — env vars not in Vercel.
 Add these in Vercel dashboard → Project Settings → Environment Variables:
 - `NERIS_CLIENT_ID` — from NERIS Integrations tab

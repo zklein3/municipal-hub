@@ -36,7 +36,8 @@
 - Public Inbox — burn permits + records tabs, pending count badge
 - Login show/hide password toggle
 - BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
-- Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings
+- Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings, on/off marketing toggle
+- Training — unified member training page, direct cert entry, dept-wide enrollment, cert signatures, auto-cert issuance from events
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
 
@@ -93,6 +94,12 @@ Items flagged during development — address during next cleanup pass:
 ### ISO
 - `apparatus_iso_specs`, `hoses`, `hose_tests`, `hydrants`, `hydrant_flow_tests`, `incident_mutual_aid`
 
+### Training (additions)
+- `member_certifications.signature_url`, `.signed_at` — member signature on cert records
+- `course_enrollments.training_date`, `.session_logged_at`, `.session_status` — simple cert session flow
+- `training_events.certification_type_id` — auto-issues cert to verified attendees
+- `system_settings` table — key/value global config (fire_school_enabled)
+
 ### Fire School (public, no auth)
 - `fire_school_bottles`, `fire_school_fill_logs`
 - `fire_school_fill_logs.verified_at` — timestamptz, null = unverified
@@ -117,6 +124,21 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-05-17 — Training Module Overhaul + Fire School Polish
+- Training member page: replaced 3-tab layout with unified My Training list + My Certifications section
+- Simple cert flow: admin assigns cert with training date → member logs attendance after date → officer verifies → cert auto-issued → member signs
+- Training events: added `certification_type_id` — verified attendance auto-issues cert to member
+- Direct cert entry: admin UI built in Enrollments tab, `createDirectCertification` action (was action-only, no UI)
+- Member signatures on all cert records (`member_certifications.signature_url`, `signed_at`)  
+- `CertSignaturePadModal` component for cert signing
+- Dept-wide enrollment: "Assign to All Active Members" toggle — one click creates enrollments for entire dept
+- Re-enroll button on withdrawn enrollment rows
+- Admin Pending tab: shows both pending course unit progress AND pending simple cert sessions
+- Fuel log: inline edit for officer+ (Edit button per row, same form pre-filled)
+- Fire school: on/off toggle in sys admin (system_settings table) — when off, QR codes show marketing cover page with inquiry form
+- Fire school inquiry form: submits to system_logs as fire_school_inquiry type
+- Salamander QR scanner: Take Photo fallback for dense QR codes
 
 ### 2026-05-16 — Fire School Realtime + Verification + QR Research
 - Fire school settings page (`/fire-school/settings`) — timezone selector saved to localStorage per device, drives fill log timestamp display
