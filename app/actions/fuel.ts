@@ -71,6 +71,51 @@ export async function logFuel(formData: FormData) {
   return { success: true }
 }
 
+// ─── Update Fuel Entry ───────────────────────────────────────────────────────
+export async function updateFuelEntry(id: string, formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can edit fuel entries.' }
+  const adminClient = createAdminClient()
+
+  const fuel_date = formData.get('fuel_date') as string
+  const gallons = formData.get('gallons') as string
+  const cost_per_gallon = formData.get('cost_per_gallon') as string
+  const total_cost = formData.get('total_cost') as string
+  const fuel_type = formData.get('fuel_type') as string || 'diesel'
+  const fuel_system = formData.get('fuel_system') as string || 'main'
+  const aux_description = formData.get('aux_description') as string
+  const odometer = formData.get('odometer') as string
+  const engine_hours = formData.get('engine_hours') as string
+  const vendor = formData.get('vendor') as string
+  const notes = formData.get('notes') as string
+
+  if (!fuel_date) return { error: 'Date is required.' }
+  if (!gallons || parseFloat(gallons) <= 0) return { error: 'Gallons must be greater than 0.' }
+
+  const { error } = await adminClient
+    .from('apparatus_fuel_logs')
+    .update({
+      fuel_date,
+      gallons: parseFloat(gallons),
+      cost_per_gallon: cost_per_gallon ? parseFloat(cost_per_gallon) : null,
+      total_cost: total_cost ? parseFloat(total_cost) : null,
+      fuel_type,
+      fuel_system,
+      aux_description: fuel_system === 'auxiliary' ? (aux_description || null) : null,
+      odometer: fuel_system === 'main' ? (odometer ? parseInt(odometer) : null) : null,
+      engine_hours: engine_hours ? parseFloat(engine_hours) : null,
+      vendor: vendor || null,
+      notes: notes || null,
+    })
+    .eq('id', id)
+    .eq('department_id', ctx.department_id!)
+
+  if (error) { await logError(error.message, '/fuel'); return { error: error.message } }
+  revalidatePath('/fuel')
+  revalidatePath('/reports/fuel')
+  return { success: true }
+}
+
 // ─── Delete Fuel Entry ────────────────────────────────────────────────────────
 export async function deleteFuelEntry(id: string) {
   const ctx = await getContext()

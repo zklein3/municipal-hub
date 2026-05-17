@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { logFuel, deleteFuelEntry } from '@/app/actions/fuel'
+import { logFuel, updateFuelEntry, deleteFuelEntry } from '@/app/actions/fuel'
 import { parseFuelReceipt, type ParsedFuelReceipt } from '@/app/actions/parse-fuel-receipt'
 
 const inputCls = 'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -50,6 +50,7 @@ export default function FuelClient({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -121,6 +122,36 @@ export default function FuelClient({
     }
   }
 
+  function handleEdit(entry: FuelEntry) {
+    setEditingId(entry.id)
+    setForm({
+      apparatus_id: entry.apparatus_id,
+      fuel_date: entry.fuel_date,
+      gallons: String(entry.gallons),
+      cost_per_gallon: entry.cost_per_gallon != null ? String(entry.cost_per_gallon) : '',
+      total_cost: entry.total_cost != null ? String(entry.total_cost) : '',
+      fuel_type: entry.fuel_type,
+      fuel_system: entry.fuel_system,
+      aux_description: entry.aux_description ?? '',
+      odometer: entry.odometer != null ? String(entry.odometer) : '',
+      engine_hours: entry.engine_hours != null ? String(entry.engine_hours) : '',
+      vendor: entry.vendor ?? '',
+      notes: entry.notes ?? '',
+    })
+    setShowForm(true)
+    setError(null)
+    setSuccess(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function handleCancelForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setError(null)
+    setSuccess(null)
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '' }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -128,12 +159,35 @@ export default function FuelClient({
     setSuccess(null)
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => { if (v) fd.set(k, v) })
-    const result = await logFuel(fd)
-    if (result?.error) { setError(result.error); setLoading(false); return }
-    setSuccess('Fuel entry saved.')
+
+    if (editingId) {
+      const result = await updateFuelEntry(editingId, fd)
+      if (result?.error) { setError(result.error); setLoading(false); return }
+      setEntries(prev => prev.map(e => e.id === editingId ? {
+        ...e,
+        fuel_date: form.fuel_date,
+        gallons: parseFloat(form.gallons),
+        cost_per_gallon: form.cost_per_gallon ? parseFloat(form.cost_per_gallon) : null,
+        total_cost: form.total_cost ? parseFloat(form.total_cost) : null,
+        fuel_type: form.fuel_type,
+        fuel_system: form.fuel_system,
+        aux_description: form.aux_description || null,
+        odometer: form.odometer ? parseInt(form.odometer) : null,
+        engine_hours: form.engine_hours ? parseFloat(form.engine_hours) : null,
+        vendor: form.vendor || null,
+        notes: form.notes || null,
+      } : e))
+      setSuccess('Fuel entry updated.')
+    } else {
+      const result = await logFuel(fd)
+      if (result?.error) { setError(result.error); setLoading(false); return }
+      setSuccess('Fuel entry saved.')
+      router.refresh()
+    }
+
     setShowForm(false)
-    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today }))
-    router.refresh()
+    setEditingId(null)
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '' }))
     setLoading(false)
   }
 
@@ -170,7 +224,7 @@ export default function FuelClient({
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Fuel Log</h2>
-        <button onClick={() => { setShowForm(!showForm); setError(null); setSuccess(null) }}
+        <button onClick={() => showForm ? handleCancelForm() : setShowForm(true)}
           className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">
           {showForm ? 'Cancel' : '+ Log Fuel'}
         </button>
@@ -181,6 +235,7 @@ export default function FuelClient({
 
       {showForm && (
         <div className="mb-6 rounded-xl bg-white border border-zinc-200 p-5 shadow-sm">
+          <p className="text-sm font-semibold text-zinc-700 mb-4">{editingId ? 'Edit Fuel Entry' : 'New Fuel Entry'}</p>
           {/* Receipt scan */}
           <div className="mb-4 flex items-center gap-3">
             <button type="button" onClick={() => fileRef.current?.click()} disabled={scanning}
@@ -279,7 +334,7 @@ export default function FuelClient({
 
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-              {loading ? 'Saving…' : 'Save Fuel Entry'}
+              {loading ? 'Saving…' : editingId ? 'Update Fuel Entry' : 'Save Fuel Entry'}
             </button>
           </form>
         </div>
@@ -323,10 +378,16 @@ export default function FuelClient({
                   {entry.logged_by_name && <p className="text-xs text-zinc-400 mt-0.5">Logged by {entry.logged_by_name}</p>}
                 </div>
                 {isOfficerOrAbove && (
-                  <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
-                    className="shrink-0 text-xs text-zinc-400 hover:text-red-600 disabled:opacity-50 transition-colors">
-                    {deletingId === entry.id ? '…' : 'Delete'}
-                  </button>
+                  <div className="shrink-0 flex gap-3">
+                    <button onClick={() => handleEdit(entry)}
+                      className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors">
+                      Edit
+                    </button>
+                    <button onClick={() => handleDelete(entry.id)} disabled={deletingId === entry.id}
+                      className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-50 transition-colors">
+                      {deletingId === entry.id ? '…' : 'Delete'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
