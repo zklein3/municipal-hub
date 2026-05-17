@@ -26,17 +26,12 @@ interface Bottle {
   active: boolean
 }
 
-interface UnverifiedFill {
-  id: string
-  filled_at: string
-}
-
 interface CheckBottleResult {
   found: boolean
   bottle?: Bottle
   fillable?: boolean
   reason?: string | null
-  unverifiedFill?: UnverifiedFill | null
+  unverifiedFill?: { id: string; filled_at: string } | null
 }
 
 export default function FillStationPage() {
@@ -57,9 +52,7 @@ function FillStationContent() {
   const [lastFillId, setLastFillId] = useState<string | null>(null)
   const [verified, setVerified] = useState(false)
   const [verifying, setVerifying] = useState(false)
-  const [pendingVerify, setPendingVerify] = useState<UnverifiedFill | null>(null)
-  const [pendingVerified, setPendingVerified] = useState(false)
-  const [pendingVerifying, setPendingVerifying] = useState(false)
+  const [skippedVerify, setSkippedVerify] = useState(false)
 
   const extractBottleIdFromScan = useCallback((raw: string): string => {
     const trimmed = raw.trim()
@@ -98,8 +91,6 @@ function FillStationContent() {
     try {
       const res = await checkBottle(cleanBottleId)
       setResult(res as CheckBottleResult)
-      setPendingVerify(res.unverifiedFill ?? null)
-      setPendingVerified(false)
     } finally {
       setChecking(false)
     }
@@ -131,8 +122,7 @@ function FillStationContent() {
     setScannerOpen(false)
     setLastFillId(null)
     setVerified(false)
-    setPendingVerify(null)
-    setPendingVerified(false)
+    setSkippedVerify(false)
     router.replace('/fire-school')
   }
 
@@ -244,47 +234,47 @@ function FillStationContent() {
 
           {result.found && result.bottle && (
             <>
-              {/* Unverified fill prompt */}
-              {pendingVerify && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-                  <p className="text-sm font-semibold text-amber-800 mb-1">Unverified fill on record</p>
-                  <p className="text-xs text-amber-700 mb-4">
-                    This bottle was filled at{' '}
-                    {new Date(pendingVerify.filled_at).toLocaleString('en-US', {
+              {/* Pending verification — primary screen */}
+              {result.unverifiedFill && !skippedVerify && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                  <div className="text-4xl mb-3">📋</div>
+                  <h2 className="text-lg font-bold text-zinc-900 mb-1">Fill Pending Verification</h2>
+                  <p className="text-sm text-zinc-500 mb-1">
+                    <span className="font-mono font-bold">{result.bottle.bottle_id}</span>
+                  </p>
+                  <p className="text-xs text-zinc-400 mb-6">
+                    Filled at{' '}
+                    {new Date(result.unverifiedFill.filled_at).toLocaleString('en-US', {
                       timeZone: 'America/Chicago',
                       month: 'short', day: 'numeric',
                       hour: 'numeric', minute: '2-digit',
-                    })}{' '}
-                    and has not been verified.
+                    })}
                   </p>
-                  {pendingVerified ? (
-                    <p className="text-sm font-semibold text-green-700">✓ Previous fill verified</p>
+                  {verified ? (
+                    <p className="text-sm font-semibold text-green-700 mb-4">✓ Fill verified</p>
                   ) : (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={async () => {
-                          setPendingVerifying(true)
-                          await verifyFill(pendingVerify.id)
-                          setPendingVerified(true)
-                          setPendingVerifying(false)
-                          setPendingVerify(null)
-                        }}
-                        disabled={pendingVerifying}
-                        className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                      >
-                        {pendingVerifying ? 'Verifying...' : 'Verify Previous Fill'}
-                      </button>
-                      <button
-                        onClick={() => setPendingVerify(null)}
-                        className="flex-1 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
-                      >
-                        Skip
-                      </button>
-                    </div>
+                    <button
+                      onClick={async () => {
+                        setVerifying(true)
+                        await verifyFill(result.unverifiedFill!.id)
+                        setVerified(true)
+                        setVerifying(false)
+                      }}
+                      disabled={verifying}
+                      className="w-full rounded-lg bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 mb-3"
+                    >
+                      {verifying ? 'Verifying...' : 'Verify Fill'}
+                    </button>
                   )}
+                  <button
+                    onClick={() => setSkippedVerify(true)}
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-50"
+                  >
+                    {verified ? 'Continue to Fill' : 'Skip — Proceed to Fill'}
+                  </button>
                 </div>
               )}
-              <div
+              {(!result.unverifiedFill || skippedVerify || verified) && <div
                 className={`rounded-xl shadow-sm border p-5 ${
                   result.fillable ? 'bg-white border-zinc-200' : 'bg-red-50 border-red-200'
                 }`}
@@ -364,9 +354,9 @@ function FillStationContent() {
                     />
                   )}
                 </div>
-              </div>
+              </div>}
 
-              {result.fillable && (
+              {(!result.unverifiedFill || skippedVerify || verified) && result.fillable && (
                 <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
                   <h3 className="text-base font-semibold text-zinc-900 mb-3">Log Fill</h3>
                   <textarea

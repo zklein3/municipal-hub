@@ -55,9 +55,7 @@ export async function checkBottle(bottleId: string) {
     .order('filled_at', { ascending: false })
     .limit(1)
 
-  const unverifiedFill = unverified?.[0] ?? null
-
-  return { found: true, bottle, fillable: true, reason: null, unverifiedFill }
+  return { found: true, bottle, fillable: true, reason: null, unverifiedFill: unverified?.[0] ?? null }
 }
 
 // ─── Log a fill ───────────────────────────────────────────────────────────────
