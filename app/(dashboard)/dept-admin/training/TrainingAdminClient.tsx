@@ -8,6 +8,7 @@ import {
   enrollMember, updateEnrollmentStatus,
   verifyProgress, verifyTrainingAttendance,
   createTrainingEvent, logTrainingAttendance,
+  createDirectCertification,
 } from '@/app/actions/training'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -53,6 +54,8 @@ export default function TrainingAdminClient({
 
   // Enrollment state
   const [showEnrollForm, setShowEnrollForm] = useState(false)
+  const [enrollMode, setEnrollMode] = useState<'course' | 'direct'>('course')
+  const [directCertExpires, setDirectCertExpires] = useState(false)
 
   // Reject state — course progress
   const [rejectingProgressId, setRejectingProgressId] = useState<string | null>(null)
@@ -304,32 +307,102 @@ export default function TrainingAdminClient({
       {/* ── ENROLLMENTS ─────────────────────────────────────────────────────── */}
       {tab === 'enrollments' && (
         <div>
-          <div className="flex justify-end mb-4">
-            <button onClick={() => { setShowEnrollForm(!showEnrollForm); reset() }}
+          <div className="flex justify-end gap-2 mb-4">
+            <button onClick={() => { setShowEnrollForm(!showEnrollForm); setEnrollMode('course'); setDirectCertExpires(false); reset() }}
               className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">
-              {showEnrollForm ? 'Cancel' : '+ Enroll Member'}
+              {showEnrollForm ? 'Cancel' : '+ Assign Training'}
             </button>
           </div>
+
           {showEnrollForm && (
             <div className="mb-5 rounded-xl bg-white p-5 shadow-sm border border-zinc-200">
-              <h2 className="text-sm font-semibold text-zinc-700 mb-4">Enroll Member in Course</h2>
-              <form action={async (fd) => { const r = await wrap(() => enrollMember(fd)); if (!r?.error) setShowEnrollForm(false) }} className="flex flex-col gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-600">Member *</label>
-                  <select name="personnel_id" required className={inputCls}>
-                    <option value="">Select member...</option>
-                    {allPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-600">Certification Course *</label>
-                  <select name="certification_type_id" required className={inputCls}>
-                    <option value="">Select course...</option>
-                    {certTypes.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.cert_name}</option>)}
-                  </select>
-                </div>
-                <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Enroll'}</button>
-              </form>
+              {/* Mode toggle */}
+              <div className="flex gap-1 mb-5 bg-zinc-100 rounded-lg p-1">
+                <button type="button" onClick={() => setEnrollMode('course')}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${enrollMode === 'course' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
+                  Enroll in Course
+                </button>
+                <button type="button" onClick={() => setEnrollMode('direct')}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${enrollMode === 'direct' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
+                  Enter Certification Directly
+                </button>
+              </div>
+
+              {enrollMode === 'course' && (
+                <>
+                  <p className="text-xs text-zinc-400 mb-3">Enroll a member in a structured course with units to complete.</p>
+                  <form action={async (fd) => { const r = await wrap(() => enrollMember(fd)); if (!r?.error) setShowEnrollForm(false) }} className="flex flex-col gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Member *</label>
+                      <select name="personnel_id" required className={inputCls}>
+                        <option value="">Select member...</option>
+                        {allPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Course *</label>
+                      <select name="certification_type_id" required className={inputCls}>
+                        <option value="">Select course...</option>
+                        {certTypes.filter(c => c.active && c.is_structured_course).map(c => <option key={c.id} value={c.id}>{c.cert_name}</option>)}
+                      </select>
+                      {certTypes.filter(c => c.active && c.is_structured_course).length === 0 && (
+                        <p className="text-xs text-zinc-400 mt-1">No structured courses set up yet. Add one in Cert Types with the "Structured course" option checked.</p>
+                      )}
+                    </div>
+                    <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Enroll'}</button>
+                  </form>
+                </>
+              )}
+
+              {enrollMode === 'direct' && (
+                <>
+                  <p className="text-xs text-zinc-400 mb-3">Record a certification a member already holds — CPR, EMT-B, prior certs, etc.</p>
+                  <form action={async (fd) => { const r = await wrap(() => createDirectCertification(fd)); if (!r?.error) { setShowEnrollForm(false); setDirectCertExpires(false) } }} className="flex flex-col gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Member *</label>
+                      <select name="personnel_id" required className={inputCls}>
+                        <option value="">Select member...</option>
+                        {allPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Certification *</label>
+                      <select name="certification_type_id" className={inputCls}>
+                        <option value="">Select from list...</option>
+                        {certTypes.filter(c => c.active && !c.is_structured_course).map(c => <option key={c.id} value={c.id}>{c.cert_name}</option>)}
+                      </select>
+                      <p className="text-xs text-zinc-400 mt-1">Or enter a custom name below if not in the list.</p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Name (if not in list) *</label>
+                      <input name="cert_name" className={inputCls} placeholder="CPR/AED" />
+                      <p className="text-xs text-zinc-400 mt-1">Required — will use this name on the member's record.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">Issuing Body</label>
+                        <input name="issuing_body" className={inputCls} placeholder="American Heart Association" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Number</label>
+                        <input name="cert_number" className={inputCls} placeholder="Optional" />
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">Issued Date</label>
+                        <input name="issued_date" type="date" className={inputCls} />
+                      </div>
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">Expiration Date</label>
+                        <input name="expiration_date" type="date" className={inputCls} />
+                      </div>
+                    </div>
+                    <input name="notes" className={inputCls} placeholder="Notes (optional)" />
+                    <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Save Certification'}</button>
+                  </form>
+                </>
+              )}
             </div>
           )}
           <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
