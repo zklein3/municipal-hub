@@ -48,7 +48,7 @@ export default async function TrainingPage() {
   // My certifications
   const { data: myCerts } = await adminClient
     .from('member_certifications')
-    .select('id, cert_name, issuing_body, cert_number, issued_date, expiration_date, source, active')
+    .select('id, cert_name, issuing_body, cert_number, issued_date, expiration_date, source, active, signature_url, signed_at')
     .eq('personnel_id', me.id)
     .eq('department_id', department_id)
     .eq('active', true)

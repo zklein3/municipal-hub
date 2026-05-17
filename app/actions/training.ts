@@ -329,6 +329,51 @@ export async function submitUnitProgress(formData: FormData) {
   return { success: true }
 }
 
+// ─── ANY MEMBER: Save Cert Signature ─────────────────────────────────────────
+export async function saveCertSignature(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+
+  const file = formData.get('signature') as File
+  const certId = formData.get('certId') as string
+  const personnelId = formData.get('personnelId') as string
+  if (!file || !certId || !personnelId) return { error: 'Missing required fields.' }
+
+  if (!ctx.isOfficerOrAbove && ctx.me.id !== personnelId) {
+    return { error: 'You may only sign your own certification record.' }
+  }
+
+  const adminClient = createAdminClient()
+  const path = `certifications/${certId}/${personnelId}.png`
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+
+  const { error: uploadErr } = await adminClient.storage
+    .from('signatures')
+    .upload(path, buffer, { contentType: 'image/png', upsert: true })
+
+  if (uploadErr) {
+    await logError(uploadErr, 'saveCertSignature/upload')
+    return { error: 'Failed to upload signature.' }
+  }
+
+  const signedAt = new Date().toISOString()
+
+  const { error: dbErr } = await adminClient
+    .from('member_certifications')
+    .update({ signature_url: path, signed_at: signedAt })
+    .eq('id', certId)
+    .eq('personnel_id', personnelId)
+
+  if (dbErr) {
+    await logError(dbErr, 'saveCertSignature/db')
+    return { error: 'Failed to save signature record.' }
+  }
+
+  revalidatePath('/training')
+  return { success: true, signedAt }
+}
+
 // ─── ANY MEMBER: Save Training Signature (own record only; officers can sign any) ──
 export async function saveTrainingSignature(formData: FormData) {
   const ctx = await getContext()

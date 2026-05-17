@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { submitUnitProgress, selfReportTrainingAttendance } from '@/app/actions/training'
+import { submitUnitProgress, selfReportTrainingAttendance, saveCertSignature } from '@/app/actions/training'
 import SignaturePadModal from '@/components/SignaturePadModal'
+import CertSignaturePadModal from '@/components/CertSignaturePadModal'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
@@ -13,7 +14,7 @@ interface Enrollment { id: string; certification_type_id: string; status: string
 interface CertType { id: string; cert_name: string; issuing_body: string | null; does_expire: boolean; expiration_interval_months: number | null; is_structured_course: boolean }
 interface Unit { id: string; certification_type_id: string; unit_title: string; unit_description: string | null; required_hours: number | null; sort_order: number; active: boolean }
 interface Progress { id: string; enrollment_id: string; unit_id: string; status: string; hours_submitted: number | null; completed_date: string | null; submitted_at: string }
-interface Certification { id: string; cert_name: string; issuing_body: string | null; cert_number: string | null; issued_date: string | null; expiration_date: string | null; source: string; active: boolean }
+interface Certification { id: string; cert_name: string; issuing_body: string | null; cert_number: string | null; issued_date: string | null; expiration_date: string | null; source: string; active: boolean; signature_url: string | null; signed_at: string | null }
 interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
@@ -71,7 +72,9 @@ export default function TrainingClient({
   const [submittingUnitId, setSubmittingUnitId] = useState<string | null>(null)
   const [signingEventId, setSigningEventId] = useState<string | null>(null)
   const [sigPadTarget, setSigPadTarget] = useState<{ eventId: string; personnelId: string; memberName: string; eventTopic: string } | null>(null)
+  const [certSigTarget, setCertSigTarget] = useState<{ certId: string; certName: string } | null>(null)
   const [localSignatures, setLocalSignatures] = useState<Record<string, string>>({})
+  const [localCertSignatures, setLocalCertSignatures] = useState<Record<string, string>>({})
 
   function reset() { setError(null); setSuccess(null) }
 
@@ -255,9 +258,10 @@ export default function TrainingClient({
                 {myCerts.map(cert => {
                   const expiring = isExpiringSoon(cert.expiration_date)
                   const expired = isExpired(cert.expiration_date)
+                  const isSigned = !!cert.signature_url || !!localCertSignatures[cert.id]
                   return (
                     <div key={cert.id} className="px-5 py-4">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-zinc-900">{cert.cert_name}</p>
                           {cert.issuing_body && <p className="text-xs text-zinc-400">{cert.issuing_body}</p>}
@@ -274,9 +278,21 @@ export default function TrainingClient({
                             {!cert.expiration_date && <span>No expiration</span>}
                           </div>
                         </div>
-                        <span className="text-xs rounded-full bg-zinc-100 text-zinc-500 px-2 py-0.5 ml-3 shrink-0">
-                          {cert.source === 'course_completion' ? 'Course' : 'Direct Entry'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <span className="text-xs rounded-full bg-zinc-100 text-zinc-500 px-2 py-0.5">
+                            {cert.source === 'course_completion' ? 'Course' : 'Direct Entry'}
+                          </span>
+                          {isSigned ? (
+                            <span className="text-xs font-semibold text-green-600">✓ Signed</span>
+                          ) : (
+                            <button
+                              onClick={() => setCertSigTarget({ certId: cert.id, certName: cert.cert_name })}
+                              className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                            >
+                              Sign
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -436,7 +452,7 @@ export default function TrainingClient({
       )}
     </div>
 
-      {/* Signature pad modal */}
+      {/* Training event signature modal */}
       {sigPadTarget && (
         <SignaturePadModal
           memberName={sigPadTarget.memberName}
@@ -447,6 +463,21 @@ export default function TrainingClient({
           onSaved={(personnelId, signedAt) => {
             setLocalSignatures(prev => ({ ...prev, [`${sigPadTarget.eventId}:${personnelId}`]: signedAt }))
             setSigPadTarget(null)
+          }}
+        />
+      )}
+
+      {/* Cert signature modal */}
+      {certSigTarget && (
+        <CertSignaturePadModal
+          memberName={myName}
+          certName={certSigTarget.certName}
+          certId={certSigTarget.certId}
+          personnelId={myPersonnelId}
+          onClose={() => setCertSigTarget(null)}
+          onSaved={(signedAt) => {
+            setLocalCertSignatures(prev => ({ ...prev, [certSigTarget.certId]: signedAt }))
+            setCertSigTarget(null)
           }}
         />
       )}
