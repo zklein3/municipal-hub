@@ -66,7 +66,7 @@ const SECTION_ANCHORS: Record<string, string | null> = {
   fire: 'neris-section-fire',
   medical: 'neris-section-medical',
   hazmat: 'neris-section-hazmat',
-  rescue: 'neris-section-rescue',
+  rescue: 'neris-section-medical',
   mutual_aid: 'neris-section-mutual-aid',
   api: null,
 }
