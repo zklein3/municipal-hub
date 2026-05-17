@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createDepartment, toggleDepartment } from '@/app/actions/departments'
+import { setSystemSetting } from '@/app/actions/admin'
 
 interface Department {
   id: string
@@ -11,10 +12,18 @@ interface Department {
   created_at: string
 }
 
-export default function DepartmentsClient({ departments }: { departments: Department[] }) {
+export default function DepartmentsClient({
+  departments,
+  fireSchoolEnabled,
+}: {
+  departments: Department[]
+  fireSchoolEnabled: boolean
+}) {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fsEnabled, setFsEnabled] = useState(fireSchoolEnabled)
+  const [fsToggling, setFsToggling] = useState(false)
 
   async function handleCreate(formData: FormData) {
     setError(null)
@@ -32,8 +41,42 @@ export default function DepartmentsClient({ departments }: { departments: Depart
     await toggleDepartment(id, !active)
   }
 
+  async function handleFsToggle() {
+    setFsToggling(true)
+    const next = !fsEnabled
+    await setSystemSetting('fire_school_enabled', next ? 'true' : 'false')
+    setFsEnabled(next)
+    setFsToggling(false)
+  }
+
   return (
     <div>
+      {/* System Settings */}
+      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-6 mb-6">
+        <h2 className="text-base font-semibold text-zinc-900 mb-4">System Settings</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-zinc-800">Fire School Fill Station</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {fsEnabled
+                ? 'Live — fill station is active at /fire-school'
+                : 'Off — QR codes show the FireOps7 marketing page'}
+            </p>
+          </div>
+          <button
+            onClick={handleFsToggle}
+            disabled={fsToggling}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+              fsEnabled ? 'bg-green-500' : 'bg-zinc-300'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+              fsEnabled ? 'translate-x-5' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

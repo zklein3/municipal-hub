@@ -19,6 +19,38 @@ export async function resolveLog(id: string) {
   }
 }
 
+export async function setSystemSetting(key: string, value: string) {
+  const admin = createAdminClient()
+  const { error: dbErr } = await admin
+    .from('system_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+  if (dbErr) return { error: dbErr.message }
+  revalidatePath('/admin/departments')
+  revalidatePath('/fire-school')
+  return { success: true }
+}
+
+export async function submitFireSchoolInquiry(formData: FormData) {
+  const name = (formData.get('name') as string)?.trim()
+  const dept = (formData.get('dept') as string)?.trim()
+  const email = (formData.get('email') as string)?.trim()
+  const message = (formData.get('message') as string)?.trim()
+
+  if (!name || !message) return { error: 'Name and message are required.' }
+
+  const admin = createAdminClient()
+  const { error: dbErr } = await admin
+    .from('system_logs')
+    .insert({
+      log_type: 'fire_school_inquiry',
+      message: `Fire School Inquiry\nFrom: ${name}${dept ? ` — ${dept}` : ''}${email ? ` (${email})` : ''}\n\n${message}`,
+      resolved: false,
+    })
+
+  if (dbErr) return { error: 'Failed to submit. Please try again.' }
+  return { success: true }
+}
+
 export async function resolveAllLogs(logType?: string) {
   try {
     const admin = createAdminClient()

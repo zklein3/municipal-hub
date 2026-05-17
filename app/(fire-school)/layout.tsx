@@ -1,6 +1,21 @@
 import Link from 'next/link'
+import { createAdminClient } from '@/lib/supabase/admin'
+import FireSchoolCoverPage from './FireSchoolCoverPage'
 
-export default function FireSchoolLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = 'force-dynamic'
+
+export default async function FireSchoolLayout({ children }: { children: React.ReactNode }) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('system_settings')
+    .select('value')
+    .eq('key', 'fire_school_enabled')
+    .single()
+
+  const enabled = data?.value !== 'false'
+
+  if (!enabled) return <FireSchoolCoverPage />
+
   return (
     <div className="min-h-screen bg-zinc-100">
       {/* Header */}
