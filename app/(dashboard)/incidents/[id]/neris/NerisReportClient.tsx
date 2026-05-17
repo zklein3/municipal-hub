@@ -964,7 +964,7 @@ export default function NerisReportClient({
         {(isMedicalType || isRescueType) && (
           <section id="neris-section-medical" className={`${sectionCls} scroll-mt-6`}>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-900">Persons on Scene</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">Medical / Rescue — Patients & Victims</h2>
               {testingMode && coverType !== 'rescue' && (
                 <span className="text-xs text-amber-600 font-medium">Testing — not a rescue/medical incident</span>
               )}
