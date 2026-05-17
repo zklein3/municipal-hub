@@ -124,6 +124,44 @@ export async function enrollMember(formData: FormData) {
   return { success: true }
 }
 
+export async function enrollAllMembers(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const certTypeId = formData.get('certification_type_id') as string
+  const trainingDate = (formData.get('training_date') as string) || null
+  if (!certTypeId) return { error: 'Certification type is required.' }
+
+  const { data: deptPersonnel } = await adminClient
+    .from('department_personnel')
+    .select('personnel_id')
+    .eq('department_id', ctx.department_id!)
+    .eq('active', true)
+
+  if (!deptPersonnel?.length) return { error: 'No active members found.' }
+
+  const records = deptPersonnel.map(dp => ({
+    personnel_id: dp.personnel_id,
+    certification_type_id: certTypeId,
+    department_id: ctx.department_id,
+    enrolled_by: ctx.me.id,
+    training_date: trainingDate,
+    status: 'active',
+    session_logged_at: null,
+    session_status: null,
+  }))
+
+  const { error } = await adminClient
+    .from('course_enrollments')
+    .upsert(records, { onConflict: 'personnel_id,certification_type_id', ignoreDuplicates: false })
+
+  if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
+  revalidatePath('/dept-admin/training')
+  revalidatePath('/training')
+  return { success: true, count: records.length }
+}
+
 export async function updateEnrollmentStatus(enrollment_id: string, status: string) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }

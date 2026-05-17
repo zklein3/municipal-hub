@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   createCertificationType, updateCertificationType,
   createCourseUnit, updateCourseUnit,
-  enrollMember, updateEnrollmentStatus,
+  enrollMember, enrollAllMembers, updateEnrollmentStatus,
   verifyProgress, verifyTrainingAttendance,
   verifyEnrollmentSession,
   createTrainingEvent, logTrainingAttendance,
@@ -58,6 +58,7 @@ export default function TrainingAdminClient({
   // Enrollment state
   const [showEnrollForm, setShowEnrollForm] = useState(false)
   const [enrollMode, setEnrollMode] = useState<'course' | 'direct'>('course')
+  const [enrollAll, setEnrollAll] = useState(false)
   const [directCertExpires, setDirectCertExpires] = useState(false)
 
   // Reject state — course progress
@@ -333,15 +334,33 @@ export default function TrainingAdminClient({
 
               {enrollMode === 'course' && (
                 <>
-                  <p className="text-xs text-zinc-400 mb-3">Enroll a member in a structured course with units to complete.</p>
-                  <form action={async (fd) => { const r = await wrap(() => enrollMember(fd)); if (!r?.error) setShowEnrollForm(false) }} className="flex flex-col gap-3">
+                  <p className="text-xs text-zinc-400 mb-3">Enroll member(s) in a structured course with units to complete.</p>
+
+                  {/* Dept-wide toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer mb-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+                    <input type="checkbox" checked={enrollAll} onChange={e => setEnrollAll(e.target.checked)} className={checkCls} />
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-600">Member *</label>
-                      <select name="personnel_id" required className={inputCls}>
-                        <option value="">Select member...</option>
-                        {allPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
+                      <p className="text-sm font-medium text-zinc-800">Assign to all active members</p>
+                      <p className="text-xs text-zinc-400">Creates an enrollment for every active member in the department ({allPersonnel.length} members).</p>
                     </div>
+                  </label>
+
+                  <form
+                    action={async (fd) => {
+                      const r = await wrap(() => enrollAll ? enrollAllMembers(fd) : enrollMember(fd))
+                      if (!r?.error) { setShowEnrollForm(false); setEnrollAll(false) }
+                    }}
+                    className="flex flex-col gap-3"
+                  >
+                    {!enrollAll && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-600">Member *</label>
+                        <select name="personnel_id" required={!enrollAll} className={inputCls}>
+                          <option value="">Select member...</option>
+                          {allPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className="mb-1 block text-xs font-medium text-zinc-600">Course *</label>
                       <select name="certification_type_id" required className={inputCls}>
@@ -355,9 +374,11 @@ export default function TrainingAdminClient({
                     <div>
                       <label className="mb-1 block text-xs font-medium text-zinc-600">Training Date</label>
                       <input name="training_date" type="date" className={inputCls} />
-                      <p className="text-xs text-zinc-400 mt-1">Member can log attendance after this date.</p>
+                      <p className="text-xs text-zinc-400 mt-1">Members can log attendance after this date.</p>
                     </div>
-                    <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Enroll'}</button>
+                    <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                      {loading ? '...' : enrollAll ? `Enroll All ${allPersonnel.length} Members` : 'Enroll'}
+                    </button>
                   </form>
                 </>
               )}
