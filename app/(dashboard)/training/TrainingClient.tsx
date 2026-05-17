@@ -7,7 +7,7 @@ import SignaturePadModal from '@/components/SignaturePadModal'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
-type Tab = 'courses' | 'certifications' | 'history'
+type Tab = 'events' | 'courses' | 'certifications'
 
 interface Enrollment { id: string; certification_type_id: string; status: string; enrolled_at: string }
 interface CertType { id: string; cert_name: string; issuing_body: string | null; does_expire: boolean; expiration_interval_months: number | null; is_structured_course: boolean }
@@ -64,7 +64,7 @@ export default function TrainingClient({
   officerAttendance?: AttendanceRecord[]
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('courses')
+  const [tab, setTab] = useState<Tab>('events')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -116,7 +116,7 @@ export default function TrainingClient({
     <>
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Certifications</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Training</h1>
         <p className="text-sm text-zinc-500 mt-0.5">{myName}</p>
       </div>
 
@@ -125,9 +125,9 @@ export default function TrainingClient({
 
       <div className="flex gap-1 mb-6 bg-white rounded-xl border border-zinc-200 p-1">
         {([
-          { key: 'courses', label: 'My Courses' },
+          { key: 'events', label: 'Training Events' },
+          { key: 'courses', label: 'Courses' },
           { key: 'certifications', label: 'Certifications' },
-          { key: 'history', label: 'Training Events' },
         ] as { key: Tab; label: string }[]).map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); reset() }}
             className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${tab === t.key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
@@ -288,7 +288,7 @@ export default function TrainingClient({
       )}
 
       {/* ── TRAINING EVENTS ───────────────────────────────────────────────────── */}
-      {tab === 'history' && (
+      {tab === 'events' && (
         <div>
           {trainingEvents.length === 0 ? (
             <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">No training events found.</div>
