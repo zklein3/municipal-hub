@@ -104,14 +104,20 @@ export async function enrollMember(formData: FormData) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
   const adminClient = createAdminClient()
+  const personnelId = formData.get('personnel_id') as string
+  const certTypeId = formData.get('certification_type_id') as string
+  const trainingDate = (formData.get('training_date') as string) || null
+
   const { error } = await adminClient.from('course_enrollments').upsert({
-    personnel_id: formData.get('personnel_id') as string,
-    certification_type_id: formData.get('certification_type_id') as string,
+    personnel_id: personnelId,
+    certification_type_id: certTypeId,
     department_id: ctx.department_id,
     enrolled_by: ctx.me.id,
-    training_date: (formData.get('training_date') as string) || null,
+    training_date: trainingDate,
     status: 'active',
-  }, { onConflict: 'personnel_id,certification_type_id' })
+    session_logged_at: null,
+    session_status: null,
+  }, { onConflict: 'personnel_id,certification_type_id', ignoreDuplicates: false })
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
   revalidatePath('/dept-admin/training')
   revalidatePath('/training')
