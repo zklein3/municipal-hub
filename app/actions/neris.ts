@@ -258,24 +258,27 @@ function buildNerisPayload(
     }
   }
 
-  // ── Fire module (confirmed 2026-05-15) ──────────────────────────────────────
-  // Only included when incident type contains FIRE.
-  // location_detail is discriminated by type: "STRUCTURE" or "OUTSIDE".
+  // ── Fire module ──────────────────────────────────────────────────────────────
+  // location_detail is discriminated by type: "STRUCTURE", "OUTSIDE", or "VEHICLE"
   const incidentTypeStr: string = neris?.neris_incident_type ?? ''
   const isFire = incidentTypeStr.startsWith('FIRE') || incident?.incident_type === 'fire'
   if (isFire) {
-    // Discriminate OUTSIDE vs STRUCTURE — use NERIS type string first, fall back to fire_subtype
     const outsideSubtypes = ['grass', 'wildland', 'other_fire']
     const isOutside = incidentTypeStr.includes('OUTSIDE_FIRE') ||
       outsideSubtypes.includes(incident?.fire_subtype ?? '')
+    const isTransportationFire = incidentTypeStr.includes('TRANSPORTATION_FIRE') ||
+      (incident?.fire_subtype === 'vehicle' && !incidentTypeStr)
 
     const locationDetail: Record<string, unknown> = {
-      type: isOutside ? 'OUTSIDE' : 'STRUCTURE',
+      type: isOutside ? 'OUTSIDE' : isTransportationFire ? 'VEHICLE' : 'STRUCTURE',
     }
 
     if (isOutside) {
       if (neris?.fire_cause_code) locationDetail.cause = neris.fire_cause_code
       if (neris?.outside_fire_acres != null) locationDetail.acres_burned = neris.outside_fire_acres
+    } else if (isTransportationFire) {
+      if (neris?.fire_cause_code) locationDetail.cause = neris.fire_cause_code
+      if (neris?.fire_condition_arrival) locationDetail.arrival_condition = neris.fire_condition_arrival
     } else {
       if (neris?.fire_condition_arrival) locationDetail.arrival_condition = neris.fire_condition_arrival
       if (neris?.building_damage) locationDetail.damage_type = neris.building_damage
