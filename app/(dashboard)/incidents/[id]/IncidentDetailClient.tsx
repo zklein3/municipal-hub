@@ -109,6 +109,16 @@ export default function IncidentDetailClient({
   const [showAddMutualAid, setShowAddMutualAid] = useState(false)
   const [mutualAidError, setMutualAidError] = useState<string | null>(null)
   const [editingMutualAidId, setEditingMutualAidId] = useState<string | null>(null)
+  const [addArrivalTime, setAddArrivalTime] = useState('')
+  const [addDepartureTime, setAddDepartureTime] = useState('')
+
+  const toLocal = (iso: string | null) => iso ? iso.slice(0, 16) : ''
+  const incidentTimes = [
+    { label: 'Call', value: toLocal(incident.call_time) },
+    { label: 'On Scene', value: toLocal(incident.first_on_scene_at) },
+    { label: 'Leaving', value: toLocal(incident.last_leaving_scene_at) },
+    { label: 'In Service', value: toLocal(incident.in_service_at) },
+  ].filter(t => t.value)
 
   const isFinalized = incident.status === 'finalized'
   const canEdit = !isFinalized || isOfficerOrAbove
@@ -794,14 +804,28 @@ export default function IncidentDetailClient({
                         <input name="personnel_count" type="number" min="0" defaultValue={m.personnel_count ?? ''} className={inputCls} />
                       </div>
                     </div>
+                    {incidentTimes.length > 0 && (
+                      <div className="rounded-lg bg-white border border-zinc-200 px-3 py-2">
+                        <p className="text-xs text-zinc-400 mb-1.5">Fill from incident times:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {incidentTimes.map(t => (
+                            <div key={t.label} className="flex items-center gap-1">
+                              <span className="text-xs text-zinc-500">{t.label}</span>
+                              <button type="button" onClick={() => { const el = (document.querySelector(`[data-edit-arrival="${m.id}"]`) as HTMLInputElement); if (el) el.value = t.value }} className="text-xs text-red-700 hover:underline">→ Arrival</button>
+                              <button type="button" onClick={() => { const el = (document.querySelector(`[data-edit-departure="${m.id}"]`) as HTMLInputElement); if (el) el.value = t.value }} className="text-xs text-zinc-500 hover:underline">→ Departure</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={labelCls}>Arrival Time</label>
-                        <input name="arrival_time" type="datetime-local" defaultValue={m.arrival_time ? m.arrival_time.slice(0, 16) : ''} className={inputCls} />
+                        <input name="arrival_time" type="datetime-local" data-edit-arrival={m.id} defaultValue={m.arrival_time ? m.arrival_time.slice(0, 16) : ''} className={inputCls} />
                       </div>
                       <div>
                         <label className={labelCls}>Departure Time</label>
-                        <input name="departure_time" type="datetime-local" defaultValue={m.departure_time ? m.departure_time.slice(0, 16) : ''} className={inputCls} />
+                        <input name="departure_time" type="datetime-local" data-edit-departure={m.id} defaultValue={m.departure_time ? m.departure_time.slice(0, 16) : ''} className={inputCls} />
                       </div>
                     </div>
                     <div>
@@ -868,14 +892,28 @@ export default function IncidentDetailClient({
                   <input name="personnel_count" type="number" min="0" className={inputCls} />
                 </div>
               </div>
+              {incidentTimes.length > 0 && (
+                <div className="rounded-lg bg-white border border-zinc-200 px-3 py-2">
+                  <p className="text-xs text-zinc-400 mb-1.5">Fill from incident times:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {incidentTimes.map(t => (
+                      <div key={t.label} className="flex items-center gap-1">
+                        <span className="text-xs text-zinc-500">{t.label}</span>
+                        <button type="button" onClick={() => setAddArrivalTime(t.value)} className="text-xs text-red-700 hover:underline">→ Arrival</button>
+                        <button type="button" onClick={() => setAddDepartureTime(t.value)} className="text-xs text-zinc-500 hover:underline">→ Departure</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Arrival Time</label>
-                  <input name="arrival_time" type="datetime-local" className={inputCls} />
+                  <input name="arrival_time" type="datetime-local" value={addArrivalTime} onChange={e => setAddArrivalTime(e.target.value)} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>Departure Time</label>
-                  <input name="departure_time" type="datetime-local" className={inputCls} />
+                  <input name="departure_time" type="datetime-local" value={addDepartureTime} onChange={e => setAddDepartureTime(e.target.value)} className={inputCls} />
                 </div>
               </div>
               <div>
@@ -884,7 +922,7 @@ export default function IncidentDetailClient({
               </div>
               <div className="flex gap-2">
                 <button type="submit" disabled={isPending} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">Add</button>
-                <button type="button" onClick={() => setShowAddMutualAid(false)} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100">Cancel</button>
+                <button type="button" onClick={() => { setShowAddMutualAid(false); setAddArrivalTime(''); setAddDepartureTime('') }} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100">Cancel</button>
               </div>
             </form>
           )}
