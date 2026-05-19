@@ -234,7 +234,7 @@ function getSectionStatus(summary: {
 }): NerisSectionStatus {
   if (summary.total === 0) return 'not_started'
   if (summary.blocked > 0) return 'blocked'
-  if (summary.requiredMissing > 0 || summary.missing > 0) return 'needs_info'
+  if (summary.requiredMissing > 0) return 'needs_info'
   if (summary.complete > 0) return 'complete'
   return 'not_started'
 }
