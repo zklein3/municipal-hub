@@ -287,10 +287,10 @@ function buildNerisPayload(
     if (neris?.suppression_appliance?.length > 0) {
       fireDetail.suppression_appliances = neris.suppression_appliance
     }
-    if (neris?.smoke_alarm) payload.smoke_alarm = { presence: neris.smoke_alarm }
-    if (neris?.fire_alarm) payload.fire_alarm = { presence: neris.fire_alarm }
-    if (neris?.other_alarm) payload.other_alarm = { presence: neris.other_alarm }
-    if (neris?.fire_suppression_system) payload.fire_suppression = { presence: neris.fire_suppression_system }
+    if (neris?.smoke_alarm) payload.smoke_alarm = { presence: { type: neris.smoke_alarm } }
+    if (neris?.fire_alarm) payload.fire_alarm = { presence: { type: neris.fire_alarm } }
+    if (neris?.other_alarm) payload.other_alarm = { presence: { type: neris.other_alarm } }
+    if (neris?.fire_suppression_system) payload.fire_suppression = { presence: { type: neris.fire_suppression_system } }
     if (neris?.water_supply) fireDetail.water_supply = neris.water_supply
     fireDetail.investigation_needed = neris?.investigation_needed || 'NO'
     fireDetail.investigation_types = neris?.investigation_types ?? []
