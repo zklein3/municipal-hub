@@ -270,7 +270,7 @@ function buildNerisPayload(
       (incident?.fire_subtype === 'vehicle' && !incidentTypeStr)
 
     const locationDetail: Record<string, unknown> = {
-      type: isOutside ? 'OUTSIDE' : isTransportationFire ? 'VEHICLE' : 'STRUCTURE',
+      type: (isOutside || isTransportationFire) ? 'OUTSIDE' : 'STRUCTURE',
     }
 
     if (isOutside) {
