@@ -105,20 +105,35 @@ Built 2026-05-17. User is playing with flow before proposing further changes.
 - No expiry notification for certs approaching expiration
 - Admin has no read-only view of a member's full cert history
 
-### 2. NERIS — Live on Vercel, First Submission Complete ✅ (2026-05-17)
-First live NERIS submission: `FD35049607|WIN26-0017|1779004260` — rescue call, Fremont Fire Test Dept.
+### 2. NERIS — Multi-module testing complete ✅ (2026-05-19)
+Waiting on NERIS to confirm production enrollment. Continue testing with `test.admin@fireops7.com`.
 
-**What's done:**
-- `NERIS_CLIENT_ID`, `NERIS_CLIENT_SECRET`, `NERIS_USE_TEST=true` in Vercel env vars
-- `module_neris` flag per department (DB column, sys admin toggle, dept admin entity ID field)
-- `neris_entity_id = FD35049607` set for Fremont Fire Test Dept — only dept with NERIS on
-- Property use codes fixed to pipe-delimited format (`RESIDENTIAL||ATTACHED_SINGLE_FAMILY_DWELLING`)
-- `apiEnrollmentReady` now checks real conditions (entity ID + env vars) instead of hardcoded false
-- Medical/rescue section renamed "Medical / Rescue — Patients & Victims" (was confusingly "Persons on Scene")
+**Confirmed live submissions (test API, `NERIS_USE_TEST=true`):**
+- `FD35049607|WIN26-0017|1779004260` — rescue (2026-05-17, first submission)
+- `FD35049607|FRE26-T001|1779199200` — structure fire
+- `FD35049607|FRE26-T002|1779204600` — medical (chest pain)
+- `FD35049607|FRE26-T003|1779209100` — hazmat (gas leak)
+- `FD35049607|WIN26-0008|1771255200` — real incident, structure fire with investigation
 
-**Next: run more calls through to verify all modules work end-to-end**
+**Confirmed payload structures (2026-05-19):**
+- Actions taken: flat string array — valid codes in `NERIS_ACTIONS_TAKEN` in `lib/neris-value-sets.ts`
+- Fire module: `fire_detail` object inside payload; `investigation_needed` always sent (default `'NO'`); `investigation_types` always sent (array, can be empty)
+- Alarm/suppression modules: top-level payload keys (`smoke_alarm`, `fire_alarm`, `other_alarm`, `fire_suppression`), each `{ presence: { type: 'PRESENT' | 'NOT_PRESENT' | 'NOT_APPLICABLE' } }`
+- Water supply: flat string enum inside `fire_detail`
+- Investigation needed: string enum (`NO`, `YES`, `NOT_APPLICABLE`, `NOT_EVALUATED`, `NO_CAUSE_OBVIOUS`, `OTHER`)
+- Investigation types: array of confirmed codes — see `NERIS_INVESTIGATION_TYPES` in value sets
+- Room of origin: confirmed enum — see `NERIS_ROOM_OF_ORIGIN`
+- Mutual aid: `involves_mutual_aid` boolean on `incident_neris` — checkbox in NERIS form incident section reveals the mutual aid module
+
+**Still to verify:**
+- Outside fire (grass/wildland) — different `fire_detail.location_detail` path (`OUTSIDE` vs `STRUCTURE`)
+- Rescue module — own payload section
+- Mutual aid module payload structure
+
+**Key files:**
 - Payload builder: `app/actions/neris.ts` → `buildNerisPayload`
-- Test with: `test.admin@fireops7.com` (Fremont Fire Test Dept)
+- Value sets (all confirmed enums): `lib/neris-value-sets.ts`
+- Requirements checker: `lib/neris-requirements.ts`
 - See `NERIS.md` for full field reference
 
 ### 3. ISO Hose — Build Plan ✳️ ARCHITECTURE LOCKED
