@@ -936,6 +936,7 @@ export default function NerisReportClient({
               )}
             </div>
 
+            {!isTransportationFire && (
             <div>
               <label className={labelCls}>Condition on Arrival</label>
               <NerisCombobox
@@ -947,6 +948,7 @@ export default function NerisReportClient({
                 showRequired={!fireCondition}
               />
             </div>
+            )}
 
             {!isTransportationFire && (
               <div>
