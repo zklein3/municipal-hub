@@ -8,7 +8,7 @@ import {
   addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus,
   addIncidentPersonnel, updateIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
 } from '@/app/actions/incidents'
-import { addMutualAid, removeMutualAid } from '@/app/actions/iso'
+import { addMutualAid, removeMutualAid, updateMutualAid } from '@/app/actions/iso'
 import { parseRunSheet, type ParsedRunSheet } from '@/app/actions/parse-run-sheet'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -108,6 +108,7 @@ export default function IncidentDetailClient({
   // Mutual aid
   const [showAddMutualAid, setShowAddMutualAid] = useState(false)
   const [mutualAidError, setMutualAidError] = useState<string | null>(null)
+  const [editingMutualAidId, setEditingMutualAidId] = useState<string | null>(null)
 
   const isFinalized = incident.status === 'finalized'
   const canEdit = !isFinalized || isOfficerOrAbove
@@ -756,25 +757,87 @@ export default function IncidentDetailClient({
 
           <div className="space-y-2 mb-2">
             {mutualAid.map(m => (
-              <div key={m.id} className="rounded-lg border border-zinc-200 px-4 py-3 bg-zinc-50 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
-                    </span>
-                    <span className="font-medium text-zinc-800">{m.external_department_name}</span>
+              <div key={m.id} className="rounded-lg border border-zinc-200 bg-zinc-50 text-sm">
+                {editingMutualAidId === m.id ? (
+                  <form
+                    onSubmit={async e => {
+                      e.preventDefault()
+                      const fd = new FormData(e.currentTarget)
+                      fd.set('incident_id', incident.id)
+                      const result = await updateMutualAid(m.id, fd)
+                      if (result?.error) setMutualAidError(result.error)
+                      else setEditingMutualAidId(null)
+                    }}
+                    className="p-4 space-y-3"
+                  >
+                    {mutualAidError && <p className="text-xs text-red-600">{mutualAidError}</p>}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Department Name <span className="text-red-600">*</span></label>
+                        <input name="external_department_name" required defaultValue={m.external_department_name} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Role <span className="text-red-600">*</span></label>
+                        <select name="role" defaultValue={m.role} className={inputCls}>
+                          <option value="gave_aid">We Gave Aid</option>
+                          <option value="received_aid">We Received Aid</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Apparatus</label>
+                        <input name="apparatus_description" defaultValue={m.apparatus_description ?? ''} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Personnel Count</label>
+                        <input name="personnel_count" type="number" min="0" defaultValue={m.personnel_count ?? ''} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Arrival Time</label>
+                        <input name="arrival_time" type="datetime-local" defaultValue={m.arrival_time ? m.arrival_time.slice(0, 16) : ''} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Departure Time</label>
+                        <input name="departure_time" type="datetime-local" defaultValue={m.departure_time ? m.departure_time.slice(0, 16) : ''} className={inputCls} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Notes</label>
+                      <input name="notes" defaultValue={m.notes ?? ''} className={inputCls} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={isPending} className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">Save</button>
+                      <button type="button" onClick={() => setEditingMutualAidId(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50">Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${m.role === 'gave_aid' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                          {m.role === 'gave_aid' ? 'Gave Aid' : 'Received Aid'}
+                        </span>
+                        <span className="font-medium text-zinc-800">{m.external_department_name}</span>
+                      </div>
+                      {canEdit && (
+                        <div className="flex gap-3">
+                          <button onClick={() => { setEditingMutualAidId(m.id); setMutualAidError(null) }} className="text-xs text-zinc-500 hover:text-zinc-800">Edit</button>
+                          <button onClick={() => handleRemoveMutualAid(m.id)} disabled={isPending} className="text-xs text-red-600 hover:underline disabled:opacity-50">Remove</button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                      {m.apparatus_description && <span>Apparatus: {m.apparatus_description}</span>}
+                      {m.personnel_count != null && <span>Personnel: {m.personnel_count}</span>}
+                      {m.arrival_time && <span>Arrived: {formatDT(m.arrival_time)}</span>}
+                      {m.departure_time && <span>Departed: {formatDT(m.departure_time)}</span>}
+                      {m.notes && <span className="col-span-2">{m.notes}</span>}
+                    </div>
                   </div>
-                  {canEdit && (
-                    <button onClick={() => handleRemoveMutualAid(m.id)} disabled={isPending} className="text-xs text-red-600 hover:underline disabled:opacity-50">Remove</button>
-                  )}
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                  {m.apparatus_description && <span>Apparatus: {m.apparatus_description}</span>}
-                  {m.personnel_count != null && <span>Personnel: {m.personnel_count}</span>}
-                  {m.arrival_time && <span>Arrived: {formatDT(m.arrival_time)}</span>}
-                  {m.departure_time && <span>Departed: {formatDT(m.departure_time)}</span>}
-                  {m.notes && <span className="col-span-2">{m.notes}</span>}
-                </div>
+                )}
               </div>
             ))}
           </div>

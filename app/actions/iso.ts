@@ -508,6 +508,35 @@ export async function addMutualAid(formData: FormData) {
   return { success: true }
 }
 
+export async function updateMutualAid(mutualAidId: string, formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const incident_id = formData.get('incident_id') as string
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('incident_mutual_aid')
+    .update({
+      external_department_name: (formData.get('external_department_name') as string)?.trim(),
+      role: formData.get('role') as string,
+      apparatus_description: (formData.get('apparatus_description') as string)?.trim() || null,
+      personnel_count: formData.get('personnel_count') ? parseInt(formData.get('personnel_count') as string) : null,
+      arrival_time: (formData.get('arrival_time') as string) || null,
+      departure_time: (formData.get('departure_time') as string) || null,
+      notes: (formData.get('notes') as string)?.trim() || null,
+    })
+    .eq('id', mutualAidId)
+    .eq('department_id', ctx.department_id)
+
+  if (dbErr) {
+    await logError('updateMutualAid', dbErr.message, ctx.me.id)
+    return { error: dbErr.message }
+  }
+
+  revalidatePath(`/incidents/${incident_id}`)
+  return { success: true }
+}
+
 export async function removeMutualAid(mutualAidId: string, incidentId: string) {
   const ctx = await getContext()
   if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
