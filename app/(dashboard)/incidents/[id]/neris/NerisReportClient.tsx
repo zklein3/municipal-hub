@@ -128,6 +128,7 @@ export default function NerisReportClient({
 
   // Testing mode (admin only) — forces all sections visible
   const [testingMode, setTestingMode] = useState(false)
+  const [involvesMutualAid, setInvolvesMutualAid] = useState<boolean>(nerisRecord?.involves_mutual_aid ?? false)
 
   const coverType = incident.incident_type
   const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
@@ -150,7 +151,6 @@ export default function NerisReportClient({
 
   // Incident type filter toggle
   const [showAllTypes, setShowAllTypes] = useState(false)
-  const [involvesMutualAid, setInvolvesMutualAid] = useState<boolean>(nerisRecord?.involves_mutual_aid ?? false)
   const incidentTypeGroups = showAllTypes ? NERIS_INCIDENT_TYPES : getFilteredIncidentTypes(incident.incident_type)
 
   // Core fields
