@@ -131,7 +131,7 @@ export default function NerisReportClient({
 
   const coverType = incident.incident_type
   const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
-  const hasMutualAid  = testingMode || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
+  const hasMutualAid  = testingMode || involvesMutualAid || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
   const hasOpenUnitsWork = requirementSummary.sections.some(section => section.section === 'units' && !!section.firstOpenRequirement)
   const hasOpenPersonnelWork = requirementSummary.sections.some(section => section.section === 'personnel' && !!section.firstOpenRequirement)
   const showUnitsSection = testingMode || incidentApparatus.length > 0 || hasOpenUnitsWork
@@ -150,6 +150,7 @@ export default function NerisReportClient({
 
   // Incident type filter toggle
   const [showAllTypes, setShowAllTypes] = useState(false)
+  const [involvesMutualAid, setInvolvesMutualAid] = useState<boolean>(nerisRecord?.involves_mutual_aid ?? false)
   const incidentTypeGroups = showAllTypes ? NERIS_INCIDENT_TYPES : getFilteredIncidentTypes(incident.incident_type)
 
   // Core fields
@@ -268,6 +269,7 @@ export default function NerisReportClient({
       investigation_needed: investigationNeeded || null,
       investigation_types: investigationTypes,
       fire_cause_code: fireCauseCode || null,
+      involves_mutual_aid: involvesMutualAid,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
       incident_persons: incidentPersons.map(p => ({ rescue_type: p.rescue_type, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
@@ -571,15 +573,27 @@ export default function NerisReportClient({
         <section id="neris-section-incident" className={`${getSectionCls('incident')} scroll-mt-6`}>
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-sm font-semibold text-zinc-900">NERIS Incident Type</h2>
-            <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={showAllTypes}
-                onChange={e => setShowAllTypes(e.target.checked)}
-                className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-              />
-              <span className="text-xs text-zinc-500">Show all types</span>
-            </label>
+            <div className="flex items-center gap-4 shrink-0">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={involvesMutualAid}
+                  onChange={e => setInvolvesMutualAid(e.target.checked)}
+                  disabled={isSubmitted}
+                  className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                />
+                <span className="text-xs text-zinc-500">Mutual Aid</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showAllTypes}
+                  onChange={e => setShowAllTypes(e.target.checked)}
+                  className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                />
+                <span className="text-xs text-zinc-500">Show all types</span>
+              </label>
+            </div>
           </div>
           {!showAllTypes && (
             <p className="text-xs text-zinc-400 -mt-2">
