@@ -284,7 +284,7 @@ function buildNerisPayload(
       fireDetail.suppression_appliances = neris.suppression_appliance
     }
     if (neris?.water_supply) fireDetail.water_supply = neris.water_supply
-    if (neris?.investigation_needed) fireDetail.investigation_needed = neris.investigation_needed
+    fireDetail.investigation_needed = neris?.investigation_needed || 'NO'
     fireDetail.investigation_types = neris?.investigation_types ?? []
 
     payload.fire_detail = fireDetail
