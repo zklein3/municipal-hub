@@ -294,7 +294,6 @@ function buildNerisPayload(
     if (neris?.suppression_appliance?.length > 0) {
       fireDetail.suppression_appliances = neris.suppression_appliance
     }
-    const isTransportationFire = incidentTypeStr.includes('TRANSPORTATION_FIRE')
     if (!isTransportationFire) {
       if (neris?.smoke_alarm) payload.smoke_alarm = { presence: { type: neris.smoke_alarm } }
       if (neris?.fire_alarm) payload.fire_alarm = { presence: { type: neris.fire_alarm } }
