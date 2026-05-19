@@ -83,6 +83,9 @@ export async function saveNerisReport(incident_id: string, data: {
   investigation_types?: string[]
   fire_cause_code?: string | null
   involves_mutual_aid?: boolean
+  aid_call_time?: string | null
+  aid_on_scene_at?: string | null
+  aid_in_service_at?: string | null
   aid_type?: string | null
   aid_direction?: string | null
   // Unified persons — rescue + medical per person

@@ -180,6 +180,10 @@ export default function NerisReportClient({
   const [noActionReason, setNoActionReason] = useState<string>(nerisRecord?.no_action_reason ?? '')
 
   // Mutual aid
+  const toDatetimeLocal = (iso: string | null) => iso ? iso.slice(0, 16) : ''
+  const [aidCallTime, setAidCallTime] = useState<string>(nerisRecord?.aid_call_time ? toDatetimeLocal(nerisRecord.aid_call_time) : toDatetimeLocal(incident.call_time))
+  const [aidOnSceneAt, setAidOnSceneAt] = useState<string>(nerisRecord?.aid_on_scene_at ? toDatetimeLocal(nerisRecord.aid_on_scene_at) : toDatetimeLocal(incident.first_on_scene_at))
+  const [aidInServiceAt, setAidInServiceAt] = useState<string>(nerisRecord?.aid_in_service_at ? toDatetimeLocal(nerisRecord.aid_in_service_at) : toDatetimeLocal(incident.in_service_at))
   const [aidType, setAidType] = useState<string>(nerisRecord?.aid_type ?? '')
   const [aidDirection, setAidDirection] = useState<string>(nerisRecord?.aid_direction ?? '')
 
@@ -270,6 +274,9 @@ export default function NerisReportClient({
       investigation_types: investigationTypes,
       fire_cause_code: fireCauseCode || null,
       involves_mutual_aid: involvesMutualAid,
+      aid_call_time: aidCallTime ? new Date(aidCallTime).toISOString() : null,
+      aid_on_scene_at: aidOnSceneAt ? new Date(aidOnSceneAt).toISOString() : null,
+      aid_in_service_at: aidInServiceAt ? new Date(aidInServiceAt).toISOString() : null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
       incident_persons: incidentPersons.map(p => ({ rescue_type: p.rescue_type, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
@@ -740,20 +747,34 @@ export default function NerisReportClient({
               </div>
             )}
 
-            <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3">
-              <p className="text-xs font-semibold text-zinc-500 mb-2">Incident Times</p>
-              <div className="grid grid-cols-3 gap-3 text-xs">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className={labelCls} style={{marginBottom: 0}}>Response Times</label>
+                <button
+                  type="button"
+                  disabled={isSubmitted}
+                  onClick={() => {
+                    setAidCallTime(toDatetimeLocal(incident.call_time))
+                    setAidOnSceneAt(toDatetimeLocal(incident.first_on_scene_at))
+                    setAidInServiceAt(toDatetimeLocal(incident.in_service_at))
+                  }}
+                  className="text-xs font-medium text-red-700 hover:text-red-900 disabled:opacity-40"
+                >
+                  Auto-fill from incident
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="text-zinc-400 mb-0.5">Call Time</p>
-                  <p className="font-medium text-zinc-800">{formatDT(incident.call_time)}</p>
+                  <label className="block text-xs text-zinc-500 mb-1">Call Time</label>
+                  <input type="datetime-local" value={aidCallTime} onChange={e => setAidCallTime(e.target.value)} disabled={isSubmitted} className={inputCls} />
                 </div>
                 <div>
-                  <p className="text-zinc-400 mb-0.5">On Scene</p>
-                  <p className="font-medium text-zinc-800">{formatDT(incident.first_on_scene_at)}</p>
+                  <label className="block text-xs text-zinc-500 mb-1">On Scene</label>
+                  <input type="datetime-local" value={aidOnSceneAt} onChange={e => setAidOnSceneAt(e.target.value)} disabled={isSubmitted} className={inputCls} />
                 </div>
                 <div>
-                  <p className="text-zinc-400 mb-0.5">In Service</p>
-                  <p className="font-medium text-zinc-800">{formatDT(incident.in_service_at)}</p>
+                  <label className="block text-xs text-zinc-500 mb-1">In Service</label>
+                  <input type="datetime-local" value={aidInServiceAt} onChange={e => setAidInServiceAt(e.target.value)} disabled={isSubmitted} className={inputCls} />
                 </div>
               </div>
             </div>
