@@ -769,11 +769,11 @@ export const NERIS_DOT_HAZARD_CLASS: NerisCode[] = [
 // Codes are best-guess based on NFIRS patterns; verify on next API submission
 
 // Structure confirmed 2026-05-19: payload = { presence: { type: code } }
-// PRESENT and NOT_PRESENT confirmed valid from live submission FRE26-T001
+// All three values confirmed from API validation 2026-05-19
 export const NERIS_ALARM_SYSTEM: NerisCode[] = [
   { code: 'PRESENT', label: 'Present' },
   { code: 'NOT_PRESENT', label: 'Not present' },
-  { code: 'UNDETERMINED', label: 'Undetermined' },
+  { code: 'NOT_APPLICABLE', label: 'Not applicable' },
 ]
 
 // ─── Fire Module — Room of Origin, Water Supply, Investigation ───────────────
@@ -820,12 +820,16 @@ export const NERIS_INVESTIGATION_NEEDED: NerisCode[] = [
   { code: 'OTHER', label: 'Other' },
 ]
 
-// investigation_types — valid values TBD from next API submission
+// All values confirmed from API validation 2026-05-19
 export const NERIS_INVESTIGATION_TYPES: NerisCode[] = [
-  { code: 'CAUSE_AND_ORIGIN', label: 'Cause and Origin' },
-  { code: 'ARSON', label: 'Arson / Suspected Arson' },
-  { code: 'FIRE_MARSHAL', label: 'Fire Marshal Investigation' },
-  { code: 'UNDETERMINED', label: 'Undetermined' },
+  { code: 'INVESTIGATED_ON_SCENE_RESOURCE', label: 'Investigated — On-Scene Resource' },
+  { code: 'INVESTIGATED_BY_ARSON_FIRE_INVESTIGATOR', label: 'Investigated — Arson / Fire Investigator' },
+  { code: 'INVESTIGATED_BY_STATE_FIRE_MARSHAL', label: 'Investigated — State Fire Marshal' },
+  { code: 'INVESTIGATED_BY_OUTSIDE_AGENCY', label: 'Investigated — Outside Agency' },
+  { code: 'INVESTIGATED_BY_NONFIRE_LAW_ENFORCEMENT', label: 'Investigated — Non-Fire Law Enforcement' },
+  { code: 'INVESTIGATED_BY_INSURANCE', label: 'Investigated — Insurance' },
+  { code: 'INVESTIGATED_BY_OTHER', label: 'Investigated — Other' },
+  { code: 'NONE', label: 'None' },
 ]
 
 // ─── Rescue Module ────────────────────────────────────────────────────────────
