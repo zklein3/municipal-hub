@@ -109,24 +109,34 @@ Built 2026-05-17. User is playing with flow before proposing further changes.
 Waiting on NERIS to confirm production enrollment. Continue testing with `test.admin@fireops7.com`.
 
 **Confirmed live submissions (test API, `NERIS_USE_TEST=true`):**
-- `FD35049607|WIN26-0017|1779004260` — rescue (2026-05-17, first submission)
+- `FD35049607|WIN26-0017|1779004260` — rescue (2026-05-17)
 - `FD35049607|FRE26-T001|1779199200` — structure fire
 - `FD35049607|FRE26-T002|1779204600` — medical (chest pain)
 - `FD35049607|FRE26-T003|1779209100` — hazmat (gas leak)
-- `FD35049607|WIN26-0008|1771255200` — real incident, structure fire with investigation
+- `FD35049607|WIN26-0008|1771255200` — structure fire with investigation
+- `FD35049607|WIN26-0002|1767597600` — mutual aid
+- `FD35049607|26-0100|1761846420` — vehicle / transportation fire
 
 **Confirmed payload structures (2026-05-19):**
-- Actions taken: flat string array — valid codes in `NERIS_ACTIONS_TAKEN` in `lib/neris-value-sets.ts`
-- Fire module: `fire_detail` object inside payload; `investigation_needed` always sent (default `'NO'`); `investigation_types` always sent (array, can be empty)
-- Alarm/suppression modules: top-level payload keys (`smoke_alarm`, `fire_alarm`, `other_alarm`, `fire_suppression`), each `{ presence: { type: 'PRESENT' | 'NOT_PRESENT' | 'NOT_APPLICABLE' } }`
-- Water supply: flat string enum inside `fire_detail`
-- Investigation needed: string enum (`NO`, `YES`, `NOT_APPLICABLE`, `NOT_EVALUATED`, `NO_CAUSE_OBVIOUS`, `OTHER`)
-- Investigation types: array of confirmed codes — see `NERIS_INVESTIGATION_TYPES` in value sets
-- Room of origin: confirmed enum — see `NERIS_ROOM_OF_ORIGIN`
-- Mutual aid: `involves_mutual_aid` boolean on `incident_neris` — checkbox in NERIS form incident section reveals the mutual aid module
+- Actions taken: flat string array — groups ordered suppression-first in `NERIS_ACTIONS_TAKEN`
+- Fire module — `location_detail.type` discriminator:
+  - `STRUCTURE`: condition on arrival, building damage, cause, floor of origin (required), room of origin (required), water supply, investigation
+  - `OUTSIDE`: cause, acres burned (outside/wildland fires) — NO condition on arrival
+  - Transportation fires (`FIRE||TRANSPORTATION_FIRE||*`): also use `OUTSIDE` type — only cause sent
+- Alarm/suppression modules (`smoke_alarm`, `fire_alarm`, `other_alarm`, `fire_suppression`): top-level payload keys, each `{ presence: { type: 'PRESENT' | 'NOT_PRESENT' | 'NOT_APPLICABLE' } }` — structure fires only, NOT sent for transportation fires
+- `investigation_needed`: always sent for fire incidents (default `'NO'`), string enum
+- `investigation_types`: always sent (array, can be `[]`)
+- Mutual aid: `involves_mutual_aid` boolean on `incident_neris` — checkbox in NERIS form reveals mutual aid module
+
+**UX improvements (2026-05-19):**
+- Required fire fields show red border when empty (`showRequired` prop on `NerisCombobox`)
+- Transportation fires hide structure-only fields (building damage, floor/room, alarms, condition on arrival)
+- Mutual aid section has response times with auto-fill from incident button
+- Mutual aid rows on incident cover page now have Edit button (inline form)
+- NERIS form sections show red border when required fields are missing
 
 **Still to verify:**
-- Outside fire (grass/wildland) — different `fire_detail.location_detail` path (`OUTSIDE` vs `STRUCTURE`)
+- Outside fire (grass/wildland) — `OUTSIDE` path with `acres_burned`
 - Rescue module — own payload section
 - Mutual aid module payload structure
 
