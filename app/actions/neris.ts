@@ -278,7 +278,6 @@ function buildNerisPayload(
       if (neris?.outside_fire_acres != null) locationDetail.acres_burned = neris.outside_fire_acres
     } else if (isTransportationFire) {
       if (neris?.fire_cause_code) locationDetail.cause = neris.fire_cause_code
-      if (neris?.fire_condition_arrival) locationDetail.arrival_condition = neris.fire_condition_arrival
     } else {
       if (neris?.fire_condition_arrival) locationDetail.arrival_condition = neris.fire_condition_arrival
       if (neris?.building_damage) locationDetail.damage_type = neris.building_damage
