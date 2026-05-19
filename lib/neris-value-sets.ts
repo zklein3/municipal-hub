@@ -466,27 +466,6 @@ export function getPropertyUseLabel(code: string | null): string {
 // Action codes confirmed from live NERIS API — pipe-delimited format same as incident types.
 export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
   {
-    group: 'Emergency Medical Care',
-    codes: [
-      { code: 'EMERGENCY_MEDICAL_CARE||PATIENT_ASSESSMENT', label: 'Patient Assessment' },
-      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_BASIC_LIFE_SUPPORT', label: 'Basic Life Support (BLS)' },
-      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_ADVANCED_LIFE_SUPPORT', label: 'Advanced Life Support (ALS)' },
-      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_TRANSPORT', label: 'Patient Transport' },
-      { code: 'EMERGENCY_MEDICAL_CARE||PATIENT_REFERRAL', label: 'Patient Referral' },
-    ],
-  },
-  {
-    group: 'Command and Control',
-    codes: [
-      { code: 'COMMAND_AND_CONTROL||ESTABLISH_INCIDENT_COMMAND', label: 'Establish Incident Command' },
-      { code: 'COMMAND_AND_CONTROL||SAFETY_OFFICER_ASSIGNED', label: 'Safety Officer Assigned' },
-      { code: 'COMMAND_AND_CONTROL||ACCOUNTABILITY_OFFICER_ASSIGNED', label: 'Accountability Officer Assigned' },
-      { code: 'COMMAND_AND_CONTROL||PIO_ASSIGNED', label: 'PIO Assigned' },
-      { code: 'COMMAND_AND_CONTROL||NOTIFY_OTHER_AGENCIES', label: 'Notify Other Agencies' },
-      { code: 'COMMAND_AND_CONTROL||INCIDENT_ASSESSMENT_COMPLETED', label: 'Incident Assessment (360°) Completed' },
-    ],
-  },
-  {
     group: 'Suppression — Structure',
     codes: [
       { code: 'SUPPRESSION||STRUCTURAL_FIRE_SUPPRESSION||INTERIOR', label: 'Structural Fire Suppression — Interior' },
@@ -517,6 +496,27 @@ export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
     codes: [
       { code: 'CONTAINMENT||OUTSIDE_FIRE_SUPPRESSION||HAND_CREW_FUEL_BREAK', label: 'Hand Crew Fuel Break' },
       { code: 'CONTAINMENT||OUTSIDE_FIRE_SUPPRESSION||DOZER_FUEL_BREAK', label: 'Dozer Fuel Break' },
+    ],
+  },
+  {
+    group: 'Command and Control',
+    codes: [
+      { code: 'COMMAND_AND_CONTROL||ESTABLISH_INCIDENT_COMMAND', label: 'Establish Incident Command' },
+      { code: 'COMMAND_AND_CONTROL||SAFETY_OFFICER_ASSIGNED', label: 'Safety Officer Assigned' },
+      { code: 'COMMAND_AND_CONTROL||ACCOUNTABILITY_OFFICER_ASSIGNED', label: 'Accountability Officer Assigned' },
+      { code: 'COMMAND_AND_CONTROL||PIO_ASSIGNED', label: 'PIO Assigned' },
+      { code: 'COMMAND_AND_CONTROL||NOTIFY_OTHER_AGENCIES', label: 'Notify Other Agencies' },
+      { code: 'COMMAND_AND_CONTROL||INCIDENT_ASSESSMENT_COMPLETED', label: 'Incident Assessment (360°) Completed' },
+    ],
+  },
+  {
+    group: 'Emergency Medical Care',
+    codes: [
+      { code: 'EMERGENCY_MEDICAL_CARE||PATIENT_ASSESSMENT', label: 'Patient Assessment' },
+      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_BASIC_LIFE_SUPPORT', label: 'Basic Life Support (BLS)' },
+      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_ADVANCED_LIFE_SUPPORT', label: 'Advanced Life Support (ALS)' },
+      { code: 'EMERGENCY_MEDICAL_CARE||PROVIDE_TRANSPORT', label: 'Patient Transport' },
+      { code: 'EMERGENCY_MEDICAL_CARE||PATIENT_REFERRAL', label: 'Patient Referral' },
     ],
   },
   {
