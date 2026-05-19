@@ -765,6 +765,16 @@ export const NERIS_DOT_HAZARD_CLASS: NerisCode[] = [
   { code: 'NOT_REGULATED', label: 'Not DOT regulated' },
 ]
 
+// ─── Fire Module — Alarm / Suppression System (structure fires) ──────────────
+// Codes are best-guess based on NFIRS patterns; verify on next API submission
+
+export const NERIS_ALARM_SYSTEM: NerisCode[] = [
+  { code: 'PRESENT_OPERATED', label: 'Present — operated' },
+  { code: 'PRESENT_DID_NOT_OPERATE', label: 'Present — did not operate' },
+  { code: 'NOT_PRESENT', label: 'Not present' },
+  { code: 'UNDETERMINED', label: 'Undetermined' },
+]
+
 // ─── Fire Module — Room of Origin, Water Supply, Investigation ───────────────
 // room_of_origin_type confirmed from API validation error 2026-05-19
 

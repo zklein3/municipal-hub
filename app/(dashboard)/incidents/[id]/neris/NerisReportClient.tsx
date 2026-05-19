@@ -28,6 +28,7 @@ import {
   NERIS_VEHICLE_TYPE,
   NERIS_SAFETY_DEVICE,
   NERIS_ROOM_OF_ORIGIN,
+  NERIS_ALARM_SYSTEM,
   NERIS_WATER_SUPPLY,
   NERIS_INVESTIGATION_NEEDED,
   NERIS_INVESTIGATION_TYPES,
@@ -189,6 +190,10 @@ export default function NerisReportClient({
     nerisRecord?.floor_of_origin != null ? String(nerisRecord.floor_of_origin) : ''
   )
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
+  const [smokeAlarm, setSmokeAlarm] = useState<string>(nerisRecord?.smoke_alarm ?? '')
+  const [fireAlarm, setFireAlarm] = useState<string>(nerisRecord?.fire_alarm ?? '')
+  const [otherAlarm, setOtherAlarm] = useState<string>(nerisRecord?.other_alarm ?? '')
+  const [fireSuppressionSystem, setFireSuppressionSystem] = useState<string>(nerisRecord?.fire_suppression_system ?? '')
   const [waterSupply, setWaterSupply] = useState<string>(nerisRecord?.water_supply ?? '')
   const [investigationNeeded, setInvestigationNeeded] = useState<string>(nerisRecord?.investigation_needed ?? '')
   const [investigationTypes, setInvestigationTypes] = useState<string[]>(nerisRecord?.investigation_types ?? [])
@@ -255,6 +260,10 @@ export default function NerisReportClient({
       suppression_appliance: suppressionAppliances,
       floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
       room_of_origin: roomOfOrigin || null,
+      smoke_alarm: smokeAlarm || null,
+      fire_alarm: fireAlarm || null,
+      other_alarm: otherAlarm || null,
+      fire_suppression_system: fireSuppressionSystem || null,
       water_supply: waterSupply || null,
       investigation_needed: investigationNeeded || null,
       investigation_types: investigationTypes,
@@ -950,6 +959,27 @@ export default function NerisReportClient({
                 />
               </div>
             </div>
+
+            {!isOutsideFire && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Smoke Alarm</label>
+                  <NerisCombobox groups={toGroups(NERIS_ALARM_SYSTEM, 'Smoke Alarm')} value={smokeAlarm} onChange={setSmokeAlarm} placeholder="Select…" disabled={isSubmitted} />
+                </div>
+                <div>
+                  <label className={labelCls}>Fire Alarm System</label>
+                  <NerisCombobox groups={toGroups(NERIS_ALARM_SYSTEM, 'Fire Alarm')} value={fireAlarm} onChange={setFireAlarm} placeholder="Select…" disabled={isSubmitted} />
+                </div>
+                <div>
+                  <label className={labelCls}>Other Alarm</label>
+                  <NerisCombobox groups={toGroups(NERIS_ALARM_SYSTEM, 'Other Alarm')} value={otherAlarm} onChange={setOtherAlarm} placeholder="Select…" disabled={isSubmitted} />
+                </div>
+                <div>
+                  <label className={labelCls}>Suppression System</label>
+                  <NerisCombobox groups={toGroups(NERIS_ALARM_SYSTEM, 'Suppression System')} value={fireSuppressionSystem} onChange={setFireSuppressionSystem} placeholder="Select…" disabled={isSubmitted} />
+                </div>
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>Water Supply</label>
