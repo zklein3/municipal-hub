@@ -1006,7 +1006,7 @@ export default function NerisReportClient({
                     disabled={isSubmitted}
                     placeholder="e.g. 1"
                     min={0}
-                    className={inputCls}
+                    className={floorOfOrigin !== '' ? inputCls : inputCls.replace('border-zinc-300', 'border-red-400')}
                   />
                 </div>
                 <div>
@@ -1017,6 +1017,7 @@ export default function NerisReportClient({
                     onChange={setRoomOfOrigin}
                     placeholder="Select room or area of origin…"
                     disabled={isSubmitted}
+                    showRequired={!roomOfOrigin}
                   />
                 </div>
               </div>

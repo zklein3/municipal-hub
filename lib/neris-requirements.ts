@@ -519,7 +519,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
         id: 'fire.floor_origin',
         section: 'fire',
         label: 'Floor of origin',
-        severity: 'conditional',
+        severity: 'required',
         status: completeIf(hasNumber(neris.floor_of_origin)),
         source: 'neris_report',
       })
@@ -527,7 +527,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
         id: 'fire.room_origin',
         section: 'fire',
         label: 'Room or area of origin',
-        severity: 'conditional',
+        severity: 'required',
         status: completeIf(hasText(neris.room_of_origin)),
         source: 'neris_report',
       })
