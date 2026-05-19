@@ -768,7 +768,8 @@ export const NERIS_DOT_HAZARD_CLASS: NerisCode[] = [
 // ─── Fire Module — Alarm / Suppression System (structure fires) ──────────────
 // Codes are best-guess based on NFIRS patterns; verify on next API submission
 
-// presence field confirmed as the key 2026-05-19; enum values TBD from next API submission
+// Structure confirmed 2026-05-19: payload = { presence: { type: code } }
+// PRESENT and NOT_PRESENT confirmed valid from live submission FRE26-T001
 export const NERIS_ALARM_SYSTEM: NerisCode[] = [
   { code: 'PRESENT', label: 'Present' },
   { code: 'NOT_PRESENT', label: 'Not present' },
