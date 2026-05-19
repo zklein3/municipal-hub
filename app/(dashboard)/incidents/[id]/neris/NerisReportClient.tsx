@@ -120,7 +120,7 @@ export default function NerisReportClient({
   function getSectionCls(...keys: string[]) {
     const hasIssue = keys.some(key => {
       const s = requirementSummary.sections.find(s => s.section === key)
-      return s && (s.status === 'needs_info' || s.status === 'blocked')
+      return s && (s.requiredMissing > 0 || s.status === 'blocked')
     })
     return `${baseSectionCls} ${hasIssue ? 'border-red-400' : 'border-zinc-200'}`
   }
