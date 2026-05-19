@@ -740,6 +740,24 @@ export default function NerisReportClient({
               </div>
             )}
 
+            <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3">
+              <p className="text-xs font-semibold text-zinc-500 mb-2">Incident Times</p>
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <p className="text-zinc-400 mb-0.5">Call Time</p>
+                  <p className="font-medium text-zinc-800">{formatDT(incident.call_time)}</p>
+                </div>
+                <div>
+                  <p className="text-zinc-400 mb-0.5">On Scene</p>
+                  <p className="font-medium text-zinc-800">{formatDT(incident.first_on_scene_at)}</p>
+                </div>
+                <div>
+                  <p className="text-zinc-400 mb-0.5">In Service</p>
+                  <p className="font-medium text-zinc-800">{formatDT(incident.in_service_at)}</p>
+                </div>
+              </div>
+            </div>
+
             <p className="text-xs text-zinc-400">Select the NERIS aid classification codes for this mutual aid.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
