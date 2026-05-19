@@ -12,10 +12,15 @@ export default function FireSchoolCoverPage() {
   async function handleSubmit(formData: FormData) {
     setLoading(true)
     setError(null)
-    const res = await submitFireSchoolInquiry(formData)
-    setLoading(false)
-    if (res?.error) setError(res.error)
-    else setSent(true)
+    try {
+      const res = await submitFireSchoolInquiry(formData)
+      if (res?.error) setError(res.error)
+      else setSent(true)
+    } catch {
+      setError('Something went wrong. Please try again or email us directly.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

@@ -32,7 +32,7 @@ import {
 import type { NerisRequirementSummary } from '@/lib/neris-requirements'
 
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
-const sectionCls = "rounded-xl bg-white border border-zinc-200 p-5 space-y-4"
+const baseSectionCls = "rounded-xl bg-white border p-5 space-y-4"
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
 function toGroups(codes: { code: string; label: string }[], groupLabel: string) {
@@ -112,6 +112,14 @@ export default function NerisReportClient({
 }) {
   const router = useRouter()
   const isSubmitted = nerisRecord?.neris_status === 'submitted'
+
+  function getSectionCls(...keys: string[]) {
+    const hasIssue = keys.some(key => {
+      const s = requirementSummary.sections.find(s => s.section === key)
+      return s && (s.status === 'needs_info' || s.status === 'blocked')
+    })
+    return `${baseSectionCls} ${hasIssue ? 'border-red-400' : 'border-zinc-200'}`
+  }
 
   // Testing mode (admin only) — forces all sections visible
   const [testingMode, setTestingMode] = useState(false)
@@ -541,7 +549,7 @@ export default function NerisReportClient({
       <form onSubmit={handleSave} className="space-y-5">
 
         {/* Incident Type */}
-        <section id="neris-section-incident" className={`${sectionCls} scroll-mt-6`}>
+        <section id="neris-section-incident" className={`${getSectionCls('incident')} scroll-mt-6`}>
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-sm font-semibold text-zinc-900">NERIS Incident Type</h2>
             <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
@@ -601,7 +609,7 @@ export default function NerisReportClient({
         </section>
 
         {/* Scene Information */}
-        <section id="neris-section-location" className={`${sectionCls} scroll-mt-6`}>
+        <section id="neris-section-location" className={`${getSectionCls('location')} scroll-mt-6`}>
           <h2 className="text-sm font-semibold text-zinc-900">Scene Information</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -644,7 +652,7 @@ export default function NerisReportClient({
         </section>
 
         {/* Actions Taken */}
-        <section id="neris-section-actions" className={`${sectionCls} scroll-mt-6`}>
+        <section id="neris-section-actions" className={`${getSectionCls('actions')} scroll-mt-6`}>
           <h2 className="text-sm font-semibold text-zinc-900">Actions Taken on Scene</h2>
           <NerisCombobox
             multiple
@@ -669,7 +677,7 @@ export default function NerisReportClient({
 
         {/* Mutual Aid */}
         {hasMutualAid && (
-          <section id="neris-section-mutual-aid" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-mutual-aid" className={`${getSectionCls('mutual_aid')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
               {testingMode && mutualAidRows.length === 0 && !incident.mutual_aid_direction && (
@@ -727,7 +735,7 @@ export default function NerisReportClient({
 
         {/* Apparatus — Response Mode */}
         {showUnitsSection && (
-          <section id="neris-section-units" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-units" className={`${getSectionCls('units')} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Apparatus Response Mode</h2>
             <p className="text-xs text-zinc-400 -mt-1">Staffing is prefilled from cover sheet personnel assigned to each unit; adjust if needed.</p>
             {incidentApparatus.length === 0 && (
@@ -816,7 +824,7 @@ export default function NerisReportClient({
 
         {/* Personnel — read-only */}
         {showPersonnelSection && (
-          <section id="neris-section-personnel" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-personnel" className={`${getSectionCls('personnel')} scroll-mt-6`}>
             <h2 className="text-sm font-semibold text-zinc-900">Personnel on Scene</h2>
             <p className="text-xs text-zinc-400 -mt-1">From cover sheet — flows directly to NERIS payload.</p>
             {incidentPersonnel.length === 0 && (
@@ -846,7 +854,7 @@ export default function NerisReportClient({
 
         {/* Fire Module */}
         {isFireType && (
-          <section id="neris-section-fire" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-fire" className={`${getSectionCls('fire')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Fire Module</h2>
               {testingMode && incident.incident_type !== 'fire' && (
@@ -962,7 +970,7 @@ export default function NerisReportClient({
 
         {/* Unified Persons on Scene — rescue + medical per person */}
         {(isMedicalType || isRescueType) && (
-          <section id="neris-section-medical" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-medical" className={`${getSectionCls('medical', 'rescue')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Medical / Rescue — Patients & Victims</h2>
               {testingMode && coverType !== 'rescue' && (
@@ -1139,7 +1147,7 @@ export default function NerisReportClient({
 
         {/* Hazmat Module */}
         {isHazmatType && (
-          <section id="neris-section-hazmat" className={`${sectionCls} scroll-mt-6`}>
+          <section id="neris-section-hazmat" className={`${getSectionCls('hazmat')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Hazmat Module</h2>
               {testingMode && coverType !== 'special' && (
