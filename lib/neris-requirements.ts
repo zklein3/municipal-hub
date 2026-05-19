@@ -51,6 +51,7 @@ export type NerisRecordInput = {
   chemical_dot_class?: string | null
   chemical_release_occurred?: boolean | null
   vehicles_involved?: number | null
+  neris_narrative?: string | null
 }
 
 export type NerisApparatusInput = {
@@ -360,7 +361,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     section: 'incident',
     label: 'Narrative / comments',
     severity: 'recommended',
-    status: completeIf(hasText(incident.narrative)),
+    status: completeIf(hasText(neris.neris_narrative) || hasText(incident.narrative)),
     source: 'fireops7',
   })
 
