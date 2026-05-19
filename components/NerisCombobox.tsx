@@ -9,6 +9,7 @@ interface BaseProps {
   groups: Group[]
   placeholder?: string
   disabled?: boolean
+  showRequired?: boolean
 }
 
 interface SingleProps extends BaseProps {
@@ -26,7 +27,7 @@ interface MultiProps extends BaseProps {
 type NerisComboboxProps = SingleProps | MultiProps
 
 export default function NerisCombobox(props: NerisComboboxProps) {
-  const { groups, placeholder = 'Select…', disabled = false } = props
+  const { groups, placeholder = 'Select…', disabled = false, showRequired = false } = props
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -109,7 +110,7 @@ export default function NerisCombobox(props: NerisComboboxProps) {
         onClick={() => !disabled && setOpen(o => !o)}
         disabled={disabled}
         className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-sm text-left bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-          ${open ? 'border-red-500 ring-1 ring-red-500' : 'border-zinc-300 hover:border-zinc-400'}
+          ${open ? 'border-red-500 ring-1 ring-red-500' : (showRequired && !hasValue) ? 'border-red-400 hover:border-red-500' : 'border-zinc-300 hover:border-zinc-400'}
           ${hasValue ? 'text-zinc-900' : 'text-zinc-400'}`}
       >
         <span className="truncate">{triggerLabel}</span>

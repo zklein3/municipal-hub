@@ -40,6 +40,7 @@ const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
 const baseSectionCls = "rounded-xl bg-white border p-5 space-y-4"
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
+
 function toGroups(codes: { code: string; label: string }[], groupLabel: string) {
   return [{ group: groupLabel, codes }]
 }
@@ -158,7 +159,8 @@ export default function NerisReportClient({
 
   // Module visibility — mirrors getNerisActiveModules, also driven by selected NERIS code
   const codeMatchesAny = (markers: string[]) => markers.some(m => nerisType.includes(m))
-  const isFireType    = testingMode || coverType === 'fire'    || nerisType.startsWith('FIRE||')
+  const isFireType          = testingMode || coverType === 'fire'    || nerisType.startsWith('FIRE||')
+  const isTransportationFire = nerisType.includes('TRANSPORTATION_FIRE') || (coverType === 'fire' && incident.fire_subtype === 'vehicle')
   const isMedicalType = testingMode || coverType === 'rescue'  || codeMatchesAny(MEDICAL_MARKERS)
   const isHazmatType  = testingMode || coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
   const isRescueType  = testingMode || coverType === 'rescue'  || codeMatchesAny(RESCUE_MARKERS)
@@ -942,19 +944,23 @@ export default function NerisReportClient({
                 onChange={setFireCondition}
                 placeholder="Select condition on arrival…"
                 disabled={isSubmitted}
+                showRequired={!fireCondition}
               />
             </div>
 
-            <div>
-              <label className={labelCls}>Building Damage</label>
-              <NerisCombobox
-                groups={toGroups(NERIS_BUILDING_DAMAGE, 'Building Damage')}
-                value={buildingDamage}
-                onChange={setBuildingDamage}
-                placeholder="Select building damage…"
-                disabled={isSubmitted}
-              />
-            </div>
+            {!isTransportationFire && (
+              <div>
+                <label className={labelCls}>Building Damage</label>
+                <NerisCombobox
+                  groups={toGroups(NERIS_BUILDING_DAMAGE, 'Building Damage')}
+                  value={buildingDamage}
+                  onChange={setBuildingDamage}
+                  placeholder="Select building damage…"
+                  disabled={isSubmitted}
+                  showRequired={!buildingDamage}
+                />
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>
@@ -969,6 +975,7 @@ export default function NerisReportClient({
                 onChange={setFireCauseCode}
                 placeholder="Select fire cause…"
                 disabled={isSubmitted}
+                showRequired={!fireCauseCode}
               />
             </div>
 
@@ -988,32 +995,34 @@ export default function NerisReportClient({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Floor of Origin</label>
-                <input
-                  type="number"
-                  value={floorOfOrigin}
-                  onChange={e => setFloorOfOrigin(e.target.value)}
-                  disabled={isSubmitted}
-                  placeholder="e.g. 1"
-                  min={0}
-                  className={inputCls}
-                />
+            {!isTransportationFire && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Floor of Origin</label>
+                  <input
+                    type="number"
+                    value={floorOfOrigin}
+                    onChange={e => setFloorOfOrigin(e.target.value)}
+                    disabled={isSubmitted}
+                    placeholder="e.g. 1"
+                    min={0}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Room / Area of Origin</label>
+                  <NerisCombobox
+                    groups={toGroups(NERIS_ROOM_OF_ORIGIN, 'Room / Area of Origin')}
+                    value={roomOfOrigin}
+                    onChange={setRoomOfOrigin}
+                    placeholder="Select room or area of origin…"
+                    disabled={isSubmitted}
+                  />
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Room / Area of Origin</label>
-                <NerisCombobox
-                  groups={toGroups(NERIS_ROOM_OF_ORIGIN, 'Room / Area of Origin')}
-                  value={roomOfOrigin}
-                  onChange={setRoomOfOrigin}
-                  placeholder="Select room or area of origin…"
-                  disabled={isSubmitted}
-                />
-              </div>
-            </div>
+            )}
 
-            {!isOutsideFire && (
+            {!isOutsideFire && !isTransportationFire && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Smoke Alarm</label>
@@ -1042,6 +1051,7 @@ export default function NerisReportClient({
                 onChange={setWaterSupply}
                 placeholder="Select water supply used…"
                 disabled={isSubmitted}
+                showRequired={!waterSupply}
               />
             </div>
 
