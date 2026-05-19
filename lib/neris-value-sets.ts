@@ -476,7 +476,7 @@ export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
   {
     group: 'Suppression — Vehicle / Transportation',
     codes: [
-      { code: 'SUPPRESSION||STRUCTURAL_FIRE_SUPPRESSION||EXTERIOR', label: 'Vehicle / Transportation Fire Suppression' },
+      { code: 'SUPPRESSION||OUTSIDE_FIRE_SUPPRESSION||FIRE_CONTROL_EXTINGUISHMENT', label: 'Vehicle / Transportation Fire — Control / Extinguishment' },
     ],
   },
   {
