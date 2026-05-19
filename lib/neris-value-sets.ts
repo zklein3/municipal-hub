@@ -786,17 +786,30 @@ export const NERIS_ROOM_OF_ORIGIN: NerisCode[] = [
 ]
 
 // water_supply and investigation_types — codes are best-guess; verify on next API submission
+// Confirmed from API validation 2026-05-19
 export const NERIS_WATER_SUPPLY: NerisCode[] = [
-  { code: 'MUNICIPAL_SYSTEM', label: 'Municipal System / Hydrant' },
-  { code: 'ON_SITE_STORAGE', label: 'On-Site Storage (Cistern / Tank)' },
-  { code: 'SURFACE_WATER', label: 'Surface Water (Pond / Lake)' },
-  { code: 'GROUND_WATER', label: 'Ground Water (Well)' },
-  { code: 'TENDER_SHUTTLE', label: 'Tender Shuttle' },
-  { code: 'DRY_HYDRANT', label: 'Dry Hydrant' },
-  { code: 'NONE_USED', label: 'None Used' },
+  { code: 'HYDRANT_LESS_500', label: 'Hydrant — < 500 GPM' },
+  { code: 'HYDRANT_GREATER_500', label: 'Hydrant — ≥ 500 GPM' },
+  { code: 'TANK_WATER', label: 'Tank Water (On-Board)' },
+  { code: 'WATER_TENDER_SHUTTLE', label: 'Water Tender Shuttle' },
+  { code: 'NURSE_OTHER_APPARATUS', label: 'Nurse / Other Apparatus' },
+  { code: 'DRAFT_FROM_STATIC_SOURCE', label: 'Draft from Static Source' },
+  { code: 'SUPPLY_FROM_FIRE_BOAT', label: 'Supply from Fire Boat' },
+  { code: 'FOAM_ADDITIVE', label: 'Foam Additive' },
+  { code: 'NONE', label: 'None' },
+]
+
+// Confirmed from API validation 2026-05-19 — enum, not boolean
+export const NERIS_INVESTIGATION_NEEDED: NerisCode[] = [
+  { code: 'NO', label: 'No' },
+  { code: 'YES', label: 'Yes' },
+  { code: 'NO_CAUSE_OBVIOUS', label: 'No — Cause Obvious' },
+  { code: 'NOT_EVALUATED', label: 'Not Evaluated' },
+  { code: 'NOT_APPLICABLE', label: 'Not Applicable' },
   { code: 'OTHER', label: 'Other' },
 ]
 
+// investigation_types — valid values TBD from next API submission
 export const NERIS_INVESTIGATION_TYPES: NerisCode[] = [
   { code: 'CAUSE_AND_ORIGIN', label: 'Cause and Origin' },
   { code: 'ARSON', label: 'Arson / Suspected Arson' },

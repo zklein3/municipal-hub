@@ -29,6 +29,7 @@ import {
   NERIS_SAFETY_DEVICE,
   NERIS_ROOM_OF_ORIGIN,
   NERIS_WATER_SUPPLY,
+  NERIS_INVESTIGATION_NEEDED,
   NERIS_INVESTIGATION_TYPES,
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
@@ -189,7 +190,7 @@ export default function NerisReportClient({
   )
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
   const [waterSupply, setWaterSupply] = useState<string>(nerisRecord?.water_supply ?? '')
-  const [investigationNeeded, setInvestigationNeeded] = useState<boolean>(nerisRecord?.investigation_needed ?? false)
+  const [investigationNeeded, setInvestigationNeeded] = useState<string>(nerisRecord?.investigation_needed ?? '')
   const [investigationTypes, setInvestigationTypes] = useState<string[]>(nerisRecord?.investigation_types ?? [])
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
   const [outsideFireAcres, setOutsideFireAcres] = useState<string>(
@@ -255,7 +256,7 @@ export default function NerisReportClient({
       floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
       room_of_origin: roomOfOrigin || null,
       water_supply: waterSupply || null,
-      investigation_needed: investigationNeeded,
+      investigation_needed: investigationNeeded || null,
       investigation_types: investigationTypes,
       fire_cause_code: fireCauseCode || null,
       aid_type: aidType || null,
@@ -961,31 +962,28 @@ export default function NerisReportClient({
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="investigation_needed"
-                checked={investigationNeeded}
-                onChange={e => { setInvestigationNeeded(e.target.checked); if (!e.target.checked) setInvestigationTypes([]) }}
+            <div>
+              <label className={labelCls}>Investigation</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_INVESTIGATION_NEEDED, 'Investigation')}
+                value={investigationNeeded}
+                onChange={setInvestigationNeeded}
+                placeholder="Select investigation status…"
                 disabled={isSubmitted}
-                className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
               />
-              <label htmlFor="investigation_needed" className="text-sm font-medium text-zinc-700">Investigation Needed</label>
             </div>
 
-            {investigationNeeded && (
-              <div>
-                <label className={labelCls}>Investigation Types</label>
-                <NerisCombobox
-                  multiple
-                  groups={toGroups(NERIS_INVESTIGATION_TYPES, 'Investigation Types')}
-                  value={investigationTypes}
-                  onChange={setInvestigationTypes}
-                  placeholder="Select investigation types…"
-                  disabled={isSubmitted}
-                />
-              </div>
-            )}
+            <div>
+              <label className={labelCls}>Investigation Types</label>
+              <NerisCombobox
+                multiple
+                groups={toGroups(NERIS_INVESTIGATION_TYPES, 'Investigation Types')}
+                value={investigationTypes}
+                onChange={setInvestigationTypes}
+                placeholder="Select investigation types (if any)…"
+                disabled={isSubmitted}
+              />
+            </div>
 
             <div>
               <label className={labelCls}>Suppression Appliances Used</label>

@@ -75,7 +75,7 @@ export async function saveNerisReport(incident_id: string, data: {
   floor_of_origin?: number | null
   room_of_origin?: string | null
   water_supply?: string | null
-  investigation_needed?: boolean | null
+  investigation_needed?: string | null
   investigation_types?: string[]
   fire_cause_code?: string | null
   aid_type?: string | null
@@ -284,8 +284,8 @@ function buildNerisPayload(
       fireDetail.suppression_appliances = neris.suppression_appliance
     }
     if (neris?.water_supply) fireDetail.water_supply = neris.water_supply
-    if (neris?.investigation_needed != null) fireDetail.investigation_needed = neris.investigation_needed
-    if (neris?.investigation_types?.length > 0) fireDetail.investigation_types = neris.investigation_types
+    if (neris?.investigation_needed) fireDetail.investigation_needed = neris.investigation_needed
+    fireDetail.investigation_types = neris?.investigation_types ?? []
 
     payload.fire_detail = fireDetail
   }
