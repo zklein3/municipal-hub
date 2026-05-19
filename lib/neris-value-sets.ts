@@ -765,6 +765,45 @@ export const NERIS_DOT_HAZARD_CLASS: NerisCode[] = [
   { code: 'NOT_REGULATED', label: 'Not DOT regulated' },
 ]
 
+// ─── Fire Module — Room of Origin, Water Supply, Investigation ───────────────
+// room_of_origin_type confirmed from API validation error 2026-05-19
+
+export const NERIS_ROOM_OF_ORIGIN: NerisCode[] = [
+  { code: 'ASSEMBLY', label: 'Assembly Area' },
+  { code: 'ATTIC', label: 'Attic' },
+  { code: 'BALCONY_PORCH_DECK', label: 'Balcony / Porch / Deck' },
+  { code: 'BASEMENT', label: 'Basement' },
+  { code: 'BATHROOM', label: 'Bathroom' },
+  { code: 'BEDROOM', label: 'Bedroom' },
+  { code: 'GARAGE', label: 'Garage' },
+  { code: 'HALLWAY_FOYER', label: 'Hallway / Foyer' },
+  { code: 'KITCHEN', label: 'Kitchen' },
+  { code: 'LIVING_SPACE', label: 'Living Space / Living Room' },
+  { code: 'OFFICE', label: 'Office' },
+  { code: 'UTILITY_ROOM', label: 'Utility Room' },
+  { code: 'OTHER', label: 'Other' },
+  { code: 'UNKNOWN', label: 'Unknown' },
+]
+
+// water_supply and investigation_types — codes are best-guess; verify on next API submission
+export const NERIS_WATER_SUPPLY: NerisCode[] = [
+  { code: 'MUNICIPAL_SYSTEM', label: 'Municipal System / Hydrant' },
+  { code: 'ON_SITE_STORAGE', label: 'On-Site Storage (Cistern / Tank)' },
+  { code: 'SURFACE_WATER', label: 'Surface Water (Pond / Lake)' },
+  { code: 'GROUND_WATER', label: 'Ground Water (Well)' },
+  { code: 'TENDER_SHUTTLE', label: 'Tender Shuttle' },
+  { code: 'DRY_HYDRANT', label: 'Dry Hydrant' },
+  { code: 'NONE_USED', label: 'None Used' },
+  { code: 'OTHER', label: 'Other' },
+]
+
+export const NERIS_INVESTIGATION_TYPES: NerisCode[] = [
+  { code: 'CAUSE_AND_ORIGIN', label: 'Cause and Origin' },
+  { code: 'ARSON', label: 'Arson / Suspected Arson' },
+  { code: 'FIRE_MARSHAL', label: 'Fire Marshal Investigation' },
+  { code: 'UNDETERMINED', label: 'Undetermined' },
+]
+
 // ─── Rescue Module ────────────────────────────────────────────────────────────
 // From mod_rescue_nonff.csv — type_rescue, type_casualty, type_casualty_cause
 

@@ -27,6 +27,9 @@ import {
   NERIS_CASUALTY_CAUSE,
   NERIS_VEHICLE_TYPE,
   NERIS_SAFETY_DEVICE,
+  NERIS_ROOM_OF_ORIGIN,
+  NERIS_WATER_SUPPLY,
+  NERIS_INVESTIGATION_TYPES,
   COVER_TYPE_LABEL,
 } from '@/lib/neris-value-sets'
 import type { NerisRequirementSummary } from '@/lib/neris-requirements'
@@ -185,6 +188,9 @@ export default function NerisReportClient({
     nerisRecord?.floor_of_origin != null ? String(nerisRecord.floor_of_origin) : ''
   )
   const [roomOfOrigin, setRoomOfOrigin] = useState<string>(nerisRecord?.room_of_origin ?? '')
+  const [waterSupply, setWaterSupply] = useState<string>(nerisRecord?.water_supply ?? '')
+  const [investigationNeeded, setInvestigationNeeded] = useState<boolean>(nerisRecord?.investigation_needed ?? false)
+  const [investigationTypes, setInvestigationTypes] = useState<string[]>(nerisRecord?.investigation_types ?? [])
   const [fireCauseCode, setFireCauseCode] = useState<string>(nerisRecord?.fire_cause_code ?? '')
   const [outsideFireAcres, setOutsideFireAcres] = useState<string>(
     nerisRecord?.outside_fire_acres != null ? String(nerisRecord.outside_fire_acres) : ''
@@ -248,6 +254,9 @@ export default function NerisReportClient({
       suppression_appliance: suppressionAppliances,
       floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
       room_of_origin: roomOfOrigin || null,
+      water_supply: waterSupply || null,
+      investigation_needed: investigationNeeded,
+      investigation_types: investigationTypes,
       fire_cause_code: fireCauseCode || null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
@@ -931,16 +940,52 @@ export default function NerisReportClient({
               </div>
               <div>
                 <label className={labelCls}>Room / Area of Origin</label>
-                <input
-                  type="text"
+                <NerisCombobox
+                  groups={toGroups(NERIS_ROOM_OF_ORIGIN, 'Room / Area of Origin')}
                   value={roomOfOrigin}
-                  onChange={e => setRoomOfOrigin(e.target.value)}
+                  onChange={setRoomOfOrigin}
+                  placeholder="Select room or area of origin…"
                   disabled={isSubmitted}
-                  placeholder="e.g. Kitchen"
-                  className={inputCls}
                 />
               </div>
             </div>
+
+            <div>
+              <label className={labelCls}>Water Supply</label>
+              <NerisCombobox
+                groups={toGroups(NERIS_WATER_SUPPLY, 'Water Supply')}
+                value={waterSupply}
+                onChange={setWaterSupply}
+                placeholder="Select water supply used…"
+                disabled={isSubmitted}
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="investigation_needed"
+                checked={investigationNeeded}
+                onChange={e => { setInvestigationNeeded(e.target.checked); if (!e.target.checked) setInvestigationTypes([]) }}
+                disabled={isSubmitted}
+                className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+              />
+              <label htmlFor="investigation_needed" className="text-sm font-medium text-zinc-700">Investigation Needed</label>
+            </div>
+
+            {investigationNeeded && (
+              <div>
+                <label className={labelCls}>Investigation Types</label>
+                <NerisCombobox
+                  multiple
+                  groups={toGroups(NERIS_INVESTIGATION_TYPES, 'Investigation Types')}
+                  value={investigationTypes}
+                  onChange={setInvestigationTypes}
+                  placeholder="Select investigation types…"
+                  disabled={isSubmitted}
+                />
+              </div>
+            )}
 
             <div>
               <label className={labelCls}>Suppression Appliances Used</label>
