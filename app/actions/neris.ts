@@ -476,6 +476,7 @@ export async function submitToNeris(incident_id: string) {
       neris_status: 'submitted',
       neris_submission_id: nerisId,
       neris_submitted_at: new Date().toISOString(),
+      neris_last_error: null,
       updated_at: new Date().toISOString(),
     })
     .eq('incident_id', incident_id)
