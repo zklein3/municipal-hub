@@ -88,6 +88,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
+Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
+
 ### 1. Training — Resume After User Testing ✳️ IN PROGRESS
 Built 2026-05-17. User is playing with flow before proposing further changes.
 
@@ -105,8 +108,18 @@ Built 2026-05-17. User is playing with flow before proposing further changes.
 - No expiry notification for certs approaching expiration
 - Admin has no read-only view of a member's full cert history
 
-### 2. NERIS — Multi-module testing complete ✅ (2026-05-19)
-Waiting on NERIS to confirm production enrollment. Continue testing with `test.admin@fireops7.com`.
+### 2. NERIS — Production credentials set ✅ (2026-05-20)
+V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.local.
+`NERIS_USE_TEST=true` still set — flip to `false` to go live after first production test submission.
+
+**Next step:** Test a submission against the production API. Historically field labeling issues cause first-attempt failures — watch `/admin/neris` Issues tab + Gmail for the error. Fix in `buildNerisPayload` or `lib/neris-value-sets.ts`.
+
+**Dept enrollment UI built** (`/dept-admin/neris`) — 4-step guide, Client ID copy button, Test Connection.
+**Admin troubleshooting panel built** (`/admin/neris`) — Departments / Issues / Error Logs tabs.
+
+**New DB column:** `incident_neris.neris_last_error` — stores API error on failed submissions.
+
+**Confirmed live submissions (test API):**
 
 **Confirmed live submissions (test API, `NERIS_USE_TEST=true`):**
 - `FD35049607|WIN26-0017|1779004260` — rescue (2026-05-17)

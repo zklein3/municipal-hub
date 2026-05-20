@@ -12,20 +12,24 @@
 
 ### Nav Structure (layout.tsx)
 
-**Main nav — identical for all dept roles:**
-| Group | Items |
-|---|---|
-| (none) | Dashboard |
-| Personnel | Roster |
-| Training & Events | Events, Certifications |
-| Operations | Announcements (badge), Incidents, Public Inbox (badge) |
-| (none) | Inspections |
-| Reports | My Activity |
+**Hub-and-spoke — sidebar 6 items only (all dept roles):**
+| Sidebar Item | Hub Page | What's on it |
+|---|---|---|
+| Dashboard | `/dashboard` | Greeting, upcoming events, announcements, quick links |
+| Operations | `/operations` | Incidents, Announcements, Fuel Log, Public Inbox cards + recent incidents list |
+| Personnel | `/personnel` | Roster + profile card (already a hub) |
+| Training | `/training` | Events / My Certs / Print cards + TrainingClient below |
+| Equipment | `/equipment` | Inspections, Assets, Storage, Movement Log cards + apparatus grid |
+| Reports | `/reports` | Tile grid — My Activity (all), Attendance/Training/Inspections/Inventory/Fuel (officer+) |
 
-**Dept Admin section — admin only:**
-Equipment / Personnel / Training / Hose Inventory / Hydrants / ISO Report
+**Dept Admin section — admin only:** Single link → `/dept-admin` hub
+Tiles: Personnel / Training & Certs / Equipment Setup / ISO (if enabled) / NERIS Settings (if enabled) / Public Site (if enabled)
 
-**System Admin section:** Departments / Users / System Logs
+**ISO sub-hub** (`/iso`): Hose Inventory / Hydrants / Mutual Aid / Pre-Fire Plans / ISO Report
+
+**System Admin section:** Departments / Users / System Logs / NERIS
+
+**PageNavBar** (`components/PageNavBar.tsx`) — auto-rendered on every dashboard page above content. Shows `← Back` (router.back()) + `[Hub Name] ↑` (parent hub link). Hidden on `/dashboard`. Pathname-driven — no per-page wiring needed.
 
 Sidebar footer: name links to own `/personnel/[id]` profile.
 

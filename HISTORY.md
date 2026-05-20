@@ -2,13 +2,20 @@
 
 ## What's Built & Working ✅
 - Full auth flow + middleware routing
-- Unified main nav — identical for all roles: Dashboard / Personnel / Training & Events / Operations / Inspections / Reports
+- Hub-and-spoke navigation — sidebar 6 items only (Dashboard, Operations, Personnel, Training, Equipment, Reports). Each leads to a card-grid hub page. Dept Admin is a single link → hub with tiles.
+- `HubCard` component — reusable card with title, description, stat badge, alert state
+- `PageNavBar` — global Back + hub breadcrumb on every dashboard page (pathname-driven, no per-page wiring)
+- Operations hub (`/operations`) — Incidents, Announcements, Fuel Log, Public Inbox cards + recent incidents list
+- Equipment hub (`/equipment`) — section cards (Inspections, Assets, Storage, Movement Log) + apparatus grid
+- Reports hub (`/reports`) — tile grid, role-adaptive (members see My Activity only, officers+ see all)
+- Dept Admin hub (`/dept-admin`) — Personnel, Training, Equipment Setup, ISO (conditional), NERIS (conditional), Public Site (conditional)
+- ISO sub-hub (`/iso`) — Hose Inventory, Hydrants, Mutual Aid, Pre-Fire Plans, ISO Report
+- Training hub card row — Events, My Certifications (expiry alert), Print Training Card
 - My Profile link in sidebar footer (name links to own personnel profile)
-- Dept Admin hub: Equipment (`/dept-admin/setup`) / Personnel (`/dept-admin/personnel`) / Training (`/dept-admin/training`) / Hose Inventory / Hydrants / ISO Report
 - Equipment hub — 5 tabs: Stations, Apparatus (with Load button), Compartments, Items, Assets
 - Personnel hub — 2 tabs: Members (card grid), Attendance Settings
 - Training hub — 4 tabs: Cert Types, Enrollments, Pending, Events (left rail + mobile scroll)
-- Sys admin dashboard, Departments, Users, System Logs
+- Sys admin dashboard, Departments, Users, System Logs, NERIS panel
 - Sys admin dept drill-in `/admin/dept/[id]` — 5 tabs
 - Personnel roster + profile (role-based editing, change password, officer add)
 - Apparatus list + detail (edit, compartment assign/remove, Manage Equipment link)
@@ -124,6 +131,26 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-05-20 — Hub-and-Spoke Nav + NERIS Production + Admin Troubleshooting
+- Sidebar trimmed to 6 top-level items: Dashboard, Operations, Personnel, Training, Equipment, Reports
+- Dept Admin collapsed to single link → `/dept-admin` hub page with conditional tiles (ISO, NERIS, Public Site)
+- New hub pages: `/operations`, `/reports`, `/iso` (sub-hub under Dept Admin)
+- Enhanced existing pages as hubs: `/equipment` (section cards + apparatus grid), `/training` (Events/Certs/Print cards), `/personnel` (subtitle)
+- `HubCard` component (`components/HubCard.tsx`) — shared card with stat badge + alert state
+- `PageNavBar` component (`components/PageNavBar.tsx`) — auto Back + parent hub link on every page, pathname-driven
+- NERIS V1 Compatible badge earned — passed FSRI compatibility check (2026-05-20)
+- NERIS production credentials obtained from neris.fsri.org, set in Vercel + .env.local
+- NERIS dept enrollment UI (`/dept-admin/neris`) rebuilt — full 4-step guide (NERIS account signup → entity ID → FireOps7 integration enrollment → connect), FireOps7 Client ID displayed with copy button, Test Connection button pings NERIS API
+- `nerisCheckEntityExists()` added to `lib/neris-api.ts` — uses validate endpoint to confirm entity + auth
+- `testNerisConnection()` server action added to `app/actions/departments.ts`
+- NERIS admin troubleshooting panel (`/admin/neris`) — 3 tabs:
+  - Departments: all NERIS-enabled depts, entity ID status, submitted/draft/error counts, last submission, per-dept Test button
+  - Issues: failed submissions with raw error + ready-but-not-submitted drafts, direct link to NERIS form
+  - Error Logs: system_logs filtered to NERIS with dept context
+- `neris_last_error` column added to `incident_neris` — stores API error message on failed submissions
+- Submit action: on failure writes `neris_status='error'` + `neris_last_error`; on success clears `neris_last_error`
+- `NERIS_USE_TEST` still `true` — flip to `false` after confirming production credentials work
 
 ### 2026-05-17 — Training Module Overhaul + Fire School Polish
 - Training member page: replaced 3-tab layout with unified My Training list + My Certifications section
