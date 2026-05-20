@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import TrainingClient from './TrainingClient'
+import HubCard from '@/components/HubCard'
 
 export default async function TrainingPage() {
   const supabase = await createClient()
@@ -99,21 +100,54 @@ export default async function TrainingPage() {
     }))
   }
 
+  // Count expiring certs (within 90 days)
+  const today = new Date()
+  const in90 = new Date(); in90.setDate(today.getDate() + 90)
+  const expiringCount = (myCerts ?? []).filter(c => {
+    if (!c.expiration_date) return false
+    const exp = new Date(c.expiration_date + 'T00:00:00')
+    return exp >= today && exp <= in90
+  }).length
+
   return (
-    <TrainingClient
-      enrollments={enrollments ?? []}
-      certTypes={certTypes ?? []}
-      units={units ?? []}
-      myProgress={myProgress ?? []}
-      myCerts={myCerts ?? []}
-      trainingEvents={(allTrainingEvents ?? []).map(e => ({
-        ...e,
-        my_attendance: myAttendanceMap[e.id] ?? null,
-      }))}
-      myPersonnelId={me.id}
-      myName={`${me.first_name} ${me.last_name}`}
-      isOfficerOrAbove={isOfficerOrAbove}
-      officerAttendance={officerAttendance}
-    />
+    <div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 mb-6">
+        <HubCard
+          title="Events"
+          description="Department training events and attendance sign-in"
+          href="/events"
+        />
+        <HubCard
+          title="My Certifications"
+          description="Active certs and expiration status"
+          href="/training#certs"
+          stat={expiringCount > 0 ? expiringCount : null}
+          statLabel="Expiring Soon"
+          alert={expiringCount > 0}
+        />
+        {isOfficerOrAbove && (
+          <HubCard
+            title="Print Training Card"
+            description="Printable member training record"
+            href={`/print/member-training?personnel_id=${me.id}`}
+          />
+        )}
+      </div>
+      <TrainingClient
+        enrollments={enrollments ?? []}
+        certTypes={certTypes ?? []}
+        units={units ?? []}
+        myProgress={myProgress ?? []}
+        myCerts={myCerts ?? []}
+        trainingEvents={(allTrainingEvents ?? []).map(e => ({
+          ...e,
+          my_attendance: myAttendanceMap[e.id] ?? null,
+        }))}
+        myPersonnelId={me.id}
+        myName={`${me.first_name} ${me.last_name}`}
+        isOfficerOrAbove={isOfficerOrAbove}
+        officerAttendance={officerAttendance}
+      />
+    </div>
   )
 }

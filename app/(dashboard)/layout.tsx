@@ -65,42 +65,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
     moduleNeris = (deptFlags as any)?.module_neris ?? false
   }
 
+  const opsBadge = (announcementUnreadCount + inboxPendingCount) > 0
+    ? announcementUnreadCount + inboxPendingCount
+    : undefined
+
   const navGroups: NavGroup[] = isSysAdmin ? [
     { items: [{ href: '/dashboard', label: 'Overview' }] },
   ] : [
     { items: [{ href: '/dashboard', label: 'Dashboard' }] },
-    {
-      label: 'Personnel',
-      items: [
-        { href: '/personnel', label: 'Roster' },
-        { href: user?.personnelId ? `/personnel/${user.personnelId}` : '/personnel', label: 'My Profile' },
-      ],
-    },
-    {
-      label: 'Training & Events',
-      items: [
-        { href: '/events', label: 'Events' },
-        { href: '/training', label: 'Certifications' },
-      ],
-    },
-    {
-      label: 'Operations',
-      items: [
-        { href: '/announcements', label: 'Announcements', badge: announcementUnreadCount > 0 ? announcementUnreadCount : undefined },
-        ...(moduleOperations ? [{ href: '/incidents', label: 'Incidents' }] : []),
-        ...(publicSiteEnabled ? [{ href: '/inbox', label: 'Public Inbox', badge: inboxPendingCount > 0 ? inboxPendingCount : undefined }] : []),
-      ],
-    },
-    { items: [{ href: '/inspections', label: 'Inspections' }] },
-    { items: [{ href: '/fuel', label: 'Fuel Log' }] },
-    {
-      label: 'Reports',
-      items: [
-        { href: '/reports/my-activity', label: 'My Activity' },
-        ...(isOfficerOrAbove ? [{ href: '/reports/inventory-status', label: 'Inventory Status' }] : []),
-        ...(isOfficerOrAbove ? [{ href: '/reports/fuel', label: 'Fuel Report' }] : []),
-      ],
-    },
+    { items: [{ href: '/operations', label: 'Operations', badge: opsBadge }] },
+    { items: [{ href: '/personnel', label: 'Personnel' }] },
+    { items: [{ href: '/training', label: 'Training' }] },
+    { items: [{ href: '/equipment', label: 'Equipment' }] },
+    { items: [{ href: '/reports', label: 'Reports' }] },
   ]
 
   const adminNavItems = isSysAdmin ? [
@@ -108,18 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/logs', label: 'System Logs' },
   ] : isDeptAdmin ? [
-    { href: '/dept-admin/setup', label: 'Equipment' },
-    { href: '/dept-admin/personnel', label: 'Personnel' },
-    { href: '/dept-admin/training', label: 'Training' },
-    ...(moduleIso ? [
-      { href: '/iso/hoses', label: 'Hose Inventory' },
-      { href: '/iso/hydrants', label: 'Hydrants' },
-      { href: '/iso/mutual-aid', label: 'Mutual Aid' },
-      { href: '/iso/preplans', label: 'Pre-Fire Plans' },
-      { href: '/iso/report', label: 'ISO Report' },
-    ] : []),
-    ...(publicSiteEnabled ? [{ href: '/dept-admin/public-inbox', label: 'Public Inbox' }] : []),
-    ...(moduleNeris ? [{ href: '/dept-admin/neris', label: 'NERIS Settings' }] : []),
+    { href: '/dept-admin', label: 'Dept Admin' },
   ] : []
 
   const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'
