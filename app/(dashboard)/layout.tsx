@@ -5,6 +5,7 @@ import FeedbackButton from '@/components/FeedbackButton'
 import MobileSidebar from '@/components/MobileSidebar'
 import NavGroups from '@/components/NavGroups'
 import type { NavGroup } from '@/components/NavGroups'
+import PageNavBar from '@/components/PageNavBar'
 
 async function getUserContext() {
   const supabase = await createClient()
@@ -104,6 +105,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
       <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} />
       <main className="flex-1 pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 overflow-y-auto">
+        <PageNavBar />
         {children}
       </main>
     </div>
