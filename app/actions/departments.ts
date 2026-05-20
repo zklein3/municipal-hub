@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { nerisCheckEntityExists } from '@/lib/neris-api'
 
 export async function createDepartment(formData: FormData) {
   const name = formData.get('name') as string
@@ -121,4 +122,16 @@ export async function saveDeptAdminNerisEntityId(departmentId: string, nerisEnti
   if (error) return { error: error.message }
   revalidatePath('/dept-admin/neris')
   return { success: true }
+}
+
+export async function testNerisConnection(nerisEntityId: string): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Not authenticated.' }
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { ok: false, error: 'Not authenticated.' }
+  if (!nerisEntityId.trim()) return { ok: false, error: 'Enter an Entity ID first.' }
+  return nerisCheckEntityExists(nerisEntityId.trim())
 }

@@ -30,11 +30,14 @@ export default async function DeptNerisSettingsPage() {
 
   if (!dept?.module_neris) redirect('/dashboard')
 
+  const clientId = process.env.NERIS_CLIENT_ID ?? null
+
   return (
-    <div className="pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 max-w-2xl">
+    <div className="max-w-2xl">
       <NerisSettingsClient
         departmentId={myDept.department_id}
         nerisEntityId={dept.neris_entity_id ?? null}
+        clientId={clientId}
       />
     </div>
   )

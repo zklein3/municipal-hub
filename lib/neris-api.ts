@@ -172,6 +172,27 @@ export async function nerisUpdateEntity(
   }
 }
 
+// Check that an entity ID is valid and auth is working.
+// Uses the validate endpoint — 422 means entity is recognized (payload just needs fields).
+export async function nerisCheckEntityExists(nerisEntityId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const authHeaders = await getAuthHeaders()
+    const res = await fetch(`${BASE_URL}/incident/${nerisEntityId}/validate`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (res.status === 204 || res.status === 422 || res.status === 400) return { ok: true }
+    if (res.status === 404) return { ok: false, error: 'Entity ID not found in NERIS. Verify the value on your NERIS department profile.' }
+    if (res.status === 401 || res.status === 403) return { ok: false, error: 'Authentication failed. Contact FireOps7 support.' }
+    return { ok: false, error: `Unexpected response from NERIS (${res.status})` }
+  } catch (err: any) {
+    return { ok: false, error: err.message ?? 'Could not reach NERIS servers.' }
+  }
+}
+
 // POST a unit to a station. Used for NERIS compatibility checks.
 export async function nerisCreateUnit(
   nerisEntityId: string,
