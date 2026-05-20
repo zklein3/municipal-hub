@@ -461,6 +461,11 @@ export async function submitToNeris(incident_id: string) {
     nerisId = result.neris_id
   } catch (err: any) {
     await logError(err.message, '/incidents/neris/submit')
+    await adminClient.from('incident_neris').update({
+      neris_status: 'error',
+      neris_last_error: err.message,
+      updated_at: new Date().toISOString(),
+    }).eq('incident_id', incident_id)
     return { error: err.message }
   }
 

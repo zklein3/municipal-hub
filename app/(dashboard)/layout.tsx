@@ -85,6 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/admin/departments', label: 'Departments' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/logs', label: 'System Logs' },
+    { href: '/admin/neris', label: 'NERIS' },
   ] : isDeptAdmin ? [
     { href: '/dept-admin', label: 'Dept Admin' },
   ] : []
