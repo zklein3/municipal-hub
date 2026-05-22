@@ -108,18 +108,16 @@ Built 2026-05-17. User is playing with flow before proposing further changes.
 - No expiry notification for certs approaching expiration
 - Admin has no read-only view of a member's full cert history
 
-### 2. NERIS — Production credentials set ✅ (2026-05-20)
+### 2. NERIS — Payload validation in progress ✳️ (2026-05-22)
 V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.local.
-`NERIS_USE_TEST=true` still set — flip to `false` to go live after first production test submission.
+`NERIS_USE_TEST=true` in `.env.local` — test credentials were retired when badge was issued; no test OAuth available. Use payload preview for local dev; live submissions go through Vercel once a real dept is enrolled.
 
-**Next step:** Test a submission against the production API. Historically field labeling issues cause first-attempt failures — watch `/admin/neris` Issues tab + Gmail for the error. Fix in `buildNerisPayload` or `lib/neris-value-sets.ts`.
+**Auth situation:** Production credentials only work against `api.neris.fsri.org`. Test API (`api-test.neris.fsri.org`) had separate credentials that were retired. To go live: flip `NERIS_USE_TEST=false` in Vercel, set real dept FDID as `neris_entity_id`, dept must be enrolled and linked to vendor account `VN03615504`.
 
 **Dept enrollment UI built** (`/dept-admin/neris`) — 4-step guide, Client ID copy button, Test Connection.
 **Admin troubleshooting panel built** (`/admin/neris`) — Departments / Issues / Error Logs tabs.
 
 **New DB column:** `incident_neris.neris_last_error` — stores API error on failed submissions.
-
-**Confirmed live submissions (test API):**
 
 **Confirmed live submissions (test API, `NERIS_USE_TEST=true`):**
 - `FD35049607|WIN26-0017|1779004260` — rescue (2026-05-17)
@@ -130,28 +128,34 @@ V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.l
 - `FD35049607|WIN26-0002|1767597600` — mutual aid
 - `FD35049607|26-0100|1761846420` — vehicle / transportation fire
 
-**Confirmed payload structures (2026-05-19):**
+**Confirmed payload structures (2026-05-19 + 2026-05-22):**
 - Actions taken: flat string array — groups ordered suppression-first in `NERIS_ACTIONS_TAKEN`
+- Ventilation actions have timing variants (PRIOR_TO_SUPPRESSION / DURING_SUPPRESSION / POST_SUPPRESSION) — added 2026-05-22
 - Fire module — `location_detail.type` discriminator:
   - `STRUCTURE`: condition on arrival, building damage, cause, floor of origin (required), room of origin (required), water supply, investigation
-  - `OUTSIDE`: cause, acres burned (outside/wildland fires) — NO condition on arrival
+  - `OUTSIDE`: cause, acres burned, water supply — NO condition on arrival, NO building damage, NO floor/room
   - Transportation fires (`FIRE||TRANSPORTATION_FIRE||*`): also use `OUTSIDE` type — only cause sent
-- Alarm/suppression modules (`smoke_alarm`, `fire_alarm`, `other_alarm`, `fire_suppression`): top-level payload keys, each `{ presence: { type: 'PRESENT' | 'NOT_PRESENT' | 'NOT_APPLICABLE' } }` — structure fires only, NOT sent for transportation fires
-- `investigation_needed`: always sent for fire incidents (default `'NO'`), string enum
-- `investigation_types`: always sent (array, can be `[]`)
-- Mutual aid: `involves_mutual_aid` boolean on `incident_neris` — checkbox in NERIS form reveals mutual aid module
+- Alarm/suppression modules: structure fires only, NOT sent for outside or transportation fires
+- `investigation_needed` + `investigation_types`: always sent for fire incidents
+- Mutual aid: `involves_mutual_aid` boolean on `incident_neris`
+- **Rescue module** (`casualty_rescues[]`) — confirmed correct 2026-05-22:
+  - Per person: `type` (FF|NONFF) + `rescue` + optional `casualty`
+  - `rescue.ffrescue_or_nonffrescue` discriminated by type: FF rescue types → `FfRescuePayload` (requires `removal_or_nonremoval`); non-FF → `NonFfRescuePayload`
+  - FF rescue `removal_or_nonremoval.type`: EXTRICATION | DISENTANGLEMENT | RECOVERY | REMOVAL_FROM_STRUCTURE | OTHER
+  - `rescue.presence_known`: NONFF persons only (regardless of who did the rescuing)
+  - `casualty.injury_or_noninjury.type`: UNINJURED | INJURED_NONFATAL | INJURED_FATAL
+- **Medical module** (`medical_details[]`) — field names confirmed 2026-05-22:
+  - `patient_care_evaluation` (required), `patient_status`, `transport_disposition`
+  - `transport_disposition` values: TRANSPORT_BY_EMS_UNIT | OTHER_AGENCY_TRANSPORT | NONPATIENT_TRANSPORT | PATIENT_REFUSED_TRANSPORT | NO_TRANSPORT
+- **Hazmat module**: top-level key is `hazsit_detail` (not `hazardous_situation`) — sub-fields still TODO(api-review)
 
-**UX improvements (2026-05-19):**
-- Required fire fields show red border when empty (`showRequired` prop on `NerisCombobox`)
-- Transportation fires hide structure-only fields (building damage, floor/room, alarms, condition on arrival)
-- Mutual aid section has response times with auto-fill from incident button
-- Mutual aid rows on incident cover page now have Edit button (inline form)
-- NERIS form sections show red border when required fields are missing
+**Confirmed clean payloads (preview verified 2026-05-22):**
+- Motor vehicle extrication (`RESCUE||TRANSPORTATION||MOTOR_VEHICLE_EXTRICATION_ENTRAPPED`) — FFD26-1819
+- Wildland fire (`FIRE||OUTSIDE_FIRE||WILDFIRE_WILDLAND`) — UEH26-0017
 
 **Still to verify:**
-- Outside fire (grass/wildland) — `OUTSIDE` path with `acres_burned`
-- Rescue module — own payload section
 - Mutual aid module payload structure
+- Hazmat module sub-field names (`hazsit_detail` inner fields)
 
 **Key files:**
 - Payload builder: `app/actions/neris.ts` → `buildNerisPayload`

@@ -132,6 +132,22 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-05-22 — NERIS Rescue Module + Payload Validation
+- **Rescue module rebuilt** — `NERIS_RESCUE_TYPE` removed (codes didn't exist in spec); replaced with correct spec-sourced enums:
+  - `NERIS_PERSON_TYPE` (FF | NONFF), `NERIS_RESCUE_PERFORMED_BY` (6 rescue outcome codes), `NERIS_RESCUE_MODE` (EXTRICATION etc.), `NERIS_RESCUE_ACTIONS` (TypeRescueActionValue), `NERIS_RESCUE_IMPEDIMENTS`, `NERIS_PRESENCE_KNOWN`
+  - `NERIS_CASUALTY_TYPE` codes fixed: INJURED_NONFATAL / INJURED_FATAL (not NONFATALLY / FATALLY)
+- **Medical module field names confirmed** from spec — `patient_care_evaluation`, `patient_status`, `transport_disposition`; top-level key is `medical_details` (was wrong `medical_patients`)
+- **`NERIS_MEDICAL_DISPOSITION` rebuilt** from `TypeMedicalTransportValue` — TRANSPORT_BY_EMS_UNIT | OTHER_AGENCY_TRANSPORT | NONPATIENT_TRANSPORT | PATIENT_REFUSED_TRANSPORT | NO_TRANSPORT
+- **Hazmat key fixed** — `hazsit_detail` (was `hazardous_situation`); inner field names still TODO(api-review)
+- **Payload builder** (`buildNerisPayload`) — built actual `CasualtyRescuePayload` with correct discriminated union nesting; built `medical_details` and `hazsit_detail` (were all TODO)
+- **`presence_known` bug fixed** — was gated on `!isFfRescue`; corrected to `person_type === 'NONFF'` (a NONFF rescued by a FF still needs presence_known)
+- **Outside fire form fixed** — condition on arrival, building damage, floor/room of origin now hidden for outside/wildland fires (were shown for all non-transportation fires)
+- **Requirements checker fixed** — `fire_condition_arrival`, building damage, floor/room now structure-fire-only; `OUTSIDE_FIRE_CODES` / `STRUCTURE_FIRE_CODES` matching fixed to split pipe-delimited codes by `||` segment
+- **Ventilation timing variants added** — 12 new action codes (PRIOR_TO_SUPPRESSION / DURING_SUPPRESSION / POST_SUPPRESSION for all 4 ventilation types)
+- **Payload preview copy button fixed** — fallback to `execCommand` for HTTP localhost; shows "✓ Copied" confirmation
+- **Auth clarification** — production credentials don't work with test API (separate OAuth servers); test credentials were retired when badge was issued; local dev uses preview only
+- **Confirmed clean payloads**: motor vehicle extrication (FFD26-1819) and wildland fire (UEH26-0017)
+
 ### 2026-05-20 — Hub-and-Spoke Nav + NERIS Production + Admin Troubleshooting
 - Sidebar trimmed to 6 top-level items: Dashboard, Operations, Personnel, Training, Equipment, Reports
 - Dept Admin collapsed to single link → `/dept-admin` hub page with conditional tiles (ISO, NERIS, Public Site)

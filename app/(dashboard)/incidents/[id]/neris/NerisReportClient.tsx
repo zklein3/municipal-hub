@@ -22,7 +22,12 @@ import {
   NERIS_MEDICAL_DISPOSITION,
   NERIS_HAZSIT_DISPOSITION,
   NERIS_DOT_HAZARD_CLASS,
-  NERIS_RESCUE_TYPE,
+  NERIS_PERSON_TYPE,
+  NERIS_RESCUE_PERFORMED_BY,
+  NERIS_RESCUE_MODE,
+  NERIS_RESCUE_ACTIONS,
+  NERIS_RESCUE_IMPEDIMENTS,
+  NERIS_PRESENCE_KNOWN,
   NERIS_CASUALTY_TYPE,
   NERIS_CASUALTY_CAUSE,
   NERIS_VEHICLE_TYPE,
@@ -147,6 +152,7 @@ export default function NerisReportClient({
   // Payload preview
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewCopied, setPreviewCopied] = useState(false)
   const [previewData, setPreviewData] = useState<string | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
@@ -167,10 +173,10 @@ export default function NerisReportClient({
   const isMotorVehicle = testingMode || nerisType.includes('MOTOR_VEHICLE') || nerisType.includes('EXTRICATION')
 
   // Which rescue types show vehicle fields vs entrapment-only vs neither
-  const VEHICLE_RESCUE_TYPES = new Set(['MOTOR_VEHICLE_EXTRICATION_ENTRAPPED'])
-  const ENTRAPMENT_RESCUE_TYPES = new Set(['MOTOR_VEHICLE_EXTRICATION_ENTRAPPED', 'BUILDING_STRUCTURE_COLLAPSE', 'CONFINED_SPACE_RESCUE', 'EXTRICATION_ENTRAPPED', 'TRENCH'])
-  function showVehicleFields(rescueType: string) { return VEHICLE_RESCUE_TYPES.has(rescueType) || isMotorVehicle }
-  function showEntrapmentField(rescueType: string) { return ENTRAPMENT_RESCUE_TYPES.has(rescueType) || isMotorVehicle }
+  const FF_RESCUE_TYPES = new Set(['RESCUED_BY_FIREFIGHTER', 'RESCUED_BY_FF_RIT', 'EVAC_ASSISTED_BY_FIREFIGHTER'])
+  function isFfRescue(rescuePerformedBy: string) { return FF_RESCUE_TYPES.has(rescuePerformedBy) }
+  function showVehicleFields(rescueMode: string) { return rescueMode === 'EXTRICATION' || isMotorVehicle }
+  function showEntrapmentField(rescueMode: string) { return ['EXTRICATION', 'DISENTANGLEMENT', 'RECOVERY'].includes(rescueMode) || isMotorVehicle }
   const [propertyUse, setPropertyUse] = useState<string>(nerisRecord?.property_use ?? '')
   const [propertyNormalUse, setPropertyNormalUse] = useState<string>(nerisRecord?.property_normal_use ?? '')
   const [nerisNarrative, setNerisNarrative] = useState<string>(nerisRecord?.neris_narrative ?? '')
@@ -210,11 +216,47 @@ export default function NerisReportClient({
   )
 
   // Unified persons — rescue + medical per person
-  type IncidentPerson = { _id: string; rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string; evaluation_care: string; improved_status: string; disposition: string }
+  type IncidentPerson = {
+    _id: string
+    // Who is this person
+    person_type: string        // FF | NONFF
+    // Rescue — how/by whom rescued
+    rescue_performed_by: string  // RESCUED_BY_FIREFIGHTER | RESCUED_BY_FF_RIT | EVAC_ASSISTED_BY_FIREFIGHTER | RESCUED_BY_NONFIREFIGHTER | SELF_EVACUATION | NO_RESCUE_NEEDED
+    rescue_mode: string          // EXTRICATION | DISENTANGLEMENT | RECOVERY | REMOVAL_FROM_STRUCTURE | OTHER (required when FF rescue)
+    rescue_actions: string[]     // TypeRescueActionValue[] (multi-select, FF rescue only)
+    rescue_impediments: string[] // TypeRescueImpedimentValue[] (multi-select, FF rescue only)
+    presence_known: string       // KNOWN_DISPATCH | KNOWN_ARRIVAL | KNOWN_DURING (NONFF only)
+    entrapped: boolean
+    vehicle_type: string
+    safety_device: string
+    // Casualty
+    casualty_type: string    // UNINJURED | INJURED_NONFATAL | INJURED_FATAL
+    casualty_cause: string
+    // Medical
+    evaluation_care: string
+    improved_status: string
+    disposition: string
+  }
   const initPersons = (): IncidentPerson[] => {
     const saved = nerisRecord?.incident_persons
     if (Array.isArray(saved) && saved.length > 0) {
-      return saved.map((p: any, i: number) => ({ _id: String(i), rescue_type: p.rescue_type ?? '', casualty_type: p.casualty_type ?? '', casualty_cause: p.casualty_cause ?? '', entrapped: p.entrapped ?? false, vehicle_type: p.vehicle_type ?? '', safety_device: p.safety_device ?? '', evaluation_care: p.evaluation_care ?? '', improved_status: p.improved_status ?? '', disposition: p.disposition ?? '' }))
+      return saved.map((p: any, i: number) => ({
+        _id: String(i),
+        person_type: p.person_type ?? '',
+        rescue_performed_by: p.rescue_performed_by ?? '',
+        rescue_mode: p.rescue_mode ?? '',
+        rescue_actions: p.rescue_actions ?? [],
+        rescue_impediments: p.rescue_impediments ?? [],
+        presence_known: p.presence_known ?? '',
+        entrapped: p.entrapped ?? false,
+        vehicle_type: p.vehicle_type ?? '',
+        safety_device: p.safety_device ?? '',
+        casualty_type: p.casualty_type ?? '',
+        casualty_cause: p.casualty_cause ?? '',
+        evaluation_care: p.evaluation_care ?? '',
+        improved_status: p.improved_status ?? '',
+        disposition: p.disposition ?? '',
+      }))
     }
     return []
   }
@@ -281,7 +323,7 @@ export default function NerisReportClient({
       aid_in_service_at: aidInServiceAt ? new Date(aidInServiceAt).toISOString() : null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
-      incident_persons: incidentPersons.map(p => ({ rescue_type: p.rescue_type, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+      incident_persons: incidentPersons.map(p => ({ person_type: p.person_type, rescue_performed_by: p.rescue_performed_by, rescue_mode: p.rescue_mode, rescue_actions: p.rescue_actions, rescue_impediments: p.rescue_impediments, presence_known: p.presence_known, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
       hazsit_disposition: hazsitDisposition || null,
       hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
       chemical_name: chemicalName || null,
@@ -413,10 +455,36 @@ export default function NerisReportClient({
                 <p className="text-xs text-zinc-400">This is the exact JSON that will be sent to NERIS. Field names marked <span className="font-mono bg-zinc-100 px-1 rounded">TODO(api-review)</span> need verification against the NERIS openapi.json once credentials are active.</p>
                 <button
                   type="button"
-                  onClick={() => navigator.clipboard.writeText(previewData)}
-                  className="ml-3 shrink-0 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50"
+                  onClick={() => {
+                    const text = previewData ?? ''
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(text).then(() => {
+                        setPreviewCopied(true)
+                        setTimeout(() => setPreviewCopied(false), 2000)
+                      }).catch(() => {
+                        const el = document.createElement('textarea')
+                        el.value = text
+                        document.body.appendChild(el)
+                        el.select()
+                        document.execCommand('copy')
+                        document.body.removeChild(el)
+                        setPreviewCopied(true)
+                        setTimeout(() => setPreviewCopied(false), 2000)
+                      })
+                    } else {
+                      const el = document.createElement('textarea')
+                      el.value = text
+                      document.body.appendChild(el)
+                      el.select()
+                      document.execCommand('copy')
+                      document.body.removeChild(el)
+                      setPreviewCopied(true)
+                      setTimeout(() => setPreviewCopied(false), 2000)
+                    }
+                  }}
+                  className="ml-3 shrink-0 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors"
                 >
-                  Copy
+                  {previewCopied ? '✓ Copied' : 'Copy'}
                 </button>
               </div>
               <pre className="overflow-x-auto bg-zinc-950 text-green-400 text-xs p-4 max-h-[480px] overflow-y-auto font-mono leading-relaxed">
@@ -936,7 +1004,7 @@ export default function NerisReportClient({
               )}
             </div>
 
-            {!isTransportationFire && (
+            {!isTransportationFire && !isOutsideFire && (
             <div>
               <label className={labelCls}>Condition on Arrival</label>
               <NerisCombobox
@@ -950,7 +1018,7 @@ export default function NerisReportClient({
             </div>
             )}
 
-            {!isTransportationFire && (
+            {!isTransportationFire && !isOutsideFire && (
               <div>
                 <label className={labelCls}>Building Damage</label>
                 <NerisCombobox
@@ -997,7 +1065,7 @@ export default function NerisReportClient({
               </div>
             )}
 
-            {!isTransportationFire && (
+            {!isTransportationFire && !isOutsideFire && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Floor of Origin</label>
@@ -1153,14 +1221,15 @@ export default function NerisReportClient({
                   {/* Rescue fields */}
                   {isRescueType && (
                     <>
+                      {/* Row 1: Person type + casualty type */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className={labelCls}>Rescue Type</label>
+                          <label className={labelCls}>Person Type</label>
                           <NerisCombobox
-                            groups={toGroups(NERIS_RESCUE_TYPE, 'Rescue Type')}
-                            value={p.rescue_type}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_type: val as string } : x))}
-                            placeholder="Select rescue type…"
+                            groups={toGroups(NERIS_PERSON_TYPE, 'Person Type')}
+                            value={p.person_type}
+                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, person_type: val as string } : x))}
+                            placeholder="Firefighter or civilian…"
                             disabled={isSubmitted}
                           />
                         </div>
@@ -1176,6 +1245,7 @@ export default function NerisReportClient({
                         </div>
                       </div>
 
+                      {/* Casualty cause — only when injured */}
                       {p.casualty_type && p.casualty_type !== 'UNINJURED' && (
                         <div>
                           <label className={labelCls}>Casualty Cause</label>
@@ -1189,43 +1259,123 @@ export default function NerisReportClient({
                         </div>
                       )}
 
-                      {/* Entrapment — confined space, structure, or vehicle */}
-                      {showEntrapmentField(p.rescue_type) && (
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={p.entrapped}
-                            onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, entrapped: e.target.checked } : x))}
-                            disabled={isSubmitted}
-                            className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                          />
-                          <span className="text-sm font-medium text-zinc-700">Person was entrapped</span>
-                        </label>
+                      {/* Row 2: How rescued */}
+                      <div>
+                        <label className={labelCls}>How Rescued</label>
+                        <NerisCombobox
+                          groups={toGroups(NERIS_RESCUE_PERFORMED_BY, 'How Rescued')}
+                          value={p.rescue_performed_by}
+                          onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_performed_by: val as string, rescue_mode: '', rescue_actions: [], rescue_impediments: [] } : x))}
+                          placeholder="Select how person was rescued…"
+                          disabled={isSubmitted}
+                        />
+                      </div>
+
+                      {/* FF rescue fields — only when rescue was performed by a firefighter */}
+                      {isFfRescue(p.rescue_performed_by) && (
+                        <>
+                          <div>
+                            <label className={labelCls}>Rescue Method</label>
+                            <NerisCombobox
+                              groups={toGroups(NERIS_RESCUE_MODE, 'Rescue Method')}
+                              value={p.rescue_mode}
+                              onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_mode: val as string } : x))}
+                              placeholder="Extrication, removal from structure…"
+                              disabled={isSubmitted}
+                            />
+                          </div>
+
+                          {/* Entrapment checkbox */}
+                          {showEntrapmentField(p.rescue_mode) && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={p.entrapped}
+                                onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, entrapped: e.target.checked } : x))}
+                                disabled={isSubmitted}
+                                className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                              />
+                              <span className="text-sm font-medium text-zinc-700">Person was entrapped</span>
+                            </label>
+                          )}
+
+                          {/* Vehicle fields — extrication only */}
+                          {showVehicleFields(p.rescue_mode) && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className={labelCls}>Vehicle Type</label>
+                                <NerisCombobox
+                                  groups={toGroups(NERIS_VEHICLE_TYPE, 'Vehicle Type')}
+                                  value={p.vehicle_type}
+                                  onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, vehicle_type: val as string } : x))}
+                                  placeholder="Select vehicle type…"
+                                  disabled={isSubmitted}
+                                />
+                              </div>
+                              <div>
+                                <label className={labelCls}>Safety Device</label>
+                                <NerisCombobox
+                                  groups={toGroups(NERIS_SAFETY_DEVICE, 'Safety Device')}
+                                  value={p.safety_device}
+                                  onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, safety_device: val as string } : x))}
+                                  placeholder="Select safety device…"
+                                  disabled={isSubmitted}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rescue actions multi-select */}
+                          <div>
+                            <label className={labelCls}>Rescue Actions</label>
+                            <div className="flex flex-wrap gap-2">
+                              {NERIS_RESCUE_ACTIONS.map(a => (
+                                <label key={a.code} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={p.rescue_actions.includes(a.code)}
+                                    onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_actions: e.target.checked ? [...x.rescue_actions, a.code] : x.rescue_actions.filter(c => c !== a.code) } : x))}
+                                    disabled={isSubmitted}
+                                    className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                                  />
+                                  <span className="text-xs text-zinc-700">{a.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Rescue impediments multi-select */}
+                          <div>
+                            <label className={labelCls}>Impediments</label>
+                            <div className="flex flex-wrap gap-2">
+                              {NERIS_RESCUE_IMPEDIMENTS.map(imp => (
+                                <label key={imp.code} className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={p.rescue_impediments.includes(imp.code)}
+                                    onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_impediments: e.target.checked ? [...x.rescue_impediments, imp.code] : x.rescue_impediments.filter(c => c !== imp.code) } : x))}
+                                    disabled={isSubmitted}
+                                    className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                                  />
+                                  <span className="text-xs text-zinc-700">{imp.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </>
                       )}
 
-                      {/* Vehicle fields — motor vehicle / extrication only */}
-                      {showVehicleFields(p.rescue_type) && (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className={labelCls}>Vehicle Type</label>
-                            <NerisCombobox
-                              groups={toGroups(NERIS_VEHICLE_TYPE, 'Vehicle Type')}
-                              value={p.vehicle_type}
-                              onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, vehicle_type: val as string } : x))}
-                              placeholder="Select vehicle type…"
-                              disabled={isSubmitted}
-                            />
-                          </div>
-                          <div>
-                            <label className={labelCls}>Safety Device</label>
-                            <NerisCombobox
-                              groups={toGroups(NERIS_SAFETY_DEVICE, 'Safety Device')}
-                              value={p.safety_device}
-                              onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, safety_device: val as string } : x))}
-                              placeholder="Select safety device…"
-                              disabled={isSubmitted}
-                            />
-                          </div>
+                      {/* Presence known — NONFF only */}
+                      {p.person_type === 'NONFF' && p.rescue_performed_by && (
+                        <div>
+                          <label className={labelCls}>When Was Presence Known</label>
+                          <NerisCombobox
+                            groups={toGroups(NERIS_PRESENCE_KNOWN, 'Presence Known')}
+                            value={p.presence_known}
+                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, presence_known: val as string } : x))}
+                            placeholder="When was person's presence known…"
+                            disabled={isSubmitted}
+                          />
                         </div>
                       )}
                     </>
@@ -1276,7 +1426,7 @@ export default function NerisReportClient({
             {!isSubmitted && (
               <button
                 type="button"
-                onClick={() => setIncidentPersons(prev => [...prev, { _id: String(Date.now()), rescue_type: '', casualty_type: '', casualty_cause: '', entrapped: false, vehicle_type: '', safety_device: '', evaluation_care: '', improved_status: '', disposition: '' }])}
+                onClick={() => setIncidentPersons(prev => [...prev, { _id: String(Date.now()), person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [], rescue_impediments: [], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '', evaluation_care: '', improved_status: '', disposition: '' }])}
                 className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors">
                 + Add Person
               </button>
@@ -1386,7 +1536,7 @@ export default function NerisReportClient({
                     fire_cause_code: fireCauseCode || null,
                     aid_type: aidType || null,
                     aid_direction: aidDirection || null,
-                    incident_persons: incidentPersons.map(p => ({ rescue_type: p.rescue_type, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+                    incident_persons: incidentPersons.map(p => ({ person_type: p.person_type, rescue_performed_by: p.rescue_performed_by, rescue_mode: p.rescue_mode, rescue_actions: p.rescue_actions, rescue_impediments: p.rescue_impediments, presence_known: p.presence_known, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
                     hazsit_disposition: hazsitDisposition || null,
                     hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
                     chemical_name: chemicalName || null,

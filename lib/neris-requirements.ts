@@ -44,7 +44,13 @@ export type NerisRecordInput = {
   fire_cause_code?: string | null
   aid_type?: string | null
   aid_direction?: string | null
-  incident_persons?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string; evaluation_care: string; improved_status: string; disposition: string }[] | null
+  incident_persons?: {
+    person_type: string; rescue_performed_by: string; rescue_mode: string;
+    rescue_actions: string[]; rescue_impediments: string[]; presence_known: string;
+    entrapped: boolean; vehicle_type: string; safety_device: string;
+    casualty_type: string; casualty_cause: string;
+    evaluation_care: string; improved_status: string; disposition: string
+  }[] | null
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
   chemical_name?: string | null
@@ -307,12 +313,17 @@ export function getNerisActiveModules(context: NerisRequirementContext): NerisRe
   }
 }
 
+function codeSegmentMatches(nerisCode: string | null | undefined, set: Set<string>): boolean {
+  if (!nerisCode) return false
+  return nerisCode.split('||').some(seg => set.has(seg))
+}
+
 export function isNerisStructureFire(incident: NerisIncidentInput, nerisCode?: string | null): boolean {
-  return incident.fire_subtype === 'structure' || STRUCTURE_FIRE_CODES.has(nerisCode ?? '')
+  return incident.fire_subtype === 'structure' || codeSegmentMatches(nerisCode, STRUCTURE_FIRE_CODES)
 }
 
 export function isNerisOutsideFire(incident: NerisIncidentInput, nerisCode?: string | null): boolean {
-  return ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '') || OUTSIDE_FIRE_CODES.has(nerisCode ?? '')
+  return ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '') || codeSegmentMatches(nerisCode, OUTSIDE_FIRE_CODES)
 }
 
 export function evaluateNerisRequirements(context: NerisRequirementContext): NerisRequirementSummary {
@@ -482,14 +493,6 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
 
   if (modules.fire) {
     add({
-      id: 'fire.condition_arrival',
-      section: 'fire',
-      label: 'Fire condition on arrival',
-      severity: 'required',
-      status: completeIf(hasText(neris.fire_condition_arrival)),
-      source: 'neris_report',
-    })
-    add({
       id: 'fire.cause',
       section: 'fire',
       label: outsideFire ? 'Outside fire cause' : 'Fire cause',
@@ -507,6 +510,14 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     })
 
     if (structureFire) {
+      add({
+        id: 'fire.condition_arrival',
+        section: 'fire',
+        label: 'Fire condition on arrival',
+        severity: 'required',
+        status: completeIf(hasText(neris.fire_condition_arrival)),
+        source: 'neris_report',
+      })
       add({
         id: 'fire.building_damage',
         section: 'fire',

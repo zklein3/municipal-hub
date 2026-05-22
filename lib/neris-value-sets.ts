@@ -523,9 +523,21 @@ export const NERIS_ACTIONS_TAKEN: NerisGroup[] = [
     group: 'Ventilation',
     codes: [
       { code: 'VENTILATION||VERTICAL', label: 'Vertical Ventilation' },
+      { code: 'VENTILATION||VERTICAL||PRIOR_TO_SUPPRESSION', label: 'Vertical Ventilation — Prior to Suppression' },
+      { code: 'VENTILATION||VERTICAL||DURING_SUPPRESSION', label: 'Vertical Ventilation — During Suppression' },
+      { code: 'VENTILATION||VERTICAL||POST_SUPPRESSION', label: 'Vertical Ventilation — Post Suppression' },
       { code: 'VENTILATION||HORIZONTAL', label: 'Horizontal Ventilation' },
+      { code: 'VENTILATION||HORIZONTAL||PRIOR_TO_SUPPRESSION', label: 'Horizontal Ventilation — Prior to Suppression' },
+      { code: 'VENTILATION||HORIZONTAL||DURING_SUPPRESSION', label: 'Horizontal Ventilation — During Suppression' },
+      { code: 'VENTILATION||HORIZONTAL||POST_SUPPRESSION', label: 'Horizontal Ventilation — Post Suppression' },
       { code: 'VENTILATION||POSITIVE_PRESSURE', label: 'Positive Pressure Ventilation' },
+      { code: 'VENTILATION||POSITIVE_PRESSURE||PRIOR_TO_SUPPRESSION', label: 'Positive Pressure Ventilation — Prior to Suppression' },
+      { code: 'VENTILATION||POSITIVE_PRESSURE||DURING_SUPPRESSION', label: 'Positive Pressure Ventilation — During Suppression' },
+      { code: 'VENTILATION||POSITIVE_PRESSURE||POST_SUPPRESSION', label: 'Positive Pressure Ventilation — Post Suppression' },
       { code: 'VENTILATION||HYDRAULIC', label: 'Hydraulic Ventilation' },
+      { code: 'VENTILATION||HYDRAULIC||PRIOR_TO_SUPPRESSION', label: 'Hydraulic Ventilation — Prior to Suppression' },
+      { code: 'VENTILATION||HYDRAULIC||DURING_SUPPRESSION', label: 'Hydraulic Ventilation — During Suppression' },
+      { code: 'VENTILATION||HYDRAULIC||POST_SUPPRESSION', label: 'Hydraulic Ventilation — Post Suppression' },
     ],
   },
   {
@@ -735,16 +747,13 @@ export const NERIS_PATIENT_IMPROVED_STATUS: NerisCode[] = [
   { code: 'WORSE', label: 'Worse' },
 ]
 
+// TypeMedicalTransportValue — confirmed from NERIS openapi.json 2026-05-22
 export const NERIS_MEDICAL_DISPOSITION: NerisCode[] = [
-  { code: 'TRANSPORTED_ALS', label: 'Transported — ALS' },
-  { code: 'TRANSPORTED_BLS', label: 'Transported — BLS' },
-  { code: 'TRANSPORTED_AIR', label: 'Transported — Air Medical' },
-  { code: 'TREATED_RELEASED', label: 'Treated on scene — released' },
-  { code: 'TREATED_TRANSFERRED', label: 'Treated on scene — transferred to EMS' },
-  { code: 'REFUSED_TRANSPORT', label: 'Refused transport / AMA' },
-  { code: 'NO_TREATMENT_REQUIRED', label: 'No treatment required' },
-  { code: 'DECEASED_PRIOR', label: 'Deceased prior to arrival' },
-  { code: 'DECEASED_ON_SCENE', label: 'Deceased on scene' },
+  { code: 'TRANSPORT_BY_EMS_UNIT', label: 'Transported by EMS unit' },
+  { code: 'OTHER_AGENCY_TRANSPORT', label: 'Transported by other agency' },
+  { code: 'NONPATIENT_TRANSPORT', label: 'Transported — non-patient' },
+  { code: 'PATIENT_REFUSED_TRANSPORT', label: 'Patient refused transport' },
+  { code: 'NO_TRANSPORT', label: 'No transport' },
 ]
 
 // ─── Hazmat Module ────────────────────────────────────────────────────────────
@@ -839,19 +848,70 @@ export const NERIS_INVESTIGATION_TYPES: NerisCode[] = [
 ]
 
 // ─── Rescue Module ────────────────────────────────────────────────────────────
-// From mod_rescue_nonff.csv — type_rescue, type_casualty, type_casualty_cause
+// Codes confirmed from NERIS openapi.json 2026-05-22
 
-export const NERIS_RESCUE_TYPE: NerisCode[] = [
-  { code: 'FIREFIGHTER_RESCUED', label: 'Firefighter rescued by crew' },
-  { code: 'FIREFIGHTER_ASSISTED_EVACUATION', label: 'Firefighter-assisted evacuation' },
-  { code: 'SELF_EVACUATED', label: 'Occupant self-evacuated' },
-  { code: 'NO_RESCUE', label: 'No rescue required' },
+// CasualtyRescuePayload.type — who was the person (rescued or casualty)
+export const NERIS_PERSON_TYPE: NerisCode[] = [
+  { code: 'NONFF', label: 'Civilian / non-firefighter' },
+  { code: 'FF', label: 'Firefighter' },
 ]
 
+// RescuePayload.ffrescue_or_nonffrescue.type — how / by whom were they rescued
+// FF types → FfRescuePayload (requires rescue_mode); NONFF types → NonFfRescuePayload
+export const NERIS_RESCUE_PERFORMED_BY: NerisCode[] = [
+  { code: 'RESCUED_BY_FIREFIGHTER', label: 'Rescued by firefighter' },
+  { code: 'RESCUED_BY_FF_RIT', label: 'Rescued by RIT crew (Mayday)' },
+  { code: 'EVAC_ASSISTED_BY_FIREFIGHTER', label: 'Evacuation assisted by firefighter' },
+  { code: 'RESCUED_BY_NONFIREFIGHTER', label: 'Rescued by non-firefighter' },
+  { code: 'SELF_EVACUATION', label: 'Self-evacuation' },
+  { code: 'NO_RESCUE_NEEDED', label: 'No rescue needed' },
+]
+
+// FfRescuePayload.removal_or_nonremoval.type — required when rescue was performed by a firefighter
+// REMOVAL_FROM_STRUCTURE → RemovalPayload; all others → NonremovalPayload
+export const NERIS_RESCUE_MODE: NerisCode[] = [
+  { code: 'EXTRICATION', label: 'Extrication' },
+  { code: 'DISENTANGLEMENT', label: 'Disentanglement' },
+  { code: 'RECOVERY', label: 'Recovery' },
+  { code: 'REMOVAL_FROM_STRUCTURE', label: 'Removal from structure' },
+  { code: 'OTHER', label: 'Other' },
+]
+
+// FfRescuePayload.actions — TypeRescueActionValue (multi-select)
+export const NERIS_RESCUE_ACTIONS: NerisCode[] = [
+  { code: 'HYDRAULIC_TOOL_USE', label: 'Hydraulic tool use' },
+  { code: 'ROPE_RIGGING', label: 'Rope / rigging' },
+  { code: 'BREAK_BREACH_WALL', label: 'Break / breach wall' },
+  { code: 'BRACE_WALL_INFRASTRUCTURE', label: 'Brace wall / infrastructure' },
+  { code: 'TRENCH_SHORING', label: 'Trench shoring' },
+  { code: 'SUPPLY_AIR', label: 'Supply air' },
+  { code: 'UNDERWATER_DIVE', label: 'Underwater dive' },
+  { code: 'VENTILATION', label: 'Ventilation' },
+  { code: 'NONE', label: 'None' },
+]
+
+// FfRescuePayload.impediments — TypeRescueImpedimentValue (multi-select)
+export const NERIS_RESCUE_IMPEDIMENTS: NerisCode[] = [
+  { code: 'ACCESS_LIMITATIONS', label: 'Access limitations' },
+  { code: 'HOARDING_CONDITIONS', label: 'Hoarding conditions' },
+  { code: 'IMPAIRED_PERSON', label: 'Impaired person' },
+  { code: 'PHYSICAL_MEDICAL_CONDITIONS_PERSON', label: 'Physical / medical conditions of person' },
+  { code: 'OTHER', label: 'Other' },
+  { code: 'NONE', label: 'None' },
+]
+
+// RescuePayload.presence_known — TypeRescuePresenceKnownValue (NONFF only)
+export const NERIS_PRESENCE_KNOWN: NerisCode[] = [
+  { code: 'KNOWN_DISPATCH', label: 'Known at dispatch' },
+  { code: 'KNOWN_ARRIVAL', label: 'Known on arrival' },
+  { code: 'KNOWN_DURING', label: 'Known during incident' },
+]
+
+// CasualtyPayload.injury_or_noninjury.type
 export const NERIS_CASUALTY_TYPE: NerisCode[] = [
   { code: 'UNINJURED', label: 'Uninjured' },
-  { code: 'INJURED_NONFATALLY', label: 'Injured — nonfatally' },
-  { code: 'INJURED_FATALLY', label: 'Injured — fatally' },
+  { code: 'INJURED_NONFATAL', label: 'Injured — nonfatally' },
+  { code: 'INJURED_FATAL', label: 'Injured — fatally' },
 ]
 
 export const NERIS_CASUALTY_CAUSE: NerisCode[] = [

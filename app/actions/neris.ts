@@ -89,7 +89,13 @@ export async function saveNerisReport(incident_id: string, data: {
   aid_type?: string | null
   aid_direction?: string | null
   // Unified persons — rescue + medical per person
-  incident_persons?: { rescue_type: string; casualty_type: string; casualty_cause: string; entrapped: boolean; vehicle_type: string; safety_device: string; evaluation_care: string; improved_status: string; disposition: string }[] | null
+  incident_persons?: {
+    person_type: string; rescue_performed_by: string; rescue_mode: string;
+    rescue_actions: string[]; rescue_impediments: string[]; presence_known: string;
+    entrapped: boolean; vehicle_type: string; safety_device: string;
+    casualty_type: string; casualty_cause: string;
+    evaluation_care: string; improved_status: string; disposition: string
+  }[] | null
   // Hazmat module
   hazsit_disposition?: string | null
   hazsit_evacuated?: number | null
@@ -314,7 +320,87 @@ function buildNerisPayload(
   if (neris?.impediment_narrative) base.impediment_narrative = neris.impediment_narrative
 
   // TODO(api-review): unit_responses timing — enroute_at/on_scene_at field names unverified
-  // TODO(api-review): medical, rescue, hazmat — field names need verification
+
+  // ── Rescue module (CasualtyRescuePayload per person) ────────────────────────
+  const FF_RESCUE_TYPES = new Set(['RESCUED_BY_FIREFIGHTER', 'RESCUED_BY_FF_RIT', 'EVAC_ASSISTED_BY_FIREFIGHTER'])
+  const persons = neris?.incident_persons ?? []
+
+  const rescuePersons = persons.filter((p: any) =>
+    p.rescue_performed_by && p.rescue_performed_by !== 'NO_RESCUE_NEEDED'
+  )
+  if (rescuePersons.length > 0) {
+    payload.casualty_rescues = rescuePersons.map((p: any) => {
+      const isFfRescue = FF_RESCUE_TYPES.has(p.rescue_performed_by)
+
+      // Build rescue sub-object
+      let ffrescue_or_nonffrescue: Record<string, unknown>
+      if (isFfRescue) {
+        // RemovalPayload for REMOVAL_FROM_STRUCTURE, NonremovalPayload for everything else
+        const removalOrNon = p.rescue_mode === 'REMOVAL_FROM_STRUCTURE'
+          ? { type: 'REMOVAL_FROM_STRUCTURE' }
+          : { type: p.rescue_mode || 'OTHER' }
+
+        ffrescue_or_nonffrescue = {
+          type: p.rescue_performed_by,
+          removal_or_nonremoval: removalOrNon,
+          ...(p.rescue_actions?.length > 0 && { actions: p.rescue_actions }),
+          ...(p.rescue_impediments?.length > 0 && { impediments: p.rescue_impediments }),
+        }
+      } else {
+        ffrescue_or_nonffrescue = { type: p.rescue_performed_by }
+      }
+
+      const rescue: Record<string, unknown> = { ffrescue_or_nonffrescue }
+      if (p.person_type === 'NONFF' && p.presence_known) rescue.presence_known = { type: p.presence_known }
+
+      // Build casualty sub-object
+      let casualty: Record<string, unknown> | undefined
+      if (p.casualty_type) {
+        casualty = {
+          injury_or_noninjury: { type: p.casualty_type },
+        }
+      }
+
+      const person: Record<string, unknown> = {
+        type: p.person_type || 'NONFF',
+        rescue,
+        ...(casualty && { casualty }),
+      }
+
+      if (p.person_type === 'FF' && p.rescue_performed_by === 'RESCUED_BY_FF_RIT') {
+        rescue.mayday = { mayday: true }
+      }
+
+      return person
+    })
+  }
+
+  // ── Medical module (MedicalPayload per person) ───────────────────────────────
+  const medicalPersons = persons.filter((p: any) => p.evaluation_care)
+  if (medicalPersons.length > 0) {
+    payload.medical_details = medicalPersons.map((p: any) => {
+      const patient: Record<string, unknown> = {
+        patient_care_evaluation: p.evaluation_care,
+      }
+      if (p.improved_status) patient.patient_status = p.improved_status
+      if (p.disposition) patient.transport_disposition = p.disposition
+      return patient
+    })
+  }
+
+  // ── Hazmat module (HazsitPayload) ─────────────────────────────────────────────
+  // TODO(api-review): hazsit sub-field names need verification against spec
+  if (neris?.hazsit_disposition) {
+    const hazmat: Record<string, unknown> = {
+      hazsit_disposition: neris.hazsit_disposition,
+    }
+    if (neris?.hazsit_evacuated != null) hazmat.evacuated_count = neris.hazsit_evacuated
+    if (neris?.chemical_name) hazmat.chemical_name = neris.chemical_name
+    if (neris?.chemical_dot_class) hazmat.dot_class = neris.chemical_dot_class
+    if (neris?.chemical_release_occurred != null) hazmat.release_occurred = neris.chemical_release_occurred
+    if (neris?.vehicles_involved != null) hazmat.vehicles_involved = neris.vehicles_involved
+    payload.hazsit_detail = hazmat
+  }
 
   return payload
 }
