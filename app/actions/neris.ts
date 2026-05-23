@@ -538,7 +538,14 @@ export async function submitToNeris(incident_id: string) {
     await logError(err.message, '/incidents/neris/validate')
     return { error: `NERIS connection failed: ${err.message}` }
   }
-  if (!validation.ok) return { error: `NERIS validation failed: ${validation.error}` }
+  if (!validation.ok) {
+    await adminClient.from('incident_neris').update({
+      neris_status: 'error',
+      neris_last_error: `Validation failed: ${validation.error}`,
+      updated_at: new Date().toISOString(),
+    }).eq('incident_id', incident_id)
+    return { error: `NERIS validation failed: ${validation.error}` }
+  }
 
   // Submit
   let nerisId: string

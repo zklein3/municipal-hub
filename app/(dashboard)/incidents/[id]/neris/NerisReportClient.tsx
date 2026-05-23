@@ -358,7 +358,7 @@ export default function NerisReportClient({
     setResponseModeSaving(null)
   }
 
-  const fireCauseCodes = isOutsideFire ? NERIS_FIRE_CAUSE_OUT : NERIS_FIRE_CAUSE_IN
+  const fireCauseCodes = (isOutsideFire || isTransportationFire) ? NERIS_FIRE_CAUSE_OUT : NERIS_FIRE_CAUSE_IN
   const localOpenRequirements = requirementSummary.requirements.filter(req =>
     req.status === 'missing' && ['required', 'conditional'].includes(req.severity)
   )
@@ -1036,7 +1036,7 @@ export default function NerisReportClient({
               <label className={labelCls}>
                 Fire Cause
                 <span className="ml-1.5 text-xs font-normal text-zinc-400">
-                  ({isOutsideFire ? 'outside / vegetation' : 'inside / structure'})
+                  ({(isOutsideFire || isTransportationFire) ? 'outside / vehicle / vegetation' : 'inside / structure'})
                 </span>
               </label>
               <NerisCombobox
