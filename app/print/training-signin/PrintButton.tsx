@@ -12,6 +12,7 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
 
   return (
     <button
+      type="button"
       onClick={() => window.print()}
       style={{
         position: 'fixed', top: '1rem', right: '1rem',
@@ -19,11 +20,12 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
         border: 'none', borderRadius: '8px',
         padding: '0.5rem 1.25rem',
         fontSize: '0.875rem', fontWeight: 600,
-        cursor: 'pointer', zIndex: 100,
+        cursor: 'pointer', zIndex: 9999,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
       }}
       className="no-print"
     >
-      Print
+      Print / Save PDF
     </button>
   )
 }
