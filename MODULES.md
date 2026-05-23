@@ -103,3 +103,33 @@
 - Scan → extract bottle ID → auto-trigger `handleCheck()`
 - Bottle IDs are public/shared across depts — separate from main app QR system
 - `/print/qr?type=bottle` for bottle QR labels
+
+---
+
+## Future Integrations (Research / Roadmap)
+
+### ImageTrend Elite — EMS Run Data Push
+**Status:** Future research — not started
+**Context:** Nebraska (and most Midwest states) provide ImageTrend Elite free to departments for NEMSIS 3.5 EMS reporting. Most fire departments in the region run dual fire/EMS.
+
+**Concept:** FireOps7 acts like a CAD system — pushes run logistics to ImageTrend when an incident is created, pre-populating the draft PCR so medics only need to add clinical data.
+
+**What FireOps7 would push:**
+- Incident number (join key between systems)
+- Address and incident type
+- Dispatch, en route, on scene, cleared times
+- Apparatus that responded
+- Personnel on scene (mapped to ImageTrend responder IDs)
+
+**Path to build:**
+1. Apply to ImageTrend vendor/partner integration program (fee required for test environment access)
+2. Nebraska DHHS EMS division may require separate state-level approval for third-party vendor access
+3. Build push via ImageTrend Elite REST API — same pattern as NERIS
+4. Gate behind a `module_imagetrend` flag per department
+
+**Key unknowns:**
+- ImageTrend vendor program cost
+- Whether Nebraska DHHS allows agency-level third-party API connections
+- How ImageTrend maps personnel IDs (need a sync step or manual mapping per dept)
+
+**Do not build** a full ePCR/PCR module — the state provides that for free. Integration only.

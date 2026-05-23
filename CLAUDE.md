@@ -81,7 +81,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## Reference Files
 - `REFERENCE.md` — routes, action files, edge functions, permissions, nav structure
-- `MODULES.md` — equipment/inspection, attendance, training, incident, ISO module design
+- `MODULES.md` — equipment/inspection, attendance, training, incident, ISO module design + **Future Integrations** (ImageTrend EMS push)
 - `HISTORY.md` — what's built, what's not, DB tables, session history
 
 ---
