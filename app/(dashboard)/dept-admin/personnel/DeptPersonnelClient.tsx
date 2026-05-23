@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createDeptMember } from '@/app/actions/users'
 
 interface Role {
@@ -58,6 +59,7 @@ export default function DeptPersonnelClient({
   departmentName: string
   departmentId: string
 }) {
+  const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -255,6 +257,14 @@ export default function DeptPersonnelClient({
                     </span>
                   )}
                 </div>
+                {p?.id && (
+                  <button
+                    onClick={() => router.push(`/personnel/${p.id}`)}
+                    className="mt-3 w-full rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
+                  >
+                    Edit Profile
+                  </button>
+                )}
               </div>
             )
           })}
