@@ -41,6 +41,7 @@ export default async function OperationsPage() {
     permitsResult,
     requestsResult,
     incidentsResult,
+    { count: pendingSigCount },
   ] = await Promise.all([
     adminClient.from('announcements').select('id').eq('department_id', departmentId),
     adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', me.id),
@@ -57,11 +58,17 @@ export default async function OperationsPage() {
           .order('incident_date', { ascending: false })
           .limit(5)
       : Promise.resolve({ data: [], error: null }),
+    adminClient.from('incident_signatures')
+      .select('id', { count: 'exact', head: true })
+      .eq('personnel_id', me.id)
+      .is('signed_at', null),
   ])
 
   const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
   const unreadCount = (allAnnouncements ?? []).filter(a => !readSet.has(a.id)).length
   const pendingInboxCount = ((permitsResult as any).count ?? 0) + ((requestsResult as any).count ?? 0)
+  const pendingSignatures = pendingSigCount ?? 0
+  const totalInboxCount = pendingInboxCount + pendingSignatures
   const recentIncidents = (incidentsResult as any).data ?? []
 
   function formatIncidentDate(d: string) {
@@ -98,16 +105,14 @@ export default async function OperationsPage() {
           description="Log and review apparatus fuel entries"
           href="/fuel"
         />
-        {publicSiteEnabled && isOfficerOrAbove && (
-          <HubCard
-            title="Public Inbox"
-            description="Burn permits and records requests"
-            href="/inbox"
-            stat={pendingInboxCount > 0 ? pendingInboxCount : null}
-            statLabel="Pending"
-            alert={pendingInboxCount > 0}
-          />
-        )}
+        <HubCard
+          title="Inbox"
+          description={isOfficerOrAbove ? 'Signatures, burn permits, and records requests' : 'Pending run signatures'}
+          href="/inbox"
+          stat={totalInboxCount > 0 ? totalInboxCount : null}
+          statLabel={pendingSignatures > 0 && !isOfficerOrAbove ? `${pendingSignatures} signature${pendingSignatures !== 1 ? 's' : ''}` : 'Pending'}
+          alert={totalInboxCount > 0}
+        />
       </div>
 
       {moduleOperations && recentIncidents.length > 0 && (
