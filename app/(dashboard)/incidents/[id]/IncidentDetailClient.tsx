@@ -369,6 +369,9 @@ export default function IncidentDetailClient({
       </div>
       <div className="flex flex-wrap gap-3 mb-6">
         <button onClick={() => router.push('/incidents')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+        <a href={`/print/run-sheet?id=${incident.id}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">
+          Print Run Sheet
+        </a>
         {canEdit && (
           <label className={`relative cursor-pointer rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium transition-colors shadow-sm ${isParsing ? 'text-zinc-400 cursor-not-allowed' : 'text-zinc-700 hover:bg-zinc-50 cursor-pointer'}`}>
             {isParsing ? 'Reading PDF…' : 'Import Run Sheet'}
