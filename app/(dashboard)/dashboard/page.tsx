@@ -186,16 +186,10 @@ export default async function DashboardPage() {
   const isAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
 
-  const [data, unreadAnnouncements, pendingInbox, pendingSigCount] = await Promise.all([
+  const [data, unreadAnnouncements, pendingInbox] = await Promise.all([
     getDashboardData(departmentId, me.id),
     getUnreadAnnouncements(departmentId, me.id),
     isOfficerOrAbove ? getPendingInboxCounts(departmentId) : Promise.resolve({ permits: 0, records: 0 }),
-    adminClient
-      .from('incident_signatures')
-      .select('id', { count: 'exact', head: true })
-      .eq('personnel_id', me.id)
-      .is('signed_at', null)
-      .then(({ count }) => count ?? 0),
   ])
 
   const greeting = () => {
@@ -289,21 +283,6 @@ export default async function DashboardPage() {
           </div>
           <Link href="/dept-admin/setup" className="text-xs font-semibold text-yellow-800 hover:underline whitespace-nowrap ml-4">
             Dept Setup →
-          </Link>
-        </div>
-      )}
-
-      {/* Pending signatures banner — all members */}
-      {pendingSigCount > 0 && (
-        <div className="mb-4 rounded-xl bg-orange-50 border border-orange-200 px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-orange-800">
-              {pendingSigCount} run{pendingSigCount !== 1 ? 's' : ''} pending your signature
-            </p>
-            <p className="text-xs text-orange-600 mt-0.5">Sign to confirm you were on scene for these incidents.</p>
-          </div>
-          <Link href="/signatures" className="shrink-0 text-xs font-semibold text-orange-700 hover:text-orange-900 transition-colors ml-4">
-            Sign Now →
           </Link>
         </div>
       )}

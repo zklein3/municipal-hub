@@ -3,71 +3,184 @@
 import { useState } from 'react'
 import BurnPermitsTab from './BurnPermitsTab'
 import RecordRequestsTab from './RecordRequestsTab'
+import IncidentSignaturePadModal from '../signatures/IncidentSignaturePadModal'
 
-type Tab = 'permits' | 'records'
+type Tab = 'permits' | 'records' | 'signatures'
+
+interface SignatureRow {
+  sig_id: string
+  incident_id: string
+  created_at: string
+  incident: {
+    id: string
+    incident_number: string
+    incident_date: string
+    incident_type: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+  } | null
+}
+
+function formatDate(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
 
 export default function InboxClient({
   permits,
   requests,
+  signatureRows,
+  memberName,
   initialTab,
+  isOfficerOrAbove,
   deptName,
   burnPermitCountyInfo,
   burnPermitRestrictions,
 }: {
   permits: any[]
   requests: any[]
+  signatureRows: SignatureRow[]
+  memberName: string
   initialTab: Tab
+  isOfficerOrAbove: boolean
   deptName: string | null
   burnPermitCountyInfo: string | null
   burnPermitRestrictions: string | null
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [pendingSigs, setPendingSigs] = useState<SignatureRow[]>(signatureRows)
+  const [activeSig, setActiveSig] = useState<SignatureRow | null>(null)
 
   const pendingPermits  = permits.filter(p => p.status === 'pending').length
   const pendingRequests = requests.filter(r => r.status === 'pending').length
 
+  function handleSigned(sig_id: string) {
+    setPendingSigs(prev => prev.filter(r => r.sig_id !== sig_id))
+    setActiveSig(null)
+  }
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Public Inbox</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Burn permit requests and public records requests</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Inbox</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">
+          {isOfficerOrAbove ? 'Signatures, burn permits, and public records requests' : 'Incident signatures pending your review'}
+        </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit">
+      <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit flex-wrap">
+        {/* Signatures tab — all members */}
         <button
-          onClick={() => setTab('permits')}
+          onClick={() => setTab('signatures')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'permits' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+            tab === 'signatures' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
           }`}
         >
-          Burn Permits
-          {pendingPermits > 0 && (
+          Signatures
+          {pendingSigs.length > 0 && (
             <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-              tab === 'permits' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+              tab === 'signatures' ? 'bg-red-500 text-white' : 'bg-orange-100 text-orange-700'
             }`}>
-              {pendingPermits}
+              {pendingSigs.length}
             </span>
           )}
         </button>
-        <button
-          onClick={() => setTab('records')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'records' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
-          }`}
-        >
-          Records Requests
-          {pendingRequests > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-              tab === 'records' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
-            }`}>
-              {pendingRequests}
-            </span>
-          )}
-        </button>
+
+        {/* Officer+ tabs */}
+        {isOfficerOrAbove && (
+          <>
+            <button
+              onClick={() => setTab('permits')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                tab === 'permits' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+              }`}
+            >
+              Burn Permits
+              {pendingPermits > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                  tab === 'permits' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                }`}>
+                  {pendingPermits}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setTab('records')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                tab === 'records' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+              }`}
+            >
+              Records Requests
+              {pendingRequests > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                  tab === 'records' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                }`}>
+                  {pendingRequests}
+                </span>
+              )}
+            </button>
+          </>
+        )}
       </div>
 
-      {tab === 'permits' && (
+      {/* Signatures tab content */}
+      {tab === 'signatures' && (
+        <div>
+          {pendingSigs.length === 0 ? (
+            <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center">
+              <p className="text-2xl mb-2">✓</p>
+              <p className="text-sm font-semibold text-zinc-700">All caught up</p>
+              <p className="text-xs text-zinc-400 mt-1">No runs pending your signature.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {pendingSigs.map(row => {
+                const inc = row.incident
+                const location = [inc?.address, inc?.city, inc?.state].filter(Boolean).join(', ')
+                return (
+                  <div key={row.sig_id} className="rounded-xl bg-white border border-zinc-200 p-5 flex items-center gap-4">
+                    {inc?.incident_date && (
+                      <div className="shrink-0 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-center min-w-[52px]">
+                        <p className="text-xs font-semibold text-red-500 uppercase">
+                          {new Date(inc.incident_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                        </p>
+                        <p className="text-2xl font-bold text-red-800 leading-none">
+                          {new Date(inc.incident_date + 'T00:00:00').getDate()}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-zinc-900 text-sm">
+                        {inc?.incident_number ?? '—'}
+                        {inc?.incident_type && (
+                          <span className="ml-2 text-xs font-normal text-zinc-400">{inc.incident_type}</span>
+                        )}
+                      </p>
+                      {inc?.incident_date && (
+                        <p className="text-xs text-zinc-500 mt-0.5">{formatDate(inc.incident_date)}</p>
+                      )}
+                      {location && (
+                        <p className="text-xs text-zinc-400 mt-0.5 truncate">{location}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setActiveSig(row)}
+                      className="shrink-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
+                    >
+                      Sign
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'permits' && isOfficerOrAbove && (
         <BurnPermitsTab
           permits={permits}
           deptName={deptName}
@@ -76,7 +189,23 @@ export default function InboxClient({
         />
       )}
 
-      {tab === 'records' && <RecordRequestsTab requests={requests} />}
+      {tab === 'records' && isOfficerOrAbove && (
+        <RecordRequestsTab requests={requests} />
+      )}
+
+      {activeSig && (
+        <IncidentSignaturePadModal
+          sig_id={activeSig.sig_id}
+          memberName={memberName}
+          incidentLabel={
+            activeSig.incident
+              ? `${activeSig.incident.incident_number}${activeSig.incident.incident_date ? ' — ' + formatDate(activeSig.incident.incident_date) : ''}`
+              : 'Incident'
+          }
+          onClose={() => setActiveSig(null)}
+          onSigned={() => handleSigned(activeSig.sig_id)}
+        />
+      )}
     </div>
   )
 }

@@ -44,9 +44,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let moduleOperations = false
   let moduleIso = false
   let moduleNeris = false
+  let pendingSignatureCount = 0
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
-    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }] = await Promise.all([
+    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }, { count: sigCount }] = await Promise.all([
       adminClient.from('announcements').select('id').eq('department_id', user.department_id),
       adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
       isOfficerOrAbove
@@ -56,18 +57,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
         ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
         : Promise.resolve({ data: [] }),
       adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris').eq('id', user.department_id).single(),
+      adminClient.from('incident_signatures').select('id', { count: 'exact', head: true }).eq('personnel_id', user.id).is('signed_at', null),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
     inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0)
+    pendingSignatureCount = sigCount ?? 0
     publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
     moduleOperations = (deptFlags as any)?.module_operations ?? false
     moduleIso = (deptFlags as any)?.module_iso ?? false
     moduleNeris = (deptFlags as any)?.module_neris ?? false
   }
 
-  const opsBadge = (announcementUnreadCount + inboxPendingCount) > 0
-    ? announcementUnreadCount + inboxPendingCount
+  const opsBadge = (announcementUnreadCount + inboxPendingCount + pendingSignatureCount) > 0
+    ? announcementUnreadCount + inboxPendingCount + pendingSignatureCount
     : undefined
 
   const navGroups: NavGroup[] = isSysAdmin ? [
