@@ -577,6 +577,20 @@ export async function submitToNeris(incident_id: string) {
 
   await adminClient.from('incidents').update({ neris_reported: true, status: 'finalized' }).eq('id', incident_id)
 
+  // Create signature requests for all non-absent personnel on this incident
+  const { data: sigPersonnel } = await adminClient
+    .from('incident_personnel')
+    .select('personnel_id')
+    .eq('incident_id', incident_id)
+    .neq('status', 'absent')
+    .not('personnel_id', 'is', null)
+  if (sigPersonnel && sigPersonnel.length > 0) {
+    await adminClient.from('incident_signatures').upsert(
+      sigPersonnel.map((p: any) => ({ incident_id, personnel_id: p.personnel_id, department_id })),
+      { onConflict: 'incident_id,personnel_id', ignoreDuplicates: true }
+    )
+  }
+
   revalidatePath(`/incidents/${incident_id}`)
   revalidatePath(`/incidents/${incident_id}/neris`)
   return { success: true, neris_id: nerisId }

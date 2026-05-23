@@ -114,6 +114,35 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   ])
   const moduleNeris = deptFlagsList?.[0]?.module_neris ?? false
 
+  // Signature roster (officers/admins only)
+  let signatureRoster: { sig_id: string; personnel_id: string; signed_at: string | null; has_signature: boolean; name: string }[] = []
+  if (isOfficerOrAbove) {
+    const { data: sigs } = await adminClient
+      .from('incident_signatures')
+      .select('id, personnel_id, signed_at, signature_data')
+      .eq('incident_id', id)
+    if (sigs && sigs.length > 0) {
+      const sigPersonnelIds = sigs.map(s => s.personnel_id)
+      const { data: sigPersonnel } = await adminClient
+        .from('personnel')
+        .select('id, first_name, last_name')
+        .in('id', sigPersonnelIds)
+      const sigPersonnelMap = Object.fromEntries((sigPersonnel ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`.trim()]))
+      signatureRoster = sigs.map(s => ({
+        sig_id: s.id,
+        personnel_id: s.personnel_id,
+        signed_at: s.signed_at,
+        has_signature: !!s.signature_data,
+        name: sigPersonnelMap[s.personnel_id] ?? '—',
+      }))
+      signatureRoster.sort((a, b) => {
+        if (a.signed_at && !b.signed_at) return -1
+        if (!a.signed_at && b.signed_at) return 1
+        return a.name.localeCompare(b.name)
+      })
+    }
+  }
+
   return (
     <IncidentDetailClient
       incident={incident}
@@ -136,6 +165,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       mutualAid={mutualAid ?? []}
       nerisRecord={nerisRecord ?? null}
       moduleNeris={moduleNeris}
+      signatureRoster={signatureRoster}
     />
   )
 }

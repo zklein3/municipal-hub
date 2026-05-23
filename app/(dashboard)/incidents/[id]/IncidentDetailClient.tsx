@@ -58,6 +58,7 @@ export default function IncidentDetailClient({
   mutualAid,
   nerisRecord,
   moduleNeris,
+  signatureRoster,
 }: {
   incident: any
   incidentApparatus: ApparatusRow[]
@@ -71,6 +72,7 @@ export default function IncidentDetailClient({
   mutualAid: MutualAidRow[]
   nerisRecord: { id: string; neris_status: string; completed_at: string | null; neris_submission_id: string | null } | null
   moduleNeris: boolean
+  signatureRoster: { sig_id: string; personnel_id: string; signed_at: string | null; has_signature: boolean; name: string }[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -1116,6 +1118,46 @@ export default function IncidentDetailClient({
           </div>
         )}
       </section>
+
+      {/* Signatures — officer/admin view */}
+      {isOfficerOrAbove && signatureRoster.length > 0 && (
+        <section className="mt-6 rounded-xl bg-white border border-zinc-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900">Run Signatures</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {signatureRoster.filter(s => s.signed_at).length} of {signatureRoster.length} signed
+              </p>
+            </div>
+            {signatureRoster.some(s => !s.signed_at) && (
+              <span className="rounded-full bg-orange-100 text-orange-700 px-2 py-0.5 text-xs font-medium">
+                {signatureRoster.filter(s => !s.signed_at).length} pending
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            {signatureRoster.map(s => (
+              <div key={s.sig_id} className="flex items-center justify-between gap-3 py-2 border-b border-zinc-100 last:border-0">
+                <p className="text-sm font-medium text-zinc-800">{s.name}</p>
+                {s.signed_at ? (
+                  <div className="text-right shrink-0">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium">
+                      ✓ Signed
+                    </span>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {new Date(s.signed_at).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-zinc-100 text-zinc-500 px-2 py-0.5 text-xs font-medium">
+                    Pending
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
