@@ -26,7 +26,7 @@ const FIRE_SUBTYPES = [
   { value: 'other_fire', label: 'Other Fire' },
 ]
 const FIRE_SUBTYPE_LABELS: Record<string, string> = Object.fromEntries(FIRE_SUBTYPES.map(s => [s.value, s.label]))
-const ROLE_LABELS: Record<string, string> = { ic: 'IC', driver: 'Driver', officer: 'Officer', crew: 'Crew', ems: 'EMS', other: 'Other' }
+const ROLE_LABELS: Record<string, string> = { ic: 'IC', driver: 'Driver', officer: 'Officer', crew: 'Crew', ems: 'EMS', standby: 'Standby', other: 'Other' }
 const APPARATUS_ROLE_LABELS: Record<string, string> = { primary: 'Primary', support: 'Support', staging: 'Staging' }
 
 function formatDT(dt: string | null) {
@@ -964,6 +964,7 @@ export default function IncidentDetailClient({
                   <option value="driver">Driver</option>
                   <option value="officer">Officer</option>
                   <option value="ems">EMS</option>
+                  <option value="standby">Standby at Station</option>
                   <option value="other">Other</option>
                 </select>
                 <button onClick={handleSelfLog} disabled={isPending} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">Confirm</button>
@@ -1035,6 +1036,7 @@ export default function IncidentDetailClient({
                   <option value="officer">Officer</option>
                   <option value="crew">Crew</option>
                   <option value="ems">EMS</option>
+                  <option value="standby">Standby at Station</option>
                   <option value="other">Other</option>
                 </select>
               </div>
@@ -1098,6 +1100,7 @@ export default function IncidentDetailClient({
                   <option value="officer">Officer</option>
                   <option value="crew">Crew</option>
                   <option value="ems">EMS</option>
+                  <option value="standby">Standby at Station</option>
                   <option value="other">Other</option>
                 </select>
               </div>
