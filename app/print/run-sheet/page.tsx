@@ -81,14 +81,20 @@ export default async function RunSheetPrintPage({
     apparatusGroups.push({ unitLabel: unit, members })
   }
 
-  // Station: personnel with no apparatus_id
+  // POV: no apparatus, not standby — went to scene in personal vehicle
+  const povMembers = (incPersonnel ?? [])
+    .filter(p => !p.apparatus_id && p.role !== 'standby')
+    .map(p => personnelNameMap[p.personnel_id] ?? '—')
+    .sort()
+
+  if (povMembers.length > 0) {
+    apparatusGroups.push({ unitLabel: 'POV', members: povMembers })
+  }
+
+  // Station: no apparatus, standby role — stayed at station
   const stationMembers = (incPersonnel ?? [])
-    .filter(p => !p.apparatus_id)
-    .map(p => {
-      const name = personnelNameMap[p.personnel_id] ?? '—'
-      const roleLabel = p.role === 'standby' ? ' (Standby)' : p.role === 'other' ? '' : ''
-      return name + roleLabel
-    })
+    .filter(p => !p.apparatus_id && p.role === 'standby')
+    .map(p => personnelNameMap[p.personnel_id] ?? '—')
     .sort()
 
   if (stationMembers.length > 0) {
