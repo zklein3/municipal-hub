@@ -91,6 +91,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 ### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
 Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
 
+### 0a. Incident Run Signatures — SHIPPED ✅ (2026-05-23)
+- `incident_signatures` table — unique `(incident_id, personnel_id)`, `signed_at` null = pending
+- Triggered on NERIS submit — rows upserted for all non-absent personnel
+- Members sign via `/inbox` Signatures tab (`IncidentSignaturePadModal`)
+- Officer/admin sees signed/pending roster on incident detail page
+- Inbox opened to all members; layout badge includes pending signature count
+- `standby` role added to `incident_personnel_role_check` constraint
+
+### 0b. Run Sheet Print — SHIPPED ✅ (2026-05-23)
+`/print/run-sheet?id=xxx` — matches dept paper Run Field Report, fits one letter sheet.
+- Units Dispatched: each apparatus with member names; **POV** group (no apparatus, role ≠ standby); **Station** group (no apparatus, role = standby)
+- Mutual aid reads `incident_mutual_aid`: `gave_aid` → To, `received_aid` → From
+- PrintButton: `type="button"`, z-index 9999, "Print / Save PDF"
+- Key file: `app/print/run-sheet/page.tsx`
+
 ### 1. Training — Resume After User Testing ✳️ IN PROGRESS
 Built 2026-05-17. User is playing with flow before proposing further changes.
 

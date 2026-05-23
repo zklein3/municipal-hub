@@ -33,14 +33,16 @@
 - Events + attendance — full lifecycle, excused absence, close event, auto-close cron
 - Training/Certifications — courses, enrollments, verification, direct cert entry, training events, digital signatures
 - Incidents — manual entry, apparatus/personnel tracking, mutual aid, officer verify + finalize
+- Incident run signatures — NERIS submit triggers signature rows for all responders; members sign via Inbox; officer sees signed/pending roster on incident detail page
 - ISO audit — hose inventory (add/edit/remove/log test), hydrant flow tests (add/edit/remove/log test), apparatus specs, mutual aid log, `/iso/report`
 - Reports — inspections, inventory, training, attendance, my-activity (all with print)
 - Member training record print
+- Run Sheet print page (`/print/run-sheet?id=xxx`) — matches paper Run Field Report: apparatus groups with member names, POV group, Station group (standby), mutual aid To/From, full dept roster with checkmarks, fits on one letter sheet
 - Public department sites — `/dept/[slug]/*`, per-dept on/off toggle
 - Burn permit system — public form, inbox sign-then-approve flow, officer + applicant signatures, printable Nebraska state permit
 - Burn permit submission notification → logEvent → sys admin email
 - Records request system — public form, inbox review flow
-- Public Inbox — burn permits + records tabs, pending count badge
+- Public Inbox — burn permits + records tabs, pending count badge; all members see Signatures tab
 - Login show/hide password toggle
 - BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
 - Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings, on/off marketing toggle
@@ -92,6 +94,7 @@ Items flagged during development — address during next cleanup pass:
 
 ### Incidents
 - `incidents`, `incident_apparatus`, `incident_personnel`, `incident_fire_details`
+- `incident_signatures` — `incident_id`, `personnel_id`, `department_id`, `signed_at` (null = unsigned), `signature_data` (base64 PNG); unique on `(incident_id, personnel_id)`
 
 ### Comms / Content
 - `announcements`, `announcement_reads`
@@ -131,6 +134,29 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-05-23 — Incident Signatures + Run Sheet Print
+
+**Incident run signature system:**
+- `incident_signatures` table — unique on `(incident_id, personnel_id)`. `signed_at` null = pending, timestamp = signed. `signature_data` stores base64 PNG.
+- Trigger: after successful NERIS submit, signature rows upserted for all non-absent `incident_personnel` (`app/actions/neris.ts`)
+- `app/actions/signatures.ts` — 4 actions: `getPendingSignatureCount`, `getPendingSignatures`, `saveIncidentSignature`, `getIncidentSignatureRoster`
+- Inbox (`/inbox`) opened to all members (was officer-only redirect). New **Signatures** tab always first; Permits + Records tabs only visible to officers+. Members can sign from inbox via `IncidentSignaturePadModal`.
+- Layout badge (`opsBadge`) includes pending signature count for all members
+- Incident detail page — Run Signatures section (officer/admin): shows signed/pending roster, signed count
+- `standby` added to `incident_personnel_role_check` DB constraint
+
+**Run Sheet print page (`/print/run-sheet?id=xxx`):**
+- Matches dept paper Run Field Report (one letter sheet, portrait)
+- Top-left: Date, Address, Incident #, CAD # — Top-right: military times (Paged / Enroute / On Scene / Finished at Scene / Back at Station)
+- Middle-left: Units Dispatched — each apparatus with member names listed; **POV** group for non-standby no-apparatus personnel; **Station** group for role=standby no-apparatus personnel
+- Middle-right: Type of Incident checkboxes + Mutual Aid (To/From with dept name) + Cause / Dollar Loss / Property Lost / Vehicle Make / NERIS Done fields
+- Narrative block if present
+- Bottom: full dept roster in 3-column grid, checkmark for each responder
+- Mutual aid reads from `incident_mutual_aid` table: `gave_aid` → To, `received_aid` → From; falls back to `incidents.mutual_aid_direction/department`
+- Spacing tuned to fit on one sheet: `@page margin: 0.35in`, div padding `0.35in 0.5in`
+- PrintButton hardened: `type="button"`, z-index 9999, shadow, "Print / Save PDF"
+- "Print Run Sheet" button on incident detail page → opens `/print/run-sheet?id=...` in new tab
 
 ### 2026-05-22 — NERIS Rescue Module + Payload Validation
 - **Rescue module rebuilt** — `NERIS_RESCUE_TYPE` removed (codes didn't exist in spec); replaced with correct spec-sourced enums:

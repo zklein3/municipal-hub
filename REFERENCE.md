@@ -54,7 +54,7 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `/incidents`, `/incidents/[id]`, `/incidents/new`
 - `/reports/inspections`, `/reports/inventory`, `/reports/training`, `/reports/attendance`, `/reports/my-activity`, `/reports/fuel`
 - `/iso/hoses`, `/iso/hydrants`, `/iso/report`
-- `/inbox` — burn permits + records requests (officers/admins)
+- `/inbox` — Signatures tab (all members, pending run signatures); Permits + Records tabs (officers/admins only)
 - `/admin/departments`, `/admin/users`, `/admin/logs`
 - `/admin/dept/[id]` — 5 tabs: Personnel/Stations/Apparatus/Compartments/Public Site
 - `/dept-admin/setup`, `/dept-admin/items`, `/dept-admin/attendance`, `/dept-admin/training`
@@ -67,6 +67,7 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 ### Print Routes
 - `/print/qr` | `/print/training-signin?event_id=xxx` | `/print/member-training?personnel_id=xxx&from=xxx&to=xxx`
 - `/print/burn-permit?id=xxx` — auth required
+- `/print/run-sheet?id=xxx` — auth required; Run Field Report matching dept paper form (one letter sheet)
 
 ---
 
