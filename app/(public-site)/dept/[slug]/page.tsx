@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
@@ -25,7 +26,7 @@ export default async function DeptLandingPage({
 
   const { data: deptList } = await adminClient
     .from('departments')
-    .select('id, name, public_site_enabled, public_phone, public_email, public_address, public_tagline, public_about')
+    .select('id, name, public_site_enabled, public_phone, public_email, public_address, public_tagline, public_about, neris_entity_id')
     .eq('public_slug', slug)
     .limit(1)
 
@@ -138,6 +139,25 @@ export default async function DeptLandingPage({
           <p className="text-xs text-zinc-400">Request incident reports or inspection records.</p>
         </Link>
       </div>
+
+      {/* NERIS badge */}
+      {dept.neris_entity_id && (
+        <div className="rounded-xl bg-zinc-950 border border-zinc-800 px-6 py-5 mb-8 flex items-center gap-5">
+          <Image
+            src="/NERIS_Data_Exchange_Compatible__SealV1.png"
+            alt="NERIS V1 Data Exchange Compatible"
+            width={56}
+            height={56}
+            className="shrink-0 rounded-full"
+          />
+          <div>
+            <p className="text-sm font-semibold text-white">NERIS V1 Data Exchange Compatible</p>
+            <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+              This department submits incident data to the National Emergency Response Information System through FireOps7.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Upcoming events */}
       {upcomingEvents.length > 0 && (
