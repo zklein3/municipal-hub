@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // ── Always public routes ──────────────────────────────────────────────────
-  if (pathname.startsWith('/fire-school') || pathname.startsWith('/dept/') || pathname.startsWith('/print/fire-school')) {
+  if (pathname === '/' || pathname.startsWith('/fire-school') || pathname.startsWith('/dept/') || pathname.startsWith('/print/fire-school')) {
     return supabaseResponse
   }
 

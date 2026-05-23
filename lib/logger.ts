@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 interface LogEntry {
-  log_type: 'error' | 'user_report' | 'info'
+  log_type: 'error' | 'user_report' | 'info' | 'fire_school_inquiry' | 'contact_request'
   page?: string
   message: string
   metadata?: Record<string, any>

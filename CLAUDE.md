@@ -250,9 +250,15 @@ Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload p
 Only relevant for depts with aerial apparatus — skip until needed.
 Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, apparatus detail page.
 
-### 9. Permit Approval Email (blocked)
-Blocked until `fireops7.com` verified in Resend post-Wix migration.
-Swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
+### 9. Pending Email Tasks — Blocked on Resend + fireops7.com domain migration from Wix
+
+All items below are stubbed/logged to `system_logs` in the interim. Wire up once domain is verified in Resend.
+
+**When domain is ready:**
+1. **Permit Approval Email** — swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
+2. **Landing Page Contact Form** — `app/actions/contact.ts` currently writes to `system_logs` (`log_type: contact_request`). Add Resend `fetch` call to email `zklein3@gmail.com`. Use `from: 'FireOps7 <noreply@fireops7.com>'`, `reply_to: submitter email`. See `RequestAccessModal.tsx`.
+3. **New Member Welcome Email** — not yet built. Send when a dept admin creates a new personnel record / invite.
+4. **Resend setup steps:** Verify `fireops7.com` in Resend dashboard → add DNS records → set `from` addresses → install `resend` npm package or keep using raw `fetch` to `https://api.resend.com/emails`.
 
 ### 10. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
