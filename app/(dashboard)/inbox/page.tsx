@@ -23,10 +23,12 @@ export default async function InboxPage({
   const { data: myDeptList } = await adminClient
     .from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
   const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
 
-  const department_id = myDept.department_id
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
+  // Sys admin has no dept record — allow through with signatures-only view
+  if (!myDept && !me.is_sys_admin) redirect('/dashboard')
+
+  const department_id = myDept?.department_id ?? null
+  const isOfficerOrAbove = me.is_sys_admin || myDept?.system_role === 'admin' || myDept?.system_role === 'officer'
 
   // Pending signatures — all members
   const { data: pendingSigs } = await adminClient
@@ -57,7 +59,7 @@ export default async function InboxPage({
   let requestsRaw: any[] = []
   let deptConfig: any = null
 
-  if (isOfficerOrAbove) {
+  if (isOfficerOrAbove && department_id) {
     const [deptRes, permitsRes, recordsRes] = await Promise.all([
       adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions').eq('id', department_id).single(),
       adminClient.from('burn_permits')
