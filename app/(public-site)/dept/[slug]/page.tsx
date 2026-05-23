@@ -140,25 +140,6 @@ export default async function DeptLandingPage({
         </Link>
       </div>
 
-      {/* NERIS badge */}
-      {dept.neris_entity_id && (
-        <div className="rounded-xl bg-zinc-950 border border-zinc-800 px-6 py-5 mb-8 flex items-center gap-5">
-          <Image
-            src="/NERIS_Data_Exchange_Compatible__SealV1.png"
-            alt="NERIS V1 Data Exchange Compatible"
-            width={56}
-            height={56}
-            className="shrink-0 rounded-full"
-          />
-          <div>
-            <p className="text-sm font-semibold text-white">NERIS V1 Data Exchange Compatible</p>
-            <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
-              This department submits incident data to the National Emergency Response Information System through FireOps7.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Upcoming events */}
       {upcomingEvents.length > 0 && (
         <div>
@@ -191,6 +172,25 @@ export default async function DeptLandingPage({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* NERIS badge */}
+      {dept.neris_entity_id && (
+        <div className="mt-8 rounded-xl bg-zinc-950 border border-zinc-800 px-5 py-4 flex items-center gap-4">
+          <Image
+            src="/NERIS_Data_Exchange_Compatible__SealV1.png"
+            alt="NERIS V1 Data Exchange Compatible"
+            width={44}
+            height={44}
+            className="shrink-0 rounded-full"
+          />
+          <div>
+            <p className="text-xs font-semibold text-white">NERIS V1 Data Exchange Compatible</p>
+            <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+              This department submits incident data to the National Emergency Response Information System through FireOps7.
+            </p>
           </div>
         </div>
       )}
