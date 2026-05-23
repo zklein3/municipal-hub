@@ -95,10 +95,11 @@ export default async function RunSheetPrintPage({
     apparatusGroups.push({ unitLabel: 'Station', members: stationMembers })
   }
 
-  // Mutual aid
-  const { data: mutualAid } = await adminClient
-    .from('incident_mutual_aid').select('external_department_name, role').eq('incident_id', id).limit(1)
-  const ma = mutualAid?.[0] ?? null
+  // Mutual aid — all records, split by role
+  const { data: mutualAidRows } = await adminClient
+    .from('incident_mutual_aid').select('external_department_name, role').eq('incident_id', id)
+  const maGave     = (mutualAidRows ?? []).filter(m => m.role === 'gave_aid').map(m => m.external_department_name)
+  const maReceived = (mutualAidRows ?? []).filter(m => m.role === 'received_aid').map(m => m.external_department_name)
 
   function milTime(dt: string | null) {
     if (!dt) return ''
@@ -115,9 +116,12 @@ export default async function RunSheetPrintPage({
   const isStandby   = incType === 'standby'
   const isMeeting   = incType === 'meeting' || incType === 'special'
   const isTraining  = incType === 'training'
-  const isMutualAid = incType === 'mutual_aid' || !!incident.mutual_aid_direction
-  const hasMutualAidOut = incident.mutual_aid_direction === 'to'   || incident.mutual_aid_direction === 'both'
-  const hasMutualAidIn  = incident.mutual_aid_direction === 'from' || incident.mutual_aid_direction === 'both'
+  const isMutualAid = incType === 'mutual_aid' || !!incident.mutual_aid_direction || (mutualAidRows ?? []).length > 0
+  const hasMutualAidOut = maGave.length > 0 || incident.mutual_aid_direction === 'to'   || incident.mutual_aid_direction === 'both'
+  const hasMutualAidIn  = maReceived.length > 0 || incident.mutual_aid_direction === 'from' || incident.mutual_aid_direction === 'both'
+  // Department name strings — prefer detailed table, fall back to flat incident field
+  const maToNames   = maGave.length > 0 ? maGave.join(', ') : (hasMutualAidOut ? (incident.mutual_aid_department ?? '') : '')
+  const maFromNames = maReceived.length > 0 ? maReceived.join(', ') : (hasMutualAidIn && incident.mutual_aid_direction !== 'to' ? (incident.mutual_aid_department ?? '') : '')
 
   const enrouteTimes = (incApparatus ?? []).map(a => a.enroute_at).filter(Boolean)
   const earliestEnroute = enrouteTimes.length > 0 ? enrouteTimes.reduce((a, b) => (a! < b! ? a : b)) : null
@@ -242,15 +246,11 @@ export default async function RunSheetPrintPage({
               <>
                 <div style={S.row}>
                   <span style={{ fontWeight: 600, marginLeft: '0.2in' }}>To</span>
-                  <span style={{ ...S.shortLine, flex: 1 }}>
-                    {hasMutualAidOut ? (incident.mutual_aid_department ?? ma?.external_department_name ?? '') : ''}
-                  </span>
+                  <span style={{ ...S.shortLine, flex: 1 }}>{maToNames}</span>
                 </div>
                 <div style={S.row}>
                   <span style={{ fontWeight: 600, marginLeft: '0.2in' }}>From</span>
-                  <span style={{ ...S.shortLine, flex: 1 }}>
-                    {hasMutualAidIn ? (ma?.external_department_name ?? '') : ''}
-                  </span>
+                  <span style={{ ...S.shortLine, flex: 1 }}>{maFromNames}</span>
                 </div>
               </>
             )}
