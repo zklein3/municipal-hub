@@ -393,16 +393,18 @@ export default function PersonnelProfileClient({
           {qrParsed && !qrScannerOpen && qrParsed.type !== 'unknown' && (() => {
             const alreadyLinked = linkedTokens.some(t => t.token_type === qrParsed.type)
             const isOwnFo7 = qrParsed.type === 'fireops7' && qrParsed.id === person.id
-            if (isOwnFo7 && alreadyLinked) return <p className="mb-3 text-sm text-green-600 font-medium">FireOps7 card linked.</p>
-            if (isOwnFo7 && linkingToken) return <p className="mb-3 text-sm text-zinc-500">Linking...</p>
-            if (!isOwnFo7 && qrParsed.type === 'fireops7') return <p className="mb-3 text-sm text-zinc-500">This FireOps7 card belongs to a different member.</p>
-            if (!alreadyLinked) return (
+            if (qrParsed.type === 'fireops7' && !isOwnFo7) return <p className="mb-3 text-sm text-zinc-500">This FireOps7 card belongs to a different member.</p>
+            if (alreadyLinked) {
+              const label = qrParsed.type === 'fireops7' ? 'FireOps7' : 'Salamander'
+              return <p className="mb-3 text-sm text-green-600 font-medium">{label} card linked to this profile.</p>
+            }
+            if (linkingToken) return <p className="mb-3 text-sm text-zinc-500">Linking...</p>
+            return (
               <button type="button" disabled={linkingToken} onClick={handleLinkToken}
                 className="mb-3 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                {linkingToken ? 'Linking...' : 'Link to Profile'}
+                Link to Profile
               </button>
             )
-            return <p className="mb-3 text-sm text-zinc-500">A {qrParsed.type} card is already linked — remove it first to replace.</p>
           })()}
 
           {/* Linked cards list */}
