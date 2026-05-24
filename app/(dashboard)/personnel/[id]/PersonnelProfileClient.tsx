@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, saveQrDebugScan } from '@/app/actions/personnel'
 import QRScanner from '@/components/QRScanner'
+import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card } from '@/lib/salamander'
+import type { SalamanderCard } from '@/lib/salamander'
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -74,9 +76,24 @@ export default function PersonnelProfileClient({
 
   const [qrScannerOpen, setQrScannerOpen] = useState(false)
   const [qrResult, setQrResult] = useState<string | null>(null)
+  const [qrParsed, setQrParsed] = useState<{ type: 'fireops7'; id: string } | { type: 'salamander'; card: SalamanderCard } | { type: 'unknown' } | null>(null)
   const [qrSaving, setQrSaving] = useState(false)
   const [qrSaved, setQrSaved] = useState(false)
   const [qrSaveError, setQrSaveError] = useState<string | null>(null)
+
+  function handleScan(raw: string) {
+    setQrResult(raw)
+    setQrScannerOpen(false)
+    setQrSaved(false)
+    setQrSaveError(null)
+    if (isFireOps7Card(raw)) {
+      const id = parseFireOps7Card(raw)
+      setQrParsed(id ? { type: 'fireops7', id } : { type: 'unknown' })
+    } else {
+      const card = parseSalamanderCard(raw)
+      setQrParsed(card ? { type: 'salamander', card } : { type: 'unknown' })
+    }
+  }
 
   const canEditProfile = isMe || isOfficerOrAbove
 
@@ -279,73 +296,81 @@ export default function PersonnelProfileClient({
         )}
       </div>
 
-      {/* ── QR Code Scanner ──────────────────────────────────────────────── */}
+      {/* ── Card Scanner ─────────────────────────────────────────────────── */}
       {isMe && (
         <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-6 mb-6">
-          <h2 className="text-base font-semibold text-zinc-900 mb-1">QR Code Scanner</h2>
-          <p className="text-xs text-zinc-400 mb-4">Scan a QR code or paste the string directly — then save to the database.</p>
+          <h2 className="text-base font-semibold text-zinc-900 mb-1">Scan ID Card</h2>
+          <p className="text-xs text-zinc-400 mb-4">Scan a FireOps7 member card or a Salamander accountability card.</p>
 
           {qrScannerOpen && (
             <div className="mb-4">
               <QRScanner
-                onScan={raw => {
-                  setQrResult(raw)
-                  setQrScannerOpen(false)
-                  setQrSaved(false)
-                }}
+                onScan={handleScan}
                 onClose={() => setQrScannerOpen(false)}
-                hint="Point the camera at any QR code"
+                hint="Point camera at QR code or PDF417 barcode"
               />
             </div>
           )}
 
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">QR String</span>
-            {qrResult && (
-              <button
-                type="button"
-                onClick={() => { setQrResult(null); setQrSaved(false) }}
-                className="text-xs text-zinc-400 hover:text-zinc-600"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <textarea
-            value={qrResult ?? ''}
-            onChange={e => { setQrResult(e.target.value); setQrSaved(false) }}
-            rows={6}
-            placeholder="Paste a QR string here, or use Scan / Take Photo below..."
-            className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 resize-y focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-
-          {qrSaveError && (
-            <p className="mt-2 text-sm text-red-600">{qrSaveError}</p>
+          {/* Parsed result */}
+          {qrParsed && !qrScannerOpen && (
+            <div className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              {qrParsed.type === 'fireops7' && (
+                <div>
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 mb-2">FireOps7 Card</span>
+                  <p className="text-sm text-zinc-700">Personnel ID: <span className="font-mono text-xs">{qrParsed.id}</span></p>
+                </div>
+              )}
+              {qrParsed.type === 'salamander' && (
+                <div className="flex flex-col gap-1">
+                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 mb-1">Salamander Card</span>
+                  <p className="text-sm font-semibold text-zinc-900">{qrParsed.card.firstName} {qrParsed.card.lastName}</p>
+                  <p className="text-sm text-zinc-600">{qrParsed.card.department}</p>
+                  {qrParsed.card.title && <p className="text-sm text-zinc-500">{qrParsed.card.title}</p>}
+                  {qrParsed.card.certs.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {qrParsed.card.certs.map(c => (
+                        <span key={c} className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-mono text-zinc-700">{c}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {qrParsed.type === 'unknown' && (
+                <p className="text-sm text-zinc-500">Card format not recognized.</p>
+              )}
+            </div>
           )}
-          <button
-            type="button"
-            disabled={qrSaving || qrSaved || !qrResult?.trim()}
-            onClick={async () => {
-              if (!qrResult?.trim()) return
-              setQrSaving(true)
-              setQrSaveError(null)
-              const res = await saveQrDebugScan(qrResult)
-              setQrSaving(false)
-              if (res?.error) setQrSaveError(res.error)
-              else setQrSaved(true)
-            }}
-            className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
-          >
-            {qrSaved ? '✓ Saved to Database' : qrSaving ? 'Saving...' : 'Save to Database'}
-          </button>
+
+          {qrSaveError && <p className="mt-2 text-sm text-red-600">{qrSaveError}</p>}
+
+          {/* Save raw scan for debug */}
+          {qrResult && !qrScannerOpen && (
+            <button
+              type="button"
+              disabled={qrSaving || qrSaved}
+              onClick={async () => {
+                if (!qrResult.trim()) return
+                setQrSaving(true)
+                setQrSaveError(null)
+                const res = await saveQrDebugScan(qrResult)
+                setQrSaving(false)
+                if (res?.error) setQrSaveError(res.error)
+                else setQrSaved(true)
+              }}
+              className="mb-2 w-full rounded-lg bg-zinc-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            >
+              {qrSaved ? '✓ Saved' : qrSaving ? 'Saving...' : 'Save Raw Scan (debug)'}
+            </button>
+          )}
 
           {!qrScannerOpen && (
             <button
               type="button"
               onClick={() => { setQrScannerOpen(true); setQrSaved(false) }}
-              className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+              className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
             >
-              Scan QR Code
+              {qrResult ? 'Scan Again' : 'Scan Card'}
             </button>
           )}
         </div>

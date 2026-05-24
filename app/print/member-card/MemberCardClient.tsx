@@ -110,8 +110,9 @@ export default function MemberCardClient({ personnelId, name, deptName, role, em
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { margin: 0; padding: 0; }
-          @page { size: letter; margin: 0.5in; }
+          body { margin: 0; padding: 0; background: #fff; }
+          @page { size: 3.375in 2.125in; margin: 0; }
+          div[style*="3.375in"] { box-shadow: none !important; border-radius: 0 !important; }
         }
       `}</style>
     </div>
