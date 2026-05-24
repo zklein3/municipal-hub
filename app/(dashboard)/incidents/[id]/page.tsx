@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
 import IncidentDetailClient from './IncidentDetailClient'
-import Link from 'next/link'
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -144,14 +143,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     }
   }
 
-  // Accountability summary (count only — board is on its own page)
-  const { count: acctCount } = await adminClient
-    .from('incident_accountability')
-    .select('id', { count: 'exact', head: true })
-    .eq('incident_id', id)
-
   return (
-    <div>
     <IncidentDetailClient
       incident={incident}
       incidentApparatus={(incidentApparatus ?? []).map(a => ({
@@ -175,18 +167,5 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       moduleNeris={moduleNeris}
       signatureRoster={signatureRoster}
     />
-    <div className="mt-5 mb-8">
-      <Link href={`/incidents/${id}/accountability`}
-        className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 px-5 py-4 hover:bg-zinc-50 transition-colors shadow-sm">
-        <div>
-          <p className="text-sm font-semibold text-zinc-900">Accountability Board</p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            {(acctCount ?? 0) > 0 ? `${acctCount} on scene` : 'Not started'}
-          </p>
-        </div>
-        <span className="text-zinc-400 text-lg">→</span>
-      </Link>
-    </div>
-    </div>
   )
 }

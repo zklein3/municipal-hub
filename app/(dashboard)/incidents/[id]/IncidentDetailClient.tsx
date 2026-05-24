@@ -369,6 +369,9 @@ export default function IncidentDetailClient({
       </div>
       <div className="flex flex-wrap gap-3 mb-6">
         <button onClick={() => router.push('/incidents')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+        <Link href={`/incidents/${incident.id}/accountability`} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">
+          Accountability
+        </Link>
         <a href={`/print/run-sheet?id=${incident.id}`} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">
           Print Run Sheet
         </a>
