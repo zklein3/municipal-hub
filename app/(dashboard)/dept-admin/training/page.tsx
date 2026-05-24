@@ -16,14 +16,15 @@ export default async function TrainingAdminPage() {
 
   const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
   const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role !== 'admin') redirect('/dashboard')
+  if (!myDept || (myDept.system_role !== 'admin' && myDept.system_role !== 'officer')) redirect('/dashboard')
 
+  const isAdmin = myDept.system_role === 'admin'
   const department_id = myDept.department_id
 
   // Cert types
   const { data: certTypes } = await adminClient
     .from('certification_types')
-    .select('id, cert_name, issuing_body, does_expire, expiration_interval_months, is_structured_course, active')
+    .select('id, cert_name, issuing_body, does_expire, expiration_interval_months, is_structured_course, show_on_run_report, active')
     .eq('department_id', department_id)
     .order('cert_name')
 
@@ -71,6 +72,24 @@ export default async function TrainingAdminPage() {
   const allPersonnel = (deptPersonnel ?? []).map(p => ({
     id: (p.personnel as any)?.id ?? p.personnel_id,
     name: [(p.personnel as any)?.first_name, (p.personnel as any)?.last_name].filter(Boolean).join(' '),
+  })).sort((a, b) => a.name.localeCompare(b.name))
+
+  // Member certifications — all records for the dept
+  const { data: memberCertsRaw } = await adminClient
+    .from('member_certifications')
+    .select('id, personnel_id, cert_name, issuing_body, cert_number, issued_date, expiration_date, source, notes, active')
+    .eq('department_id', department_id)
+    .order('cert_name')
+
+  const certPersonnelIds = [...new Set((memberCertsRaw ?? []).map(c => c.personnel_id))]
+  const { data: certPersonnelRaw } = certPersonnelIds.length > 0
+    ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', certPersonnelIds)
+    : { data: [] }
+  const certPersonnelNameMap = Object.fromEntries((certPersonnelRaw ?? []).map(p => [p.id, `${p.last_name}, ${p.first_name}`]))
+
+  const memberCerts = (memberCertsRaw ?? []).map(c => ({
+    ...c,
+    name: certPersonnelNameMap[c.personnel_id] ?? '—',
   })).sort((a, b) => a.name.localeCompare(b.name))
 
   // Training events (last 30 + future 60)
@@ -127,6 +146,8 @@ export default async function TrainingAdminPage() {
         pending_attendance: attendanceByEvent[e.id]?.pending ?? [],
         all_attendance: attendanceByEvent[e.id]?.all ?? [],
       }))}
+      memberCerts={memberCerts}
+      isAdmin={isAdmin}
       departmentId={department_id}
     />
   )

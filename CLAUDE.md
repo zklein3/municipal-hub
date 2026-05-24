@@ -99,29 +99,37 @@ Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhan
 - Inbox opened to all members; layout badge includes pending signature count
 - `standby` role added to `incident_personnel_role_check` constraint
 
-### 0b. Run Sheet Print — SHIPPED ✅ (2026-05-23)
+### 0b. Run Sheet Print — SHIPPED ✅ (2026-05-23, enhanced 2026-05-24)
 `/print/run-sheet?id=xxx` — matches dept paper Run Field Report, fits one letter sheet.
 - Units Dispatched: each apparatus with member names; **POV** group (no apparatus, role ≠ standby); **Station** group (no apparatus, role = standby)
+- Role labels (IC, Driver, Officer, FF) shown right of name; members sorted IC → Driver → Officer → FF → Standby
+- Cert labels shown below name — driven by `certification_types.show_on_run_report` flag (dept controls which certs appear)
 - Mutual aid reads `incident_mutual_aid`: `gave_aid` → To, `received_aid` → From
-- PrintButton: `type="button"`, z-index 9999, "Print / Save PDF"
 - Key file: `app/print/run-sheet/page.tsx`
 
-### 1. Training — Resume After User Testing ✳️ IN PROGRESS
-Built 2026-05-17. User is playing with flow before proposing further changes.
+### 0c. Run Report — SHIPPED ✅ (2026-05-24)
+`/reports/run-report` — filterable incident list with print links.
+- Filters: date range (default last 90 days) + incident type dropdown (only types present in dept)
+- Each row: date, incident #, type badge (color-coded), address, unit count, responder count
+- Print ↗ button opens `/print/run-sheet?id=...` in new tab
+- Card added to `/reports` hub (officers + admins)
+
+### 1. Training — ✅ Most gaps resolved (2026-05-24)
+Built 2026-05-17. Enhanced 2026-05-24.
 
 **What's working:**
 - Unified member training page (My Training list + My Certifications)
 - Simple cert: assign → training date → member logs attendance → officer verifies → cert issued → member signs
 - Training event with cert type: bulk log attendance → cert auto-issued to all
-- Direct cert entry (admin): picks cert type or enters custom name, dates, cert number
+- Direct cert entry (admin): picks cert type or enters custom name, dates, cert number — all fields stacked (no cutoff on medium screens)
 - Dept-wide enrollment: "Assign to All Active Members" toggle
 - Cert signatures on all records (CertSignaturePadModal)
+- **Member Certs tab** in Training Admin: officers see all cert records (read-only); admins can edit any cert record (dates, cert number, issuing body, active status)
+- `show_on_run_report` flag on cert types — admin checks it per cert type to control run sheet display
 
-**Known gaps to revisit after testing:**
+**Known gaps still open:**
 - Training event cert issuance deduplication (same-day check only — may double-issue if event re-verified)
-- No way to edit a cert record after entry (wrong date, cert number, etc.)
 - No expiry notification for certs approaching expiration
-- Admin has no read-only view of a member's full cert history
 
 ### 2. NERIS — Payload validation in progress ✳️ (2026-05-22)
 V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.local.

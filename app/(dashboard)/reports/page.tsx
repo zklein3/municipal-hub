@@ -38,6 +38,13 @@ export default async function ReportsPage() {
           href="/reports/my-activity"
         />
         {isOfficerOrAbove && (
+          <HubCard
+            title="Run Report"
+            description="Incident run sheets — filter by date and type, print any incident"
+            href="/reports/run-report"
+          />
+        )}
+        {isOfficerOrAbove && (
           <>
             <HubCard
               title="Attendance"

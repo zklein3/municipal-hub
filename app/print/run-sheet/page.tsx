@@ -55,8 +55,34 @@ export default async function RunSheetPrintPage({
     .eq('department_id', incident.department_id)
     .eq('active', true)
 
+  // Certs marked show_on_run_report by the dept — controls what appears next to names
+  const { data: runReportTypes } = await adminClient
+    .from('certification_types')
+    .select('id')
+    .eq('department_id', incident.department_id)
+    .eq('show_on_run_report', true)
+    .eq('active', true)
+
+  const runReportTypeIds = (runReportTypes ?? []).map(ct => ct.id)
+
+  const { data: medCertRows } = runReportTypeIds.length > 0
+    ? await adminClient
+        .from('member_certifications')
+        .select('personnel_id, cert_name')
+        .eq('department_id', incident.department_id)
+        .eq('active', true)
+        .in('certification_type_id', runReportTypeIds)
+    : { data: [] }
+
+  // Build map: personnel_id → comma-joined cert names
+  const medLabelMap: Record<string, string> = {}
+  for (const cert of medCertRows ?? []) {
+    const existing = medLabelMap[cert.personnel_id]
+    medLabelMap[cert.personnel_id] = existing ? `${existing}, ${cert.cert_name}` : cert.cert_name
+  }
+
   const personnelNameMap: Record<string, string> = {}
-  const allPersonnel: { id: string; name: string; responded: boolean }[] = []
+  const allPersonnel: { id: string; name: string; responded: boolean; medLabel?: string }[] = []
   const respondedIds = new Set((incPersonnel ?? []).map(p => p.personnel_id))
 
   for (const dp of deptPersonnelRaw ?? []) {
@@ -64,42 +90,59 @@ export default async function RunSheetPrintPage({
     const pid = p?.id ?? dp.personnel_id
     const name = `${p?.last_name ?? ''}, ${p?.first_name ?? ''}`.trim().replace(/^,\s*/, '')
     personnelNameMap[pid] = name
-    allPersonnel.push({ id: pid, name, responded: respondedIds.has(pid) })
+    allPersonnel.push({ id: pid, name, responded: respondedIds.has(pid), medLabel: medLabelMap[pid] })
   }
   allPersonnel.sort((a, b) => a.name.localeCompare(b.name))
 
-  // Build apparatus groups: each unit + Station group for unassigned
-  type ApparatusGroup = { unitLabel: string; members: string[] }
+  const ROLE_LABELS: Record<string, string> = {
+    ic:      'IC',
+    driver:  'Driver',
+    officer: 'Officer',
+    crew:    'FF',
+    standby: 'Standby',
+  }
+  // Sort order: IC first, then Driver, Officer, FF, others
+  const ROLE_ORDER: Record<string, number> = { ic: 0, driver: 1, officer: 2, crew: 3, standby: 4 }
+
+  type Member = { name: string; roleLabel: string | null; medLabel: string | null }
+  type ApparatusGroup = { unitLabel: string; members: Member[] }
   const apparatusGroups: ApparatusGroup[] = []
+
+  function buildMember(p: { personnel_id: string; role: string | null }): Member {
+    return {
+      name: personnelNameMap[p.personnel_id] ?? '—',
+      roleLabel: p.role ? (ROLE_LABELS[p.role] ?? p.role) : null,
+      medLabel: medLabelMap[p.personnel_id] ?? null,
+    }
+  }
+
+  function sortMembers(members: Member[]): Member[] {
+    return members.sort((a, b) => {
+      const ra = ROLE_ORDER[Object.keys(ROLE_LABELS).find(k => ROLE_LABELS[k] === a.roleLabel) ?? ''] ?? 99
+      const rb = ROLE_ORDER[Object.keys(ROLE_LABELS).find(k => ROLE_LABELS[k] === b.roleLabel) ?? ''] ?? 99
+      return ra !== rb ? ra - rb : a.name.localeCompare(b.name)
+    })
+  }
 
   for (const a of incApparatus ?? []) {
     const unit = apparatusNameMap[a.apparatus_id] ?? '—'
-    const members = (incPersonnel ?? [])
-      .filter(p => p.apparatus_id === a.apparatus_id)
-      .map(p => personnelNameMap[p.personnel_id] ?? '—')
-      .sort()
+    const members = sortMembers(
+      (incPersonnel ?? []).filter(p => p.apparatus_id === a.apparatus_id).map(buildMember)
+    )
     apparatusGroups.push({ unitLabel: unit, members })
   }
 
-  // POV: no apparatus, not standby — went to scene in personal vehicle
-  const povMembers = (incPersonnel ?? [])
-    .filter(p => !p.apparatus_id && p.role !== 'standby')
-    .map(p => personnelNameMap[p.personnel_id] ?? '—')
-    .sort()
+  // POV: no apparatus, not standby
+  const povMembers = sortMembers(
+    (incPersonnel ?? []).filter(p => !p.apparatus_id && p.role !== 'standby').map(buildMember)
+  )
+  if (povMembers.length > 0) apparatusGroups.push({ unitLabel: 'POV', members: povMembers })
 
-  if (povMembers.length > 0) {
-    apparatusGroups.push({ unitLabel: 'POV', members: povMembers })
-  }
-
-  // Station: no apparatus, standby role — stayed at station
-  const stationMembers = (incPersonnel ?? [])
-    .filter(p => !p.apparatus_id && p.role === 'standby')
-    .map(p => personnelNameMap[p.personnel_id] ?? '—')
-    .sort()
-
-  if (stationMembers.length > 0) {
-    apparatusGroups.push({ unitLabel: 'Station', members: stationMembers })
-  }
+  // Station: no apparatus, standby role
+  const stationMembers = sortMembers(
+    (incPersonnel ?? []).filter(p => !p.apparatus_id && p.role === 'standby').map(buildMember)
+  )
+  if (stationMembers.length > 0) apparatusGroups.push({ unitLabel: 'Station', members: stationMembers })
 
   // Mutual aid — all records, split by role
   const { data: mutualAidRows } = await adminClient
@@ -222,8 +265,16 @@ export default async function RunSheetPrintPage({
                 <div style={{ fontWeight: 700, fontSize: '10pt' }}>{grp.unitLabel}</div>
                 {grp.members.length === 0 ? (
                   <div style={{ fontSize: '9pt', color: '#888', marginLeft: '0.15in' }}>—</div>
-                ) : grp.members.map((name, ni) => (
-                  <div key={ni} style={{ fontSize: '9pt', marginLeft: '0.15in', lineHeight: 1.5 }}>{name}</div>
+                ) : grp.members.map((m, ni) => (
+                  <div key={ni} style={{ marginLeft: '0.15in', marginBottom: '0.05in' }}>
+                    <div style={{ fontSize: '9pt', lineHeight: 1.4, display: 'flex', justifyContent: 'space-between', gap: '0.1in' }}>
+                      <span>{m.name}</span>
+                      {m.roleLabel && <span style={{ fontStyle: 'italic', color: '#444', flexShrink: 0 }}>{m.roleLabel}</span>}
+                    </div>
+                    {m.medLabel && (
+                      <div style={{ fontSize: '7.5pt', color: '#555', lineHeight: 1.3 }}>{m.medLabel}</div>
+                    )}
+                  </div>
                 ))}
               </div>
             ))}
@@ -308,7 +359,10 @@ export default async function RunSheetPrintPage({
                 {col.map(p => (
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', marginBottom: '0.05in', gap: '0.08in' }}>
                     <span style={{ ...S.checkBox }}>{p.responded ? '✓' : ''}</span>
-                    <span style={{ fontSize: '9.5pt' }}>{p.name}</span>
+                    <span style={{ fontSize: '9.5pt' }}>
+                      {p.name}
+                      {p.medLabel && <span style={{ fontSize: '8.5pt', color: '#333' }}> — {p.medLabel}</span>}
+                    </span>
                   </div>
                 ))}
               </div>

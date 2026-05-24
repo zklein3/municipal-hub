@@ -9,21 +9,23 @@ import {
   verifyProgress, verifyTrainingAttendance,
   verifyEnrollmentSession,
   createTrainingEvent, logTrainingAttendance,
-  createDirectCertification,
+  createDirectCertification, updateMemberCertification,
 } from '@/app/actions/training'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const checkCls = "rounded border-zinc-300 text-red-600 focus:ring-red-500"
 
-type Tab = 'certs' | 'enrollments' | 'pending' | 'events'
+type Tab = 'certs' | 'enrollments' | 'pending' | 'events' | 'member_certs'
 
-interface CertType { id: string; cert_name: string; issuing_body: string | null; does_expire: boolean; expiration_interval_months: number | null; is_structured_course: boolean; active: boolean }
+interface CertType { id: string; cert_name: string; issuing_body: string | null; does_expire: boolean; expiration_interval_months: number | null; is_structured_course: boolean; show_on_run_report: boolean; active: boolean }
 interface Unit { id: string; certification_type_id: string; unit_title: string; unit_description: string | null; required_hours: number | null; sort_order: number; active: boolean }
 interface Enrollment { id: string; personnel_id: string; certification_type_id: string; status: string; enrolled_at: string; name: string }
 interface PendingProgress { id: string; enrollment_id: string; unit_id: string; personnel_id: string; hours_submitted: number | null; completed_date: string | null; notes: string | null; status: string; submitted_at: string; name: string }
 interface PendingSession { id: string; personnel_id: string; certification_type_id: string; training_date: string | null; session_logged_at: string | null; name: string }
 interface Personnel { id: string; name: string }
 interface PendingAttendance { id: string; personnel_id: string; name: string; submitted_at: string }
+interface MemberCert { id: string; personnel_id: string; name: string; cert_name: string; issuing_body: string | null; cert_number: string | null; issued_date: string | null; expiration_date: string | null; source: string | null; notes: string | null; active: boolean }
+
 interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
@@ -33,15 +35,18 @@ interface TrainingEvent {
 }
 
 export default function TrainingAdminClient({
-  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, departmentId,
+  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, memberCerts, isAdmin, departmentId,
 }: {
   certTypes: CertType[]; units: Unit[]; enrollments: Enrollment[]
   pendingProgress: PendingProgress[]; pendingSessions: PendingSession[]
   allPersonnel: Personnel[]
-  trainingEvents: TrainingEvent[]; departmentId: string
+  trainingEvents: TrainingEvent[]
+  memberCerts: MemberCert[]
+  isAdmin: boolean
+  departmentId: string
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('certs')
+  const [tab, setTab] = useState<Tab>(isAdmin ? 'certs' : 'member_certs')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -60,6 +65,9 @@ export default function TrainingAdminClient({
   const [enrollMode, setEnrollMode] = useState<'course' | 'direct'>('course')
   const [enrollAll, setEnrollAll] = useState(false)
   const [directCertExpires, setDirectCertExpires] = useState(false)
+
+  // Member cert edit state
+  const [editingMemberCertId, setEditingMemberCertId] = useState<string | null>(null)
 
   // Reject state — course progress
   const [rejectingProgressId, setRejectingProgressId] = useState<string | null>(null)
@@ -103,12 +111,14 @@ export default function TrainingAdminClient({
   const totalPending = pendingProgress.length + pendingSessions.length
   const totalPendingAttendance = trainingEvents.reduce((sum, e) => sum + e.pending_attendance.length, 0)
 
-  const TABS: { key: Tab; label: string }[] = [
-    { key: 'certs',       label: 'Cert Types'   },
-    { key: 'enrollments', label: 'Enrollments'  },
-    { key: 'pending',     label: totalPending > 0 ? `Pending (${totalPending})` : 'Pending' },
-    { key: 'events',      label: totalPendingAttendance > 0 ? `Events (${totalPendingAttendance})` : 'Events' },
+  const ALL_TABS: { key: Tab; label: string; adminOnly?: boolean }[] = [
+    { key: 'member_certs', label: 'Member Certs' },
+    { key: 'certs',        label: 'Cert Types',   adminOnly: true },
+    { key: 'enrollments',  label: 'Enrollments',  adminOnly: true },
+    { key: 'pending',      label: totalPending > 0 ? `Pending (${totalPending})` : 'Pending', adminOnly: true },
+    { key: 'events',       label: totalPendingAttendance > 0 ? `Events (${totalPendingAttendance})` : 'Events', adminOnly: true },
   ]
+  const TABS = ALL_TABS.filter(t => !t.adminOnly || isAdmin)
 
   return (
     <div>
@@ -149,6 +159,87 @@ export default function TrainingAdminClient({
         {/* Tab content */}
         <div className="flex-1 min-w-0">
 
+      {/* ── MEMBER CERTS ────────────────────────────────────────────────────── */}
+      {tab === 'member_certs' && (
+        <div>
+          <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+            {memberCerts.length === 0 ? (
+              <div className="px-6 py-12 text-center text-sm text-zinc-400">No certifications on record.</div>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {memberCerts.map(cert => (
+                  <div key={cert.id}>
+                    {isAdmin && editingMemberCertId === cert.id ? (
+                      <div className="p-4">
+                        <form action={async (fd) => { const r = await wrap(() => updateMemberCertification(fd)); if (!r?.error) setEditingMemberCertId(null) }} className="flex flex-col gap-3">
+                          <input type="hidden" name="id" value={cert.id} />
+                          <div className="text-xs font-semibold text-zinc-500">{cert.name}</div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Name *</label>
+                            <input name="cert_name" required defaultValue={cert.cert_name} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Issuing Body</label>
+                            <input name="issuing_body" defaultValue={cert.issuing_body ?? ''} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Number</label>
+                            <input name="cert_number" defaultValue={cert.cert_number ?? ''} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Issued Date</label>
+                            <input name="issued_date" type="date" defaultValue={cert.issued_date ?? ''} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Expiration Date</label>
+                            <input name="expiration_date" type="date" defaultValue={cert.expiration_date ?? ''} className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Notes</label>
+                            <input name="notes" defaultValue={cert.notes ?? ''} placeholder="Optional" className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Status</label>
+                            <select name="active" defaultValue={cert.active ? 'true' : 'false'} className={inputCls}>
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Save'}</button>
+                            <button type="button" onClick={() => setEditingMemberCertId(null)} className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="flex items-center px-5 py-4 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-zinc-900">{cert.name}</p>
+                          <p className="text-sm text-zinc-700">{cert.cert_name}</p>
+                          <div className="flex gap-3 text-xs text-zinc-400 mt-0.5 flex-wrap">
+                            {cert.issuing_body && <span>{cert.issuing_body}</span>}
+                            {cert.cert_number && <span>#{cert.cert_number}</span>}
+                            {cert.issued_date && <span>Issued: {new Date(cert.issued_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                            {cert.expiration_date && <span>Exp: {new Date(cert.expiration_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                            {cert.source && <span className="capitalize">{cert.source.replace('_', ' ')}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {!cert.active && <span className="text-xs text-zinc-300">Inactive</span>}
+                          {isAdmin && (
+                            <button onClick={() => { setEditingMemberCertId(cert.id); reset() }} className="text-xs font-semibold text-red-600 hover:text-red-800">Edit</button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── CERT TYPES ─────────────────────────────────────────────────────── */}
       {tab === 'certs' && (
         <div>
@@ -184,6 +275,11 @@ export default function TrainingAdminClient({
                     <span className="text-sm text-zinc-700">Structured course with chapters/units?</span>
                   </label>
                   <input type="hidden" name="is_structured_course" value={newCertCourse ? 'true' : 'false'} />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="show_on_run_report" value="true" className={checkCls} />
+                    <span className="text-sm text-zinc-700">Show on run report</span>
+                    <span className="text-xs text-zinc-400">— displays this cert next to the member&apos;s name on incident run sheets</span>
+                  </label>
                 </div>
                 <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Add'}</button>
               </form>
@@ -211,6 +307,7 @@ export default function TrainingAdminClient({
                             <div className="flex gap-4 flex-wrap">
                               <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="does_expire" value="true" defaultChecked={cert.does_expire} className={checkCls} /><span className="text-sm text-zinc-700">Expires</span></label>
                               <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="is_structured_course" value="true" defaultChecked={cert.is_structured_course} className={checkCls} /><span className="text-sm text-zinc-700">Structured course</span></label>
+                              <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="show_on_run_report" value="true" defaultChecked={cert.show_on_run_report} className={checkCls} /><span className="text-sm text-zinc-700">Show on run report</span></label>
                             </div>
                             {cert.does_expire && <input name="expiration_interval_months" type="number" defaultValue={cert.expiration_interval_months ?? ''} className="w-32 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none" placeholder="Months" />}
                             <select name="active" defaultValue={cert.active ? 'true' : 'false'} className={inputCls}><option value="true">Active</option><option value="false">Inactive</option></select>
@@ -407,25 +504,21 @@ export default function TrainingAdminClient({
                       <input name="cert_name" className={inputCls} placeholder="CPR/AED" />
                       <p className="text-xs text-zinc-400 mt-1">Required — will use this name on the member's record.</p>
                     </div>
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">Issuing Body</label>
-                        <input name="issuing_body" className={inputCls} placeholder="American Heart Association" />
-                      </div>
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Number</label>
-                        <input name="cert_number" className={inputCls} placeholder="Optional" />
-                      </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Issuing Body</label>
+                      <input name="issuing_body" className={inputCls} placeholder="American Heart Association" />
                     </div>
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">Issued Date</label>
-                        <input name="issued_date" type="date" className={inputCls} />
-                      </div>
-                      <div className="flex-1">
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">Expiration Date</label>
-                        <input name="expiration_date" type="date" className={inputCls} />
-                      </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Cert Number</label>
+                      <input name="cert_number" className={inputCls} placeholder="Optional" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Issued Date</label>
+                      <input name="issued_date" type="date" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-600">Expiration Date</label>
+                      <input name="expiration_date" type="date" className={inputCls} />
                     </div>
                     <input name="notes" className={inputCls} placeholder="Notes (optional)" />
                     <button type="submit" disabled={loading} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? '...' : 'Save Certification'}</button>

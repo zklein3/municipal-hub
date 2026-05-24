@@ -37,6 +37,7 @@ export async function createCertificationType(formData: FormData) {
     does_expire,
     expiration_interval_months: does_expire ? parseInt(formData.get('expiration_interval_months') as string) || null : null,
     is_structured_course: formData.get('is_structured_course') === 'true',
+    show_on_run_report: formData.get('show_on_run_report') === 'true',
     active: true,
   })
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
@@ -55,6 +56,7 @@ export async function updateCertificationType(formData: FormData) {
     does_expire,
     expiration_interval_months: does_expire ? parseInt(formData.get('expiration_interval_months') as string) || null : null,
     is_structured_course: formData.get('is_structured_course') === 'true',
+    show_on_run_report: formData.get('show_on_run_report') === 'true',
     active: formData.get('active') === 'true',
     updated_at: new Date().toISOString(),
   }).eq('id', formData.get('id') as string)
@@ -395,6 +397,34 @@ export async function createDirectCertification(formData: FormData) {
     active: true,
   })
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
+  revalidatePath('/dept-admin/training')
+  revalidatePath('/training')
+  return { success: true }
+}
+
+// ─── ADMIN: Edit Member Certification ────────────────────────────────────────
+export async function updateMemberCertification(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+
+  const id = formData.get('id') as string
+  if (!id) return { error: 'Missing cert id.' }
+
+  const certName = (formData.get('cert_name') as string)?.trim()
+  if (!certName) return { error: 'Certification name is required.' }
+
+  const { error: dbErr } = await adminClient.from('member_certifications').update({
+    cert_name: certName,
+    issuing_body: (formData.get('issuing_body') as string) || null,
+    cert_number: (formData.get('cert_number') as string) || null,
+    issued_date: (formData.get('issued_date') as string) || null,
+    expiration_date: (formData.get('expiration_date') as string) || null,
+    notes: (formData.get('notes') as string) || null,
+    active: formData.get('active') !== 'false',
+  }).eq('id', id).eq('department_id', ctx.department_id)
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/training'); return { error: dbErr.message } }
   revalidatePath('/dept-admin/training')
   revalidatePath('/training')
   return { success: true }
