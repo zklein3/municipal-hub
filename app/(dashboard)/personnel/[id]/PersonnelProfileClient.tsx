@@ -132,6 +132,14 @@ export default function PersonnelProfileClient({
       </div>
       <div className="flex flex-wrap gap-3 mb-6">
         <button onClick={() => router.push('/personnel')} className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm">← Back</button>
+        {(isMe || isOfficerOrAbove) && (
+          <button
+            onClick={() => window.open(`/print/member-card?id=${person.id}`, '_blank')}
+            className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
+          >
+            Print ID Card
+          </button>
+        )}
       </div>
 
       {/* ── Personal Info ─────────────────────────────────────────────────── */}
