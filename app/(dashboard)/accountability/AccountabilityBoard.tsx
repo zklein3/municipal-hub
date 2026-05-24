@@ -5,7 +5,7 @@ import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card, salamanderCanonicalKey } from '@/lib/salamander'
 import {
   initBoardLanes, addBoardLane,
-  checkInPerson, movePersonToLane, removeAccountabilityEntry, recordPAR,
+  checkInPerson, movePersonToLane, removeAccountabilityEntry, recordPAR, saveDebugScan,
 } from '@/app/actions/accountability'
 
 interface Lane { id: string; name: string; sort_order: number }
@@ -58,6 +58,10 @@ export default function AccountabilityBoard({
   const [parSaving, setParSaving] = useState(false)
   const [parDone, setParDone] = useState(false)
 
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [debugValue, setDebugValue] = useState('')
+  const [debugSaved, setDebugSaved] = useState(false)
+
   const stagingLane = lanes.find(l => l.name === 'Staging') ?? lanes[0] ?? null
 
   async function handleInit() {
@@ -102,6 +106,11 @@ export default function AccountabilityBoard({
   async function handleScan(raw: string) {
     setScannerOpen(false)
     setError(null)
+
+    // Auto-save unrecognized card formats to debug table
+    const isKnown = isFireOps7Card(raw) || !!parseSalamanderCard(raw)
+    if (!isKnown) saveDebugScan(raw)
+
     const resolved = resolveCard(raw)
 
     const alreadyOn = entries.find(e =>
@@ -215,6 +224,47 @@ export default function AccountabilityBoard({
       {scannerOpen && (
         <div className="mb-4">
           <QRScanner onScan={handleScan} onClose={() => setScannerOpen(false)} hint="Scan FireOps7 QR or Salamander PDF417" />
+        </div>
+      )}
+
+      {/* Debug raw scan input */}
+      {isOfficerOrAbove && (
+        <div className="mb-4">
+          {!debugOpen ? (
+            <button type="button" onClick={() => setDebugOpen(true)}
+              className="text-xs text-zinc-400 hover:text-zinc-600 underline">
+              Paste raw scan data
+            </button>
+          ) : (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 flex flex-col gap-2">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Raw Scan Debug</p>
+              <textarea
+                autoFocus
+                value={debugValue}
+                onChange={e => setDebugValue(e.target.value)}
+                placeholder="Paste raw card data here..."
+                rows={3}
+                className="w-full rounded border border-zinc-300 px-2 py-1.5 text-xs font-mono focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              <div className="flex gap-2">
+                <button type="button"
+                  disabled={!debugValue.trim()}
+                  onClick={async () => {
+                    await saveDebugScan(debugValue.trim())
+                    setDebugSaved(true)
+                    setDebugValue('')
+                    setTimeout(() => setDebugSaved(false), 2000)
+                  }}
+                  className="rounded bg-zinc-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50">
+                  {debugSaved ? '✓ Saved' : 'Save to DB'}
+                </button>
+                <button type="button" onClick={() => { setDebugOpen(false); setDebugValue('') }}
+                  className="rounded border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-white">
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

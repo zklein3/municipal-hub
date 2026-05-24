@@ -246,3 +246,9 @@ export async function recordPAR(boardId: string, snapshot: { lane_name: string; 
   if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true }
 }
+
+export async function saveDebugScan(rawValue: string) {
+  const adminClient = createAdminClient()
+  await adminClient.from('qr_debug_scans').insert({ raw_value: rawValue })
+  return { success: true }
+}
