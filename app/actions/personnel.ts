@@ -198,3 +198,75 @@ export async function saveQrDebugScan(rawValue: string) {
   if (!data || data.length === 0) return { error: 'Insert returned no rows.' }
   return { success: true }
 }
+
+// ─── Link a QR/barcode token to a personnel record ───────────────────────────
+export async function linkQrToken(
+  personnelId: string,
+  tokenType: 'fireops7' | 'salamander' | 'custom',
+  tokenValue: string,
+  label: string | null
+) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Not authenticated.' }
+
+  const isMe = me.id === personnelId
+  if (!isMe) {
+    const { data: myDeptList } = await adminClient
+      .from('department_personnel').select('department_id, system_role')
+      .eq('personnel_id', me.id).eq('active', true)
+    const myDept = myDeptList?.[0]
+    if (myDept?.system_role !== 'admin' && myDept?.system_role !== 'officer') return { error: 'Not authorized.' }
+    const { data: targetDept } = await adminClient
+      .from('department_personnel').select('id')
+      .eq('personnel_id', personnelId).eq('department_id', myDept.department_id).eq('active', true).limit(1)
+    if (!targetDept?.length) return { error: 'Member not found in your department.' }
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('personnel_qr_tokens')
+    .upsert(
+      { personnel_id: personnelId, token_type: tokenType, token_value: tokenValue, label, linked_by: me.id },
+      { onConflict: 'personnel_id,token_type' }
+    )
+
+  if (dbErr) { await logError(dbErr.message, '/personnel'); return { error: dbErr.message } }
+  revalidatePath(`/personnel/${personnelId}`)
+  return { success: true }
+}
+
+// ─── Delete a linked QR token ─────────────────────────────────────────────────
+export async function deleteQrToken(tokenId: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Not authenticated.' }
+
+  const { data: tokenList } = await adminClient
+    .from('personnel_qr_tokens').select('id, personnel_id').eq('id', tokenId)
+  const token = tokenList?.[0]
+  if (!token) return { error: 'Token not found.' }
+
+  const isMe = me.id === token.personnel_id
+  if (!isMe) {
+    const { data: myDeptList } = await adminClient
+      .from('department_personnel').select('department_id, system_role')
+      .eq('personnel_id', me.id).eq('active', true)
+    const myDept = myDeptList?.[0]
+    if (myDept?.system_role !== 'admin' && myDept?.system_role !== 'officer') return { error: 'Not authorized.' }
+  }
+
+  const { error: dbErr } = await adminClient.from('personnel_qr_tokens').delete().eq('id', tokenId)
+  if (dbErr) { await logError(dbErr.message, '/personnel'); return { error: dbErr.message } }
+  revalidatePath(`/personnel/${token.personnel_id}`)
+  return { success: true }
+}

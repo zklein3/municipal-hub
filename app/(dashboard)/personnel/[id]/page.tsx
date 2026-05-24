@@ -59,11 +59,18 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
     .eq('active', true)
     .order('sort_order')
 
+  const { data: linkedTokens } = await adminClient
+    .from('personnel_qr_tokens')
+    .select('id, token_type, label, linked_at')
+    .eq('personnel_id', id)
+    .order('linked_at')
+
   return (
     <PersonnelProfileClient
       person={person}
       deptRecord={deptRecord}
       roles={roles ?? []}
+      linkedTokens={linkedTokens ?? []}
       isMe={isMe}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
