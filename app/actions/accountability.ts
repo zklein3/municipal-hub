@@ -228,6 +228,18 @@ export async function movePersonToLane(entryId: string, laneId: string) {
   return { success: true }
 }
 
+export async function updateEntryName(entryId: string, rawName: string, rawDept: string | null) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (!rawName.trim()) return { error: 'Name required.' }
+  const { error: dbErr } = await ctx.adminClient
+    .from('accountability_entries')
+    .update({ raw_name: rawName.trim(), raw_dept: rawDept?.trim() ?? null })
+    .eq('id', entryId)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
+  return { success: true }
+}
+
 export async function removeAccountabilityEntry(entryId: string) {
   const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }

@@ -30,7 +30,7 @@ export function parseSalamanderCard(raw: string): SalamanderCard | null {
 
   // --- Name ---
   // Pattern: UPPERCASE_LASTNAME * BEL UPPERCASE_FIRSTNAME
-  const nameMatch = raw.match(/([A-Z][A-Z'-]*)(?:\*)\x07([A-Z][A-Z'-]*)/)
+  const nameMatch = raw.match(/([A-Z][A-Z'-]*)(?:\*)[\x01-\x08\x0B\x0E-\x1F]([A-Z][A-Z'-]*)/)
   if (!nameMatch) return null
   const lastName = nameMatch[1].trim()
   const firstName = nameMatch[2].trim()

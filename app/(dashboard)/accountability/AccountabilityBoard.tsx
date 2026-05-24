@@ -5,7 +5,7 @@ import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card, salamanderCanonicalKey } from '@/lib/salamander'
 import {
   initBoardLanes, addBoardLane,
-  checkInPerson, movePersonToLane, removeAccountabilityEntry, recordPAR, saveDebugScan,
+  checkInPerson, movePersonToLane, removeAccountabilityEntry, updateEntryName, recordPAR, saveDebugScan,
 } from '@/app/actions/accountability'
 
 interface Lane { id: string; name: string; sort_order: number }
@@ -61,6 +61,11 @@ export default function AccountabilityBoard({
   const [debugOpen, setDebugOpen] = useState(false)
   const [debugValue, setDebugValue] = useState('')
   const [debugSaved, setDebugSaved] = useState(false)
+
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDept, setEditDept] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const stagingLane = lanes.find(l => l.name === 'Staging') ?? lanes[0] ?? null
 
@@ -152,6 +157,26 @@ export default function AccountabilityBoard({
     const res = await removeAccountabilityEntry(entryId)
     if (res?.error) { setError(res.error); return }
     setEntries(prev => prev.filter(e => e.id !== entryId))
+  }
+
+  function openEditName(entry: Entry) {
+    setMovingEntryId(null)
+    setEditingEntryId(entry.id)
+    setEditName(entry.raw_name ?? entry.display_name)
+    setEditDept(entry.raw_dept ?? entry.display_dept ?? '')
+  }
+
+  async function handleEditName() {
+    if (!editingEntryId) return
+    setEditSaving(true)
+    const res = await updateEntryName(editingEntryId, editName, editDept || null)
+    setEditSaving(false)
+    if (res?.error) { setError(res.error); return }
+    setEntries(prev => prev.map(e => e.id === editingEntryId
+      ? { ...e, raw_name: editName.trim(), raw_dept: editDept.trim() || null, display_name: editName.trim(), display_dept: editDept.trim() }
+      : e
+    ))
+    setEditingEntryId(null)
   }
 
   async function handleManualAdd() {
@@ -311,9 +336,15 @@ export default function AccountabilityBoard({
               ))}
             </div>
             <div className="flex gap-2">
+              {!movingEntry.personnel_id && (
+                <button type="button" onClick={() => openEditName(movingEntry)}
+                  className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
+                  Edit Name
+                </button>
+              )}
               <button type="button" onClick={() => { handleRemove(movingEntry.id); setMovingEntryId(null) }}
                 className="flex-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-                Remove from scene
+                Remove
               </button>
               <button type="button" onClick={() => setMovingEntryId(null)}
                 className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
@@ -360,6 +391,28 @@ export default function AccountabilityBoard({
                 {manualSaving ? 'Adding...' : 'Add'}
               </button>
               <button type="button" onClick={() => setManualOpen(false)}
+                className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingEntryId && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <p className="font-semibold text-zinc-900 mb-4">Edit Name</p>
+            <div className="flex flex-col gap-3 mb-4">
+              <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                placeholder="Name" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              <input value={editDept} onChange={e => setEditDept(e.target.value)}
+                placeholder="Agency / Department (optional)" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" disabled={editSaving || !editName.trim()} onClick={handleEditName}
+                className="flex-1 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" onClick={() => setEditingEntryId(null)}
                 className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
             </div>
           </div>
