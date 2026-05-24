@@ -312,6 +312,26 @@ export default function PersonnelProfileClient({
             </div>
           )}
 
+          {/* Manual paste input — always visible for testing */}
+          {!qrScannerOpen && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Paste card string to test</span>
+                {qrResult && (
+                  <button type="button" onClick={() => { setQrResult(null); setQrParsed(null); setQrSaved(false) }}
+                    className="text-xs text-zinc-400 hover:text-zinc-600">Clear</button>
+                )}
+              </div>
+              <textarea
+                value={qrResult ?? ''}
+                onChange={e => handleScan(e.target.value)}
+                rows={3}
+                placeholder="Paste a scanned card string here..."
+                className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 resize-y focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+          )}
+
           {/* Parsed result */}
           {qrParsed && !qrScannerOpen && (
             <div className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -348,7 +368,7 @@ export default function PersonnelProfileClient({
           {qrResult && !qrScannerOpen && (
             <button
               type="button"
-              disabled={qrSaving || qrSaved}
+              disabled={qrSaving || qrSaved || !qrResult.trim()}
               onClick={async () => {
                 if (!qrResult.trim()) return
                 setQrSaving(true)
