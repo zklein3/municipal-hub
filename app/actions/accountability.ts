@@ -249,6 +249,14 @@ export async function recordPAR(boardId: string, snapshot: { lane_name: string; 
 
 export async function saveDebugScan(rawValue: string) {
   const adminClient = createAdminClient()
-  await adminClient.from('qr_debug_scans').insert({ raw_value: rawValue })
+  // Escape control chars so Postgres accepts the string
+  const sanitized = Array.from(rawValue).map(c => {
+    const code = c.charCodeAt(0)
+    if ((code < 0x20 && code !== 0x09 && code !== 0x0A && code !== 0x0D) || (code >= 0x7F && code <= 0x9F)) {
+      return `\\x${code.toString(16).padStart(2, '0')}`
+    }
+    return c
+  }).join('')
+  await adminClient.from('qr_debug_scans').insert({ raw_value: sanitized })
   return { success: true }
 }
