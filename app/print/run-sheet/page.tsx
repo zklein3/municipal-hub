@@ -213,26 +213,18 @@ export default async function RunSheetPrintPage({
 
         {/* Top section: incident info (left) + times (right) */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 0.4in', marginBottom: '0.15in' }}>
-          <div>
-            <div style={S.row}>
-              <span style={S.label}>Date of Incident:</span>
-              <span style={S.line}>{fmtDate(incident.incident_date)}</span>
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>Incident Address:</span>
-              <span style={S.line}>{[incident.address, incident.city, incident.state].filter(Boolean).join(', ')}</span>
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>Incident #:</span>
-              <span style={S.line}>{incident.incident_number ?? ''}</span>
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>CAD #:</span>
-              <span style={S.line}>{incident.cad_number ?? ''}</span>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.35in 1fr', rowGap: '0.09in', alignItems: 'flex-end' }}>
+            <span style={S.label}>Date of Incident:</span>
+            <span style={S.line}>{fmtDate(incident.incident_date)}</span>
+            <span style={S.label}>Incident Address:</span>
+            <span style={S.line}>{[incident.address, incident.city, incident.state, incident.zip].filter(Boolean).join(', ')}</span>
+            <span style={S.label}>Incident #:</span>
+            <span style={S.line}>{incident.incident_number ?? ''}</span>
+            <span style={S.label}>CAD #:</span>
+            <span style={S.line}>{incident.cad_number ?? ''}</span>
           </div>
 
-          <div>
+          <div style={{ width: '100%' }}>
             <div style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: '0.08in' }}>Incident Time (Military time)</div>
             {([
               ['Paged',             milTime(incident.paged_at ?? incident.call_time)],
@@ -241,9 +233,9 @@ export default async function RunSheetPrintPage({
               ['Finished at Scene', milTime(incident.last_leaving_scene_at)],
               ['Back at Station',   milTime(incident.in_service_at)],
             ] as [string, string][]).map(([label, val]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: '0.1in', marginBottom: '0.08in' }}>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginBottom: '0.08in' }}>
                 <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</span>
-                <span style={{ ...S.shortLine, minWidth: '1in' }}>{val}</span>
+                <span style={{ ...S.shortLine, minWidth: '1in', textAlign: 'center' }}>{val}</span>
               </div>
             ))}
           </div>
@@ -256,7 +248,10 @@ export default async function RunSheetPrintPage({
 
           {/* Units — grows with responders listed under each unit */}
           <div>
-            <div style={S.secHdr}>Units Dispatched</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.06in', borderBottom: '1px solid #000', paddingBottom: '0.02in' }}>
+              <span style={S.secHdr}>Units Dispatched</span>
+              <span style={{ fontSize: '7pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#555' }}>Incident Role</span>
+            </div>
             {apparatusGroups.length === 0 && (
               <p style={{ fontSize: '9pt', color: '#888' }}>No apparatus logged.</p>
             )}
@@ -280,8 +275,8 @@ export default async function RunSheetPrintPage({
             ))}
           </div>
 
-          {/* Type of Incident — checkboxes only */}
-          <div>
+          {/* Type of Incident */}
+          <div style={{ width: '100%' }}>
             <div style={S.secHdr}>Type Of Incident</div>
             {([
               ['Fire',     isFire],
@@ -290,22 +285,22 @@ export default async function RunSheetPrintPage({
               ['Meeting',  isMeeting],
               ['Training', isTraining],
             ] as [string, boolean][]).map(([label, checked]) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', marginBottom: '0.07in', gap: '0.1in' }}>
-                <span style={S.checkBox}>{checked ? '✓' : ''}</span>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '0.07in' }}>
                 <span style={{ fontWeight: 600 }}>{label}</span>
+                <span style={S.checkBox}>{checked ? '✓' : ''}</span>
               </div>
             ))}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.07in', gap: '0.1in' }}>
-              <span style={S.checkBox}>{isMutualAid ? '✓' : ''}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '0.07in' }}>
               <span style={{ fontWeight: 600 }}>Mutual Aid</span>
+              <span style={S.checkBox}>{isMutualAid ? '✓' : ''}</span>
             </div>
             {isMutualAid && (
               <>
-                <div style={S.row}>
+                <div style={{ ...S.row, width: '100%' }}>
                   <span style={{ fontWeight: 600, marginLeft: '0.2in' }}>To</span>
                   <span style={{ ...S.shortLine, flex: 1 }}>{maToNames}</span>
                 </div>
-                <div style={S.row}>
+                <div style={{ ...S.row, width: '100%' }}>
                   <span style={{ fontWeight: 600, marginLeft: '0.2in' }}>From</span>
                   <span style={{ ...S.shortLine, flex: 1 }}>{maFromNames}</span>
                 </div>
@@ -315,23 +310,18 @@ export default async function RunSheetPrintPage({
             <div style={{ ...S.divider, margin: '0.12in 0' }} />
 
             {/* Additional fields */}
-            <div style={S.row}>
-              <span style={S.label}>Cause of Incident:</span>
-              <span style={{ ...S.shortLine, flex: 1 }} />
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>Est. Dollar Loss:</span>
-              <span style={{ ...S.shortLine, flex: 1 }} />
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>Property Lost:</span>
-              <span style={{ ...S.shortLine, flex: 1 }} />
-            </div>
-            <div style={S.row}>
-              <span style={S.label}>Vehicle Make:</span>
-              <span style={{ ...S.shortLine, flex: 1 }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.1in' }}>
+            {([
+              ['Cause of Incident:', ''],
+              ['Est. Dollar Loss:', ''],
+              ['Property Lost:', ''],
+              ['Vehicle Make:', ''],
+            ] as [string, string][]).map(([label]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', marginBottom: '0.09in' }}>
+                <span style={S.label}>{label}</span>
+                <span style={{ ...S.shortLine, flex: 1 }} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
               <span style={S.label}>NERIS Report Done?</span>
               <span style={{ ...S.shortLine, minWidth: '0.6in' }}>{incident.neris_reported ? 'YES' : ''}</span>
             </div>

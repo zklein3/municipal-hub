@@ -102,8 +102,12 @@ Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhan
 ### 0b. Run Sheet Print — SHIPPED ✅ (2026-05-23, enhanced 2026-05-24)
 `/print/run-sheet?id=xxx` — matches dept paper Run Field Report, fits one letter sheet.
 - Units Dispatched: each apparatus with member names; **POV** group (no apparatus, role ≠ standby); **Station** group (no apparatus, role = standby)
-- Role labels (IC, Driver, Officer, FF) shown right of name; members sorted IC → Driver → Officer → FF → Standby
-- Cert labels shown below name — driven by `certification_types.show_on_run_report` flag (dept controls which certs appear)
+- Single "Incident Role" column header at top of Units Dispatched section
+- Role labels (IC, Driver, Officer, FF) right of name; members sorted IC → Driver → Officer → FF → Standby
+- Cert labels below name — driven by `certification_types.show_on_run_report` flag (dept controls which certs appear)
+- Incident info labels tab-aligned (CSS grid, 1.35in label column); address includes zip
+- Incident Time rows span full column width (label left, time line right)
+- Type of Incident: labels left, checkboxes right; additional fields span full width
 - Mutual aid reads `incident_mutual_aid`: `gave_aid` → To, `received_aid` → From
 - Key file: `app/print/run-sheet/page.tsx`
 
@@ -286,7 +290,14 @@ All items below are stubbed/logged to `system_logs` in the interim. Wire up once
 ### 10. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
-### 11. Timezone Setting per Department
+### 11. Zip Code Auto-Fill on Incident Forms
+When a zip code is entered on new/edit incident forms, city and state should auto-populate.
+- On blur of zip field: hit `https://api.zippopotam.us/us/{zip}` (free, no key)
+- Parse response → fill city + state fields automatically
+- Only fill if fields are currently empty or user confirms overwrite
+- Key files when building: `app/(dashboard)/incidents/new/NewIncidentClient.tsx`, incident edit form
+
+### 12. Timezone Setting per Department
 All timestamps currently display in UTC on Vercel (server-rendered). Fire school fill log hardcoded to `America/Chicago` as a temporary fix.
 
 **Build:**

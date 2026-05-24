@@ -38,7 +38,7 @@
 - Reports — inspections, inventory, training, attendance, my-activity (all with print)
 - Member training record print
 - Run Sheet print page (`/print/run-sheet?id=xxx`) — matches paper Run Field Report: apparatus groups with member names, POV group, Station group (standby), mutual aid To/From, full dept roster with checkmarks, fits on one letter sheet
-- Run Sheet — role labels (IC, Driver, Officer, FF) right of name; cert labels below name; members sorted by role order within each apparatus group; cert display driven by `show_on_run_report` flag on cert types
+- Run Sheet — role labels (IC, Driver, Officer, FF) right of name; cert labels below name; members sorted by role order within each apparatus group; cert display driven by `show_on_run_report` flag on cert types; address includes zip; incident info labels tab-aligned; incident time + type of incident columns span full width; type checkboxes right-aligned; single "Incident Role" column header at top of Units Dispatched
 - Run Report page (`/reports/run-report`) — filterable by date range + incident type; incident list with type badge, address, unit/responder counts; Print button per row opens run sheet
 - Training Admin — Member Certs tab: officers read-only, admins can edit cert records (dates, cert number, issuing body, active); direct cert entry form stacked for all screen sizes
 - `certification_types.show_on_run_report` boolean — dept admin toggles per cert type whether it appears on run sheets (EMT yes, CPR no); set in Cert Types create/edit form
