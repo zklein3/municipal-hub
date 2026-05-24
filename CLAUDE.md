@@ -287,7 +287,26 @@ All items below are stubbed/logged to `system_logs` in the interim. Wire up once
 3. **New Member Welcome Email** — not yet built. Send when a dept admin creates a new personnel record / invite.
 4. **Resend setup steps:** Verify `fireops7.com` in Resend dashboard → add DNS records → set `from` addresses → install `resend` npm package or keep using raw `fetch` to `https://api.resend.com/emails`.
 
-### 10. Officer Sub-Menu
+### 10. QR Self Check-In — Event / Training / Incident ⬅ PINNED FOR LATER
+Officer creates an event, training session, or incident → system generates a unique QR code for that session. Members scan with phone camera → opens a lightweight page → attendance/participation logged automatically. No app install required.
+
+**Design notes:**
+- QR encodes a signed URL: `/checkin/[token]` where token encodes `{ type: 'event'|'training'|'incident', id, expires }`
+- Token signed with `SUPABASE_SERVICE_ROLE_KEY` or a dedicated secret — prevents guessing other sessions
+- Landing page: shows event/incident name, confirms identity (member is already logged in via cookie), one-tap check-in
+- If not logged in: prompt login first, then redirect back to check-in URL
+- Officer generates QR from event/training/incident detail page — displays on screen or prints
+- Distinct from Salamander card scanning — this is member self-check-in, not officer scanning cards
+
+### 10a. Salamander QR — Incident Accountability (PAR) ⬅ SEPARATE USE CASE
+Salamander cards are for officer-scans-others-cards at a scene, not self check-in.
+- Parser: `lib/salamander.ts` → `parseSalamanderQR(raw)` returns `{ firstName, lastName, department, certs[] } | null`
+- Match parsed name to `personnel` table; unmatched = store raw name + dept (mutual aid)
+- `incident_accountability` table: `incident_id`, `personnel_id` (nullable), `raw_name`, `raw_dept`, `assignment`, `checked_in_at`, `status`
+- PAR check logs a timestamped snapshot of everyone currently on scene
+- Build incident accountability after QR self check-in is working
+
+### 11. Officer Sub-Menu
 Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
 
 ### 11. Zip Code Auto-Fill on Incident Forms

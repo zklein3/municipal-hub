@@ -92,6 +92,13 @@ export default async function OperationsPage() {
             statLabel="Recent"
           />
         )}
+        {moduleOperations && (
+          <HubCard
+            title="Accountability"
+            description="Scan cards, assign lanes, and run PAR checks"
+            href="/accountability"
+          />
+        )}
         <HubCard
           title="Announcements"
           description="Department-wide messages and notices"

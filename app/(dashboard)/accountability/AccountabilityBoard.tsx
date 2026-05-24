@@ -1,0 +1,359 @@
+'use client'
+
+import { useState } from 'react'
+import QRScanner from '@/components/QRScanner'
+import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card, salamanderCanonicalKey } from '@/lib/salamander'
+import {
+  initBoardLanes, addBoardLane,
+  checkInPerson, movePersonToLane, removeAccountabilityEntry, recordPAR,
+} from '@/app/actions/accountability'
+
+interface Lane { id: string; name: string; sort_order: number }
+interface Entry {
+  id: string
+  lane_id: string | null
+  personnel_id: string | null
+  raw_name: string | null
+  raw_dept: string | null
+  status: string
+  checked_in_at: string
+  display_name: string
+  display_dept: string
+}
+interface QrToken { personnel_id: string; token_type: string; token_value: string; display_name: string }
+
+export default function AccountabilityBoard({
+  boardId,
+  initialLanes,
+  initialEntries,
+  qrTokens,
+  deptPersonnel,
+  isOfficerOrAbove,
+}: {
+  boardId: string
+  initialLanes: Lane[]
+  initialEntries: Entry[]
+  qrTokens: QrToken[]
+  deptPersonnel: { id: string; name: string }[]
+  isOfficerOrAbove: boolean
+}) {
+  const [lanes, setLanes] = useState<Lane[]>(initialLanes)
+  const [entries, setEntries] = useState<Entry[]>(initialEntries)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [addingLane, setAddingLane] = useState(false)
+  const [newLaneName, setNewLaneName] = useState('')
+  const [savingLane, setSavingLane] = useState(false)
+
+  const [movingEntryId, setMovingEntryId] = useState<string | null>(null)
+
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualPersonnelId, setManualPersonnelId] = useState('')
+  const [manualName, setManualName] = useState('')
+  const [manualDept, setManualDept] = useState('')
+  const [manualLaneId, setManualLaneId] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
+
+  const [parSaving, setParSaving] = useState(false)
+  const [parDone, setParDone] = useState(false)
+
+  const stagingLane = lanes.find(l => l.name === 'Staging') ?? lanes[0] ?? null
+
+  async function handleInit() {
+    setError(null)
+    const res = await initBoardLanes(boardId)
+    if (res?.error) { setError(res.error); return }
+    if (res.lanes) setLanes(res.lanes.sort((a: Lane, b: Lane) => a.sort_order - b.sort_order))
+  }
+
+  async function handleAddLane() {
+    if (!newLaneName.trim()) return
+    setSavingLane(true)
+    const res = await addBoardLane(boardId, newLaneName.trim())
+    setSavingLane(false)
+    if (res?.error) { setError(res.error); return }
+    if (res.lane) setLanes(prev => [...prev, res.lane])
+    setNewLaneName('')
+    setAddingLane(false)
+  }
+
+  function resolveCard(raw: string): { personnelId: string | null; rawName: string | null; rawDept: string | null; displayName: string; displayDept: string } {
+    if (isFireOps7Card(raw)) {
+      const pid = parseFireOps7Card(raw)
+      if (pid) {
+        const token = qrTokens.find(t => t.token_type === 'fireops7' && t.personnel_id === pid)
+        const dp = deptPersonnel.find(p => p.id === pid)
+        return { personnelId: pid, rawName: null, rawDept: null, displayName: token?.display_name ?? dp?.name ?? 'Unknown', displayDept: '' }
+      }
+    }
+    const card = parseSalamanderCard(raw)
+    if (card) {
+      const key = salamanderCanonicalKey(card)
+      const token = qrTokens.find(t => t.token_type === 'salamander' && t.token_value === key)
+      if (token) {
+        return { personnelId: token.personnel_id, rawName: null, rawDept: null, displayName: token.display_name, displayDept: '' }
+      }
+      return { personnelId: null, rawName: `${card.firstName} ${card.lastName}`, rawDept: card.department, displayName: `${card.firstName} ${card.lastName}`, displayDept: card.department }
+    }
+    return { personnelId: null, rawName: raw.slice(0, 60), rawDept: null, displayName: raw.slice(0, 60), displayDept: '' }
+  }
+
+  async function handleScan(raw: string) {
+    setScannerOpen(false)
+    setError(null)
+    const resolved = resolveCard(raw)
+
+    const alreadyOn = entries.find(e =>
+      (resolved.personnelId && e.personnel_id === resolved.personnelId) ||
+      (!resolved.personnelId && e.raw_name === resolved.rawName && e.raw_dept === resolved.rawDept)
+    )
+    if (alreadyOn) {
+      setMovingEntryId(alreadyOn.id)
+      return
+    }
+
+    const laneId = stagingLane?.id ?? null
+    const res = await checkInPerson(boardId, laneId, resolved.personnelId, resolved.rawName, resolved.rawDept)
+    if (res?.error) { setError(res.error); return }
+    if (res.entry) {
+      setEntries(prev => [...prev, { ...res.entry, display_name: resolved.displayName, display_dept: resolved.displayDept }])
+    }
+  }
+
+  async function handleMove(entryId: string, laneId: string) {
+    setMovingEntryId(null)
+    const res = await movePersonToLane(entryId, laneId)
+    if (res?.error) { setError(res.error); return }
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, lane_id: laneId } : e))
+  }
+
+  async function handleRemove(entryId: string) {
+    const res = await removeAccountabilityEntry(entryId)
+    if (res?.error) { setError(res.error); return }
+    setEntries(prev => prev.filter(e => e.id !== entryId))
+  }
+
+  async function handleManualAdd() {
+    setManualSaving(true)
+    setError(null)
+    const laneId = manualLaneId || stagingLane?.id || null
+    const personnelId = manualPersonnelId || null
+    const rawName = personnelId ? null : (manualName.trim() || null)
+    const rawDept = personnelId ? null : (manualDept.trim() || null)
+    const dp = deptPersonnel.find(p => p.id === personnelId)
+    const displayName = dp?.name ?? manualName.trim()
+    const res = await checkInPerson(boardId, laneId, personnelId, rawName, rawDept)
+    setManualSaving(false)
+    if (res?.error) { setError(res.error); return }
+    if (res.entry) {
+      setEntries(prev => [...prev, { ...res.entry, display_name: displayName, display_dept: manualDept.trim() }])
+    }
+    setManualOpen(false)
+    setManualPersonnelId('')
+    setManualName('')
+    setManualDept('')
+    setManualLaneId('')
+  }
+
+  async function handlePAR() {
+    setParSaving(true)
+    const snapshot = lanes.map(lane => {
+      const inLane = entries.filter(e => e.lane_id === lane.id)
+      return { lane_name: lane.name, count: inLane.length, names: inLane.map(e => e.display_name) }
+    })
+    const unassigned = entries.filter(e => !e.lane_id)
+    if (unassigned.length) snapshot.push({ lane_name: 'Unassigned', count: unassigned.length, names: unassigned.map(e => e.display_name) })
+    const res = await recordPAR(boardId, snapshot)
+    setParSaving(false)
+    if (res?.error) { setError(res.error); return }
+    setParDone(true)
+    setTimeout(() => setParDone(false), 3000)
+  }
+
+  if (lanes.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-zinc-500 mb-4">No lanes set up yet. Start accountability to load your department's default lanes.</p>
+        {isOfficerOrAbove && (
+          <button type="button" onClick={handleInit}
+            className="rounded-lg bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors">
+            Start Accountability
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const movingEntry = movingEntryId ? entries.find(e => e.id === movingEntryId) : null
+
+  return (
+    <div>
+      {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {isOfficerOrAbove && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button type="button" onClick={() => setScannerOpen(true)}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors">
+            Scan Card
+          </button>
+          <button type="button" onClick={() => setManualOpen(true)}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+            Add Manually
+          </button>
+          <button type="button" onClick={() => setAddingLane(true)}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+            + Lane
+          </button>
+          <button type="button" disabled={parSaving} onClick={handlePAR}
+            className="ml-auto rounded-lg bg-zinc-800 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50 transition-colors">
+            {parDone ? '✓ PAR Recorded' : parSaving ? 'Recording...' : 'PAR'}
+          </button>
+        </div>
+      )}
+
+      {scannerOpen && (
+        <div className="mb-4">
+          <QRScanner onScan={handleScan} onClose={() => setScannerOpen(false)} hint="Scan FireOps7 QR or Salamander PDF417" />
+        </div>
+      )}
+
+      {addingLane && (
+        <div className="flex gap-2 mb-4">
+          <input autoFocus value={newLaneName} onChange={e => setNewLaneName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddLane(); if (e.key === 'Escape') setAddingLane(false) }}
+            placeholder="Lane name..." className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+          <button type="button" disabled={savingLane} onClick={handleAddLane}
+            className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+            {savingLane ? '...' : 'Add'}
+          </button>
+          <button type="button" onClick={() => setAddingLane(false)}
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
+        </div>
+      )}
+
+      {movingEntry && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <p className="font-semibold text-zinc-900 mb-1">{movingEntry.display_name}</p>
+            <p className="text-sm text-zinc-500 mb-4">Move to which lane?</p>
+            <div className="flex flex-col gap-2 mb-3">
+              {lanes.map(l => (
+                <button key={l.id} type="button" onClick={() => handleMove(movingEntry.id, l.id)}
+                  className={`w-full rounded-lg border px-4 py-2.5 text-sm font-medium text-left transition-colors ${
+                    movingEntry.lane_id === l.id
+                      ? 'border-red-300 bg-red-50 text-red-700'
+                      : 'border-zinc-200 hover:bg-zinc-50 text-zinc-700'
+                  }`}>
+                  {l.name}{movingEntry.lane_id === l.id ? ' ✓' : ''}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { handleRemove(movingEntry.id); setMovingEntryId(null) }}
+                className="flex-1 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                Remove from scene
+              </button>
+              <button type="button" onClick={() => setMovingEntryId(null)}
+                className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {manualOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <p className="font-semibold text-zinc-900 mb-4">Add Person Manually</p>
+            <div className="flex flex-col gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wide">Dept Member</label>
+                <select value={manualPersonnelId} onChange={e => setManualPersonnelId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                  <option value="">— Select member or enter name below —</option>
+                  {deptPersonnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {!manualPersonnelId && (
+                <>
+                  <input value={manualName} onChange={e => setManualName(e.target.value)}
+                    placeholder="Name (mutual aid / visitor)" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                  <input value={manualDept} onChange={e => setManualDept(e.target.value)}
+                    placeholder="Agency / Department" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 mb-1 uppercase tracking-wide">Lane</label>
+                <select value={manualLaneId} onChange={e => setManualLaneId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                  <option value="">Staging (default)</option>
+                  {lanes.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" disabled={manualSaving || (!manualPersonnelId && !manualName.trim())} onClick={handleManualAdd}
+                className="flex-1 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {manualSaving ? 'Adding...' : 'Add'}
+              </button>
+              <button type="button" onClick={() => setManualOpen(false)}
+                className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {lanes.map(lane => {
+          const inLane = entries.filter(e => e.lane_id === lane.id)
+          return (
+            <div key={lane.id} className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 bg-zinc-100 border-b border-zinc-200">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600">{lane.name}</span>
+                <span className="text-xs text-zinc-400">{inLane.length}</span>
+              </div>
+              <div className="p-3 flex flex-col gap-2 min-h-[48px]">
+                {inLane.length === 0 && <p className="text-xs text-zinc-400 text-center py-2">Empty</p>}
+                {inLane.map(entry => (
+                  <button key={entry.id} type="button" onClick={() => isOfficerOrAbove ? setMovingEntryId(entry.id) : undefined}
+                    className={`flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left shadow-sm w-full ${isOfficerOrAbove ? 'hover:border-red-300 hover:bg-red-50 cursor-pointer' : 'cursor-default'}`}>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900">{entry.display_name}</p>
+                      {entry.display_dept && <p className="text-xs text-zinc-400">{entry.display_dept}</p>}
+                    </div>
+                    {isOfficerOrAbove && <span className="text-xs text-zinc-300">tap to move</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        {entries.filter(e => !e.lane_id).length > 0 && (
+          <div className="rounded-xl border border-yellow-200 bg-yellow-50 overflow-hidden">
+            <div className="px-4 py-2 bg-yellow-100 border-b border-yellow-200">
+              <span className="text-xs font-semibold uppercase tracking-wide text-yellow-700">Unassigned</span>
+            </div>
+            <div className="p-3 flex flex-col gap-2">
+              {entries.filter(e => !e.lane_id).map(entry => (
+                <button key={entry.id} type="button" onClick={() => isOfficerOrAbove ? setMovingEntryId(entry.id) : undefined}
+                  className={`flex items-center justify-between rounded-lg border border-yellow-200 bg-white px-3 py-2 text-left w-full ${isOfficerOrAbove ? 'hover:border-red-300 cursor-pointer' : 'cursor-default'}`}>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900">{entry.display_name}</p>
+                    {entry.display_dept && <p className="text-xs text-zinc-400">{entry.display_dept}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {entries.length === 0 && (
+        <p className="text-center text-sm text-zinc-400 mt-6">No one checked in yet. Scan a card or add manually.</p>
+      )}
+    </div>
+  )
+}

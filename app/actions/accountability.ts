@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
-async function getOfficerContext() {
+async function getContext() {
   const supabase = await createClient()
   const adminClient = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -24,7 +24,7 @@ async function getOfficerContext() {
 // ─── Lane template actions ────────────────────────────────────────────────────
 
 export async function addLaneTemplate(departmentId: string, name: string) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx || ctx.dept.system_role !== 'admin') return { error: 'Admin only.' }
   if (!name.trim()) return { error: 'Name is required.' }
 
@@ -45,7 +45,7 @@ export async function addLaneTemplate(departmentId: string, name: string) {
 }
 
 export async function updateLaneTemplate(id: string, name: string) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx || ctx.dept.system_role !== 'admin') return { error: 'Admin only.' }
   if (!name.trim()) return { error: 'Name is required.' }
   const { error: dbErr } = await ctx.adminClient
@@ -56,7 +56,7 @@ export async function updateLaneTemplate(id: string, name: string) {
 }
 
 export async function toggleLaneTemplate(id: string, active: boolean) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx || ctx.dept.system_role !== 'admin') return { error: 'Admin only.' }
   const { error: dbErr } = await ctx.adminClient
     .from('accountability_lane_templates').update({ active }).eq('id', id)
@@ -66,7 +66,7 @@ export async function toggleLaneTemplate(id: string, active: boolean) {
 }
 
 export async function reorderLaneTemplates(departmentId: string, orderedIds: string[]) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx || ctx.dept.system_role !== 'admin') return { error: 'Admin only.' }
   const updates = orderedIds.map((id, i) =>
     ctx.adminClient.from('accountability_lane_templates').update({ sort_order: i }).eq('id', id).eq('department_id', departmentId)
@@ -76,95 +76,173 @@ export async function reorderLaneTemplates(departmentId: string, orderedIds: str
   return { success: true }
 }
 
-// ─── Incident accountability actions ─────────────────────────────────────────
+// ─── Board actions ────────────────────────────────────────────────────────────
 
-export async function initIncidentLanes(incidentId: string) {
-  const ctx = await getOfficerContext()
+export async function createBoard(
+  title: string,
+  boardDate: string,
+  linkedIncidentId?: string | null,
+  linkedTrainingEventId?: string | null,
+  linkedEventInstanceId?: string | null,
+) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (!title.trim()) return { error: 'Title is required.' }
+
+  const { data: row, error: dbErr } = await ctx.adminClient
+    .from('accountability_boards')
+    .insert({
+      department_id: ctx.dept.department_id,
+      title: title.trim(),
+      board_date: boardDate,
+      created_by: ctx.me.id,
+      linked_incident_id: linkedIncidentId ?? null,
+      linked_training_event_id: linkedTrainingEventId ?? null,
+      linked_event_instance_id: linkedEventInstanceId ?? null,
+    })
+    .select('id')
+    .single()
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
+  revalidatePath('/accountability')
+  return { success: true, boardId: row.id }
+}
+
+export async function updateBoardLink(
+  boardId: string,
+  linkedIncidentId: string | null,
+  linkedTrainingEventId: string | null,
+  linkedEventInstanceId: string | null,
+) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  const { error: dbErr } = await ctx.adminClient
+    .from('accountability_boards')
+    .update({ linked_incident_id: linkedIncidentId, linked_training_event_id: linkedTrainingEventId, linked_event_instance_id: linkedEventInstanceId })
+    .eq('id', boardId)
+    .eq('department_id', ctx.dept.department_id)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
+  revalidatePath(`/accountability/${boardId}`)
+  return { success: true }
+}
+
+export async function closeBoard(boardId: string) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  const { error: dbErr } = await ctx.adminClient
+    .from('accountability_boards')
+    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .eq('id', boardId)
+    .eq('department_id', ctx.dept.department_id)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
+  revalidatePath('/accountability')
+  revalidatePath(`/accountability/${boardId}`)
+  return { success: true }
+}
+
+export async function reopenBoard(boardId: string) {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  const { error: dbErr } = await ctx.adminClient
+    .from('accountability_boards')
+    .update({ status: 'active', closed_at: null })
+    .eq('id', boardId)
+    .eq('department_id', ctx.dept.department_id)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
+  revalidatePath('/accountability')
+  revalidatePath(`/accountability/${boardId}`)
+  return { success: true }
+}
+
+// ─── Lane actions ─────────────────────────────────────────────────────────────
+
+export async function initBoardLanes(boardId: string) {
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
 
-  // Get dept id from incident
-  const { data: incList } = await ctx.adminClient.from('incidents').select('department_id').eq('id', incidentId)
-  const inc = incList?.[0]
-  if (!inc) return { error: 'Incident not found.' }
+  const { data: boardList } = await ctx.adminClient
+    .from('accountability_boards').select('department_id').eq('id', boardId)
+  const board = boardList?.[0]
+  if (!board) return { error: 'Board not found.' }
 
-  // Pull active template lanes
   const { data: templates } = await ctx.adminClient
     .from('accountability_lane_templates')
     .select('name, sort_order')
-    .eq('department_id', inc.department_id)
+    .eq('department_id', board.department_id)
     .eq('active', true)
     .order('sort_order')
 
   if (!templates?.length) return { error: 'No lane templates configured. Set them up in Dept Admin → Accountability.' }
 
-  const rows = templates.map(t => ({ incident_id: incidentId, name: t.name, sort_order: t.sort_order, created_by: ctx.me.id }))
+  const rows = templates.map(t => ({ board_id: boardId, name: t.name, sort_order: t.sort_order }))
   const { data: inserted, error: dbErr } = await ctx.adminClient
-    .from('incident_accountability_lanes').insert(rows).select('id, name, sort_order')
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+    .from('accountability_lanes').insert(rows).select('id, name, sort_order')
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true, lanes: inserted ?? [] }
 }
 
-export async function addIncidentLane(incidentId: string, name: string) {
-  const ctx = await getOfficerContext()
+export async function addBoardLane(boardId: string, name: string) {
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
   if (!name.trim()) return { error: 'Name required.' }
 
   const { data: existing } = await ctx.adminClient
-    .from('incident_accountability_lanes').select('sort_order')
-    .eq('incident_id', incidentId).order('sort_order', { ascending: false }).limit(1)
+    .from('accountability_lanes').select('sort_order')
+    .eq('board_id', boardId).order('sort_order', { ascending: false }).limit(1)
   const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1
 
   const { data: row, error: dbErr } = await ctx.adminClient
-    .from('incident_accountability_lanes')
-    .insert({ incident_id: incidentId, name: name.trim(), sort_order: nextOrder, created_by: ctx.me.id })
+    .from('accountability_lanes')
+    .insert({ board_id: boardId, name: name.trim(), sort_order: nextOrder })
     .select('id, name, sort_order').single()
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true, lane: row }
 }
 
+// ─── Entry actions ────────────────────────────────────────────────────────────
+
 export async function checkInPerson(
-  incidentId: string,
+  boardId: string,
   laneId: string | null,
   personnelId: string | null,
   rawName: string | null,
   rawDept: string | null
 ) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
   if (!personnelId && !rawName) return { error: 'Must provide personnel or name.' }
 
   const { data: row, error: dbErr } = await ctx.adminClient
-    .from('incident_accountability')
-    .insert({ incident_id: incidentId, lane_id: laneId, personnel_id: personnelId, raw_name: rawName, raw_dept: rawDept, added_by: ctx.me.id })
+    .from('accountability_entries')
+    .insert({ board_id: boardId, lane_id: laneId, personnel_id: personnelId, raw_name: rawName, raw_dept: rawDept, added_by: ctx.me.id })
     .select('id, lane_id, personnel_id, raw_name, raw_dept, status, checked_in_at').single()
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true, entry: row }
 }
 
 export async function movePersonToLane(entryId: string, laneId: string) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
   const { error: dbErr } = await ctx.adminClient
-    .from('incident_accountability').update({ lane_id: laneId }).eq('id', entryId)
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+    .from('accountability_entries').update({ lane_id: laneId }).eq('id', entryId)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true }
 }
 
 export async function removeAccountabilityEntry(entryId: string) {
-  const ctx = await getOfficerContext()
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
   const { error: dbErr } = await ctx.adminClient
-    .from('incident_accountability').delete().eq('id', entryId)
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+    .from('accountability_entries').delete().eq('id', entryId)
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true }
 }
 
-export async function recordPAR(incidentId: string, snapshot: { lane_name: string; count: number; names: string[] }[]) {
-  const ctx = await getOfficerContext()
+export async function recordPAR(boardId: string, snapshot: { lane_name: string; count: number; names: string[] }[]) {
+  const ctx = await getContext()
   if (!ctx) return { error: 'Not authenticated.' }
   const { error: dbErr } = await ctx.adminClient
-    .from('incident_par_checks')
-    .insert({ incident_id: incidentId, checked_by: ctx.me.id, snapshot })
-  if (dbErr) { await logError(dbErr.message, '/incidents'); return { error: dbErr.message } }
+    .from('accountability_par_checks')
+    .insert({ board_id: boardId, checked_by: ctx.me.id, snapshot })
+  if (dbErr) { await logError(dbErr.message, '/accountability'); return { error: dbErr.message } }
   return { success: true }
 }
