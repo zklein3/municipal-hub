@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logError } from '@/lib/logger'
+import { parseSalamanderCard } from '@/lib/salamander'
 import { revalidatePath } from 'next/cache'
 
 // ─── Update own profile ───────────────────────────────────────────────────────
@@ -228,10 +229,20 @@ export async function linkQrToken(
     if (!targetDept?.length) return { error: 'Member not found in your department.' }
   }
 
+  // Salamander payloads contain binary control chars that PostgreSQL rejects.
+  // Store a canonical key derived from the parsed data instead of the raw string.
+  let storedValue = tokenValue
+  if (tokenType === 'salamander') {
+    const card = parseSalamanderCard(tokenValue)
+    if (!card) return { error: 'Could not parse Salamander card data.' }
+    const deptKey = card.department.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    storedValue = `SAL:${card.lastName.toUpperCase()}:${card.firstName.toUpperCase()}:${deptKey}`
+  }
+
   const { error: dbErr } = await adminClient
     .from('personnel_qr_tokens')
     .upsert(
-      { personnel_id: personnelId, token_type: tokenType, token_value: tokenValue, label, linked_by: me.id },
+      { personnel_id: personnelId, token_type: tokenType, token_value: storedValue, label, linked_by: me.id },
       { onConflict: 'personnel_id,token_type' }
     )
 

@@ -58,6 +58,16 @@ export function parseSalamanderCard(raw: string): SalamanderCard | null {
   return { firstName, lastName, department, title, certs }
 }
 
+/**
+ * Builds the canonical storage key for a Salamander card.
+ * Used both when linking (server) and when looking up at an incident (Phase 2).
+ * Format: SAL:{LASTNAME}:{FIRSTNAME}:{DEPT_ALPHANUMERIC}
+ */
+export function salamanderCanonicalKey(card: SalamanderCard): string {
+  const deptKey = card.department.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return `SAL:${card.lastName.toUpperCase()}:${card.firstName.toUpperCase()}:${deptKey}`
+}
+
 /** Returns true if the raw string looks like a FireOps7 member token. */
 export function isFireOps7Card(raw: string): boolean {
   return raw.startsWith('FO7:P:')
