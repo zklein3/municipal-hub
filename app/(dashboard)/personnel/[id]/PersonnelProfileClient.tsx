@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, saveQrDebugScan, linkQrToken, deleteQrToken } from '@/app/actions/personnel'
+import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, linkQrToken, deleteQrToken } from '@/app/actions/personnel'
 import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card } from '@/lib/salamander'
 import type { SalamanderCard } from '@/lib/salamander'
@@ -86,9 +86,6 @@ export default function PersonnelProfileClient({
   const [qrScannerOpen, setQrScannerOpen] = useState(false)
   const [qrResult, setQrResult] = useState<string | null>(null)
   const [qrParsed, setQrParsed] = useState<{ type: 'fireops7'; id: string } | { type: 'salamander'; card: SalamanderCard } | { type: 'unknown' } | null>(null)
-  const [qrSaving, setQrSaving] = useState(false)
-  const [qrSaved, setQrSaved] = useState(false)
-  const [qrSaveError, setQrSaveError] = useState<string | null>(null)
 
   const [linkedTokens, setLinkedTokens] = useState<LinkedToken[]>(initialLinkedTokens)
   const [linkingToken, setLinkingToken] = useState(false)
@@ -98,8 +95,6 @@ export default function PersonnelProfileClient({
   async function handleScan(raw: string) {
     setQrResult(raw)
     setQrScannerOpen(false)
-    setQrSaved(false)
-    setQrSaveError(null)
     setLinkError(null)
 
     if (isFireOps7Card(raw)) {
@@ -351,8 +346,8 @@ export default function PersonnelProfileClient({
       {/* ── Card Scanner ─────────────────────────────────────────────────── */}
       {(isMe || isOfficerOrAbove) && (
         <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-6 mb-6">
-          <h2 className="text-base font-semibold text-zinc-900 mb-1">Scan ID Card</h2>
-          <p className="text-xs text-zinc-400 mb-4">Scan a FireOps7 member card or a Salamander accountability card.</p>
+          <h2 className="text-base font-semibold text-zinc-900 mb-1">ID Cards</h2>
+          <p className="text-xs text-zinc-400 mb-4">Link a FireOps7 or Salamander card to this profile for accountability scanning.</p>
 
           {qrScannerOpen && (
             <div className="mb-4">
@@ -364,41 +359,20 @@ export default function PersonnelProfileClient({
             </div>
           )}
 
-          {/* Manual paste input — always visible for testing */}
-          {!qrScannerOpen && (
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Paste card string to test</span>
-                {qrResult && (
-                  <button type="button" onClick={() => { setQrResult(null); setQrParsed(null); setQrSaved(false) }}
-                    className="text-xs text-zinc-400 hover:text-zinc-600">Clear</button>
-                )}
-              </div>
-              <textarea
-                value={qrResult ?? ''}
-                onChange={e => handleScan(e.target.value)}
-                rows={3}
-                placeholder="Paste a scanned card string here..."
-                className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-mono text-zinc-900 placeholder-zinc-400 resize-y focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              />
-            </div>
-          )}
-
           {/* Parsed result */}
           {qrParsed && !qrScannerOpen && (
             <div className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
               {qrParsed.type === 'fireops7' && (
-                <div>
-                  <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 mb-2">FireOps7 Card</span>
-                  <p className="text-sm text-zinc-700">Personnel ID: <span className="font-mono text-xs">{qrParsed.id}</span></p>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">FireOps7 Card</span>
+                  <span className="text-sm text-zinc-600">{qrParsed.id === person.id ? 'Matches this profile' : 'Different member'}</span>
                 </div>
               )}
               {qrParsed.type === 'salamander' && (
                 <div className="flex flex-col gap-1">
-                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 mb-1">Salamander Card</span>
+                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 mb-1 w-fit">Salamander Card</span>
                   <p className="text-sm font-semibold text-zinc-900">{qrParsed.card.firstName} {qrParsed.card.lastName}</p>
-                  <p className="text-sm text-zinc-600">{qrParsed.card.department}</p>
-                  {qrParsed.card.title && <p className="text-sm text-zinc-500">{qrParsed.card.title}</p>}
+                  <p className="text-sm text-zinc-500">{qrParsed.card.department}{qrParsed.card.title ? ` · ${qrParsed.card.title}` : ''}</p>
                   {qrParsed.card.certs.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {qrParsed.card.certs.map(c => (
@@ -414,52 +388,22 @@ export default function PersonnelProfileClient({
             </div>
           )}
 
-          {/* Link / auto-link status */}
-          {linkError && <p className="mb-2 text-sm text-red-600">{linkError}</p>}
+          {/* Link / auto-link feedback */}
+          {linkError && <p className="mb-3 text-sm text-red-600">{linkError}</p>}
           {qrParsed && !qrScannerOpen && qrParsed.type !== 'unknown' && (() => {
             const alreadyLinked = linkedTokens.some(t => t.token_type === qrParsed.type)
             const isOwnFo7 = qrParsed.type === 'fireops7' && qrParsed.id === person.id
-            if (isOwnFo7 && alreadyLinked) return (
-              <p className="mb-3 text-sm text-green-600 font-medium">FireOps7 card linked to this profile.</p>
-            )
-            if (isOwnFo7 && linkingToken) return (
-              <p className="mb-3 text-sm text-zinc-500">Linking...</p>
-            )
-            if (!isOwnFo7 && qrParsed.type === 'fireops7') return (
-              <p className="mb-3 text-sm text-zinc-500">This card belongs to a different member.</p>
-            )
+            if (isOwnFo7 && alreadyLinked) return <p className="mb-3 text-sm text-green-600 font-medium">FireOps7 card linked.</p>
+            if (isOwnFo7 && linkingToken) return <p className="mb-3 text-sm text-zinc-500">Linking...</p>
+            if (!isOwnFo7 && qrParsed.type === 'fireops7') return <p className="mb-3 text-sm text-zinc-500">This FireOps7 card belongs to a different member.</p>
             if (!alreadyLinked) return (
               <button type="button" disabled={linkingToken} onClick={handleLinkToken}
                 className="mb-3 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
                 {linkingToken ? 'Linking...' : 'Link to Profile'}
               </button>
             )
-            return (
-              <p className="mb-3 text-sm text-zinc-500">A {qrParsed.type} card is already linked. Delete the existing one first to replace it.</p>
-            )
+            return <p className="mb-3 text-sm text-zinc-500">A {qrParsed.type} card is already linked — remove it first to replace.</p>
           })()}
-
-          {qrSaveError && <p className="mt-2 text-sm text-red-600">{qrSaveError}</p>}
-
-          {/* Save raw scan for debug */}
-          {qrResult && !qrScannerOpen && (
-            <button
-              type="button"
-              disabled={qrSaving || qrSaved || !qrResult.trim()}
-              onClick={async () => {
-                if (!qrResult.trim()) return
-                setQrSaving(true)
-                setQrSaveError(null)
-                const res = await saveQrDebugScan(qrResult)
-                setQrSaving(false)
-                if (res?.error) setQrSaveError(res.error)
-                else setQrSaved(true)
-              }}
-              className="mb-2 w-full rounded-lg bg-zinc-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-            >
-              {qrSaved ? '✓ Saved' : qrSaving ? 'Saving...' : 'Save Raw Scan (debug)'}
-            </button>
-          )}
 
           {/* Linked cards list */}
           {linkedTokens.length > 0 && (
@@ -492,7 +436,7 @@ export default function PersonnelProfileClient({
           {!qrScannerOpen && (
             <button
               type="button"
-              onClick={() => { setQrScannerOpen(true); setQrSaved(false) }}
+              onClick={() => { setQrScannerOpen(true); setQrParsed(null) }}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
             >
               {qrResult ? 'Scan Again' : 'Scan Card'}
