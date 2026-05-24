@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
 import IncidentDetailClient from './IncidentDetailClient'
+import AccountabilityBoard from './AccountabilityBoard'
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -114,6 +115,42 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   ])
   const moduleNeris = deptFlagsList?.[0]?.module_neris ?? false
 
+  // Accountability lanes + roster
+  const { data: acctLanes } = await adminClient
+    .from('incident_accountability_lanes')
+    .select('id, name, sort_order')
+    .eq('incident_id', id)
+    .order('sort_order')
+
+  const { data: acctEntriesRaw } = await adminClient
+    .from('incident_accountability')
+    .select('id, lane_id, personnel_id, raw_name, raw_dept, status, checked_in_at')
+    .eq('incident_id', id)
+    .order('checked_in_at')
+
+  // Names for accountability entries
+  const acctPersonnelIds = [...new Set((acctEntriesRaw ?? []).map(e => e.personnel_id).filter(Boolean))]
+  const { data: acctPersonnelRaw } = acctPersonnelIds.length > 0
+    ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', acctPersonnelIds)
+    : { data: [] }
+  const acctNameMap = Object.fromEntries((acctPersonnelRaw ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
+
+  const acctEntries = (acctEntriesRaw ?? []).map(e => ({
+    ...e,
+    display_name: e.personnel_id ? (acctNameMap[e.personnel_id] ?? '—') : (e.raw_name ?? '—'),
+    display_dept: e.personnel_id ? '' : (e.raw_dept ?? ''),
+  }))
+
+  // QR tokens for all dept members (for card lookup during scan)
+  const { data: qrTokensRaw } = await adminClient
+    .from('personnel_qr_tokens')
+    .select('personnel_id, token_type, token_value')
+    .in('personnel_id', deptPersonnel.map(p => p.id))
+  const qrTokens = (qrTokensRaw ?? []).map(t => ({
+    ...t,
+    display_name: deptPersonnel.find(p => p.id === t.personnel_id)?.name ?? '—',
+  }))
+
   // Signature roster (officers/admins only)
   let signatureRoster: { sig_id: string; personnel_id: string; signed_at: string | null; has_signature: boolean; name: string }[] = []
   if (isOfficerOrAbove) {
@@ -144,6 +181,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   }
 
   return (
+    <div>
     <IncidentDetailClient
       incident={incident}
       incidentApparatus={(incidentApparatus ?? []).map(a => ({
@@ -167,5 +205,19 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       moduleNeris={moduleNeris}
       signatureRoster={signatureRoster}
     />
+    <div className="mt-5 mb-8">
+      <div className="rounded-xl bg-white border border-zinc-200 p-5">
+        <h2 className="text-sm font-semibold text-zinc-900 mb-4">Accountability</h2>
+        <AccountabilityBoard
+          incidentId={id}
+          initialLanes={acctLanes ?? []}
+          initialEntries={acctEntries}
+          qrTokens={qrTokens}
+          deptPersonnel={deptPersonnel}
+          isOfficerOrAbove={isOfficerOrAbove}
+        />
+      </div>
+    </div>
+    </div>
   )
 }
