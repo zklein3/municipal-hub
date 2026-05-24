@@ -82,6 +82,16 @@ export default function AccountabilityBoard({
     setAddingLane(false)
   }
 
+  function sanitizeRaw(s: string): string {
+    return Array.from(s).map(c => {
+      const code = c.charCodeAt(0)
+      if ((code < 0x20 && code !== 0x09 && code !== 0x0A && code !== 0x0D) || (code >= 0x7F && code <= 0x9F)) {
+        return `\\x${code.toString(16).padStart(2, '0')}`
+      }
+      return c
+    }).join('')
+  }
+
   function resolveCard(raw: string): { personnelId: string | null; rawName: string | null; rawDept: string | null; displayName: string; displayDept: string } {
     if (isFireOps7Card(raw)) {
       const pid = parseFireOps7Card(raw)
@@ -100,7 +110,8 @@ export default function AccountabilityBoard({
       }
       return { personnelId: null, rawName: `${card.firstName} ${card.lastName}`, rawDept: card.department, displayName: `${card.firstName} ${card.lastName}`, displayDept: card.department }
     }
-    return { personnelId: null, rawName: raw.slice(0, 60), rawDept: null, displayName: raw.slice(0, 60), displayDept: '' }
+    const safe = sanitizeRaw(raw).slice(0, 60)
+    return { personnelId: null, rawName: safe, rawDept: null, displayName: safe, displayDept: '' }
   }
 
   async function handleScan(raw: string) {
