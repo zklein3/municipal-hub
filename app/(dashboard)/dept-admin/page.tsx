@@ -71,6 +71,11 @@ export default async function DeptAdminPage() {
           href="/dept-admin/training"
         />
         <HubCard
+          title="Accountability"
+          description="Configure default incident accountability lanes"
+          href="/dept-admin/accountability"
+        />
+        <HubCard
           title="Equipment Setup"
           description="Item types, categories, and dept configuration"
           href="/dept-admin/setup"
