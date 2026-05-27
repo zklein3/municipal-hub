@@ -185,6 +185,27 @@ export async function updateEventInstance(formData: FormData) {
   const { error } = await adminClient.from('event_instances').update(updatePayload).eq('id', id)
 
   if (error) { await logError(error.message, '/events'); return { error: error.message } }
+
+  // If requires_signature just enabled, create sig records for members already marked present
+  if (requires_signature && ctx.department_id) {
+    const { data: presentAttendance } = await adminClient
+      .from('event_attendance')
+      .select('personnel_id')
+      .eq('instance_id', id)
+      .eq('status', 'present')
+
+    if (presentAttendance && presentAttendance.length > 0) {
+      await adminClient.from('event_attendance_signatures').upsert(
+        presentAttendance.map(a => ({
+          instance_id: id,
+          personnel_id: a.personnel_id,
+          department_id: ctx.department_id!,
+        })),
+        { onConflict: 'instance_id,personnel_id', ignoreDuplicates: true }
+      )
+    }
+  }
+
   revalidatePath('/events')
   return { success: true }
 }
@@ -229,15 +250,15 @@ export async function updateEventSeries(formData: FormData) {
 
   const instanceIds = (futureInstances ?? []).map(i => i.id)
 
-  // Only update instances with no attendance records
+  // Update future instances
   if (instanceIds.length > 0) {
     const { data: attended } = await adminClient
       .from('event_attendance')
-      .select('instance_id')
+      .select('instance_id, personnel_id, status')
       .in('instance_id', instanceIds)
 
-    const attendedIds = new Set((attended ?? []).map(a => a.instance_id))
-    const unattendedIds = instanceIds.filter(id => !attendedIds.has(id))
+    const attendedInstanceIds = new Set((attended ?? []).map(a => a.instance_id))
+    const unattendedIds = instanceIds.filter(id => !attendedInstanceIds.has(id))
 
     if (unattendedIds.length > 0) {
       const instanceUpdate: Record<string, unknown> = {
@@ -248,6 +269,35 @@ export async function updateEventSeries(formData: FormData) {
       }
       if (event_date) instanceUpdate.event_date = event_date
       await adminClient.from('event_instances').update(instanceUpdate).in('id', unattendedIds)
+    }
+
+    // requires_signature is a setting, not a data record — apply to attended instances too
+    const attendedInstanceIdList = instanceIds.filter(id => attendedInstanceIds.has(id))
+    if (attendedInstanceIdList.length > 0) {
+      await adminClient.from('event_instances')
+        .update({ requires_signature, updated_at: new Date().toISOString() })
+        .in('id', attendedInstanceIdList)
+    }
+
+    // If requires_signature enabled, create sig records for all present attendees
+    if (requires_signature) {
+      const { data: seriesList } = await adminClient
+        .from('event_series').select('department_id').eq('id', series_id)
+      const dept_id = seriesList?.[0]?.department_id
+
+      if (dept_id) {
+        const presentAttendance = (attended ?? []).filter(a => a.status === 'present')
+        if (presentAttendance.length > 0) {
+          await adminClient.from('event_attendance_signatures').upsert(
+            presentAttendance.map(a => ({
+              instance_id: a.instance_id,
+              personnel_id: a.personnel_id,
+              department_id: dept_id,
+            })),
+            { onConflict: 'instance_id,personnel_id', ignoreDuplicates: true }
+          )
+        }
+      }
     }
   }
 
