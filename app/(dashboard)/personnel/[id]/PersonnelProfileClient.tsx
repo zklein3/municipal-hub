@@ -338,7 +338,6 @@ export default function PersonnelProfileClient({
             <ReadOnlyField label="Access Level" value={deptRecord.system_role.charAt(0).toUpperCase() + deptRecord.system_role.slice(1)} />
             <ReadOnlyField label="Employee #" value={deptRecord.employee_number} />
             <ReadOnlyField label="Hire Date" value={deptRecord.hire_date} />
-            <ReadOnlyField label="Status" value={deptRecord.active ? 'Active' : 'Inactive'} />
           </div>
         )}
       </div>
