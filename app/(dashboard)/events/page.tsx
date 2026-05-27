@@ -46,7 +46,7 @@ export default async function EventsPage() {
 
   const { data: instances } = await adminClient
     .from('event_instances')
-    .select('id, series_id, event_date, start_time, location, status, notes, requires_verification')
+    .select('id, series_id, event_date, start_time, location, status, notes, requires_verification, requires_signature')
     .gte('event_date', past30.toISOString().split('T')[0])
     .lte('event_date', future365.toISOString().split('T')[0])
     .order('event_date', { ascending: true })
@@ -151,6 +151,7 @@ export default async function EventsPage() {
     status: i.status,
     notes: i.notes,
     requires_verification: i.requires_verification,
+    requires_signature: i.requires_signature,
     my_attendance: myAttendanceMap[i.id] ?? null,
     pending_count: (pendingByInstance[i.id]?.length ?? 0) + (excuseByInstance[i.id]?.length ?? 0),
     pending_submissions: pendingByInstance[i.id] ?? [],

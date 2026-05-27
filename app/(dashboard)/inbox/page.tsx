@@ -30,29 +30,64 @@ export default async function InboxPage({
   const department_id = myDept?.department_id ?? null
   const isOfficerOrAbove = me.is_sys_admin || myDept?.system_role === 'admin' || myDept?.system_role === 'officer'
 
-  // Pending signatures — all members
-  const { data: pendingSigs } = await adminClient
-    .from('incident_signatures')
-    .select('id, incident_id, created_at')
-    .eq('personnel_id', me.id)
-    .is('signed_at', null)
-    .order('created_at', { ascending: false })
+  // Pending signatures — all members (incident + event)
+  const [{ data: pendingIncidentSigs }, { data: pendingEventSigs }] = await Promise.all([
+    adminClient.from('incident_signatures').select('id, incident_id, created_at')
+      .eq('personnel_id', me.id).is('signed_at', null).order('created_at', { ascending: false }),
+    adminClient.from('event_attendance_signatures').select('id, instance_id, created_at')
+      .eq('personnel_id', me.id).is('signed_at', null).order('created_at', { ascending: false }),
+  ])
 
   let signatureRows: any[] = []
-  if ((pendingSigs ?? []).length > 0) {
-    const incidentIds = (pendingSigs ?? []).map(s => s.incident_id)
+
+  if ((pendingIncidentSigs ?? []).length > 0) {
+    const incidentIds = (pendingIncidentSigs ?? []).map(s => s.incident_id)
     const { data: sigIncidents } = await adminClient
       .from('incidents')
       .select('id, incident_number, incident_date, incident_type, address, city, state')
       .in('id', incidentIds)
     const incidentMap = Object.fromEntries((sigIncidents ?? []).map(i => [i.id, i]))
-    signatureRows = (pendingSigs ?? []).map(s => ({
+    signatureRows.push(...(pendingIncidentSigs ?? []).map(s => ({
+      type: 'incident' as const,
       sig_id: s.id,
       incident_id: s.incident_id,
       created_at: s.created_at,
       incident: incidentMap[s.incident_id] ?? null,
+    })))
+  }
+
+  if ((pendingEventSigs ?? []).length > 0) {
+    const instanceIds = (pendingEventSigs ?? []).map(s => s.instance_id)
+    const { data: eventInstances } = await adminClient
+      .from('event_instances')
+      .select('id, event_date, location, series_id')
+      .in('id', instanceIds)
+    const seriesIds = [...new Set((eventInstances ?? []).map(i => i.series_id))]
+    const { data: seriesData } = seriesIds.length > 0
+      ? await adminClient.from('event_series').select('id, title, event_type').in('id', seriesIds)
+      : { data: [] }
+    const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
+    const instanceMap = Object.fromEntries((eventInstances ?? []).map(i => [i.id, i]))
+    signatureRows.push(...(pendingEventSigs ?? []).map(s => {
+      const inst = instanceMap[s.instance_id]
+      const series = inst ? seriesMap[inst.series_id] : null
+      return {
+        type: 'event' as const,
+        sig_id: s.id,
+        instance_id: s.instance_id,
+        created_at: s.created_at,
+        event: inst && series ? {
+          title: series.title,
+          event_type: series.event_type,
+          event_date: inst.event_date,
+          location: inst.location,
+        } : null,
+      }
     }))
   }
+
+  // Sort combined list by created_at desc
+  signatureRows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   // Officer+ data
   let permits: any[] = []

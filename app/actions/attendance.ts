@@ -84,6 +84,7 @@ export async function createEventSeries(formData: FormData) {
   const start_time = formData.get('start_time') as string
   const duration_minutes = formData.get('duration_minutes') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
+  const requires_signature = formData.get('requires_signature') === 'true'
   const event_date = formData.get('event_date') as string // for one_time
 
   if (!title || !event_type || !recurrence_type) return { error: 'Title, type, and recurrence are required.' }
@@ -107,6 +108,7 @@ export async function createEventSeries(formData: FormData) {
     start_time: start_time || null,
     duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
     requires_verification,
+    requires_signature,
     active: true,
     generate_through_date,
     created_by: ctx.me.id,
@@ -122,6 +124,7 @@ export async function createEventSeries(formData: FormData) {
       start_time: start_time || null,
       location: location || null,
       requires_verification,
+      requires_signature,
       status: 'scheduled',
     })
   } else {
@@ -142,6 +145,7 @@ export async function createEventSeries(formData: FormData) {
           start_time: start_time || null,
           location: location || null,
           requires_verification,
+          requires_signature,
           status: 'scheduled',
         }))
       )
@@ -165,6 +169,7 @@ export async function updateEventInstance(formData: FormData) {
   const start_time = formData.get('start_time') as string
   const event_date = formData.get('event_date') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
+  const requires_signature = formData.get('requires_signature') === 'true'
 
   const updatePayload: Record<string, unknown> = {
     location: location || null,
@@ -172,6 +177,7 @@ export async function updateEventInstance(formData: FormData) {
     status,
     start_time: start_time || null,
     requires_verification,
+    requires_signature,
     updated_at: new Date().toISOString(),
   }
   if (event_date) updatePayload.event_date = event_date
@@ -198,6 +204,7 @@ export async function updateEventSeries(formData: FormData) {
   const start_time = formData.get('start_time') as string
   const duration_minutes = formData.get('duration_minutes') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
+  const requires_signature = formData.get('requires_signature') === 'true'
 
   // Update series
   const { error: seriesErr } = await adminClient.from('event_series').update({
@@ -207,6 +214,7 @@ export async function updateEventSeries(formData: FormData) {
     start_time: start_time || null,
     duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
     requires_verification,
+    requires_signature,
     updated_at: new Date().toISOString(),
   }).eq('id', series_id)
 
@@ -235,6 +243,7 @@ export async function updateEventSeries(formData: FormData) {
       const instanceUpdate: Record<string, unknown> = {
         location: location || null,
         requires_verification,
+        requires_signature,
         updated_at: new Date().toISOString(),
       }
       if (event_date) instanceUpdate.event_date = event_date
@@ -256,7 +265,7 @@ export async function logAttendance(instance_id: string, personnel_ids: string[]
   // Check if instance exists and get its details
   const { data: instanceList } = await adminClient
     .from('event_instances')
-    .select('id, event_date, start_time, requires_verification, series_id')
+    .select('id, event_date, start_time, requires_verification, requires_signature, series_id')
     .eq('id', instance_id)
   const instance = instanceList?.[0]
   if (!instance) return { error: 'Event not found.' }
@@ -293,6 +302,19 @@ export async function logAttendance(instance_id: string, personnel_ids: string[]
     .upsert(records, { onConflict: 'instance_id,personnel_id', ignoreDuplicates: false })
 
   if (error) { await logError(error.message, '/events'); return { error: error.message } }
+
+  // If attendance auto-approves (no verification required) and event requires signatures, create sig records
+  if (status === 'present' && instance.requires_signature && ctx.department_id) {
+    await adminClient.from('event_attendance_signatures').upsert(
+      personnel_ids.map(pid => ({
+        instance_id,
+        personnel_id: pid,
+        department_id: ctx.department_id!,
+      })),
+      { onConflict: 'instance_id,personnel_id', ignoreDuplicates: true }
+    )
+  }
+
   revalidatePath('/events')
   return { success: true }
 }
@@ -305,6 +327,13 @@ export async function verifyAttendance(attendance_id: string, action: 'present' 
   const adminClient = createAdminClient()
   const now = new Date().toISOString()
 
+  // Fetch the attendance record first so we can create a sig record if needed
+  const { data: attList } = await adminClient
+    .from('event_attendance')
+    .select('instance_id, personnel_id')
+    .eq('id', attendance_id)
+  const att = attList?.[0]
+
   const { error } = await adminClient.from('event_attendance').update({
     status: action,
     verified_by: ctx.me.id,
@@ -313,6 +342,31 @@ export async function verifyAttendance(attendance_id: string, action: 'present' 
   }).eq('id', attendance_id)
 
   if (error) { await logError(error.message, '/events'); return { error: error.message } }
+
+  // When approving attendance, create a signature record if the event requires one
+  if (action === 'present' && att) {
+    const { data: instList } = await adminClient
+      .from('event_instances')
+      .select('requires_signature, series_id')
+      .eq('id', att.instance_id)
+    const inst = instList?.[0]
+
+    if (inst?.requires_signature) {
+      const { data: seriesList } = await adminClient
+        .from('event_series')
+        .select('department_id')
+        .eq('id', inst.series_id)
+      const dept_id = seriesList?.[0]?.department_id
+
+      if (dept_id) {
+        await adminClient.from('event_attendance_signatures').upsert(
+          { instance_id: att.instance_id, personnel_id: att.personnel_id, department_id: dept_id },
+          { onConflict: 'instance_id,personnel_id', ignoreDuplicates: true }
+        )
+      }
+    }
+  }
+
   revalidatePath('/events')
   revalidatePath('/reports/my-activity')
   revalidatePath('/dashboard')

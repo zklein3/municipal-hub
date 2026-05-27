@@ -47,6 +47,7 @@ interface Event {
   status: string
   notes: string | null
   requires_verification: boolean
+  requires_signature: boolean
   is_public: boolean
   my_attendance: AttendanceRecord | null
   pending_count: number
@@ -171,7 +172,8 @@ export default function EventsClient({
   const [editScope, setEditScope] = useState<'instance' | 'series'>('instance')
   const [editForm, setEditForm] = useState({
     title: '', event_type: 'meeting', description: '', location: '',
-    event_date: '', start_time: '', duration_minutes: '', notes: '', requires_verification: true,
+    event_date: '', start_time: '', duration_minutes: '', notes: '',
+    requires_verification: true, requires_signature: false,
   })
 
   // Public/private toggle state per series_id
@@ -199,6 +201,7 @@ export default function EventsClient({
       duration_minutes: event.duration_minutes != null ? String(event.duration_minutes) : '',
       notes: event.notes ?? '',
       requires_verification: event.requires_verification,
+      requires_signature: event.requires_signature,
     })
     setEditScope('instance')
     setEditingId(event.id)
@@ -210,6 +213,7 @@ export default function EventsClient({
     setLoading(true)
     const fd = new FormData()
     fd.set('requires_verification', editForm.requires_verification ? 'true' : 'false')
+    fd.set('requires_signature', editForm.requires_signature ? 'true' : 'false')
 
     if (editScope === 'series' || event.recurrence_type === 'one_time') {
       fd.set('series_id', event.series_id)
@@ -682,15 +686,26 @@ export default function EventsClient({
                               )}
                             </div>
 
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={editForm.requires_verification}
-                                onChange={e => setEditForm(f => ({ ...f, requires_verification: e.target.checked }))}
-                                className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-xs text-zinc-700">Require attendance verification</span>
-                            </label>
+                            <div className="flex flex-col gap-2">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.requires_verification}
+                                  onChange={e => setEditForm(f => ({ ...f, requires_verification: e.target.checked }))}
+                                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-zinc-700">Require attendance verification</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.requires_signature}
+                                  onChange={e => setEditForm(f => ({ ...f, requires_signature: e.target.checked }))}
+                                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-zinc-700">Require member signature</span>
+                              </label>
+                            </div>
 
                             <div className="flex gap-2 pt-1">
                               <button

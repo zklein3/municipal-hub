@@ -4,10 +4,12 @@ import { useState } from 'react'
 import BurnPermitsTab from './BurnPermitsTab'
 import RecordRequestsTab from './RecordRequestsTab'
 import IncidentSignaturePadModal from '../signatures/IncidentSignaturePadModal'
+import EventAttendanceSignaturePadModal from '../signatures/EventAttendanceSignaturePadModal'
 
 type Tab = 'permits' | 'records' | 'signatures'
 
-interface SignatureRow {
+type IncidentSignatureRow = {
+  type: 'incident'
   sig_id: string
   incident_id: string
   created_at: string
@@ -21,6 +23,21 @@ interface SignatureRow {
     state: string | null
   } | null
 }
+
+type EventSignatureRow = {
+  type: 'event'
+  sig_id: string
+  instance_id: string
+  created_at: string
+  event: {
+    title: string
+    event_type: string
+    event_date: string
+    location: string | null
+  } | null
+}
+
+type SignatureRow = IncidentSignatureRow | EventSignatureRow
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
@@ -52,6 +69,10 @@ export default function InboxClient({
   const [tab, setTab] = useState<Tab>(initialTab)
   const [pendingSigs, setPendingSigs] = useState<SignatureRow[]>(signatureRows)
   const [activeSig, setActiveSig] = useState<SignatureRow | null>(null)
+
+  const EVENT_TYPE_LABELS: Record<string, string> = {
+    training: 'Training', meeting: 'Meeting', incident: 'Incident', special: 'Special Event',
+  }
 
   const pendingPermits  = permits.filter(p => p.status === 'pending').length
   const pendingRequests = requests.filter(r => r.status === 'pending').length
@@ -138,42 +159,79 @@ export default function InboxClient({
           ) : (
             <div className="flex flex-col gap-3">
               {pendingSigs.map(row => {
-                const inc = row.incident
-                const location = [inc?.address, inc?.city, inc?.state].filter(Boolean).join(', ')
-                return (
-                  <div key={row.sig_id} className="rounded-xl bg-white border border-zinc-200 p-5 flex items-center gap-4">
-                    {inc?.incident_date && (
-                      <div className="shrink-0 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-center min-w-[52px]">
-                        <p className="text-xs font-semibold text-red-500 uppercase">
-                          {new Date(inc.incident_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
-                        </p>
-                        <p className="text-2xl font-bold text-red-800 leading-none">
-                          {new Date(inc.incident_date + 'T00:00:00').getDate()}
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-zinc-900 text-sm">
-                        {inc?.incident_number ?? '—'}
-                        {inc?.incident_type && (
-                          <span className="ml-2 text-xs font-normal text-zinc-400">{inc.incident_type}</span>
-                        )}
-                      </p>
+                if (row.type === 'incident') {
+                  const inc = row.incident
+                  const location = [inc?.address, inc?.city, inc?.state].filter(Boolean).join(', ')
+                  return (
+                    <div key={row.sig_id} className="rounded-xl bg-white border border-zinc-200 p-5 flex items-center gap-4">
                       {inc?.incident_date && (
-                        <p className="text-xs text-zinc-500 mt-0.5">{formatDate(inc.incident_date)}</p>
+                        <div className="shrink-0 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-center min-w-[52px]">
+                          <p className="text-xs font-semibold text-red-500 uppercase">
+                            {new Date(inc.incident_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                          </p>
+                          <p className="text-2xl font-bold text-red-800 leading-none">
+                            {new Date(inc.incident_date + 'T00:00:00').getDate()}
+                          </p>
+                        </div>
                       )}
-                      {location && (
-                        <p className="text-xs text-zinc-400 mt-0.5 truncate">{location}</p>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-0.5">Run Report</p>
+                        <p className="font-semibold text-zinc-900 text-sm">
+                          {inc?.incident_number ?? '—'}
+                          {inc?.incident_type && (
+                            <span className="ml-2 text-xs font-normal text-zinc-400">{inc.incident_type}</span>
+                          )}
+                        </p>
+                        {inc?.incident_date && (
+                          <p className="text-xs text-zinc-500 mt-0.5">{formatDate(inc.incident_date)}</p>
+                        )}
+                        {location && (
+                          <p className="text-xs text-zinc-400 mt-0.5 truncate">{location}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setActiveSig(row)}
+                        className="shrink-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
+                      >
+                        Sign
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setActiveSig(row)}
-                      className="shrink-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
-                    >
-                      Sign
-                    </button>
-                  </div>
-                )
+                  )
+                } else {
+                  const ev = row.event
+                  return (
+                    <div key={row.sig_id} className="rounded-xl bg-white border border-zinc-200 p-5 flex items-center gap-4">
+                      {ev?.event_date && (
+                        <div className="shrink-0 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-center min-w-[52px]">
+                          <p className="text-xs font-semibold text-blue-500 uppercase">
+                            {new Date(ev.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                          </p>
+                          <p className="text-2xl font-bold text-blue-800 leading-none">
+                            {new Date(ev.event_date + 'T00:00:00').getDate()}
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-0.5">
+                          {ev ? (EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type) : 'Event'}
+                        </p>
+                        <p className="font-semibold text-zinc-900 text-sm">{ev?.title ?? '—'}</p>
+                        {ev?.event_date && (
+                          <p className="text-xs text-zinc-500 mt-0.5">{formatDate(ev.event_date)}</p>
+                        )}
+                        {ev?.location && (
+                          <p className="text-xs text-zinc-400 mt-0.5 truncate">{ev.location}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setActiveSig(row)}
+                        className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                      >
+                        Sign
+                      </button>
+                    </div>
+                  )
+                }
               })}
             </div>
           )}
@@ -193,7 +251,7 @@ export default function InboxClient({
         <RecordRequestsTab requests={requests} />
       )}
 
-      {activeSig && (
+      {activeSig && activeSig.type === 'incident' && (
         <IncidentSignaturePadModal
           sig_id={activeSig.sig_id}
           memberName={memberName}
@@ -201,6 +259,19 @@ export default function InboxClient({
             activeSig.incident
               ? `${activeSig.incident.incident_number}${activeSig.incident.incident_date ? ' — ' + formatDate(activeSig.incident.incident_date) : ''}`
               : 'Incident'
+          }
+          onClose={() => setActiveSig(null)}
+          onSigned={() => handleSigned(activeSig.sig_id)}
+        />
+      )}
+      {activeSig && activeSig.type === 'event' && (
+        <EventAttendanceSignaturePadModal
+          sig_id={activeSig.sig_id}
+          memberName={memberName}
+          eventLabel={
+            activeSig.event
+              ? `${activeSig.event.title}${activeSig.event.event_date ? ' — ' + formatDate(activeSig.event.event_date) : ''}`
+              : 'Event'
           }
           onClose={() => setActiveSig(null)}
           onSigned={() => handleSigned(activeSig.sig_id)}

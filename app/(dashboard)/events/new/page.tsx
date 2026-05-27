@@ -16,11 +16,13 @@ export default function NewEventPage() {
   const [error, setError] = useState<string | null>(null)
   const [recurrenceType, setRecurrenceType] = useState('one_time')
   const [requiresVerification, setRequiresVerification] = useState(true)
+  const [requiresSignature, setRequiresSignature] = useState(false)
 
   async function handleSubmit(formData: FormData) {
     setError(null)
     setLoading(true)
     formData.set('requires_verification', requiresVerification ? 'true' : 'false')
+    formData.set('requires_signature', requiresSignature ? 'true' : 'false')
     const result = await createEventSeries(formData)
     if (result?.error) { setError(result.error); setLoading(false); return }
     router.push('/events')
@@ -160,9 +162,9 @@ export default function NewEventPage() {
           )}
         </div>
 
-        {/* Verification */}
-        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">Attendance Settings</h2>
+        {/* Attendance Settings */}
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-zinc-700">Attendance Settings</h2>
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -173,8 +175,21 @@ export default function NewEventPage() {
             <div>
               <p className="text-sm font-medium text-zinc-800">Require attendance verification</p>
               <p className="text-xs text-zinc-500 mt-0.5">
-                When checked, member self-reported attendance must be approved by an officer or admin before it counts.
-                Uncheck to allow attendance to auto-approve on submission.
+                Member self-reported attendance must be approved by an officer before it counts.
+              </p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={requiresSignature}
+              onChange={e => setRequiresSignature(e.target.checked)}
+              className={`mt-0.5 ${checkCls}`}
+            />
+            <div>
+              <p className="text-sm font-medium text-zinc-800">Require member signature</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Members must sign via the app after their attendance is confirmed. Appears in their inbox until signed.
               </p>
             </div>
           </label>
