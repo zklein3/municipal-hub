@@ -171,7 +171,7 @@ export default function EventsClient({
   const [editScope, setEditScope] = useState<'instance' | 'series'>('instance')
   const [editForm, setEditForm] = useState({
     title: '', event_type: 'meeting', description: '', location: '',
-    start_time: '', duration_minutes: '', notes: '', requires_verification: true,
+    event_date: '', start_time: '', duration_minutes: '', notes: '', requires_verification: true,
   })
 
   // Public/private toggle state per series_id
@@ -194,6 +194,7 @@ export default function EventsClient({
       event_type: event.event_type,
       description: event.description ?? '',
       location: event.location ?? '',
+      event_date: event.event_date,
       start_time: event.start_time ?? '',
       duration_minutes: event.duration_minutes != null ? String(event.duration_minutes) : '',
       notes: event.notes ?? '',
@@ -218,12 +219,14 @@ export default function EventsClient({
       fd.set('location', editForm.location)
       fd.set('start_time', editForm.start_time)
       fd.set('duration_minutes', editForm.duration_minutes)
+      if (event.recurrence_type === 'one_time') fd.set('event_date', editForm.event_date)
       const result = await updateEventSeries(fd)
       if (result?.error) { setError(result.error); setLoading(false); return }
     } else {
       fd.set('id', event.id)
       fd.set('location', editForm.location)
       fd.set('start_time', editForm.start_time)
+      fd.set('event_date', editForm.event_date)
       fd.set('notes', editForm.notes)
       fd.set('status', event.status)
       const result = await updateEventInstance(fd)
@@ -635,15 +638,18 @@ export default function EventsClient({
 
                             {/* Instance-level fields (always shown) */}
                             <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-medium text-zinc-700 mb-1">Location</label>
-                                <input
-                                  type="text"
-                                  value={editForm.location}
-                                  onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
-                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
+                              {/* Date — shown for instance scope (recurring) and all one-time events */}
+                              {(editScope === 'instance' || event.recurrence_type === 'one_time') && (
+                                <div>
+                                  <label className="block text-xs font-medium text-zinc-700 mb-1">Date</label>
+                                  <input
+                                    type="date"
+                                    value={editForm.event_date}
+                                    onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))}
+                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                              )}
                               <div>
                                 <label className="block text-xs font-medium text-zinc-700 mb-1">Start Time</label>
                                 <input
@@ -651,6 +657,15 @@ export default function EventsClient({
                                   step="60"
                                   value={editForm.start_time}
                                   onChange={e => setEditForm(f => ({ ...f, start_time: e.target.value }))}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1">Location</label>
+                                <input
+                                  type="text"
+                                  value={editForm.location}
+                                  onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
                                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
                               </div>

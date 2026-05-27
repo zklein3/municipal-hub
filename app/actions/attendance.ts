@@ -163,16 +163,20 @@ export async function updateEventInstance(formData: FormData) {
   const notes = formData.get('notes') as string
   const status = formData.get('status') as string
   const start_time = formData.get('start_time') as string
+  const event_date = formData.get('event_date') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
 
-  const { error } = await adminClient.from('event_instances').update({
+  const updatePayload: Record<string, unknown> = {
     location: location || null,
     notes: notes || null,
     status,
     start_time: start_time || null,
     requires_verification,
     updated_at: new Date().toISOString(),
-  }).eq('id', id)
+  }
+  if (event_date) updatePayload.event_date = event_date
+
+  const { error } = await adminClient.from('event_instances').update(updatePayload).eq('id', id)
 
   if (error) { await logError(error.message, '/events'); return { error: error.message } }
   revalidatePath('/events')
@@ -187,6 +191,7 @@ export async function updateEventSeries(formData: FormData) {
   const adminClient = createAdminClient()
   const series_id = formData.get('series_id') as string
   const from_date = formData.get('from_date') as string // instances from this date forward get updated
+  const event_date = formData.get('event_date') as string // only used for one_time events
   const title = formData.get('title') as string
   const description = formData.get('description') as string
   const location = formData.get('location') as string
@@ -227,11 +232,13 @@ export async function updateEventSeries(formData: FormData) {
     const unattendedIds = instanceIds.filter(id => !attendedIds.has(id))
 
     if (unattendedIds.length > 0) {
-      await adminClient.from('event_instances').update({
+      const instanceUpdate: Record<string, unknown> = {
         location: location || null,
         requires_verification,
         updated_at: new Date().toISOString(),
-      }).in('id', unattendedIds)
+      }
+      if (event_date) instanceUpdate.event_date = event_date
+      await adminClient.from('event_instances').update(instanceUpdate).in('id', unattendedIds)
     }
   }
 
