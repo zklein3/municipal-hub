@@ -92,6 +92,17 @@ export default async function EventsPage() {
 
   const myAttendanceMap = Object.fromEntries((myAttendance ?? []).map(a => [a.instance_id, a]))
 
+  // Pending event signatures for current user
+  const { data: myPendingSigs } = instanceIds.length > 0
+    ? await adminClient
+        .from('event_attendance_signatures')
+        .select('id, instance_id')
+        .eq('personnel_id', me.id)
+        .is('signed_at', null)
+        .in('instance_id', instanceIds)
+    : { data: [] }
+  const pendingSigByInstance = Object.fromEntries((myPendingSigs ?? []).map(s => [s.instance_id, s.id]))
+
   // For officers — fetch pending attendance + pending excuse requests
   let pendingByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string }[]> = {}
   let excuseByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string; excuse_type: string; notes: string | null }[]> = {}
@@ -152,6 +163,7 @@ export default async function EventsPage() {
     notes: i.notes,
     requires_verification: i.requires_verification,
     requires_signature: i.requires_signature,
+    pending_sig_id: pendingSigByInstance[i.id] ?? null,
     my_attendance: myAttendanceMap[i.id] ?? null,
     pending_count: (pendingByInstance[i.id]?.length ?? 0) + (excuseByInstance[i.id]?.length ?? 0),
     pending_submissions: pendingByInstance[i.id] ?? [],

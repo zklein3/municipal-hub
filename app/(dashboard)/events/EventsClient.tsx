@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
+import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
 
 interface AttendanceRecord {
   id: string
@@ -48,6 +49,7 @@ interface Event {
   notes: string | null
   requires_verification: boolean
   requires_signature: boolean
+  pending_sig_id: string | null
   is_public: boolean
   my_attendance: AttendanceRecord | null
   pending_count: number
@@ -166,6 +168,9 @@ export default function EventsClient({
 
   // Log attendance confirmation step
   const [confirmingLogId, setConfirmingLogId] = useState<string | null>(null)
+
+  // Signature modal state
+  const [activeSig, setActiveSig] = useState<{ sig_id: string; eventLabel: string } | null>(null)
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -487,6 +492,13 @@ export default function EventsClient({
                         <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[event.my_attendance.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
                           {STATUS_LABELS[event.my_attendance.status] ?? event.my_attendance.status}
                         </span>
+                      )}
+                      {event.pending_sig_id && (
+                        <button
+                          onClick={() => setActiveSig({ sig_id: event.pending_sig_id!, eventLabel: `${event.title} — ${formatDate(event.event_date)}` })}
+                          className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600">
+                          ✍ Sign Required
+                        </button>
                       )}
                       {!cancelled && !event.my_attendance && canSelfLog && (
                         confirmingLogId === event.id ? (
@@ -959,6 +971,16 @@ export default function EventsClient({
             )
           })}
         </div>
+      )}
+
+      {activeSig && (
+        <EventAttendanceSignaturePadModal
+          sig_id={activeSig.sig_id}
+          memberName={myName}
+          eventLabel={activeSig.eventLabel}
+          onClose={() => setActiveSig(null)}
+          onSigned={() => { setActiveSig(null); router.refresh() }}
+        />
       )}
     </div>
   )
