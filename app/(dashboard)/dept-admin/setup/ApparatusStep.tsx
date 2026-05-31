@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createApparatus, updateApparatus } from '@/app/actions/apparatus'
+import { createApparatus } from '@/app/actions/apparatus'
 import HelpPrompt from './HelpPrompt'
 
 interface Station { id: string; station_number: string | null; station_name: string }
@@ -139,7 +139,6 @@ export default function ApparatusStep({
   stations,
   apparatusTypes,
   departmentId,
-  moduleIso,
   showHelp,
   helpResetKey,
 }: {
@@ -147,12 +146,10 @@ export default function ApparatusStep({
   stations: Station[]
   apparatusTypes: ApparatusType[]
   departmentId: string
-  moduleIso: boolean
   showHelp: boolean
   helpResetKey: number
 }) {
   const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -174,14 +171,6 @@ export default function ApparatusStep({
     setLoading(false)
   }
 
-  async function handleUpdate(formData: FormData) {
-    setError(null); setLoading(true)
-    const result = await updateApparatus(formData)
-    if (result?.error) setError(result.error)
-    else setEditingId(null)
-    setLoading(false)
-  }
-
   return (
     <div>
       <HelpPrompt id="apparatus" showHelp={showHelp} helpResetKey={helpResetKey}>
@@ -193,7 +182,7 @@ export default function ApparatusStep({
           <p className="text-sm text-zinc-500">{apparatus.filter(a => a.active).length} active</p>
         </div>
         <button
-          onClick={() => { setShowForm(!showForm); setEditingId(null); setError(null) }}
+          onClick={() => { setShowForm(!showForm); setError(null) }}
           className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
         >
           {showForm ? 'Cancel' : '+ Add Apparatus'}
@@ -237,68 +226,34 @@ export default function ApparatusStep({
             <div key={a.id} className={`rounded-xl bg-white border shadow-sm ${
               a.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'
             }`}>
-              {editingId === a.id ? (
-                <div className="p-5">
-                  <p className="text-sm font-semibold text-zinc-900 mb-4">Edit Apparatus</p>
-                  <ApparatusForm
-                    stations={stations}
-                    apparatusTypes={apparatusTypes}
-                    defaults={a}
-                    onSubmit={handleUpdate}
-                    loading={loading}
-                    submitLabel="Save Changes"
-                  />
-                  <button type="button" onClick={() => setEditingId(null)}
-                    className="mt-2 w-full rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-start justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-2xl font-bold text-zinc-900">{a.unit_number}</span>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        a.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'
-                      }`}>
-                        {a.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    {a.apparatus_name && <p className="text-sm font-medium text-zinc-700">{a.apparatus_name}</p>}
-                    {a.type_name && <p className="text-xs font-medium text-red-600">{a.type_name}</p>}
-                    <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-zinc-500">
-                      {(a.make || a.model) && <span>{[a.make, a.model].filter(Boolean).join(' ')}{a.model_year ? ` · ${a.model_year}` : ''}</span>}
-                      <span className={a.station ? '' : 'text-yellow-600 font-medium'}>
-                        {a.station
-                          ? `${a.station.station_number ? `Stn ${a.station.station_number} — ` : ''}${a.station.station_name}`
-                          : 'No station assigned'}
-                      </span>
-                    </div>
+              <div className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl font-bold text-zinc-900">{a.unit_number}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      a.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'
+                    }`}>
+                      {a.active ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Link
-                      href={`/equipment/${a.id}?from=/dept-admin/setup`}
-                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-                    >
-                      Load
-                    </Link>
-                    {moduleIso && (
-                      <Link
-                        href={`/apparatus/${a.id}`}
-                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-                      >
-                        ISO Specs
-                      </Link>
-                    )}
-                    <button
-                      onClick={() => { setEditingId(a.id); setShowForm(false); setError(null) }}
-                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-                    >
-                      Edit
-                    </button>
+                  {a.apparatus_name && <p className="text-sm font-medium text-zinc-700">{a.apparatus_name}</p>}
+                  {a.type_name && <p className="text-xs font-medium text-red-600">{a.type_name}</p>}
+                  <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-zinc-500">
+                    {(a.make || a.model) && <span>{[a.make, a.model].filter(Boolean).join(' ')}{a.model_year ? ` · ${a.model_year}` : ''}</span>}
+                    <span className={a.station ? '' : 'text-yellow-600 font-medium'}>
+                      {a.station
+                        ? `${a.station.station_number ? `Stn ${a.station.station_number} — ` : ''}${a.station.station_name}`
+                        : 'No station assigned'}
+                    </span>
                   </div>
                 </div>
-              )}
+                <Link
+                  href={`/apparatus/${a.id}`}
+                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                >
+                  Edit
+                </Link>
+              </div>
             </div>
           ))}
         </div>

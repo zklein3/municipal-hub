@@ -26,7 +26,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   // Fetch apparatus — no nested joins to avoid type issues
   const { data: apparatusList } = await adminClient
     .from('apparatus')
-    .select('id, unit_number, apparatus_name, make, model, model_year, vin, license_plate, active, in_service_date, out_of_service_date, notes, apparatus_type_id, station_id, qr_code, exclude_from_iso')
+    .select('id, unit_number, apparatus_name, make, model, model_year, vin, license_plate, active, in_service_date, out_of_service_date, notes, apparatus_type_id, station_id, qr_code, exclude_from_iso, has_air_brakes, has_engine_hours')
     .eq('id', id)
 
   const apparatus = apparatusList?.[0]

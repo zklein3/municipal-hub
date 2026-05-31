@@ -26,8 +26,12 @@
 - Inspection template builder (inline via Dept Setup)
 - Inspection run — presence checks + full asset checklist, all step types
 - Inspection sessions — claim/release, 12h expiry, expired-session email notifications
-- Inspections landing page — grouped by station → apparatus cards → compartments with View / Inspect / Daily Check
+- Inspections landing page — grouped by station → apparatus cards → compartments with View / Inspect / Daily Check / Vehicle Check
 - Daily Check mode (presence-only)
+- Vehicle Check system (`/inspections/vehicle-check/[id]`) — standalone truck check separate from compartment inspection. Dept-configurable checklist (24 items, 7 groups: Fluids, Mechanical, Lights, Communications, Emergency Equipment, Cleaning, Air Brakes). Per-apparatus toggles: `has_air_brakes` (shows Air Brakes group), `has_engine_hours` (shows engine hours field). Instructions on every item (procedure, what to look for, pass/fail) — shown expanded by default, toggle to hide. Odometer + engine hours fields. Progress bar, issue count, history panel (last 10 checks). On submit → `/inspections?checked=[id]`. "Do inventory on this vehicle?" link → compartment session
+- Vehicle check items admin — Dept Admin → Inspections → Vehicle Check Items tab. Add/edit/disable per item, instructions textarea, reset to defaults. Items are dept-owned and seeded from code defaults on first use
+- Apparatus detail page — ISO Specifications + Pump Tests section now appears before Compartments. Admin toggles for `has_air_brakes` and `has_engine_hours` in admin settings section
+- Equipment Setup → Apparatus — collapsed to single Edit button (links to `/apparatus/[id]`); removed redundant Load and ISO Specs buttons
 - QR system — human-readable codes, `/scan` redirect, print labels
 - Announcements — pinning, unread tracking, dashboard banner
 - Events + attendance — full lifecycle, excused absence, close event, auto-close cron
@@ -86,6 +90,9 @@ Items flagged during development — address during next cleanup pass:
 - `item_asset_inspection_logs`, `item_asset_inspection_log_steps`
 - `compartment_presence_check_logs`
 - `inspection_sessions`, `inspection_session_compartments`
+- `vehicle_check_items` — dept-owned checklist items (`department_id`, `label`, `group_name`, `sort_order`, `has_amount_field`, `requires_air_brakes`, `instructions`, `active`); seeded from code defaults on first use
+- `vehicle_inspections` — one record per vehicle check (`apparatus_id`, `department_id`, `inspected_by`, `odometer`, `engine_hours`, `notes`, `status`, `inspected_at`)
+- `vehicle_inspection_results` — one row per item per inspection (`inspection_id`, `item_id`, `result` ok/issue/na, `amount_added`, `notes`)
 
 ### Attendance
 - `excuse_types`, `participation_requirements`

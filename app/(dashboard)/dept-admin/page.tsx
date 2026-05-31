@@ -80,6 +80,11 @@ export default async function DeptAdminPage() {
           description="Item types, categories, and dept configuration"
           href="/dept-admin/setup"
         />
+        <HubCard
+          title="Inspections"
+          description="Vehicle check items and inspection session settings"
+          href="/dept-admin/inspections"
+        />
         {moduleIso && (
           <HubCard
             title="ISO"

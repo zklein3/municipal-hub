@@ -63,6 +63,8 @@ interface Apparatus {
   station_id: string | null
   qr_code: string | null
   exclude_from_iso: boolean
+  has_air_brakes: boolean
+  has_engine_hours: boolean
   apparatus_type: { id: string; name: string } | null
   station: { id: string; station_name: string; station_number: string | null } | null
 }
@@ -314,16 +316,38 @@ export default function ApparatusDetailClient({
               <p className="mt-1 text-xs text-zinc-400">Unique code printed on the QR label for this apparatus. Will be uppercased automatically.</p>
             </div>
             {isAdmin && (
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  name="exclude_from_iso"
-                  type="checkbox"
-                  defaultChecked={apparatus.exclude_from_iso}
-                  className="h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-500"
-                />
-                <span className="text-sm font-medium text-zinc-700">Exclude from ISO calculations</span>
-                <span className="text-xs text-zinc-400">(ambulances, support vehicles, etc.)</span>
-              </label>
+              <div className="flex flex-col gap-2.5">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    name="exclude_from_iso"
+                    type="checkbox"
+                    defaultChecked={apparatus.exclude_from_iso}
+                    className="h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-500"
+                  />
+                  <span className="text-sm font-medium text-zinc-700">Exclude from ISO calculations</span>
+                  <span className="text-xs text-zinc-400">(ambulances, support vehicles, etc.)</span>
+                </label>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    name="has_air_brakes"
+                    type="checkbox"
+                    defaultChecked={apparatus.has_air_brakes}
+                    className="h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-500"
+                  />
+                  <span className="text-sm font-medium text-zinc-700">Has air brakes</span>
+                  <span className="text-xs text-zinc-400">(enables air brake inspection section on vehicle checks)</span>
+                </label>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    name="has_engine_hours"
+                    type="checkbox"
+                    defaultChecked={apparatus.has_engine_hours}
+                    className="h-4 w-4 rounded border-zinc-300 text-red-700 focus:ring-red-500"
+                  />
+                  <span className="text-sm font-medium text-zinc-700">Track engine hours</span>
+                  <span className="text-xs text-zinc-400">(shows engine hours field on vehicle checks)</span>
+                </label>
+              </div>
             )}
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
@@ -342,115 +366,6 @@ export default function ApparatusDetailClient({
             <ReadField label="License Plate" value={apparatus.license_plate} />
             <ReadField label="In Service" value={apparatus.in_service_date} />
             <ReadField label="QR Code" value={apparatus.qr_code} />
-          </div>
-        )}
-      </div>
-
-      {/* Compartments */}
-      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-zinc-900">
-            Compartments ({compartments.filter(c => c.active).length} active)
-          </h2>
-          <div className="flex items-center gap-2">
-            {isOfficerOrAbove && compartments.filter(c => c.active).length > 0 && (
-              <Link
-                href={`/equipment/${apparatus.id}`}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
-              >
-                Manage Equipment
-              </Link>
-            )}
-            {compartments.filter(c => c.active).length > 0 && (
-              <Link
-                href={`/inspections/apparatus/${apparatus.id}`}
-                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-              >
-                Start Inspection Session
-              </Link>
-            )}
-          </div>
-        </div>
-        {compError && <Alert type="error" message={compError} />}
-
-        {compartments.length === 0 ? (
-          <p className="text-sm text-zinc-400 mb-4">No compartments assigned to this apparatus yet.</p>
-        ) : (
-          <div className="flex flex-col gap-2 mb-4">
-            {[...compartments]
-              .sort((a, b) => (a.compartment_name?.sort_order ?? 999) - (b.compartment_name?.sort_order ?? 999))
-              .map(c => (
-                <div key={c.id} className="rounded-lg border border-zinc-100 bg-zinc-50 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-100 px-2.5 py-1 text-sm font-mono font-bold text-red-700">
-                        {c.compartment_name?.compartment_code ?? '—'}
-                      </span>
-                      {c.compartment_name?.compartment_name && (
-                        <span className="text-sm text-zinc-600">{c.compartment_name.compartment_name}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/equipment/${apparatus.id}/${c.id}`}
-                        className="text-xs font-semibold text-red-600 hover:text-red-800"
-                      >
-                        View →
-                      </Link>
-                      <span className={`text-xs rounded-full px-2 py-0.5 ${c.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
-                        {c.active ? 'Active' : 'Inactive'}
-                      </span>
-                      {isAdmin && (
-                        <button onClick={() => handleRemoveCompartment(c.id)} disabled={compLoading}
-                          className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50">
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {c.items.length > 0 && (
-                    <div className="border-t border-zinc-100 px-4 py-2 flex flex-col gap-1.5">
-                      {c.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-zinc-700">{item.item_name}</span>
-                          <span className="text-xs text-zinc-400 shrink-0">qty {item.expected_quantity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
-
-        {isAdmin && (
-          <div>
-            {compartmentNames.length === 0 ? (
-              <p className="text-xs text-zinc-400">
-                No compartment names defined yet. Go to{' '}
-                <a href="/dept-admin/compartments" className="text-red-600 hover:underline">Dept Admin → Compartments</a> to add them.
-              </p>
-            ) : availableCompartments.length === 0 ? (
-              <p className="text-xs text-zinc-400">All department compartments have been assigned to this apparatus.</p>
-            ) : (
-              <div className="flex gap-3 pt-3 border-t border-zinc-100">
-                <select value={selectedCompartmentId} onChange={e => setSelectedCompartmentId(e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                  <option value="">Add compartment...</option>
-                  {availableCompartments
-                    .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
-                    .map(cn => (
-                      <option key={cn.id} value={cn.id}>
-                        {cn.compartment_code}{cn.compartment_name ? ` — ${cn.compartment_name}` : ''}
-                      </option>
-                    ))}
-                </select>
-                <button onClick={handleAssignCompartment} disabled={!selectedCompartmentId || compLoading}
-                  className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                  {compLoading ? '...' : 'Add'}
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -639,6 +554,115 @@ export default function ApparatusDetailClient({
           )}
         </div>
       )}
+
+      {/* Compartments */}
+      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mt-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-zinc-900">
+            Compartments ({compartments.filter(c => c.active).length} active)
+          </h2>
+          <div className="flex items-center gap-2">
+            {isOfficerOrAbove && compartments.filter(c => c.active).length > 0 && (
+              <Link
+                href={`/equipment/${apparatus.id}`}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+              >
+                Manage Equipment
+              </Link>
+            )}
+            {compartments.filter(c => c.active).length > 0 && (
+              <Link
+                href={`/inspections/apparatus/${apparatus.id}`}
+                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+              >
+                Start Inspection Session
+              </Link>
+            )}
+          </div>
+        </div>
+        {compError && <Alert type="error" message={compError} />}
+
+        {compartments.length === 0 ? (
+          <p className="text-sm text-zinc-400 mb-4">No compartments assigned to this apparatus yet.</p>
+        ) : (
+          <div className="flex flex-col gap-2 mb-4">
+            {[...compartments]
+              .sort((a, b) => (a.compartment_name?.sort_order ?? 999) - (b.compartment_name?.sort_order ?? 999))
+              .map(c => (
+                <div key={c.id} className="rounded-lg border border-zinc-100 bg-zinc-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-100 px-2.5 py-1 text-sm font-mono font-bold text-red-700">
+                        {c.compartment_name?.compartment_code ?? '—'}
+                      </span>
+                      {c.compartment_name?.compartment_name && (
+                        <span className="text-sm text-zinc-600">{c.compartment_name.compartment_name}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/equipment/${apparatus.id}/${c.id}`}
+                        className="text-xs font-semibold text-red-600 hover:text-red-800"
+                      >
+                        View →
+                      </Link>
+                      <span className={`text-xs rounded-full px-2 py-0.5 ${c.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
+                        {c.active ? 'Active' : 'Inactive'}
+                      </span>
+                      {isAdmin && (
+                        <button onClick={() => handleRemoveCompartment(c.id)} disabled={compLoading}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {c.items.length > 0 && (
+                    <div className="border-t border-zinc-100 px-4 py-2 flex flex-col gap-1.5">
+                      {c.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-zinc-700">{item.item_name}</span>
+                          <span className="text-xs text-zinc-400 shrink-0">qty {item.expected_quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
+
+        {isAdmin && (
+          <div>
+            {compartmentNames.length === 0 ? (
+              <p className="text-xs text-zinc-400">
+                No compartment names defined yet. Go to{' '}
+                <a href="/dept-admin/compartments" className="text-red-600 hover:underline">Dept Admin → Compartments</a> to add them.
+              </p>
+            ) : availableCompartments.length === 0 ? (
+              <p className="text-xs text-zinc-400">All department compartments have been assigned to this apparatus.</p>
+            ) : (
+              <div className="flex gap-3 pt-3 border-t border-zinc-100">
+                <select value={selectedCompartmentId} onChange={e => setSelectedCompartmentId(e.target.value)}
+                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                  <option value="">Add compartment...</option>
+                  {availableCompartments
+                    .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
+                    .map(cn => (
+                      <option key={cn.id} value={cn.id}>
+                        {cn.compartment_code}{cn.compartment_name ? ` — ${cn.compartment_name}` : ''}
+                      </option>
+                    ))}
+                </select>
+                <button onClick={handleAssignCompartment} disabled={!selectedCompartmentId || compLoading}
+                  className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                  {compLoading ? '...' : 'Add'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

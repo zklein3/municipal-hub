@@ -121,7 +121,6 @@ export default function SetupFlowClient({
               stations={stations}
               apparatusTypes={apparatusTypes}
               departmentId={departmentId}
-              moduleIso={moduleIso}
               {...helpProps}
             />
           )}

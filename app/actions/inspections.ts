@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
+import { VEHICLE_CHECK_DEFAULTS } from '@/lib/vehicle-check-defaults'
 
 async function getContext() {
   const supabase = await createClient()
@@ -593,6 +594,205 @@ export async function getSessionReconciliation(session_id: string, apparatus_id:
       item_name: itemMap.get(a.item_id) ?? 'Unknown',
     })),
   }
+}
+
+// ─── Vehicle Check: Seed defaults for dept ────────────────────────────────────
+export async function ensureVehicleCheckItems(department_id: string) {
+  const adminClient = createAdminClient()
+  const { data: existing } = await adminClient
+    .from('vehicle_check_items')
+    .select('id')
+    .eq('department_id', department_id)
+    .limit(1)
+  if (existing && existing.length > 0) return { seeded: false }
+  const inserts = VEHICLE_CHECK_DEFAULTS.map(item => ({ ...item, department_id }))
+  const { error: dbErr } = await adminClient.from('vehicle_check_items').insert(inserts)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/inspections'); return { error: dbErr.message } }
+  return { seeded: true }
+}
+
+// ─── Vehicle Check: Fetch items for dept ──────────────────────────────────────
+export async function getVehicleCheckItems(department_id: string) {
+  const adminClient = createAdminClient()
+  await ensureVehicleCheckItems(department_id)
+  const { data, error: dbErr } = await adminClient
+    .from('vehicle_check_items')
+    .select('id, label, group_name, sort_order, has_amount_field, requires_air_brakes, active, instructions')
+    .eq('department_id', department_id)
+    .order('group_name')
+    .order('sort_order')
+  if (dbErr) return { items: [], error: dbErr.message }
+  return { items: data ?? [] }
+}
+
+// ─── Vehicle Check: Submit ─────────────────────────────────────────────────────
+export async function submitVehicleCheck(payload: {
+  apparatus_id: string
+  department_id: string
+  personnel_id: string
+  odometer?: number | null
+  engine_hours?: number | null
+  notes?: string
+  results: { item_id: string; result: 'ok' | 'issue' | 'na'; amount_added?: string; notes?: string }[]
+}) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+
+  const { data: inspection, error: inspErr } = await adminClient
+    .from('vehicle_inspections')
+    .insert({
+      apparatus_id: payload.apparatus_id,
+      department_id: payload.department_id,
+      inspected_by: payload.personnel_id,
+      odometer: payload.odometer ?? null,
+      engine_hours: payload.engine_hours ?? null,
+      notes: payload.notes ?? null,
+      status: 'completed',
+    })
+    .select('id')
+    .single()
+
+  if (inspErr) { await logError(inspErr.message, '/inspections/vehicle-check'); return { error: inspErr.message } }
+
+  if (payload.results.length > 0) {
+    const { error: resErr } = await adminClient.from('vehicle_inspection_results').insert(
+      payload.results.map(r => ({
+        inspection_id: inspection.id,
+        item_id: r.item_id,
+        result: r.result,
+        amount_added: r.amount_added ?? null,
+        notes: r.notes ?? null,
+      }))
+    )
+    if (resErr) { await logError(resErr.message, '/inspections/vehicle-check'); return { error: resErr.message } }
+  }
+
+  revalidatePath('/inspections')
+  return { success: true, inspection_id: inspection.id }
+}
+
+// ─── Vehicle Check: History for apparatus ─────────────────────────────────────
+export async function getVehicleCheckHistory(apparatus_id: string, limit = 10) {
+  const adminClient = createAdminClient()
+  const { data, error: dbErr } = await adminClient
+    .from('vehicle_inspections')
+    .select('id, inspected_at, odometer, engine_hours, notes, inspected_by')
+    .eq('apparatus_id', apparatus_id)
+    .order('inspected_at', { ascending: false })
+    .limit(limit)
+  if (dbErr) return { history: [] }
+
+  const personnelIds = [...new Set((data ?? []).map(r => r.inspected_by))]
+  const { data: personnel } = personnelIds.length > 0
+    ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', personnelIds)
+    : { data: [] }
+  const pMap = new Map((personnel ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
+
+  return {
+    history: (data ?? []).map(r => ({
+      ...r,
+      inspector_name: pMap.get(r.inspected_by) ?? 'Unknown',
+    })),
+  }
+}
+
+// ─── Vehicle Check Admin: Add item ────────────────────────────────────────────
+export async function addVehicleCheckItem(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can manage vehicle check items.' }
+  const adminClient = createAdminClient()
+  const department_id = ctx.department_id
+  if (!department_id) return { error: 'Department not found.' }
+
+  const label = (formData.get('label') as string)?.trim()
+  const group_name = (formData.get('group_name') as string)?.trim()
+  const has_amount_field = formData.get('has_amount_field') === 'true'
+  const requires_air_brakes = formData.get('requires_air_brakes') === 'true'
+  const instructions = (formData.get('instructions') as string)?.trim() || null
+  if (!label || !group_name) return { error: 'Label and group are required.' }
+
+  const { data: last } = await adminClient
+    .from('vehicle_check_items')
+    .select('sort_order')
+    .eq('department_id', department_id)
+    .eq('group_name', group_name)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+  const sort_order = (last?.[0]?.sort_order ?? 0) + 1
+
+  const { error: dbErr } = await adminClient.from('vehicle_check_items').insert({
+    department_id, label, group_name, sort_order, has_amount_field, requires_air_brakes, instructions, active: true,
+  })
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/inspections'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/inspections')
+  return { success: true }
+}
+
+// ─── Vehicle Check Admin: Update item ─────────────────────────────────────────
+export async function updateVehicleCheckItem(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can manage vehicle check items.' }
+  const adminClient = createAdminClient()
+  const id = formData.get('id') as string
+  const label = (formData.get('label') as string)?.trim()
+  const group_name = (formData.get('group_name') as string)?.trim()
+  const has_amount_field = formData.get('has_amount_field') === 'true'
+  const requires_air_brakes = formData.get('requires_air_brakes') === 'true'
+  const instructions = (formData.get('instructions') as string)?.trim() || null
+  const active = formData.get('active') !== 'false'
+  if (!id || !label || !group_name) return { error: 'Invalid item.' }
+
+  const { error: dbErr } = await adminClient
+    .from('vehicle_check_items')
+    .update({ label, group_name, has_amount_field, requires_air_brakes, instructions, active })
+    .eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/inspections'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/inspections')
+  return { success: true }
+}
+
+// ─── Vehicle Check Admin: Toggle active ───────────────────────────────────────
+export async function toggleVehicleCheckItem(id: string, active: boolean) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can manage vehicle check items.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('vehicle_check_items')
+    .update({ active })
+    .eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/inspections'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/inspections')
+  return { success: true }
+}
+
+// ─── Vehicle Check Admin: Reset to defaults ───────────────────────────────────
+export async function resetVehicleCheckItemsToDefaults(department_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can reset vehicle check items.' }
+  const adminClient = createAdminClient()
+  await adminClient.from('vehicle_check_items').delete().eq('department_id', department_id)
+  const inserts = VEHICLE_CHECK_DEFAULTS.map(item => ({ ...item, department_id }))
+  const { error: dbErr } = await adminClient.from('vehicle_check_items').insert(inserts)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/inspections'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/inspections')
+  return { success: true }
+}
+
+// ─── Apparatus: Toggle air brakes ─────────────────────────────────────────────
+export async function updateApparatusAirBrakes(apparatus_id: string, has_air_brakes: boolean) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Only admins can update apparatus settings.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('apparatus')
+    .update({ has_air_brakes })
+    .eq('id', apparatus_id)
+  if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/apparatus')
+  revalidatePath(`/apparatus/${apparatus_id}`)
+  return { success: true }
 }
 
 // ─── Close Session (officer/admin) ────────────────────────────────────────────

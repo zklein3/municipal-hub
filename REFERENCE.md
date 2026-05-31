@@ -23,7 +23,7 @@
 | Reports | `/reports` | Tile grid — My Activity (all), Attendance/Training/Inspections/Inventory/Fuel (officer+) |
 
 **Dept Admin section — admin only:** Single link → `/dept-admin` hub
-Tiles: Personnel / Training & Certs / Equipment Setup / ISO (if enabled) / NERIS Settings (if enabled) / Public Site (if enabled)
+Tiles: Personnel / Training & Certs / Accountability / Equipment Setup / Inspections / ISO (if enabled) / NERIS Settings (if enabled) / Public Site (if enabled)
 
 **ISO sub-hub** (`/iso`): Hose Inventory / Hydrants / Mutual Aid / Pre-Fire Plans / ISO Report
 
@@ -44,8 +44,9 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `/equipment/storage` — dept-wide storage view: quantity items + unassigned tracked assets
 - `/equipment/movement-log` — movement history with search + source filter
 - `/equipment/assets` — dept-wide asset roster (Inspections nav group, officer+)
-- `/inspections` — landing page: stations → apparatus cards → compartments (Scan QR / View / Inspect / Daily Check)
+- `/inspections` — landing page: stations → apparatus cards → compartments (Scan QR / View / Inspect / Daily Check / Vehicle Check)
 - `/inspections/run`, `/inspections/apparatus/[id]` — inspection run + session flow
+- `/inspections/vehicle-check/[id]` — standalone vehicle check form (fluids, mechanical, lights, comms, emergency equipment, cleaning, air brakes if enabled); per-apparatus, all roles
 - `/scan` — QR code lookup + redirect; compartment scans → `/inspections/run`; supports `?next=` post-login redirect
 - `/fuel` — dept-wide fuel log + add entry (dashboard quick-action)
 - `/events`, `/events/new`
@@ -58,6 +59,7 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `/admin/departments`, `/admin/users`, `/admin/logs`
 - `/admin/dept/[id]` — 5 tabs: Personnel/Stations/Apparatus/Compartments/Public Site
 - `/dept-admin/setup`, `/dept-admin/items`, `/dept-admin/attendance`, `/dept-admin/training`
+- `/dept-admin/inspections` — 2 tabs: Session Settings (inspection session duration) + Vehicle Check Items (add/edit/disable checklist items, instructions, reset to defaults)
 
 ### Public Site Routes (no auth)
 - `/dept/[slug]` — landing | `/dept/[slug]/events` | `/dept/[slug]/burn-permit` | `/dept/[slug]/records`
@@ -84,7 +86,7 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 - `app/actions/stations.ts` — createStation, updateStation
 - `app/actions/compartments.ts` — createCompartmentName, assignCompartmentToApparatus, removeCompartmentFromApparatus, setCompartmentQrCode
 - `app/actions/equipment.ts` — createItemCategory, createItem, updateItem, createAsset, updateAsset, assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, assignAssetApparatus
-- `app/actions/inspections.ts` — createInspectionTemplate, addTemplateStep, updateTemplateStep, deleteTemplateStep, submitInspection, inspection session actions
+- `app/actions/inspections.ts` — createInspectionTemplate, addTemplateStep, updateTemplateStep, deleteTemplateStep, submitInspection, inspection session actions; vehicle check: ensureVehicleCheckItems, getVehicleCheckItems, submitVehicleCheck, getVehicleCheckHistory, addVehicleCheckItem, updateVehicleCheckItem, toggleVehicleCheckItem, resetVehicleCheckItemsToDefaults
 - `app/actions/attendance.ts` — createEventSeries, updateEventInstance, logAttendance, verifyAttendance, requestExcuse, closeEventInstance, cancelEventInstance, createExcuseType, saveParticipationRequirement
 - `app/actions/incidents.ts` — createIncident, updateIncident, setIncidentStatus, apparatus/personnel/attendance actions
 - `app/actions/training.ts` — createCertificationType, createCourseUnit, enrollMember, verifyProgress, logDirectCert, createTrainingEvent, logTrainingAttendance, saveTrainingSignature

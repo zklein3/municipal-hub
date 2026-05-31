@@ -91,6 +91,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 ### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
 Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
 
+### 0d. Vehicle Check — SHIPPED ✅ (2026-05-31)
+Standalone truck check at `/inspections/vehicle-check/[id]` — separate from compartment inventory inspection.
+- 24 default items across 7 groups: Fluids, Mechanical, Lights, Communications, Emergency Equipment, Cleaning, Air Brakes
+- Every item has instructions (procedure, what to look for, pass/fail) — shown expanded by default, tap to collapse
+- Per-apparatus toggles on apparatus detail page: `has_air_brakes` (adds Air Brakes group), `has_engine_hours` (adds engine hours field)
+- Admin manages checklist via Dept Admin → Inspections (new hub card) → Vehicle Check Items tab
+- Results stored in `vehicle_inspections` + `vehicle_inspection_results`; history panel shows last 10 checks
+- "Do inventory on this vehicle?" link connects to compartment inspection session
+- Equipment Setup → Apparatus consolidated to single Edit button (was 3 redundant buttons)
+- Apparatus detail page: ISO Specs + Pump Tests section now before Compartments
+
+**Note for existing depts:** Go to Dept Admin → Inspections → Vehicle Check Items → Reset to defaults once to load instruction text into the DB.
+
 ### 0a. Incident Run Signatures — SHIPPED ✅ (2026-05-23)
 - `incident_signatures` table — unique `(incident_id, personnel_id)`, `signed_at` null = pending
 - Triggered on NERIS submit — rows upserted for all non-absent personnel

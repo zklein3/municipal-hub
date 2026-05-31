@@ -92,10 +92,12 @@ export async function updateApparatus(formData: FormData) {
   // Station assignment — officer + admin
   const station_id = formData.get('station_id') as string
 
-  // Active status + ISO exclusion — admin only
+  // Active status + ISO exclusion + air brakes — admin only
   const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
   const active = isAdmin ? formData.get('active') === 'true' : undefined
   const exclude_from_iso = isAdmin ? formData.get('exclude_from_iso') === 'on' : undefined
+  const has_air_brakes = isAdmin ? formData.get('has_air_brakes') === 'on' : undefined
+  const has_engine_hours = isAdmin ? formData.get('has_engine_hours') === 'on' : undefined
 
   const qr_code = (formData.get('qr_code') as string)?.toUpperCase().trim() || null
 
@@ -114,6 +116,8 @@ export async function updateApparatus(formData: FormData) {
 
   if (active !== undefined) updateData.active = active
   if (exclude_from_iso !== undefined) updateData.exclude_from_iso = exclude_from_iso
+  if (has_air_brakes !== undefined) updateData.has_air_brakes = has_air_brakes
+  if (has_engine_hours !== undefined) updateData.has_engine_hours = has_engine_hours
 
   const { error } = await adminClient.from('apparatus').update(updateData).eq('id', apparatus_id)
 
