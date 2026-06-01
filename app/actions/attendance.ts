@@ -86,6 +86,9 @@ export async function createEventSeries(formData: FormData) {
   const requires_verification = formData.get('requires_verification') !== 'false'
   const requires_signature = formData.get('requires_signature') === 'true'
   const event_date = formData.get('event_date') as string // for one_time
+  const is_training = formData.get('is_training') === 'true'
+  const training_hours = formData.get('training_hours') ? parseFloat(formData.get('training_hours') as string) : null
+  const training_cert_type_id = (formData.get('training_cert_type_id') as string) || null
 
   if (!title || !event_type || !recurrence_type) return { error: 'Title, type, and recurrence are required.' }
 
@@ -109,6 +112,9 @@ export async function createEventSeries(formData: FormData) {
     duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
     requires_verification,
     requires_signature,
+    is_training,
+    training_hours: is_training ? training_hours : null,
+    training_cert_type_id: is_training ? training_cert_type_id : null,
     active: true,
     generate_through_date,
     created_by: ctx.me.id,
@@ -152,7 +158,33 @@ export async function createEventSeries(formData: FormData) {
     }
   }
 
+  // If training event, create a training_events row for each generated instance
+  if (is_training) {
+    const { data: createdInstances } = await adminClient
+      .from('event_instances')
+      .select('id, event_date')
+      .eq('series_id', series.id)
+
+    if (createdInstances?.length) {
+      await adminClient.from('training_events').insert(
+        createdInstances.map(inst => ({
+          department_id,
+          event_instance_id: inst.id,
+          topic: title,
+          event_date: inst.event_date,
+          hours: training_hours,
+          certification_type_id: training_cert_type_id,
+          requires_verification,
+          start_time: start_time || null,
+          location: location || null,
+          created_by: ctx.me.id,
+        }))
+      )
+    }
+  }
+
   revalidatePath('/events')
+  revalidatePath('/training')
   return { success: true, series_id: series.id }
 }
 
@@ -226,6 +258,9 @@ export async function updateEventSeries(formData: FormData) {
   const duration_minutes = formData.get('duration_minutes') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
   const requires_signature = formData.get('requires_signature') === 'true'
+  const is_training = formData.get('is_training') === 'true'
+  const training_hours = formData.get('training_hours') ? parseFloat(formData.get('training_hours') as string) : null
+  const training_cert_type_id = (formData.get('training_cert_type_id') as string) || null
 
   // Update series
   const { error: seriesErr } = await adminClient.from('event_series').update({
@@ -236,6 +271,9 @@ export async function updateEventSeries(formData: FormData) {
     duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
     requires_verification,
     requires_signature,
+    is_training,
+    training_hours: is_training ? training_hours : null,
+    training_cert_type_id: is_training ? training_cert_type_id : null,
     updated_at: new Date().toISOString(),
   }).eq('id', series_id)
 
@@ -301,7 +339,56 @@ export async function updateEventSeries(formData: FormData) {
     }
   }
 
+  // Sync training_events for all future instances
+  if (instanceIds.length > 0) {
+    if (is_training) {
+      const { data: existingTE } = await adminClient
+        .from('training_events')
+        .select('id, event_instance_id')
+        .in('event_instance_id', instanceIds)
+      const existingTEMap = Object.fromEntries((existingTE ?? []).map(te => [te.event_instance_id, te.id]))
+
+      const { data: instData } = await adminClient
+        .from('event_instances').select('id, event_date').in('id', instanceIds)
+      const instDateMap = Object.fromEntries((instData ?? []).map(i => [i.id, i.event_date]))
+
+      const toInsert: Record<string, unknown>[] = []
+      const toUpdateIds: string[] = []
+      for (const instId of instanceIds) {
+        if (existingTEMap[instId]) {
+          toUpdateIds.push(existingTEMap[instId])
+        } else {
+          toInsert.push({
+            department_id: ctx.department_id,
+            event_instance_id: instId,
+            topic: title,
+            event_date: instDateMap[instId],
+            hours: training_hours,
+            certification_type_id: training_cert_type_id,
+            requires_verification,
+            start_time: start_time || null,
+            location: location || null,
+            created_by: ctx.me.id,
+          })
+        }
+      }
+      if (toUpdateIds.length > 0) {
+        await adminClient.from('training_events')
+          .update({ hours: training_hours, certification_type_id: training_cert_type_id, cancelled: false, topic: title })
+          .in('id', toUpdateIds)
+      }
+      if (toInsert.length > 0) {
+        await adminClient.from('training_events').insert(toInsert)
+      }
+    } else {
+      await adminClient.from('training_events')
+        .update({ cancelled: true })
+        .in('event_instance_id', instanceIds)
+    }
+  }
+
   revalidatePath('/events')
+  revalidatePath('/training')
   return { success: true }
 }
 
@@ -417,10 +504,63 @@ export async function verifyAttendance(attendance_id: string, action: 'present' 
     }
   }
 
+  // If this instance has a linked training_events record with a cert type, issue the cert
+  if (action === 'present' && att) {
+    const { data: trainingEvtList } = await adminClient
+      .from('training_events')
+      .select('id, certification_type_id, event_date')
+      .eq('event_instance_id', att.instance_id)
+    const trainingEvt = trainingEvtList?.[0]
+    if (trainingEvt?.certification_type_id && ctx.department_id) {
+      await issueCertFromTrainingLink(adminClient, trainingEvt, att.personnel_id, ctx.department_id)
+    }
+  }
+
   revalidatePath('/events')
+  revalidatePath('/training')
   revalidatePath('/reports/my-activity')
   revalidatePath('/dashboard')
   return { success: true }
+}
+
+async function issueCertFromTrainingLink(
+  adminClient: ReturnType<typeof createAdminClient>,
+  trainingEvt: { id: string; certification_type_id: string; event_date: string },
+  personnel_id: string,
+  department_id: string
+) {
+  const { data: ct } = await adminClient
+    .from('certification_types')
+    .select('cert_name, issuing_body, does_expire, expiration_interval_months')
+    .eq('id', trainingEvt.certification_type_id)
+    .single()
+  if (!ct) return
+
+  const issued_date = trainingEvt.event_date
+  const expiration_date = ct.does_expire && ct.expiration_interval_months
+    ? (() => { const d = new Date(issued_date); d.setMonth(d.getMonth() + ct.expiration_interval_months!); return d.toISOString().split('T')[0] })()
+    : null
+
+  const { data: existing } = await adminClient
+    .from('member_certifications')
+    .select('id')
+    .eq('personnel_id', personnel_id)
+    .eq('certification_type_id', trainingEvt.certification_type_id)
+    .eq('source', 'training_event')
+    .eq('issued_date', issued_date)
+  if (existing?.length) return
+
+  await adminClient.from('member_certifications').insert({
+    personnel_id,
+    department_id,
+    certification_type_id: trainingEvt.certification_type_id,
+    cert_name: ct.cert_name,
+    issuing_body: ct.issuing_body,
+    issued_date,
+    expiration_date,
+    source: 'training_event',
+    active: true,
+  })
 }
 
 // ─── Request Excuse (member self-submit) ─────────────────────────────────────

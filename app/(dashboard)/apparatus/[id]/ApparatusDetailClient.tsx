@@ -86,6 +86,8 @@ type IsoSpecs = {
   tank_capacity_gal: number | null
   foam_capacity_gal: number | null
   aerial_length_ft: number | null
+  turning_radius_ft: number | null
+  gvwr_lbs: number | null
   hose_loads: HoseLoad[] | null
 } | null
 
@@ -396,6 +398,18 @@ export default function ApparatusDetailClient({
               <div className="sm:w-32">
                 <label className="mb-1 block text-sm font-medium text-zinc-700">Aerial Length (ft)</label>
                 <input name="aerial_length_ft" type="number" min="0" defaultValue={isoSpecs?.aerial_length_ft ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Turning Radius (ft)</label>
+                <input name="turning_radius_ft" type="number" min="0" defaultValue={isoSpecs?.turning_radius_ft ?? ''}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-zinc-700">GVWR (lbs)</label>
+                <input name="gvwr_lbs" type="number" min="0" defaultValue={isoSpecs?.gvwr_lbs ?? ''}
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
               </div>
             </div>

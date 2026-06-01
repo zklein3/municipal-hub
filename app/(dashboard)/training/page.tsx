@@ -63,11 +63,31 @@ export default async function TrainingPage() {
 
   const { data: allTrainingEvents } = await adminClient
     .from('training_events')
-    .select('id, event_date, start_time, topic, hours, location, description, requires_verification, certification_type_id')
+    .select('id, event_date, start_time, topic, hours, location, description, requires_verification, certification_type_id, event_instance_id')
     .eq('department_id', department_id)
+    .eq('cancelled', false)
     .gte('event_date', past30.toISOString().split('T')[0])
     .lte('event_date', future60.toISOString().split('T')[0])
     .order('event_date', { ascending: false })
+
+  // For linked events, fetch the parent event series title flat
+  const linkedInstanceIds = (allTrainingEvents ?? []).filter(e => e.event_instance_id).map(e => e.event_instance_id as string)
+  const { data: linkedInstances } = linkedInstanceIds.length > 0
+    ? await adminClient.from('event_instances').select('id, series_id').in('id', linkedInstanceIds)
+    : { data: [] }
+  const linkedSeriesIds = (linkedInstances ?? []).map(i => i.series_id)
+  const { data: linkedSeries } = linkedSeriesIds.length > 0
+    ? await adminClient.from('event_series').select('id, title').in('id', linkedSeriesIds)
+    : { data: [] }
+  const seriesTitleMap = Object.fromEntries((linkedSeries ?? []).map(s => [s.id, s.title]))
+  const instanceSeriesMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i.series_id]))
+  const linkedEventTitles: Record<string, string> = {}
+  for (const e of allTrainingEvents ?? []) {
+    if (e.event_instance_id) {
+      const seriesId = instanceSeriesMap[e.event_instance_id]
+      if (seriesId) linkedEventTitles[e.id] = seriesTitleMap[seriesId] ?? ''
+    }
+  }
 
   // My attendance records for these events
   const allEventIds = (allTrainingEvents ?? []).map(e => e.id)
@@ -143,6 +163,7 @@ export default async function TrainingPage() {
           ...e,
           my_attendance: myAttendanceMap[e.id] ?? null,
         }))}
+        linkedEventTitles={linkedEventTitles}
         myPersonnelId={me.id}
         myName={`${me.first_name} ${me.last_name}`}
         isOfficerOrAbove={isOfficerOrAbove}

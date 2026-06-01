@@ -10,7 +10,7 @@
 - Asset Roster (`/reports/assets` via `/equipment/assets`) — moved to Reports hub as read-only officer/admin audit view. Apparatus assignment now lives in Equipment Setup → Items → Assets tab.
 - Compartment display — `[unit_number] - [code]` (e.g. `24 - D1`) everywhere a compartment appears in apparatus context (inventory detail, inspection pages, move dropdowns). Setup screen stays universal (code only).
 - Reports hub (`/reports`) — tile grid, role-adaptive (members see My Activity only, officers+ see all)
-- Dept Admin hub (`/dept-admin`) — Personnel, Training, Equipment Setup, ISO (conditional), NERIS (conditional), Public Site (conditional)
+- Dept Admin hub (`/dept-admin`) — Personnel, **Events**, Training, Equipment Setup, Inspections, ISO (conditional), NERIS (conditional), Public Site (conditional)
 - ISO sub-hub (`/iso`) — Hose Inventory, Hydrants, Mutual Aid, Pre-Fire Plans, ISO Report
 - Training hub card row — Events, My Certifications (expiry alert), Print Training Card
 - My Profile link in sidebar footer (name links to own personnel profile)
@@ -36,11 +36,11 @@
 - Equipment Setup → Apparatus — collapsed to single Edit button (links to `/apparatus/[id]`); removed redundant Load and ISO Specs buttons
 - QR system — human-readable codes, `/scan` redirect, print labels
 - Announcements — pinning, unread tracking, dashboard banner
-- Events + attendance — full lifecycle, excused absence, close event, auto-close cron
-- Training/Certifications — courses, enrollments, verification, direct cert entry, training events, digital signatures
+- Events + attendance — full lifecycle, excused absence, close event, auto-close cron. `/events` is member-only clean view; `/dept-admin/events` is officer management (bulk log, pending queue, edit, cancel, delete, close). Events have a Training toggle (hours + cert type) that auto-creates linked `training_events` rows and auto-issues certs on attendance verification.
+- Training/Certifications — courses, enrollments, verification, direct cert entry, training events, digital signatures. Training-linked events show on `/training` page with "via [Event Title]" badge. Standalone training events have Cancel button.
 - Incidents — manual entry, apparatus/personnel tracking, mutual aid, officer verify + finalize
 - Incident run signatures — NERIS submit triggers signature rows for all responders; members sign via Inbox; officer sees signed/pending roster on incident detail page
-- ISO audit — hose inventory (add/edit/remove/log test), hydrant flow tests (add/edit/remove/log test), apparatus specs, mutual aid log, `/iso/report`
+- ISO audit — hose inventory (add/edit/remove/log test), hydrant flow tests (add/edit/remove/log test), apparatus specs (pump, tank, foam, aerial, turning radius, GVWR), mutual aid log, `/iso/report`
 - Reports — inspections, inventory, training, attendance, my-activity (all with print)
 - Member training record print
 - Run Sheet print page (`/print/run-sheet?id=xxx`) — matches paper Run Field Report: apparatus groups with member names, POV group, Station group (standby), mutual aid To/From, full dept roster with checkmarks, fits on one letter sheet

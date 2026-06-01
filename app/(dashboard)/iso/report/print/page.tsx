@@ -43,7 +43,7 @@ export default async function PrintReportPage({
 
   const { data: isoSpecs } = await adminClient
     .from('apparatus_iso_specs')
-    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
+    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, turning_radius_ft, gvwr_lbs, hose_loads')
     .eq('department_id', department_id)
 
   const { data: pumpTestsRaw } = await adminClient

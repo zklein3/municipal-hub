@@ -41,6 +41,8 @@ export async function upsertApparatusIsoSpecs(formData: FormData) {
       tank_capacity_gal: formData.get('tank_capacity_gal') ? parseInt(formData.get('tank_capacity_gal') as string) : null,
       foam_capacity_gal: formData.get('foam_capacity_gal') ? parseInt(formData.get('foam_capacity_gal') as string) : null,
       aerial_length_ft: formData.get('aerial_length_ft') ? parseInt(formData.get('aerial_length_ft') as string) : null,
+      turning_radius_ft: formData.get('turning_radius_ft') ? parseInt(formData.get('turning_radius_ft') as string) : null,
+      gvwr_lbs: formData.get('gvwr_lbs') ? parseInt(formData.get('gvwr_lbs') as string) : null,
       hose_loads: (() => { try { return JSON.parse(formData.get('hose_loads') as string) } catch { return null } })(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'apparatus_id' })

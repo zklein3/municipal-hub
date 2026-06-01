@@ -26,6 +26,7 @@ interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
   requires_verification: boolean; certification_type_id: string | null
+  event_instance_id: string | null
   my_attendance: { id: string; event_id: string; status: string; submitted_at: string; signed_at: string | null; signature_url: string | null } | null
 }
 interface AttendanceRecord {
@@ -54,10 +55,11 @@ function fmtDate(d: string) {
 
 export default function TrainingClient({
   enrollments, certTypes, units, myProgress, myCerts, trainingEvents,
-  myPersonnelId, myName, isOfficerOrAbove, officerAttendance = [],
+  linkedEventTitles = {}, myPersonnelId, myName, isOfficerOrAbove, officerAttendance = [],
 }: {
   enrollments: Enrollment[]; certTypes: CertType[]; units: Unit[]
   myProgress: Progress[]; myCerts: Certification[]; trainingEvents: TrainingEvent[]
+  linkedEventTitles?: Record<string, string>
   myPersonnelId: string; myName: string; isOfficerOrAbove: boolean
   officerAttendance?: AttendanceRecord[]
 }) {
@@ -166,6 +168,7 @@ export default function TrainingClient({
               const certType = evt.certification_type_id ? certTypeMap[evt.certification_type_id] : null
               const sigKey = `${evt.id}:${myPersonnelId}`
               const isSigned = !!localSignatures[sigKey] || !!evt.my_attendance?.signature_url
+              const linkedTitle = evt.event_instance_id ? linkedEventTitles[evt.id] : null
 
               return (
                 <div key={`evt-${evt.id}`} className="rounded-xl bg-white shadow-sm border border-zinc-200 px-5 py-4">
@@ -184,38 +187,49 @@ export default function TrainingClient({
                         {evt.location && <span>📍 {evt.location}</span>}
                         {evt.hours && <span>{evt.hours}h</span>}
                         {certType && <span className="text-blue-600 font-medium">Issues: {certType.cert_name}</span>}
+                        {linkedTitle && (
+                          <span className="text-purple-600 font-medium">via {linkedTitle}</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      {attended && evt.my_attendance!.status !== 'verified' && (
-                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[evt.my_attendance!.status]}`}>
-                          {evt.my_attendance!.status.charAt(0).toUpperCase() + evt.my_attendance!.status.slice(1)}
-                        </span>
-                      )}
-                      {attended && evt.my_attendance?.status === 'verified' && !isSigned && (
-                        <button onClick={() => setSigPadTarget({ eventId: evt.id, personnelId: myPersonnelId, memberName: myName, eventTopic: evt.topic })}
-                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                          Sign
-                        </button>
-                      )}
-                      {isSigned && <span className="text-xs font-semibold text-green-600">✓ Signed</span>}
-                      {!attended && past && windowOpen && (
-                        <button onClick={() => handleSelfReport(evt.id)} disabled={loading}
-                          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                          Log Attendance
-                        </button>
-                      )}
-                      {!attended && past && !windowOpen && !isOfficerOrAbove && (
-                        <span className="text-xs text-zinc-400">Window closed</span>
-                      )}
-                      {!attended && past && !windowOpen && isOfficerOrAbove && (
-                        <button onClick={() => handleSelfReport(evt.id)} disabled={loading}
-                          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                          Log Attendance
-                        </button>
-                      )}
-                      {!attended && !past && (
-                        <span className="text-xs text-zinc-400">{isToday(evt.event_date) ? 'Today' : 'Upcoming'}</span>
+                      {linkedTitle ? (
+                        <a href="/events" className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                          Log on Events →
+                        </a>
+                      ) : (
+                        <>
+                          {attended && evt.my_attendance!.status !== 'verified' && (
+                            <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[evt.my_attendance!.status]}`}>
+                              {evt.my_attendance!.status.charAt(0).toUpperCase() + evt.my_attendance!.status.slice(1)}
+                            </span>
+                          )}
+                          {attended && evt.my_attendance?.status === 'verified' && !isSigned && (
+                            <button onClick={() => setSigPadTarget({ eventId: evt.id, personnelId: myPersonnelId, memberName: myName, eventTopic: evt.topic })}
+                              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                              Sign
+                            </button>
+                          )}
+                          {isSigned && <span className="text-xs font-semibold text-green-600">✓ Signed</span>}
+                          {!attended && past && windowOpen && (
+                            <button onClick={() => handleSelfReport(evt.id)} disabled={loading}
+                              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                              Log Attendance
+                            </button>
+                          )}
+                          {!attended && past && !windowOpen && !isOfficerOrAbove && (
+                            <span className="text-xs text-zinc-400">Window closed</span>
+                          )}
+                          {!attended && past && !windowOpen && isOfficerOrAbove && (
+                            <button onClick={() => handleSelfReport(evt.id)} disabled={loading}
+                              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                              Log Attendance
+                            </button>
+                          )}
+                          {!attended && !past && (
+                            <span className="text-xs text-zinc-400">{isToday(evt.event_date) ? 'Today' : 'Upcoming'}</span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

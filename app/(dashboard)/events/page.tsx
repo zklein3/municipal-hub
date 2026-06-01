@@ -22,11 +22,10 @@ export default async function EventsPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
-  const isAdmin = myDept.system_role === 'admin'
+  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
   const department_id = myDept.department_id
 
-  // Excuse types for this dept
+  // Excuse types for the excuse request form
   const { data: excuseTypesRaw } = await adminClient
     .from('excuse_types')
     .select('id, excuse_name')
@@ -34,15 +33,12 @@ export default async function EventsPage() {
     .eq('active', true)
     .order('excuse_name')
 
-  // Fetch instances: past 30 days + future 365 days (special events show the full year;
-  // other types are trimmed to future 60 days after joining with series data)
+  // Event instances: past 30 days + future 365 (special events) / 60 days (all others)
   const past30 = new Date()
   past30.setDate(past30.getDate() - 30)
   const future365 = new Date()
   future365.setDate(future365.getDate() + 365)
-  const future60cutoff = new Date()
-  future60cutoff.setDate(future60cutoff.getDate() + 60)
-  const future60str = future60cutoff.toISOString().split('T')[0]
+  const future60str = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const { data: instances } = await adminClient
     .from('event_instances')
@@ -51,27 +47,20 @@ export default async function EventsPage() {
     .lte('event_date', future365.toISOString().split('T')[0])
     .order('event_date', { ascending: true })
 
-  // Fetch public site status for this department
-  const { data: deptData } = await adminClient
-    .from('departments')
-    .select('public_site_enabled')
-    .eq('id', department_id)
-    .single()
-  const publicSiteEnabled = deptData?.public_site_enabled ?? false
-
-  // Fetch series info
+  // Series info — display fields + training flags
   const seriesIds = [...new Set((instances ?? []).map(i => i.series_id))]
   const { data: seriesData } = seriesIds.length > 0
     ? await adminClient
         .from('event_series')
-        .select('id, title, event_type, department_id, recurrence_type, description, is_public, duration_minutes')
+        .select('id, title, event_type, department_id, recurrence_type, description, duration_minutes, is_training, training_hours')
         .in('id', seriesIds)
         .eq('department_id', department_id)
     : { data: [] }
 
-  // Filter to this department only; non-special events trimmed to 60-day future window
   const deptSeriesIds = new Set((seriesData ?? []).map(s => s.id))
   const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
+
+  // Filter to this dept; trim non-special events to 60-day future window
   const deptInstances = (instances ?? []).filter(i => {
     if (!deptSeriesIds.has(i.series_id)) return false
     const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
@@ -92,7 +81,7 @@ export default async function EventsPage() {
 
   const myAttendanceMap = Object.fromEntries((myAttendance ?? []).map(a => [a.instance_id, a]))
 
-  // Pending event signatures for current user
+  // My pending signatures
   const { data: myPendingSigs } = instanceIds.length > 0
     ? await adminClient
         .from('event_attendance_signatures')
@@ -101,102 +90,35 @@ export default async function EventsPage() {
         .is('signed_at', null)
         .in('instance_id', instanceIds)
     : { data: [] }
+
   const pendingSigByInstance = Object.fromEntries((myPendingSigs ?? []).map(s => [s.instance_id, s.id]))
-
-  // For officers — fetch pending attendance + pending excuse requests
-  let pendingByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string }[]> = {}
-  let excuseByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string; excuse_type: string; notes: string | null }[]> = {}
-
-  const excuseTypeMap = Object.fromEntries((excuseTypesRaw ?? []).map(e => [e.id, e.excuse_name]))
-
-  if (isOfficerOrAbove && instanceIds.length > 0) {
-    const { data: allPendingRaw } = await adminClient
-      .from('event_attendance')
-      .select('id, instance_id, personnel_id, submitted_at, status, excuse_type_id, notes')
-      .in('instance_id', instanceIds)
-      .in('status', ['pending', 'excused_pending'])
-
-    if (allPendingRaw && allPendingRaw.length > 0) {
-      const personnelIds = [...new Set(allPendingRaw.map(p => p.personnel_id))]
-      const { data: pendingPersonnel } = await adminClient
-        .from('personnel')
-        .select('id, first_name, last_name')
-        .in('id', personnelIds)
-
-      const nameMap = Object.fromEntries(
-        (pendingPersonnel ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`])
-      )
-
-      for (const p of allPendingRaw) {
-        const name = nameMap[p.personnel_id] ?? 'Unknown'
-        if (p.status === 'pending') {
-          if (!pendingByInstance[p.instance_id]) pendingByInstance[p.instance_id] = []
-          pendingByInstance[p.instance_id].push({ id: p.id, personnel_id: p.personnel_id, name, submitted_at: p.submitted_at })
-        } else {
-          if (!excuseByInstance[p.instance_id]) excuseByInstance[p.instance_id] = []
-          excuseByInstance[p.instance_id].push({
-            id: p.id,
-            personnel_id: p.personnel_id,
-            name,
-            submitted_at: p.submitted_at,
-            excuse_type: p.excuse_type_id ? (excuseTypeMap[p.excuse_type_id] ?? '—') : '—',
-            notes: p.notes ?? null,
-          })
-        }
-      }
-    }
-  }
 
   const events = deptInstances.map(i => ({
     id: i.id,
     series_id: i.series_id,
     title: seriesMap[i.series_id]?.title ?? '—',
-    event_type: seriesMap[i.series_id]?.event_type ?? 'training',
+    event_type: seriesMap[i.series_id]?.event_type ?? 'meeting',
     description: seriesMap[i.series_id]?.description ?? null,
-    recurrence_type: seriesMap[i.series_id]?.recurrence_type ?? 'one_time',
     duration_minutes: seriesMap[i.series_id]?.duration_minutes ?? null,
-    is_public: seriesMap[i.series_id]?.is_public ?? false,
+    is_training: seriesMap[i.series_id]?.is_training ?? false,
+    training_hours: seriesMap[i.series_id]?.training_hours ?? null,
     event_date: i.event_date,
     start_time: i.start_time,
     location: i.location,
     status: i.status,
     notes: i.notes,
     requires_verification: i.requires_verification,
-    requires_signature: i.requires_signature,
     pending_sig_id: pendingSigByInstance[i.id] ?? null,
     my_attendance: myAttendanceMap[i.id] ?? null,
-    pending_count: (pendingByInstance[i.id]?.length ?? 0) + (excuseByInstance[i.id]?.length ?? 0),
-    pending_submissions: pendingByInstance[i.id] ?? [],
-    excuse_submissions: excuseByInstance[i.id] ?? [],
   }))
-
-  // All personnel for bulk logging (officers only)
-  const { data: personnel } = isOfficerOrAbove
-    ? await adminClient
-        .from('department_personnel')
-        .select('personnel_id, personnel(id, first_name, last_name)')
-        .eq('department_id', department_id)
-        .eq('active', true)
-    : { data: [] }
-
-  const personnelList = (personnel ?? []).map(p => ({
-    id: (p.personnel as any)?.id ?? p.personnel_id,
-    name: [(p.personnel as any)?.first_name, (p.personnel as any)?.last_name].filter(Boolean).join(' '),
-  })).sort((a, b) => a.name.localeCompare(b.name))
-
-  const excuseTypes = (excuseTypesRaw ?? []).map(e => ({ id: e.id, name: e.excuse_name }))
 
   return (
     <EventsClient
       events={events}
-      personnelList={personnelList}
-      excuseTypes={excuseTypes}
+      excuseTypes={(excuseTypesRaw ?? []).map(e => ({ id: e.id, name: e.excuse_name }))}
       myPersonnelId={me.id}
       myName={`${me.first_name} ${me.last_name}`}
       isOfficerOrAbove={isOfficerOrAbove}
-      isAdmin={isAdmin}
-      publicSiteEnabled={publicSiteEnabled}
-      departmentId={department_id}
     />
   )
 }

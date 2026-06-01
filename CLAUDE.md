@@ -88,6 +88,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### 0f. Events Restructure + Training Toggle — SHIPPED ✅ (2026-06-01)
+- `/events` → clean member page (cards, Log Attendance, Sign, Can't Attend). Officers see "Manage Events →" top right.
+- `/dept-admin/events` → full management page (edit, bulk log, pending queue, excuse approvals, close, cancel, delete). Card added to Dept Admin hub.
+- **Training toggle** on event create + inline edit: sets hours + optional cert type → auto-creates `training_events` rows per instance → linked events show on `/training` page with purple "via [Event Title]" badge
+- Officer verifies attendance on training-linked event → cert auto-issued if cert type set
+- Standalone training events: Cancel button added; cancelled events hidden from member view
+- DB: `event_series` + `is_training`, `training_hours`, `training_cert_type_id`; `training_events` + `event_instance_id`, `cancelled`
+- Apparatus ISO specs: `turning_radius_ft` + `gvwr_lbs` added to `apparatus_iso_specs`, ISO report + apparatus detail updated
+
+**Still pending from training work:**
+- Member self-submit "Log Training" for standalone sessions (EMS conference use case) — no officer setup required
+- Training page member UX redesign (hub-and-spoke, similar to equipment)
+
 ### 0e. Inventory & Equipment Setup Restructure — SHIPPED ✅ (2026-06-01)
 - Nav label: Equipment → **Inventory**
 - `/equipment` rewritten as member-focused page: Station Storage card + apparatus list (Vehicle Check, View Inventory, Fuel Log per card)

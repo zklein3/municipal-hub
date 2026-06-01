@@ -605,6 +605,29 @@ export async function saveCertSignature(formData: FormData) {
   return { success: true, signedAt }
 }
 
+// ─── Cancel standalone training event ────────────────────────────────────────
+
+export async function cancelTrainingEvent(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('training_events')
+    .update({ cancelled: true })
+    .eq('id', id)
+    .is('event_instance_id', null) // only cancel standalone events
+
+  if (dbErr) {
+    await logError(dbErr.message, 'cancelTrainingEvent')
+    return { error: dbErr.message }
+  }
+
+  revalidatePath('/dept-admin/training')
+  revalidatePath('/training')
+  return { success: true }
+}
+
 // ─── ANY MEMBER: Save Training Signature (own record only; officers can sign any) ──
 export async function saveTrainingSignature(formData: FormData) {
   const ctx = await getContext()

@@ -10,6 +10,7 @@ import {
   verifyEnrollmentSession,
   createTrainingEvent, logTrainingAttendance,
   createDirectCertification, updateMemberCertification,
+  cancelTrainingEvent,
 } from '@/app/actions/training'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -30,17 +31,19 @@ interface TrainingEvent {
   id: string; event_date: string; start_time: string | null; topic: string
   hours: number | null; location: string | null; description: string | null
   requires_verification: boolean; verified_count: number; signed_count: number
+  event_instance_id: string | null
   pending_attendance: PendingAttendance[]
   all_attendance: { id: string; personnel_id: string; name: string; status: string; signed_at: string | null }[]
 }
 
 export default function TrainingAdminClient({
-  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, memberCerts, isAdmin, departmentId,
+  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, linkedEventTitles = {}, memberCerts, isAdmin, departmentId,
 }: {
   certTypes: CertType[]; units: Unit[]; enrollments: Enrollment[]
   pendingProgress: PendingProgress[]; pendingSessions: PendingSession[]
   allPersonnel: Personnel[]
   trainingEvents: TrainingEvent[]
+  linkedEventTitles?: Record<string, string>
   memberCerts: MemberCert[]
   isAdmin: boolean
   departmentId: string
@@ -696,41 +699,61 @@ export default function TrainingAdminClient({
               <div className="px-6 py-12 text-center text-sm text-zinc-400">No training events in the past 30 days or upcoming 60 days.</div>
             ) : (
               <div className="divide-y divide-zinc-100">
-                {trainingEvents.map(evt => (
+                {trainingEvents.map(evt => {
+                  const linkedTitle = evt.event_instance_id ? linkedEventTitles[evt.id] : null
+                  return (
                   <div key={evt.id}>
                     <div className="flex items-center px-5 py-4 gap-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-zinc-900">{evt.topic}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-zinc-900">{evt.topic}</p>
+                          {linkedTitle && (
+                            <span className="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 font-medium">via {linkedTitle}</span>
+                          )}
+                        </div>
                         <div className="flex gap-3 text-xs text-zinc-400 mt-0.5 flex-wrap">
                           <span>{new Date(evt.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                           {evt.location && <span>📍 {evt.location}</span>}
                           {evt.hours && <span>{evt.hours}h</span>}
-                          <span>{evt.verified_count} verified</span>
-                          {evt.signed_count > 0 && (
+                          {!linkedTitle && <span>{evt.verified_count} verified</span>}
+                          {!linkedTitle && evt.signed_count > 0 && (
                             <span className="text-green-600 font-semibold">✓ {evt.signed_count} signed</span>
                           )}
-                          {evt.pending_attendance.length > 0 && (
+                          {!linkedTitle && evt.pending_attendance.length > 0 && (
                             <span className="text-yellow-600 font-semibold">⏳ {evt.pending_attendance.length} pending</span>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <a
-                          href={`/print/training-signin?event_id=${evt.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
-                        >
-                          Print ↗
-                        </a>
-                        <button onClick={() => { setLogAttendanceEventId(logAttendanceEventId === evt.id ? null : evt.id); setAttendanceSelected(new Set()) }}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800">
-                          {logAttendanceEventId === evt.id ? 'Hide' : 'Manage'}
-                        </button>
+                        {linkedTitle ? (
+                          <a href="/events" className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                            Manage on Events →
+                          </a>
+                        ) : (
+                          <>
+                            <a
+                              href={`/print/training-signin?event_id=${evt.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              Print ↗
+                            </a>
+                            <button onClick={() => { setLogAttendanceEventId(logAttendanceEventId === evt.id ? null : evt.id); setAttendanceSelected(new Set()) }}
+                              className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                              {logAttendanceEventId === evt.id ? 'Hide' : 'Manage'}
+                            </button>
+                            <button onClick={() => { if (confirm('Cancel this training event?')) wrap(() => cancelTrainingEvent(evt.id)) }}
+                              disabled={loading}
+                              className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-50">
+                              Cancel
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {logAttendanceEventId === evt.id && (
+                    {logAttendanceEventId === evt.id && !linkedTitle && (
                       <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 flex flex-col gap-4">
 
                         {/* Pending self-reports */}
@@ -834,7 +857,8 @@ export default function TrainingAdminClient({
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

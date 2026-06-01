@@ -98,11 +98,31 @@ export default async function TrainingAdminPage() {
 
   const { data: trainingEvents } = await adminClient
     .from('training_events')
-    .select('id, event_date, start_time, topic, hours, location, description, requires_verification')
+    .select('id, event_date, start_time, topic, hours, location, description, requires_verification, event_instance_id')
     .eq('department_id', department_id)
+    .eq('cancelled', false)
     .gte('event_date', past30.toISOString().split('T')[0])
     .lte('event_date', future60.toISOString().split('T')[0])
     .order('event_date', { ascending: false })
+
+  // Linked event titles for training events attached to dept events
+  const linkedInstanceIds = (trainingEvents ?? []).filter(e => e.event_instance_id).map(e => e.event_instance_id as string)
+  const { data: linkedInstances } = linkedInstanceIds.length > 0
+    ? await adminClient.from('event_instances').select('id, series_id').in('id', linkedInstanceIds)
+    : { data: [] }
+  const linkedSeriesIds = (linkedInstances ?? []).map(i => i.series_id)
+  const { data: linkedSeries } = linkedSeriesIds.length > 0
+    ? await adminClient.from('event_series').select('id, title').in('id', linkedSeriesIds)
+    : { data: [] }
+  const adminSeriesTitleMap = Object.fromEntries((linkedSeries ?? []).map(s => [s.id, s.title]))
+  const adminInstanceSeriesMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i.series_id]))
+  const adminLinkedEventTitles: Record<string, string> = {}
+  for (const e of trainingEvents ?? []) {
+    if (e.event_instance_id) {
+      const seriesId = adminInstanceSeriesMap[e.event_instance_id]
+      if (seriesId) adminLinkedEventTitles[e.id] = adminSeriesTitleMap[seriesId] ?? ''
+    }
+  }
 
   // Attendance for training events (include signature fields)
   const eventIds = (trainingEvents ?? []).map(e => e.id)
@@ -146,6 +166,7 @@ export default async function TrainingAdminPage() {
         pending_attendance: attendanceByEvent[e.id]?.pending ?? [],
         all_attendance: attendanceByEvent[e.id]?.all ?? [],
       }))}
+      linkedEventTitles={adminLinkedEventTitles}
       memberCerts={memberCerts}
       isAdmin={isAdmin}
       departmentId={department_id}

@@ -51,7 +51,7 @@ export default async function IsoReportPage() {
 
   const { data: isoSpecs } = await adminClient
     .from('apparatus_iso_specs')
-    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, hose_loads')
+    .select('apparatus_id, pump_rating_gpm, tank_capacity_gal, foam_capacity_gal, aerial_length_ft, turning_radius_ft, gvwr_lbs, hose_loads')
     .eq('department_id', department_id)
 
   // Latest pump test per apparatus
@@ -269,6 +269,8 @@ export default async function IsoReportPage() {
                   <th className="pb-2 font-medium pr-4">Pump (GPM)</th>
                   <th className="pb-2 font-medium pr-4">Tank (gal)</th>
                   <th className="pb-2 font-medium pr-4">Aerial (ft)</th>
+                  <th className="pb-2 font-medium pr-4">Turn Radius (ft)</th>
+                  <th className="pb-2 font-medium pr-4">GVWR (lbs)</th>
                   <th className="pb-2 font-medium pr-4">ISO Specs</th>
                   <th className="pb-2 font-medium">Pump Test</th>
                 </tr>
@@ -287,6 +289,8 @@ export default async function IsoReportPage() {
                       <td className="py-2 pr-4 text-zinc-600">{spec?.pump_rating_gpm ?? '—'}</td>
                       <td className="py-2 pr-4 text-zinc-600">{spec?.tank_capacity_gal ?? '—'}</td>
                       <td className="py-2 pr-4 text-zinc-600">{spec?.aerial_length_ft ?? '—'}</td>
+                      <td className="py-2 pr-4 text-zinc-600">{spec?.turning_radius_ft ?? '—'}</td>
+                      <td className="py-2 pr-4 text-zinc-600">{spec?.gvwr_lbs != null ? spec.gvwr_lbs.toLocaleString() : '—'}</td>
                       <td className="py-2 pr-4">
                         <span className={`rounded-full px-2 py-0.5 font-medium ${spec ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
                           {spec ? 'Complete' : 'Missing'}
@@ -312,6 +316,8 @@ export default async function IsoReportPage() {
                     <td className="py-2 pr-4 text-zinc-400">
                       {[a.model_year, a.make, a.model].filter(Boolean).join(' ') || '—'}
                     </td>
+                    <td className="py-2 pr-4 text-zinc-400">—</td>
+                    <td className="py-2 pr-4 text-zinc-400">—</td>
                     <td className="py-2 pr-4 text-zinc-400">—</td>
                     <td className="py-2 pr-4 text-zinc-400">—</td>
                     <td className="py-2 pr-4 text-zinc-400">—</td>

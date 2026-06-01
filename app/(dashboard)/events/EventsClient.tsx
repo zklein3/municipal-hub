@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
-import { toggleEventSeriesPublic } from '@/app/actions/public-site'
+import { logAttendance, requestExcuse } from '@/app/actions/attendance'
 import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
 
 interface AttendanceRecord {
@@ -11,22 +10,6 @@ interface AttendanceRecord {
   instance_id: string
   status: string
   submitted_at: string
-}
-
-interface PendingSubmission {
-  id: string
-  personnel_id: string
-  name: string
-  submitted_at: string
-}
-
-interface ExcuseSubmission {
-  id: string
-  personnel_id: string
-  name: string
-  submitted_at: string
-  excuse_type: string
-  notes: string | null
 }
 
 interface ExcuseType {
@@ -40,7 +23,6 @@ interface Event {
   title: string
   event_type: string
   description: string | null
-  recurrence_type: string
   event_date: string
   start_time: string | null
   duration_minutes: number | null
@@ -48,18 +30,10 @@ interface Event {
   status: string
   notes: string | null
   requires_verification: boolean
-  requires_signature: boolean
+  is_training: boolean
+  training_hours: number | null
   pending_sig_id: string | null
-  is_public: boolean
   my_attendance: AttendanceRecord | null
-  pending_count: number
-  pending_submissions: PendingSubmission[]
-  excuse_submissions: ExcuseSubmission[]
-}
-
-interface Personnel {
-  id: string
-  name: string
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
@@ -92,11 +66,6 @@ const STATUS_LABELS: Record<string, string> = {
   excused: 'Excused',
 }
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 function formatTime(timeStr: string | null) {
   if (!timeStr) return null
   const [h, m] = timeStr.split(':')
@@ -117,281 +86,85 @@ function formatEndTime(startTime: string | null, durationMinutes: number | null)
   return `${hour12}:${String(endM).padStart(2, '0')} ${ampm}`
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+function formatDate(dateStr: string) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function isWindowOpen(event_date: string, start_time: string | null): boolean {
+function isPast(date: string) {
+  return new Date(date + 'T23:59:59') < new Date()
+}
+
+function isWindowOpen(event_date: string, start_time: string | null) {
   const eventDateTime = new Date(`${event_date}T${start_time || '00:00'}`)
-  const windowClose = new Date(eventDateTime.getTime() + 12 * 60 * 60 * 1000)
-  return new Date() <= windowClose
+  return new Date() <= new Date(eventDateTime.getTime() + 12 * 60 * 60 * 1000)
 }
 
-function isPast(event_date: string): boolean {
-  return new Date(event_date + 'T23:59:59') < new Date()
-}
-
-function isExcuseWindowOpen(event_date: string): boolean {
-  const windowClose = new Date(new Date(event_date + 'T23:59:59').getTime() + 7 * 24 * 60 * 60 * 1000)
-  return new Date() <= windowClose
+function isExcuseWindowOpen(event_date: string) {
+  return new Date() <= new Date(new Date(event_date + 'T23:59:59').getTime() + 7 * 24 * 60 * 60 * 1000)
 }
 
 export default function EventsClient({
-  events, personnelList, excuseTypes, myPersonnelId, myName, isOfficerOrAbove, isAdmin, publicSiteEnabled, departmentId,
+  events, excuseTypes, myPersonnelId, myName, isOfficerOrAbove,
 }: {
   events: Event[]
-  personnelList: Personnel[]
   excuseTypes: ExcuseType[]
   myPersonnelId: string
   myName: string
   isOfficerOrAbove: boolean
-  isAdmin: boolean
-  publicSiteEnabled: boolean
-  departmentId: string
 }) {
   const router = useRouter()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'upcoming' | 'past' | 'all'>('all')
+  const [filter, setFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming')
   const [typeFilter, setTypeFilter] = useState<string>('all')
-
-  // Rejection state
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
-  const [rejectionReason, setRejectionReason] = useState('')
-
-  // Excuse request state (member)
+  const [confirmingLogId, setConfirmingLogId] = useState<string | null>(null)
+  const [excuseOpenId, setExcuseOpenId] = useState<string | null>(null)
   const [selectedExcuseType, setSelectedExcuseType] = useState('')
   const [excuseNotes, setExcuseNotes] = useState('')
-
-  // Log attendance confirmation step
-  const [confirmingLogId, setConfirmingLogId] = useState<string | null>(null)
-
-  // Signature modal state
   const [activeSig, setActiveSig] = useState<{ sig_id: string; eventLabel: string } | null>(null)
-
-  // Inline edit state
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editScope, setEditScope] = useState<'instance' | 'series'>('instance')
-  const [editForm, setEditForm] = useState({
-    title: '', event_type: 'meeting', description: '', location: '',
-    event_date: '', start_time: '', duration_minutes: '', notes: '',
-    requires_verification: true, requires_signature: false,
-  })
-
-  // Public/private toggle state per series_id
-  const [publicState, setPublicState] = useState<Record<string, boolean>>(
-    Object.fromEntries(events.map(e => [e.series_id, e.is_public]))
-  )
-  const [togglingSeriesId, setTogglingSeriesId] = useState<string | null>(null)
-
-  async function handleTogglePublic(seriesId: string, current: boolean) {
-    setTogglingSeriesId(seriesId)
-    const next = !current
-    const result = await toggleEventSeriesPublic(seriesId, next, departmentId)
-    if (!result.error) setPublicState(prev => ({ ...prev, [seriesId]: next }))
-    setTogglingSeriesId(null)
-  }
-
-  function handleEditStart(event: Event) {
-    setEditForm({
-      title: event.title,
-      event_type: event.event_type,
-      description: event.description ?? '',
-      location: event.location ?? '',
-      event_date: event.event_date,
-      start_time: event.start_time ?? '',
-      duration_minutes: event.duration_minutes != null ? String(event.duration_minutes) : '',
-      notes: event.notes ?? '',
-      requires_verification: event.requires_verification,
-      requires_signature: event.requires_signature,
-    })
-    setEditScope('instance')
-    setEditingId(event.id)
-    setExpandedId(event.id)
-  }
-
-  async function handleEditSave(event: Event) {
-    reset()
-    setLoading(true)
-    const fd = new FormData()
-    fd.set('requires_verification', editForm.requires_verification ? 'true' : 'false')
-    fd.set('requires_signature', editForm.requires_signature ? 'true' : 'false')
-
-    if (editScope === 'series' || event.recurrence_type === 'one_time') {
-      fd.set('series_id', event.series_id)
-      fd.set('from_date', event.event_date)
-      fd.set('title', editForm.title)
-      fd.set('description', editForm.description)
-      fd.set('location', editForm.location)
-      fd.set('start_time', editForm.start_time)
-      fd.set('duration_minutes', editForm.duration_minutes)
-      if (event.recurrence_type === 'one_time') fd.set('event_date', editForm.event_date)
-      const result = await updateEventSeries(fd)
-      if (result?.error) { setError(result.error); setLoading(false); return }
-    } else {
-      fd.set('id', event.id)
-      fd.set('location', editForm.location)
-      fd.set('start_time', editForm.start_time)
-      fd.set('event_date', editForm.event_date)
-      fd.set('notes', editForm.notes)
-      fd.set('status', event.status)
-      const result = await updateEventInstance(fd)
-      if (result?.error) { setError(result.error); setLoading(false); return }
-    }
-
-    setEditingId(null)
-    setSuccess('Event updated.')
-    router.refresh()
-    setLoading(false)
-  }
 
   function reset() { setError(null); setSuccess(null) }
 
+  async function handleSelfLog(instance_id: string) {
+    reset(); setLoading(true)
+    const result = await logAttendance(instance_id, [myPersonnelId])
+    if (result?.error) setError(result.error)
+    else { setSuccess('Attendance logged.'); setConfirmingLogId(null); router.refresh() }
+    setLoading(false)
+  }
+
+  async function handleRequestExcuse(instance_id: string) {
+    if (!selectedExcuseType) { setError('Please select an excuse type.'); return }
+    reset(); setLoading(true)
+    const result = await requestExcuse(instance_id, selectedExcuseType, excuseNotes || undefined)
+    if (result?.error) setError(result.error)
+    else { setSuccess('Excuse request submitted.'); setExcuseOpenId(null); setSelectedExcuseType(''); setExcuseNotes(''); router.refresh() }
+    setLoading(false)
+  }
+
   const today = new Date().toISOString().split('T')[0]
   const filteredEvents = events.filter(e => {
+    if (e.status === 'cancelled') return false
     if (typeFilter !== 'all' && e.event_type !== typeFilter) return false
     if (filter === 'upcoming') return e.event_date >= today
     if (filter === 'past') return e.event_date < today
     return true
   })
 
-  async function handleSelfLog(event: Event) {
-    reset()
-    setLoading(true)
-    const result = await logAttendance(event.id, [myPersonnelId])
-    if (result?.error) setError(result.error)
-    else { setSuccess('Attendance logged.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleBulkLog(event: Event) {
-    if (bulkSelected.size === 0) { setError('Select at least one person.'); return }
-    reset()
-    setLoading(true)
-    const result = await logAttendance(event.id, Array.from(bulkSelected))
-    if (result?.error) setError(result.error)
-    else { setSuccess(`Logged attendance for ${bulkSelected.size} members.`); setBulkSelected(new Set()); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleApprove(attendance_id: string) {
-    reset()
-    setLoading(true)
-    const result = await verifyAttendance(attendance_id, 'present')
-    if (result?.error) setError(result.error)
-    else { setSuccess('Attendance approved.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleReject(attendance_id: string) {
-    reset()
-    setLoading(true)
-    const result = await verifyAttendance(attendance_id, 'absent', rejectionReason || undefined)
-    if (result?.error) setError(result.error)
-    else { setSuccess('Attendance rejected.'); setRejectingId(null); setRejectionReason(''); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleApproveAll(submissions: PendingSubmission[]) {
-    reset()
-    setLoading(true)
-    for (const s of submissions) {
-      await verifyAttendance(s.id, 'present')
-    }
-    setSuccess(`Approved ${submissions.length} submissions.`)
-    router.refresh()
-    setLoading(false)
-  }
-
-  async function handleRequestExcuse(instance_id: string) {
-    if (!selectedExcuseType) { setError('Please select an excuse type.'); return }
-    reset()
-    setLoading(true)
-    const result = await requestExcuse(instance_id, selectedExcuseType, excuseNotes || undefined)
-    if (result?.error) setError(result.error)
-    else { setSuccess('Excuse request submitted.'); setSelectedExcuseType(''); setExcuseNotes(''); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleApproveExcuse(attendance_id: string) {
-    reset()
-    setLoading(true)
-    const result = await verifyAttendance(attendance_id, 'excused')
-    if (result?.error) setError(result.error)
-    else { setSuccess('Excuse approved.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleDenyExcuse(attendance_id: string) {
-    reset()
-    setLoading(true)
-    const result = await verifyAttendance(attendance_id, 'absent')
-    if (result?.error) setError(result.error)
-    else { setSuccess('Excuse denied.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleCancel(instance_id: string) {
-    if (!confirm('Cancel this event?')) return
-    reset()
-    setLoading(true)
-    const result = await cancelEventInstance(instance_id)
-    if (result?.error) setError(result.error)
-    else { setSuccess('Event cancelled.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleDelete(instance_id: string) {
-    if (!confirm('Permanently delete this event? This cannot be undone and will remove any logged attendance.')) return
-    reset()
-    setLoading(true)
-    const result = await deleteEventInstance(instance_id)
-    if (result?.error) setError(result.error)
-    else { setSuccess('Event deleted.'); router.refresh() }
-    setLoading(false)
-  }
-
-  async function handleCloseEvent(instance_id: string) {
-    if (!confirm('Close this event? All members with no attendance record will be marked absent.')) return
-    reset()
-    setLoading(true)
-    const result = await closeEventInstance(instance_id)
-    if (result?.error) setError(result.error)
-    else { setSuccess(`Event closed. ${(result as any).absent_count} member(s) marked absent.`); router.refresh() }
-    setLoading(false)
-  }
-
-  function toggleBulk(id: string) {
-    setBulkSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function toggleAllBulk(ids: string[]) {
-    if (bulkSelected.size === ids.length) setBulkSelected(new Set())
-    else setBulkSelected(new Set(ids))
-  }
-
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Events</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Training, meetings, and department events</p>
+          <p className="text-sm text-zinc-500 mt-0.5">Upcoming meetings, drills, and training</p>
         </div>
         {isOfficerOrAbove && (
-          <button
-            onClick={() => router.push('/events/new')}
-            className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">
-            + New Event
-          </button>
+          <a href="/dept-admin/events"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors shadow-sm">
+            Manage Events →
+          </a>
         )}
       </div>
 
@@ -409,9 +182,9 @@ export default function EventsClient({
           ))}
         </div>
         <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1">
-          {(['all', 'training', 'meeting', 'incident', 'special'] as const).map(t => (
+          {(['all', 'training', 'meeting', 'special'] as const).map(t => (
             <button key={t} onClick={() => setTypeFilter(t)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors capitalize ${typeFilter === t ? 'bg-zinc-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${typeFilter === t ? 'bg-zinc-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
               {t === 'all' ? 'All Types' : EVENT_TYPE_LABELS[t]}
             </button>
           ))}
@@ -421,28 +194,22 @@ export default function EventsClient({
       {/* Event List */}
       {filteredEvents.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-          No events found.
-          {isOfficerOrAbove && <span> <button onClick={() => router.push('/events/new')} className="text-red-600 font-semibold hover:underline">Create one?</button></span>}
+          No {filter === 'upcoming' ? 'upcoming ' : filter === 'past' ? 'past ' : ''}events.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {filteredEvents.map(event => {
-            const isExpanded = expandedId === event.id
             const past = isPast(event.event_date)
             const windowOpen = isWindowOpen(event.event_date, event.start_time)
-            const canSelfLog = !past || windowOpen
-            const cancelled = event.status === 'cancelled'
             const completed = event.status === 'completed'
-            const allIds = personnelList.map(p => p.id)
-            const hasPending = event.pending_submissions.length > 0
-            const hasExcuseRequests = event.excuse_submissions.length > 0
+            const attended = !!event.my_attendance
             const noRecordOrAbsent = !event.my_attendance || event.my_attendance.status === 'absent'
-            const canRequestExcuse = !isOfficerOrAbove && !cancelled && noRecordOrAbsent &&
-              (!past || (!windowOpen && isExcuseWindowOpen(event.event_date)))
+            const canSelfLog = !attended && (!past || windowOpen)
+            const canRequestExcuse = noRecordOrAbsent && (!past || (!windowOpen && isExcuseWindowOpen(event.event_date)))
+            const excuseOpen = excuseOpenId === event.id
 
             return (
-              <div key={event.id} className={`rounded-xl bg-white shadow-sm border overflow-hidden ${cancelled ? 'border-zinc-100 opacity-60' : completed ? 'border-zinc-200 opacity-75' : 'border-zinc-200'}`}>
-                {/* Event Row */}
+              <div key={event.id} className={`rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden ${completed ? 'opacity-75' : ''}`}>
                 <div className="px-5 py-4">
                   <div className="flex items-start gap-3">
                     {/* Date block */}
@@ -462,37 +229,40 @@ export default function EventsClient({
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <p className="text-sm font-bold text-zinc-900">{event.title}</p>
-                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${EVENT_TYPE_COLORS[event.event_type]}`}>
-                          {EVENT_TYPE_LABELS[event.event_type]}
+                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${EVENT_TYPE_COLORS[event.event_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                          {EVENT_TYPE_LABELS[event.event_type] ?? event.event_type}
                         </span>
-                        {cancelled && <span className="text-xs rounded-full bg-zinc-100 text-zinc-400 px-2 py-0.5">Cancelled</span>}
+                        {event.is_training && (
+                          <span className="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 font-medium">
+                            Training{event.training_hours ? ` · ${event.training_hours}h` : ''}
+                          </span>
+                        )}
                         {completed && <span className="text-xs rounded-full bg-green-50 text-green-600 px-2 py-0.5">Closed</span>}
-                        {event.requires_verification && !cancelled && (
-                          <span className="text-xs text-zinc-400">Requires verification</span>
-                        )}
-                        {publicSiteEnabled && publicState[event.series_id] && (
-                          <span className="text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5">Public</span>
-                        )}
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
                         {event.start_time && (
-                          <span>🕐 {formatTime(event.start_time)}{formatEndTime(event.start_time, event.duration_minutes) ? ` – ${formatEndTime(event.start_time, event.duration_minutes)}` : ''}</span>
+                          <span>
+                            🕐 {formatTime(event.start_time)}
+                            {formatEndTime(event.start_time, event.duration_minutes)
+                              ? ` – ${formatEndTime(event.start_time, event.duration_minutes)}`
+                              : ''}
+                          </span>
                         )}
                         {event.location && <span>📍 {event.location}</span>}
-                        {isOfficerOrAbove && hasPending && (
-                          <span className="text-yellow-600 font-semibold">⏳ {event.pending_count} pending</span>
-                        )}
                       </div>
                       {event.description && <p className="text-xs text-zinc-400 mt-1">{event.description}</p>}
                     </div>
 
                     {/* Right side actions */}
                     <div className="flex flex-col items-end gap-2 shrink-0">
-                      {event.my_attendance && (
-                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[event.my_attendance.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                          {STATUS_LABELS[event.my_attendance.status] ?? event.my_attendance.status}
+                      {/* Attendance status */}
+                      {attended && (
+                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[event.my_attendance!.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                          {STATUS_LABELS[event.my_attendance!.status] ?? event.my_attendance!.status}
                         </span>
                       )}
+
+                      {/* Sign Required */}
                       {event.pending_sig_id && (
                         <button
                           onClick={() => setActiveSig({ sig_id: event.pending_sig_id!, eventLabel: `${event.title} — ${formatDate(event.event_date)}` })}
@@ -500,11 +270,13 @@ export default function EventsClient({
                           ✍ Sign Required
                         </button>
                       )}
-                      {!cancelled && !event.my_attendance && canSelfLog && (
+
+                      {/* Log Attendance — two-step confirm */}
+                      {canSelfLog && (
                         confirmingLogId === event.id ? (
                           <div className="flex gap-1.5">
                             <button
-                              onClick={() => { handleSelfLog(event); setConfirmingLogId(null) }}
+                              onClick={() => handleSelfLog(event.id)}
                               disabled={loading}
                               className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
                               Confirm
@@ -524,445 +296,59 @@ export default function EventsClient({
                           </button>
                         )
                       )}
+
+                      {/* Can't attend / Request excuse */}
                       {canRequestExcuse && !past && (
                         <button
-                          onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                          onClick={() => setExcuseOpenId(excuseOpen ? null : event.id)}
                           className="text-xs font-semibold text-blue-600 hover:text-blue-800">
                           Can&apos;t attend?
                         </button>
                       )}
-                      {canRequestExcuse && past && (
+                      {canRequestExcuse && past && !windowOpen && (
                         <button
-                          onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                          onClick={() => setExcuseOpenId(excuseOpen ? null : event.id)}
                           className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
-                          Request Excused Absence
+                          Request Excuse
                         </button>
                       )}
-                      {!cancelled && !isOfficerOrAbove && noRecordOrAbsent && past && !windowOpen && !isExcuseWindowOpen(event.event_date) && (
+
+                      {/* Window closed */}
+                      {!attended && past && !windowOpen && !isExcuseWindowOpen(event.event_date) && (
                         <span className="text-xs text-zinc-400">Window closed</span>
-                      )}
-                      {!cancelled && (
-                        <button
-                          onClick={() => { setExpandedId(isExpanded ? null : event.id); setBulkSelected(new Set()); setRejectingId(null); setRejectionReason(''); reset() }}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-800">
-                          {isExpanded ? 'Hide' : isOfficerOrAbove ? 'Manage' : 'Details'}
-                        </button>
-                      )}
-                      {isOfficerOrAbove && !cancelled && (
-                        <button
-                          onClick={() => editingId === event.id ? setEditingId(null) : handleEditStart(event)}
-                          className="text-xs text-zinc-400 hover:text-zinc-700">
-                          {editingId === event.id ? 'Cancel Edit' : 'Edit'}
-                        </button>
-                      )}
-                      {isOfficerOrAbove && !cancelled && !completed && (
-                        <button onClick={() => handleCancel(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
-                          Cancel
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button onClick={() => handleDelete(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
-                          Delete
-                        </button>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Expanded Panel */}
-                {isExpanded && (
-                  <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 flex flex-col gap-5">
-
-                    {/* Past event warning */}
-                    {past && (
-                      <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-2 text-xs text-yellow-700">
-                        ⚠️ This event occurred on {formatDate(event.event_date)}.
-                        {hasPending && ` Attendance has been logged for ${event.pending_count} members.`}
-                        {' '}You are modifying an existing record.
-                      </div>
-                    )}
-
-                    {isOfficerOrAbove ? (
-                      <>
-                        {/* ── INLINE EDIT FORM ─────────────────────────── */}
-                        {editingId === event.id && (
-                          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
-                            <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Edit Event</p>
-
-                            {/* Scope toggle for recurring events */}
-                            {event.recurrence_type !== 'one_time' && (
-                              <div className="flex gap-2">
-                                {(['instance', 'series'] as const).map(s => (
-                                  <button
-                                    key={s}
-                                    type="button"
-                                    onClick={() => setEditScope(s)}
-                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${editScope === s ? 'bg-blue-600 text-white' : 'bg-white border border-zinc-300 text-zinc-600 hover:bg-zinc-50'}`}>
-                                    {s === 'instance' ? 'This event only' : 'This & all future'}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Series-level fields (title, type, description, duration) */}
-                            {(editScope === 'series' || event.recurrence_type === 'one_time') && (
-                              <>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="col-span-2">
-                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Title</label>
-                                    <input
-                                      type="text"
-                                      value={editForm.title}
-                                      onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Type</label>
-                                    <select
-                                      value={editForm.event_type}
-                                      onChange={e => setEditForm(f => ({ ...f, event_type: e.target.value }))}
-                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                                      <option value="meeting">Meeting</option>
-                                      <option value="training">Training</option>
-                                      <option value="special">Special Event</option>
-                                      <option value="incident">Incident</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Duration (min)</label>
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      value={editForm.duration_minutes}
-                                      onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
-                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                  </div>
-                                  <div className="col-span-2">
-                                    <label className="block text-xs font-medium text-zinc-700 mb-1">Description</label>
-                                    <input
-                                      type="text"
-                                      value={editForm.description}
-                                      onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    />
-                                  </div>
-                                </div>
-                              </>
-                            )}
-
-                            {/* Instance-level fields (always shown) */}
-                            <div className="grid grid-cols-2 gap-3">
-                              {/* Date — shown for instance scope (recurring) and all one-time events */}
-                              {(editScope === 'instance' || event.recurrence_type === 'one_time') && (
-                                <div>
-                                  <label className="block text-xs font-medium text-zinc-700 mb-1">Date</label>
-                                  <input
-                                    type="date"
-                                    value={editForm.event_date}
-                                    onChange={e => setEditForm(f => ({ ...f, event_date: e.target.value }))}
-                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-                              )}
-                              <div>
-                                <label className="block text-xs font-medium text-zinc-700 mb-1">Start Time</label>
-                                <input
-                                  type="time"
-                                  step="60"
-                                  value={editForm.start_time}
-                                  onChange={e => setEditForm(f => ({ ...f, start_time: e.target.value }))}
-                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-zinc-700 mb-1">Location</label>
-                                <input
-                                  type="text"
-                                  value={editForm.location}
-                                  onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
-                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                              {editScope === 'instance' && event.recurrence_type !== 'one_time' && (
-                                <div className="col-span-2">
-                                  <label className="block text-xs font-medium text-zinc-700 mb-1">Notes</label>
-                                  <input
-                                    type="text"
-                                    value={editForm.notes}
-                                    onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex flex-col gap-2">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.requires_verification}
-                                  onChange={e => setEditForm(f => ({ ...f, requires_verification: e.target.checked }))}
-                                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-xs text-zinc-700">Require attendance verification</span>
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.requires_signature}
-                                  onChange={e => setEditForm(f => ({ ...f, requires_signature: e.target.checked }))}
-                                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-xs text-zinc-700">Require member signature</span>
-                              </label>
-                            </div>
-
-                            <div className="flex gap-2 pt-1">
-                              <button
-                                onClick={() => handleEditSave(event)}
-                                disabled={loading}
-                                className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                                {loading ? 'Saving…' : 'Save Changes'}
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                className="rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ── PUBLIC SITE TOGGLE ───────────────────────── */}
-                        {publicSiteEnabled && (
-                          <div className="flex items-center justify-between rounded-lg bg-zinc-50 border border-zinc-100 px-4 py-2.5">
-                            <div>
-                              <p className="text-xs font-semibold text-zinc-700">Show on Public Site</p>
-                              <p className="text-xs text-zinc-400">Visible at fireops7.com/dept/… when on</p>
-                            </div>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={publicState[event.series_id] ?? false}
-                              disabled={togglingSeriesId === event.series_id}
-                              onClick={() => handleTogglePublic(event.series_id, publicState[event.series_id] ?? false)}
-                              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50 ${
-                                publicState[event.series_id] ? 'bg-blue-600' : 'bg-zinc-300'
-                              }`}
-                            >
-                              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${publicState[event.series_id] ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* ── PENDING VERIFICATION QUEUE ───────────────── */}
-                        {hasPending && (
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">
-                                Pending Verification ({event.pending_submissions.length})
-                              </p>
-                              <button
-                                onClick={() => handleApproveAll(event.pending_submissions)}
-                                disabled={loading}
-                                className="text-xs font-semibold text-green-600 hover:text-green-800 disabled:opacity-50">
-                                Approve All
-                              </button>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              {event.pending_submissions.map(sub => (
-                                <div key={sub.id} className="rounded-lg bg-white border border-zinc-200 overflow-hidden">
-                                  <div className="flex items-center px-4 py-3 gap-3">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-semibold text-zinc-900">{sub.name}</p>
-                                      <p className="text-xs text-zinc-400">Submitted {formatDateTime(sub.submitted_at)}</p>
-                                    </div>
-                                    <div className="flex gap-2 shrink-0">
-                                      <button
-                                        onClick={() => handleApprove(sub.id)}
-                                        disabled={loading}
-                                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
-                                        Approve
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setRejectingId(rejectingId === sub.id ? null : sub.id)
-                                          setRejectionReason('')
-                                        }}
-                                        disabled={loading}
-                                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
-                                        Reject
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Rejection reason input */}
-                                  {rejectingId === sub.id && (
-                                    <div className="px-4 pb-3 border-t border-zinc-100 pt-3 flex gap-2">
-                                      <input
-                                        type="text"
-                                        value={rejectionReason}
-                                        onChange={e => setRejectionReason(e.target.value)}
-                                        placeholder="Reason (optional)"
-                                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                                        autoFocus
-                                      />
-                                      <button
-                                        onClick={() => handleReject(sub.id)}
-                                        disabled={loading}
-                                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
-                                        Confirm
-                                      </button>
-                                      <button
-                                        onClick={() => { setRejectingId(null); setRejectionReason('') }}
-                                        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50">
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ── EXCUSE REQUESTS ──────────────────────────── */}
-                        {hasExcuseRequests && (
-                          <div>
-                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
-                              Excuse Requests ({event.excuse_submissions.length})
-                            </p>
-                            <div className="flex flex-col gap-2">
-                              {event.excuse_submissions.map(sub => (
-                                <div key={sub.id} className="rounded-lg bg-white border border-zinc-200 px-4 py-3">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-semibold text-zinc-900">{sub.name}</p>
-                                      <p className="text-xs text-blue-700 font-medium mt-0.5">{sub.excuse_type}</p>
-                                      {sub.notes && <p className="text-xs text-zinc-500 mt-1">{sub.notes}</p>}
-                                      <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(sub.submitted_at)}</p>
-                                    </div>
-                                    <div className="flex gap-2 shrink-0">
-                                      <button
-                                        onClick={() => handleApproveExcuse(sub.id)}
-                                        disabled={loading}
-                                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                                        Approve
-                                      </button>
-                                      <button
-                                        onClick={() => handleDenyExcuse(sub.id)}
-                                        disabled={loading}
-                                        className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50">
-                                        Deny
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ── BULK LOG ATTENDANCE ───────────────────────── */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Log Attendance</p>
-                            <button
-                              onClick={() => toggleAllBulk(allIds)}
-                              className="text-xs text-blue-600 font-semibold hover:text-blue-800">
-                              {bulkSelected.size === allIds.length ? 'Deselect All' : 'Select All'}
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto mb-3">
-                            {personnelList.map(p => (
-                              <label key={p.id} className="flex items-center gap-2 rounded-lg bg-white border border-zinc-200 px-3 py-2 cursor-pointer hover:bg-zinc-50">
-                                <input
-                                  type="checkbox"
-                                  checked={bulkSelected.has(p.id)}
-                                  onChange={() => toggleBulk(p.id)}
-                                  className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                                />
-                                <span className="text-xs text-zinc-800">{p.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <button
-                            onClick={() => handleBulkLog(event)}
-                            disabled={loading || bulkSelected.size === 0}
-                            className="w-full rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                            {loading ? 'Logging...' : `Log ${bulkSelected.size > 0 ? bulkSelected.size : ''} ${bulkSelected.size === 1 ? 'Member' : 'Members'}`}
+                {/* Excuse Request Form */}
+                {excuseOpen && (
+                  <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+                    <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-3">
+                      {!past ? 'Notify of Absence' : 'Request an Excuse'}
+                    </p>
+                    {excuseTypes.length === 0 ? (
+                      <p className="text-xs text-zinc-400">No excuse types configured. Contact your officer.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <select value={selectedExcuseType} onChange={e => setSelectedExcuseType(e.target.value)}
+                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                          <option value="">Select excuse type...</option>
+                          {excuseTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        <textarea value={excuseNotes} onChange={e => setExcuseNotes(e.target.value)}
+                          placeholder="Additional notes (optional)" rows={2}
+                          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleRequestExcuse(event.id)} disabled={loading || !selectedExcuseType}
+                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                            {loading ? 'Submitting...' : 'Submit'}
+                          </button>
+                          <button onClick={() => { setExcuseOpenId(null); setSelectedExcuseType(''); setExcuseNotes('') }}
+                            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                            Cancel
                           </button>
                         </div>
-                        {/* ── CLOSE EVENT ──────────────────────────────── */}
-                        {past && !completed && (
-                          <div className="border-t border-zinc-200 pt-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs font-semibold text-zinc-700">Close Event</p>
-                                <p className="text-xs text-zinc-400 mt-0.5">Marks all members with no record as absent and locks attendance.</p>
-                              </div>
-                              <button
-                                onClick={() => handleCloseEvent(event.id)}
-                                disabled={loading}
-                                className="rounded-lg bg-zinc-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-900 disabled:opacity-50 shrink-0 ml-4">
-                                Close Event
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        {event.notes && <p className="text-sm text-zinc-600">{event.notes}</p>}
-                        {!event.notes && !canRequestExcuse && (
-                          <p className="text-xs text-zinc-400">No additional details.</p>
-                        )}
-
-                        {/* ── MEMBER EXCUSE REQUEST FORM ─────────────────── */}
-                        {canRequestExcuse && (
-                          <div>
-                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
-                              {!past ? 'Notify of Absence' : event.my_attendance?.status === 'absent' ? 'Appeal Absence' : 'Request an Excuse'}
-                            </p>
-                            {excuseTypes.length === 0 ? (
-                              <p className="text-xs text-zinc-400">No excuse types configured. Contact your officer.</p>
-                            ) : (
-                              <div className="flex flex-col gap-2">
-                                <select
-                                  value={selectedExcuseType}
-                                  onChange={e => setSelectedExcuseType(e.target.value)}
-                                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                                  <option value="">Select excuse type...</option>
-                                  {excuseTypes.map(t => (
-                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                  ))}
-                                </select>
-                                <textarea
-                                  value={excuseNotes}
-                                  onChange={e => setExcuseNotes(e.target.value)}
-                                  placeholder="Additional notes (optional)"
-                                  rows={2}
-                                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleRequestExcuse(event.id)}
-                                    disabled={loading || !selectedExcuseType}
-                                    className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                                    {loading ? 'Submitting...' : 'Submit'}
-                                  </button>
-                                  <button
-                                    onClick={() => { setExpandedId(null); setSelectedExcuseType(''); setExcuseNotes('') }}
-                                    className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>

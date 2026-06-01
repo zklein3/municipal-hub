@@ -66,6 +66,11 @@ export default async function DeptAdminPage() {
           alert={hasPendingSetup}
         />
         <HubCard
+          title="Events"
+          description="Manage attendance, approvals, and event settings"
+          href="/dept-admin/events"
+        />
+        <HubCard
           title="Training & Certs"
           description="Certification types, courses, and training setup"
           href="/dept-admin/training"

@@ -7,7 +7,7 @@ import Link from 'next/link'
 type Apparatus = {
   id: string; unit_number: string; apparatus_name: string | null
   make: string | null; model: string | null; model_year: number | null
-  spec: { pump_rating_gpm: number | null; tank_capacity_gal: number | null; foam_capacity_gal: number | null; aerial_length_ft: number | null; hose_loads: unknown } | null
+  spec: { pump_rating_gpm: number | null; tank_capacity_gal: number | null; foam_capacity_gal: number | null; aerial_length_ft: number | null; turning_radius_ft: number | null; gvwr_lbs: number | null; hose_loads: unknown } | null
   pumpTest: { test_date: string; passed: boolean } | null
 }
 type HoseRow = { diameter: number; owned: number; onTruck: number; inStorage: number; gap: boolean }
@@ -166,6 +166,8 @@ export default function PrintReportClient({
                   <th className="px-2 py-1.5 font-semibold text-right">Pump (GPM)</th>
                   <th className="px-2 py-1.5 font-semibold text-right">Tank (gal)</th>
                   <th className="px-2 py-1.5 font-semibold text-right">Foam (gal)</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Turn Radius (ft)</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">GVWR (lbs)</th>
                   <th className="px-2 py-1.5 font-semibold text-center">Pump Test</th>
                 </tr>
               </thead>
@@ -180,6 +182,8 @@ export default function PrintReportClient({
                       <td className="px-2 py-1.5 text-right">{a.spec?.pump_rating_gpm ?? '—'}</td>
                       <td className="px-2 py-1.5 text-right">{a.spec?.tank_capacity_gal ?? '—'}</td>
                       <td className="px-2 py-1.5 text-right">{a.spec?.foam_capacity_gal ?? '—'}</td>
+                      <td className="px-2 py-1.5 text-right">{a.spec?.turning_radius_ft ?? '—'}</td>
+                      <td className="px-2 py-1.5 text-right">{a.spec?.gvwr_lbs != null ? a.spec.gvwr_lbs.toLocaleString() : '—'}</td>
                       <td className="px-2 py-1.5 text-center">
                         {!pt ? 'No record' : overdue ? 'Overdue' : `${pt.passed ? 'Pass' : 'Fail'} · ${fmtDate(pt.test_date)}`}
                       </td>
