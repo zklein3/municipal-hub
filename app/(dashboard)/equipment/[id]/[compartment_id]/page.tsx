@@ -219,7 +219,7 @@ export default async function CompartmentPage({
         <p className="text-sm text-zinc-500">{apparatusLabel}</p>
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-lg font-mono font-bold text-red-700">
-            {compName?.compartment_code ?? '—'}
+            {apparatus.unit_number} - {compName?.compartment_code ?? '—'}
           </span>
           {compName?.compartment_name && (
             <span>{compName.compartment_name}</span>

@@ -80,7 +80,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { items: [{ href: '/operations', label: 'Operations', badge: opsBadge }] },
     { items: [{ href: '/personnel', label: 'Personnel' }] },
     { items: [{ href: '/training', label: 'Training' }] },
-    { items: [{ href: '/equipment', label: 'Equipment' }] },
+    { items: [{ href: '/equipment', label: 'Inventory' }] },
     { items: [{ href: '/reports', label: 'Reports' }] },
   ]
 

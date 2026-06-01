@@ -176,7 +176,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="inline-flex items-center rounded-md bg-red-50 border border-red-100 px-2 py-0.5 text-xs font-mono font-bold text-red-700 shrink-0">
-                              {c.compartment_code}
+                              {a.unit_number} - {c.compartment_code}
                             </span>
                             {c.compartment_name && (
                               <span className="text-sm text-zinc-600 truncate">{c.compartment_name}</span>

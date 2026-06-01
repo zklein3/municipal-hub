@@ -2,17 +2,19 @@
 
 ## What's Built & Working ✅
 - Full auth flow + middleware routing
-- Hub-and-spoke navigation — sidebar 6 items only (Dashboard, Operations, Personnel, Training, Equipment, Reports). Each leads to a card-grid hub page. Dept Admin is a single link → hub with tiles.
+- Hub-and-spoke navigation — sidebar 6 items only (Dashboard, Operations, Personnel, Training, Inventory, Reports). Each leads to a card-grid hub page. Dept Admin is a single link → hub with tiles.
 - `HubCard` component — reusable card with title, description, stat badge, alert state
 - `PageNavBar` — global Back + hub breadcrumb on every dashboard page (pathname-driven, no per-page wiring)
 - Operations hub (`/operations`) — Incidents, Announcements, Fuel Log, Public Inbox cards + recent incidents list
-- Equipment hub (`/equipment`) — section cards (Inspections, Assets, Storage, Movement Log) + apparatus grid
+- Inventory page (`/equipment`) — member-focused. Station Storage card at top + apparatus list grouped by station. Each apparatus card: Vehicle Check (blue), View Inventory (red), Fuel Log → link. No admin hub cards for members.
+- Asset Roster (`/reports/assets` via `/equipment/assets`) — moved to Reports hub as read-only officer/admin audit view. Apparatus assignment now lives in Equipment Setup → Items → Assets tab.
+- Compartment display — `[unit_number] - [code]` (e.g. `24 - D1`) everywhere a compartment appears in apparatus context (inventory detail, inspection pages, move dropdowns). Setup screen stays universal (code only).
 - Reports hub (`/reports`) — tile grid, role-adaptive (members see My Activity only, officers+ see all)
 - Dept Admin hub (`/dept-admin`) — Personnel, Training, Equipment Setup, ISO (conditional), NERIS (conditional), Public Site (conditional)
 - ISO sub-hub (`/iso`) — Hose Inventory, Hydrants, Mutual Aid, Pre-Fire Plans, ISO Report
 - Training hub card row — Events, My Certifications (expiry alert), Print Training Card
 - My Profile link in sidebar footer (name links to own personnel profile)
-- Equipment hub — 5 tabs: Stations, Apparatus (with Load button), Compartments, Items, Assets
+- Equipment Setup (Dept Admin) — 4 tabs: Stations, Apparatus, Compartments, Items. Items tab has 3 sub-tabs: Items → Asset Categories (with inspection templates nested per item) → Assets (with inline apparatus assignment). Compartments tab has Active/All toggle (defaults Active). Assets tab removed from outer shell — lives inside Items.
 - Personnel hub — 2 tabs: Members (card grid), Attendance Settings
 - Training hub — 4 tabs: Cert Types, Enrollments, Pending, Events (left rail + mobile scroll)
 - Sys admin dashboard, Departments, Users, System Logs, NERIS panel

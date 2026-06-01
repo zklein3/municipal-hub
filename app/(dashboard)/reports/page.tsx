@@ -47,6 +47,11 @@ export default async function ReportsPage() {
         {isOfficerOrAbove && (
           <>
             <HubCard
+              title="Asset Roster"
+              description="Department-wide tracked asset inventory and status"
+              href="/equipment/assets"
+            />
+            <HubCard
               title="Attendance"
               description="Department-wide event attendance records"
               href="/reports/attendance"

@@ -132,7 +132,7 @@ export default async function SetupPage() {
   const assetItemIds = (items ?? []).filter(i => i.tracks_assets).map(i => i.id)
   const { data: assets } = assetItemIds.length > 0
     ? await adminClient.from('item_assets')
-        .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes')
+        .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes, apparatus_id')
         .eq('department_id', department_id)
         .in('item_id', assetItemIds)
         .order('asset_tag')

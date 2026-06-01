@@ -34,12 +34,14 @@ export default function InspectionSessionClient({
   session,
   compartments,
   apparatus_id,
+  apparatus_unit_number,
   personnel_id,
   isOfficerOrAdmin,
 }: {
   session: Session
   compartments: SessionCompartment[]
   apparatus_id: string
+  apparatus_unit_number: string
   personnel_id: string
   isOfficerOrAdmin: boolean
 }) {
@@ -190,7 +192,7 @@ export default function InspectionSessionClient({
         {compartments.map(sc => (
           <div key={sc.id} className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-zinc-900 truncate">{sc.compartment_name}</p>
+              <p className="text-sm font-medium text-zinc-900 truncate">{apparatus_unit_number} - {sc.compartment_name}</p>
               {sc.status === 'in_progress' && sc.claimed_by_name && (
                 <p className="text-xs text-amber-600 mt-0.5">In progress — {sc.claimed_by_name}</p>
               )}

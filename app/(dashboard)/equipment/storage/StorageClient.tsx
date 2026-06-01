@@ -465,7 +465,7 @@ export default function StorageClient({
                   <option value="">Select compartment...</option>
                   {(addApparatus?.compartments ?? []).map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
+                      {addApparatus?.unit_number} - {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
                     </option>
                   ))}
                 </select>

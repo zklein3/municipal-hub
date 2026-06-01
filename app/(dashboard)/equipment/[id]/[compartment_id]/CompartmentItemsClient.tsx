@@ -279,7 +279,7 @@ export default function CompartmentItemsClient({
                   <option value="">Select compartment...</option>
                   {availableCompartments.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
+                      {moveApparatus?.unit_number} - {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
                     </option>
                   ))}
                 </select>

@@ -28,7 +28,6 @@ export default async function AssetRosterPage({
   if (!myDept) redirect('/dashboard')
 
   const department_id = myDept.department_id
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
 
   // Fetch asset-tracked items
   const { data: items } = await adminClient
@@ -105,7 +104,7 @@ export default async function AssetRosterPage({
       assets={assetRows}
       itemOptions={itemOptions}
       apparatusOptions={apparatusOptions}
-      isAdmin={isAdmin}
+      isAdmin={false}
       initialSearch={initialSearch ?? ''}
     />
   )

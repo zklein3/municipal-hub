@@ -200,8 +200,9 @@ export default function EquipmentDetailClient({
   })).filter(cat => cat.items.length > 0)
 
   // Compartments available for the selected move-target apparatus
-  const moveApparatusCompartments = allApparatus
-    .find(a => a.id === moveApparatusId)?.compartments ?? []
+  const moveApparatusObj = allApparatus.find(a => a.id === moveApparatusId)
+  const moveApparatusCompartments = moveApparatusObj?.compartments ?? []
+  const moveApparatusUnitNumber = moveApparatusObj?.unit_number ?? ''
 
   return (
     <div className="max-w-2xl">
@@ -227,12 +228,6 @@ export default function EquipmentDetailClient({
         >
           ← Back
         </button>
-        <Link
-          href="/equipment/storage"
-          className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
-        >
-          Inventory Storage →
-        </Link>
         <Link
           href={`/equipment/${apparatus.id}/fuel`}
           className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
@@ -270,7 +265,7 @@ export default function EquipmentDetailClient({
               <div className="flex items-center justify-between px-5 py-3 bg-zinc-50 border-b border-zinc-200">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center rounded-lg bg-red-50 border border-red-100 px-2.5 py-1 text-sm font-mono font-bold text-red-700">
-                    {c.compartment_code}
+                    {apparatus.unit_number} - {c.compartment_code}
                   </span>
                   {c.compartment_name && (
                     <span className="text-sm text-zinc-600">{c.compartment_name}</span>
@@ -536,7 +531,7 @@ export default function EquipmentDetailClient({
                     .filter(c => c.id !== moveTarget.sourceCompartmentId || moveApparatusId !== apparatus.id)
                     .map(c => (
                       <option key={c.id} value={c.id}>
-                        {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
+                        {moveApparatusUnitNumber} - {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
                       </option>
                     ))}
                 </select>

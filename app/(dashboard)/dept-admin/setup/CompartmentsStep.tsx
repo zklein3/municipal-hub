@@ -44,15 +44,17 @@ export default function CompartmentsStep({
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [assignChecked, setAssignChecked] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+  const [showAll, setShowAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const q = search.toLowerCase()
-  const filteredCompartments = q ? compartments.filter(c =>
+  const visibleCompartments = showAll ? compartments : compartments.filter(c => c.active)
+  const filteredCompartments = q ? visibleCompartments.filter(c =>
     c.compartment_code.toLowerCase().includes(q) ||
     (c.compartment_name ?? '').toLowerCase().includes(q)
-  ) : compartments
+  ) : visibleCompartments
 
   async function handleCreate(formData: FormData) {
     setError(null); setSuccess(null); setLoading(true)
@@ -102,14 +104,30 @@ export default function CompartmentsStep({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-900">Compartments</h2>
-          <p className="text-sm text-zinc-500">{compartments.filter(c => c.active).length} templates</p>
+          <p className="text-sm text-zinc-500">{compartments.filter(c => c.active).length} active</p>
         </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setEditingId(null); setAssigningId(null); setError(null); setSuccess(null) }}
-          className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Add Compartment'}
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-xs font-medium">
+            <button
+              onClick={() => setShowAll(false)}
+              className={`px-3 py-1.5 transition-colors ${!showAll ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setShowAll(true)}
+              className={`px-3 py-1.5 transition-colors ${showAll ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            >
+              All
+            </button>
+          </div>
+          <button
+            onClick={() => { setShowForm(!showForm); setEditingId(null); setAssigningId(null); setError(null); setSuccess(null) }}
+            className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
+          >
+            {showForm ? 'Cancel' : '+ Add Compartment'}
+          </button>
+        </div>
       </div>
 
       <HelpPrompt id="compartments" showHelp={showHelp} helpResetKey={helpResetKey}>
@@ -167,7 +185,9 @@ export default function CompartmentsStep({
           No compartment templates yet — add your first above.
         </div>
       ) : filteredCompartments.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">No compartments match "{search}".</div>
+        <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
+          {q ? `No compartments match "${search}".` : 'No active compartments — switch to All to see inactive ones.'}
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           {filteredCompartments.map(c => {

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
   createItemCategory, updateItemCategory, deleteItemCategory,
   createItem, updateItem,
   createAsset, updateAsset,
+  assignAssetApparatus,
 } from '@/app/actions/equipment'
 import {
   createInspectionTemplate, updateInspectionTemplate,
@@ -14,7 +15,7 @@ import {
 } from '@/app/actions/inspections'
 import HelpPrompt from './HelpPrompt'
 
-type Tab = 'categories' | 'items' | 'assets' | 'templates'
+type Tab = 'items' | 'categories' | 'assets'
 
 interface Category { id: string; category_name: string; active: boolean; sort_order: number | null }
 interface Item {
@@ -25,6 +26,7 @@ interface Item {
 interface Asset {
   id: string; item_id: string; asset_tag: string; serial_number: string | null
   in_service_date: string | null; status: string; active: boolean; notes: string | null
+  apparatus_id: string | null
 }
 interface Template { id: string; item_id: string; template_name: string; template_description: string | null; active: boolean }
 interface Step {
@@ -40,7 +42,7 @@ const STEP_TYPES = [
 ]
 
 export default function ItemsStep({
-  categories, items, assets, templates, steps, departmentId, showHelp, helpResetKey,
+  categories, items, assets, templates, steps, departmentId, apparatusOptions, showHelp, helpResetKey,
 }: {
   categories: Category[]
   items: Item[]
@@ -48,10 +50,11 @@ export default function ItemsStep({
   templates: Template[]
   steps: Step[]
   departmentId: string
+  apparatusOptions: { id: string; label: string }[]
   showHelp: boolean
   helpResetKey: number
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>('categories')
+  const [activeTab, setActiveTab] = useState<Tab>('items')
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -68,6 +71,33 @@ export default function ItemsStep({
   // Asset state
   const [addingAssetFor, setAddingAssetFor] = useState<string | null>(null)
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null)
+
+  // Asset location assignment state
+  const [assignments, setAssignments] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(assets.map(a => [a.id, a.apparatus_id]))
+  )
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null)
+  const [locationEditValue, setLocationEditValue] = useState('')
+  const [isPendingLocation, startLocationTransition] = useTransition()
+  const [locationError, setLocationError] = useState<string | null>(null)
+
+  const apparatusLabelMap = Object.fromEntries(apparatusOptions.map(a => [a.id, a.label]))
+
+  function startLocationEdit(assetId: string) {
+    setEditingLocationId(assetId)
+    setLocationEditValue(assignments[assetId] ?? '')
+    setLocationError(null)
+  }
+
+  function handleLocationSave(assetId: string) {
+    const newApparatusId = locationEditValue || null
+    startLocationTransition(async () => {
+      const result = await assignAssetApparatus(assetId, newApparatusId)
+      if (result?.error) { setLocationError(result.error); return }
+      setAssignments(prev => ({ ...prev, [assetId]: newApparatusId }))
+      setEditingLocationId(null)
+    })
+  }
 
   // Template state
   const [addingTemplateFor, setAddingTemplateFor] = useState<string | null>(null)
@@ -209,17 +239,257 @@ export default function ItemsStep({
   const inspectableItems = items.filter(i => i.requires_inspection && i.active)
 
   const q = search.toLowerCase()
-  const filteredCategories = q ? categories.filter(c => c.category_name.toLowerCase().includes(q)) : categories
-  const filteredItems = q ? items.filter(i => i.item_name.toLowerCase().includes(q) || (i.item_description ?? '').toLowerCase().includes(q) || (catMap[i.category_id ?? ''] ?? '').toLowerCase().includes(q)) : items
-  const filteredAssets = q ? trackableItems.filter(i => i.item_name.toLowerCase().includes(q) || (assetsByItem[i.id] ?? []).some(a => a.asset_tag.toLowerCase().includes(q) || (a.serial_number ?? '').toLowerCase().includes(q))) : trackableItems
-  const filteredInspectable = q ? inspectableItems.filter(i => i.item_name.toLowerCase().includes(q) || (templatesByItem[i.id] ?? []).some(t => t.template_name.toLowerCase().includes(q))) : inspectableItems
+  const filteredCategories = q
+    ? categories.filter(c => c.category_name.toLowerCase().includes(q))
+    : categories
+  const filteredItems = q
+    ? items.filter(i =>
+        i.item_name.toLowerCase().includes(q) ||
+        (i.item_description ?? '').toLowerCase().includes(q) ||
+        (catMap[i.category_id ?? ''] ?? '').toLowerCase().includes(q)
+      )
+    : items
+  const filteredAssets = q
+    ? trackableItems.filter(i =>
+        i.item_name.toLowerCase().includes(q) ||
+        (assetsByItem[i.id] ?? []).some(a =>
+          a.asset_tag.toLowerCase().includes(q) ||
+          (a.serial_number ?? '').toLowerCase().includes(q)
+        )
+      )
+    : trackableItems
 
   const TABS: { id: Tab; label: string; count: number }[] = [
-    { id: 'categories', label: 'Categories',           count: categories.filter(c => c.active).length },
-    { id: 'items',      label: 'Items',                count: items.filter(i => i.active).length },
-    { id: 'assets',     label: 'Assets',               count: assets.filter(a => a.active).length },
-    { id: 'templates',  label: 'Inspection Templates', count: templates.filter(t => t.active).length },
+    { id: 'items',      label: 'Items',            count: items.filter(i => i.active).length },
+    { id: 'categories', label: 'Asset Categories', count: categories.filter(c => c.active).length },
+    { id: 'assets',     label: 'Assets',           count: assets.filter(a => a.active).length },
   ]
+
+  // Template sub-section used inside Asset Categories tab
+  function TemplatesForItem({ item }: { item: Item }) {
+    const itemTemplates = templatesByItem[item.id] ?? []
+    const hasTemplates = itemTemplates.length > 0
+    return (
+      <div className="ml-4 mt-2 border-l-2 border-zinc-100 pl-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-zinc-700">{item.item_name}</span>
+            {hasTemplates ? (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                {itemTemplates.length} template{itemTemplates.length !== 1 ? 's' : ''}
+              </span>
+            ) : (
+              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">No template</span>
+            )}
+          </div>
+          <button
+            onClick={() => { setAddingTemplateFor(addingTemplateFor === item.id ? null : item.id); clear() }}
+            className="rounded-lg bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+          >
+            {addingTemplateFor === item.id ? 'Cancel' : '+ Add Inspection'}
+          </button>
+        </div>
+
+        {addingTemplateFor === item.id && (
+          <div className="mb-2 rounded-lg bg-zinc-50 border border-zinc-200 p-3">
+            <form action={handleCreateTemplate} className="flex flex-col gap-2">
+              <input type="hidden" name="item_id" value={item.id} />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">Template Name <span className="text-red-500">*</span></label>
+                  <input name="template_name" type="text" required placeholder="Weekly Inspection"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-zinc-600">Description</label>
+                  <input name="template_description" type="text" placeholder="Optional"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+              </div>
+              <button type="submit" disabled={loading}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                {loading ? 'Adding...' : 'Add Template'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {itemTemplates.length === 0 ? (
+          <p className="text-xs text-zinc-400 py-1">No inspections yet — add one to enable field inspections.</p>
+        ) : (
+          <div className="flex flex-col gap-2 mb-2">
+            {itemTemplates.map(tmpl => {
+              const tmplSteps = stepsByTemplate[tmpl.id] ?? []
+              return (
+                <div key={tmpl.id} className="rounded-lg bg-white border border-zinc-200 overflow-hidden">
+                  {editingTemplateId === tmpl.id ? (
+                    <div className="p-3 flex flex-col gap-3">
+                      {/* Template name/description form */}
+                      <form action={handleUpdateTemplate} className="flex flex-col gap-2">
+                        <input type="hidden" name="id" value={tmpl.id} />
+                        <div className="flex gap-2">
+                          <input name="template_name" type="text" required defaultValue={tmpl.template_name}
+                            className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                          <input name="template_description" type="text" placeholder="Description" defaultValue={tmpl.template_description ?? ''}
+                            className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                          <select name="active" defaultValue={tmpl.active ? 'true' : 'false'}
+                            className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="submit" disabled={loading}
+                            className="flex-1 rounded-lg bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                            {loading ? 'Saving...' : 'Save'}
+                          </button>
+                          <button type="button" onClick={() => setEditingTemplateId(null)}
+                            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Done</button>
+                        </div>
+                      </form>
+                      {/* Step management */}
+                      <div className="border-t border-zinc-100 pt-3">
+                        <p className="text-xs font-semibold text-zinc-500 mb-2">Checklist Questions</p>
+                        {tmplSteps.length > 0 && (
+                          <div className="flex flex-col gap-1.5 mb-2">
+                            {tmplSteps.map((step, idx) => (
+                              <div key={step.id}>
+                                {editingStepId === step.id ? (
+                                  <div className="rounded-lg border border-zinc-200 bg-white p-3">
+                                    <form action={handleUpdateStep} className="flex flex-col gap-2">
+                                      <input type="hidden" name="id" value={step.id} />
+                                      <input name="step_text" type="text" required defaultValue={step.step_text}
+                                        className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                                      <div className="flex gap-2 flex-wrap">
+                                        <select name="step_type" defaultValue={step.step_type}
+                                          className="flex-1 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                                          {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                        </select>
+                                        <label className="flex items-center gap-1.5 text-sm text-zinc-700 cursor-pointer">
+                                          <input name="required" type="checkbox" value="true" defaultChecked={step.required} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                                          Required
+                                        </label>
+                                        <label className="flex items-center gap-1.5 text-sm text-zinc-700 cursor-pointer">
+                                          <input name="fail_if_negative" type="checkbox" value="true" defaultChecked={step.fail_if_negative} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                                          Fail if No
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button type="submit" disabled={loading}
+                                          className="flex-1 rounded-lg bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                                          {loading ? 'Saving...' : 'Save Step'}
+                                        </button>
+                                        <button type="button" onClick={() => setEditingStepId(null)}
+                                          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                                    <div className="flex flex-col shrink-0">
+                                      <button disabled={idx === 0 || loading}
+                                        onClick={() => handleReorder(step.id, step.sort_order, tmplSteps[idx - 1].id, tmplSteps[idx - 1].sort_order)}
+                                        className="text-zinc-300 hover:text-zinc-600 disabled:opacity-20 text-xs leading-none">▲</button>
+                                      <button disabled={idx === tmplSteps.length - 1 || loading}
+                                        onClick={() => handleReorder(step.id, step.sort_order, tmplSteps[idx + 1].id, tmplSteps[idx + 1].sort_order)}
+                                        className="text-zinc-300 hover:text-zinc-600 disabled:opacity-20 text-xs leading-none">▼</button>
+                                    </div>
+                                    <span className="text-xs font-semibold text-zinc-400 w-5 shrink-0">{idx + 1}.</span>
+                                    <span className="flex-1 text-sm text-zinc-800">{step.step_text}</span>
+                                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                                      {STEP_TYPES.find(t => t.value === step.step_type)?.label ?? step.step_type}
+                                    </span>
+                                    {step.fail_if_negative && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">Fail if No</span>}
+                                    <button onClick={() => { setEditingStepId(step.id); clear() }}
+                                      className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 transition-colors">Edit</button>
+                                    <button onClick={() => handleDeleteStep(step.id)} disabled={loading}
+                                      className="shrink-0 text-xs text-red-400 hover:text-red-600 disabled:opacity-30 transition-colors">✕</button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {addingStepFor === tmpl.id ? (
+                          <div className="rounded-lg border border-zinc-200 bg-white p-3">
+                            <form action={handleAddStep} className="flex flex-col gap-2">
+                              <input type="hidden" name="template_id" value={tmpl.id} />
+                              <input name="step_text" type="text" required placeholder="Check cylinder pressure gauge"
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                              <div className="flex gap-2 flex-wrap">
+                                <select name="step_type" defaultValue="BOOLEAN"
+                                  className="flex-1 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                                  {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                </select>
+                                <label className="flex items-center gap-1.5 text-sm text-zinc-700 cursor-pointer self-center">
+                                  <input name="required" type="checkbox" value="true" defaultChecked className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                                  Required
+                                </label>
+                                <label className="flex items-center gap-1.5 text-sm text-zinc-700 cursor-pointer self-center">
+                                  <input name="fail_if_negative" type="checkbox" value="true" className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                                  Fail if No
+                                </label>
+                              </div>
+                              <div className="flex gap-2">
+                                <button type="submit" disabled={loading}
+                                  className="flex-1 rounded-lg bg-red-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                                  {loading ? 'Adding...' : 'Add Step'}
+                                </button>
+                                <button type="button" onClick={() => setAddingStepFor(null)}
+                                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
+                              </div>
+                            </form>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setAddingStepFor(tmpl.id); setEditingStepId(null); clear() }}
+                            className="w-full rounded-lg border-2 border-dashed border-zinc-200 py-1.5 text-xs text-zinc-400 hover:border-red-300 hover:text-red-600 transition-colors"
+                          >
+                            + Add Step
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Template header — read only */}
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-50 border-b border-zinc-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-zinc-900">{tmpl.template_name}</span>
+                          {tmpl.template_description && <span className="text-xs text-zinc-400">{tmpl.template_description}</span>}
+                          <span className="text-xs text-zinc-400">{tmplSteps.length} question{tmplSteps.length !== 1 ? 's' : ''}</span>
+                          {!tmpl.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
+                        </div>
+                        <button onClick={() => { setEditingTemplateId(tmpl.id); setEditingStepId(null); setAddingStepFor(null); clear() }}
+                          className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                      </div>
+                      {/* Questions — read only */}
+                      {tmplSteps.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-zinc-400">No questions yet — click Edit to add checklist steps.</p>
+                      ) : (
+                        <ol className="px-3 py-2 flex flex-col gap-1">
+                          {tmplSteps.map((step, idx) => (
+                            <li key={step.id} className="flex items-start gap-2 text-sm text-zinc-700">
+                              <span className="text-xs font-semibold text-zinc-400 w-5 shrink-0 mt-0.5">{idx + 1}.</span>
+                              <span className="flex-1">{step.step_text}</span>
+                              <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
+                                {STEP_TYPES.find(t => t.value === step.step_type)?.label ?? step.step_type}
+                              </span>
+                              {step.fail_if_negative && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">Fail if No</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -230,9 +500,6 @@ export default function ItemsStep({
             {items.filter(i => i.active).length} items · {assets.filter(a => a.active).length} assets · {templates.filter(t => t.active).length} templates
           </p>
         </div>
-        <Link href="/equipment/storage" className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors">
-          Storage →
-        </Link>
       </div>
 
       {/* Tabs */}
@@ -261,110 +528,18 @@ export default function ItemsStep({
         type="search"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder={`Search ${activeTab}...`}
+        placeholder={`Search ${activeTab === 'categories' ? 'asset categories' : activeTab}...`}
         className="w-full mb-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
       />
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
 
-      {/* ── Categories Tab ── */}
-      {activeTab === 'categories' && (
-        <div>
-          <HelpPrompt id="items-categories" {...helpProps}>
-            Categories group your equipment types. Create these first so items have somewhere to live.
-          </HelpPrompt>
-          <div className="flex justify-end mb-3">
-            <button onClick={() => { setShowCatForm(!showCatForm); setEditingCatId(null); clear() }}
-              className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors">
-              {showCatForm ? 'Cancel' : '+ Add Category'}
-            </button>
-          </div>
-          {showCatForm && (
-            <div className="mb-4 rounded-xl bg-white p-5 shadow-sm border border-zinc-200">
-              <p className="text-sm font-semibold text-zinc-900 mb-3">New Category</p>
-              <form action={handleCreateCategory} className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="mb-1 block text-xs font-medium text-zinc-600">Name <span className="text-red-500">*</span></label>
-                    <input name="category_name" type="text" required placeholder="Rescue Equipment"
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                  </div>
-                  <div className="w-28">
-                    <label className="mb-1 block text-xs font-medium text-zinc-600">Sort Order</label>
-                    <input name="sort_order" type="number" min="0"
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                  </div>
-                </div>
-                <button type="submit" disabled={loading}
-                  className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                  {loading ? 'Adding...' : 'Add Category'}
-                </button>
-              </form>
-            </div>
-          )}
-          {categories.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories yet — add one above.</div>
-          ) : filteredCategories.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories match "{search}".</div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {filteredCategories.map(cat => (
-                <div key={cat.id} className={`rounded-xl bg-white border shadow-sm ${cat.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'}`}>
-                  {editingCatId === cat.id ? (
-                    <div className="p-4">
-                      <form action={handleUpdateCategory} className="flex flex-col gap-3">
-                        <input type="hidden" name="id" value={cat.id} />
-                        <div className="flex gap-3">
-                          <div className="flex-1">
-                            <input name="category_name" type="text" required defaultValue={cat.category_name}
-                              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                          </div>
-                          <input name="sort_order" type="number" min="0" defaultValue={cat.sort_order ?? ''} placeholder="Order"
-                            className="w-24 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                          <select name="active" defaultValue={cat.active ? 'true' : 'false'}
-                            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                            <option value="true">Active</option>
-                            <option value="false">Inactive</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="submit" disabled={loading}
-                            className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                            {loading ? 'Saving...' : 'Save'}
-                          </button>
-                          <button type="button" onClick={() => setEditingCatId(null)}
-                            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-zinc-900">{cat.category_name}</span>
-                        {!cat.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
-                        <span className="text-xs text-zinc-400">{items.filter(i => i.category_id === cat.id && i.active).length} items</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setEditingCatId(cat.id); setShowCatForm(false); clear() }}
-                          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
-                        <button onClick={() => handleDeleteCategory(cat.id)}
-                          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-600 hover:border-red-200 transition-colors">Delete</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── Items Tab ── */}
       {activeTab === 'items' && (
         <div>
           <HelpPrompt id="items-items" {...helpProps}>
-            Items are equipment types (Scott Air Pack, Chainsaw). Checking "Requires Inspection" enables individual asset tracking and an inspection checklist for that type.
+            Items are equipment types (Scott Air Pack, Chainsaw). Assign to an Asset Category, then set flags to control tracking behavior.
           </HelpPrompt>
           <div className="flex justify-end mb-3">
             <button onClick={() => { setShowItemForm(!showItemForm); setEditingItemId(null); clear() }}
@@ -383,7 +558,7 @@ export default function ItemsStep({
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
                   </div>
                   <div className="flex-1">
-                    <label className="mb-1 block text-xs font-medium text-zinc-600">Category <span className="text-red-500">*</span></label>
+                    <label className="mb-1 block text-xs font-medium text-zinc-600">Asset Category <span className="text-red-500">*</span></label>
                     <select name="category_id" required
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
                       <option value="">Select category...</option>
@@ -415,7 +590,7 @@ export default function ItemsStep({
             </div>
           )}
           {items.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No items yet — add categories first, then add items.</div>
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No items yet — add an Asset Category first, then add items.</div>
           ) : filteredItems.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No items match "{search}".</div>
           ) : (
@@ -434,7 +609,7 @@ export default function ItemsStep({
                               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
                           </div>
                           <div className="flex-1">
-                            <label className="mb-1 block text-xs font-medium text-zinc-600">Category</label>
+                            <label className="mb-1 block text-xs font-medium text-zinc-600">Asset Category</label>
                             <select name="category_id" defaultValue={item.category_id ?? ''}
                               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
                               <option value="">No category</option>
@@ -502,15 +677,129 @@ export default function ItemsStep({
         </div>
       )}
 
+      {/* ── Asset Categories Tab (with nested inspection templates) ── */}
+      {activeTab === 'categories' && (
+        <div>
+          <HelpPrompt id="items-categories" {...helpProps}>
+            Asset Categories group your equipment types and define their inspection templates. Create a category, then add inspection checklists for each item in that category.
+          </HelpPrompt>
+          <div className="flex justify-end mb-3">
+            <button onClick={() => { setShowCatForm(!showCatForm); setEditingCatId(null); clear() }}
+              className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors">
+              {showCatForm ? 'Cancel' : '+ Add Category'}
+            </button>
+          </div>
+          {showCatForm && (
+            <div className="mb-4 rounded-xl bg-white p-5 shadow-sm border border-zinc-200">
+              <p className="text-sm font-semibold text-zinc-900 mb-3">New Asset Category</p>
+              <form action={handleCreateCategory} className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-zinc-600">Name <span className="text-red-500">*</span></label>
+                    <input name="category_name" type="text" required placeholder="Breathing Apparatus"
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                  </div>
+                  <div className="w-28">
+                    <label className="mb-1 block text-xs font-medium text-zinc-600">Sort Order</label>
+                    <input name="sort_order" type="number" min="0"
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading}
+                  className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                  {loading ? 'Adding...' : 'Add Category'}
+                </button>
+              </form>
+            </div>
+          )}
+          {categories.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories yet — add one above.</div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No categories match "{search}".</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {filteredCategories.map(cat => {
+                const catInspectableItems = inspectableItems.filter(i => i.category_id === cat.id)
+                return (
+                  <div key={cat.id} className={`rounded-xl bg-white border shadow-sm overflow-hidden ${cat.active ? 'border-zinc-200' : 'border-zinc-100 opacity-60'}`}>
+                    {/* Category header */}
+                    {editingCatId === cat.id ? (
+                      <div className="p-4 bg-zinc-50 border-b border-zinc-200">
+                        <form action={handleUpdateCategory} className="flex flex-col gap-3">
+                          <input type="hidden" name="id" value={cat.id} />
+                          <div className="flex gap-3">
+                            <div className="flex-1">
+                              <input name="category_name" type="text" required defaultValue={cat.category_name}
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            </div>
+                            <input name="sort_order" type="number" min="0" defaultValue={cat.sort_order ?? ''} placeholder="Order"
+                              className="w-24 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            <select name="active" defaultValue={cat.active ? 'true' : 'false'}
+                              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                              <option value="true">Active</option>
+                              <option value="false">Inactive</option>
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={loading}
+                              className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                              {loading ? 'Saving...' : 'Save'}
+                            </button>
+                            <button type="button" onClick={() => setEditingCatId(null)}
+                              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-zinc-50 border-b border-zinc-100">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-zinc-900">{cat.category_name}</span>
+                          {!cat.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
+                          <span className="text-xs text-zinc-400">{items.filter(i => i.category_id === cat.id && i.active).length} items</span>
+                          {catInspectableItems.length > 0 && (
+                            <span className="text-xs text-zinc-400">· {templates.filter(t => catInspectableItems.some(i => i.id === t.item_id)).length} templates</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditingCatId(cat.id); setShowCatForm(false); clear() }}
+                            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                          <button onClick={() => handleDeleteCategory(cat.id)}
+                            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-red-600 hover:border-red-200 transition-colors">Delete</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Inspectable items with templates */}
+                    <div className="px-4 py-3">
+                      {catInspectableItems.length === 0 ? (
+                        <p className="text-xs text-zinc-400 py-1">
+                          No inspectable items in this category. In the Items tab, add an item with "Requires Inspection" checked.
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {catInspectableItems.map(item => (
+                            <TemplatesForItem key={item.id} item={item} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Assets Tab ── */}
       {activeTab === 'assets' && (
         <div>
           <HelpPrompt id="items-assets" {...helpProps}>
-            Assets are individually tracked units (SCBA-001, SCBA-002). Add one asset per physical piece of equipment for each item that requires inspection.
+            Assets are individually tracked units (SCBA-001, SCBA-002). Add one per physical piece of equipment and assign it to an apparatus.
           </HelpPrompt>
           {trackableItems.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">
-              No asset-tracked items yet. In the Items tab, create an item with "Requires Inspection" checked — it will automatically track individual assets.
+              No asset-tracked items yet. In the Items tab, create an item with "Requires Inspection" checked.
             </div>
           ) : filteredAssets.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No assets match "{search}".</div>
@@ -523,6 +812,9 @@ export default function ItemsStep({
                     <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 border-b border-zinc-200">
                       <div>
                         <span className="font-semibold text-zinc-900">{item.item_name}</span>
+                        {item.category_id && catMap[item.category_id] && (
+                          <span className="ml-2 text-xs text-zinc-400">{catMap[item.category_id]}</span>
+                        )}
                         <span className="ml-2 text-xs text-zinc-500">{itemAssets.filter(a => a.active).length} assets</span>
                       </div>
                       <button onClick={() => { setAddingAssetFor(addingAssetFor === item.id ? null : item.id); clear() }}
@@ -618,8 +910,8 @@ export default function ItemsStep({
                                 </form>
                               </div>
                             ) : (
-                              <div className="flex items-center justify-between gap-3 px-4 py-3">
-                                <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
+                                <div className="flex items-center gap-3 min-w-0 flex-wrap">
                                   <span className="font-mono font-semibold text-zinc-900">{asset.asset_tag}</span>
                                   {asset.serial_number && <span className="text-xs text-zinc-500">SN: {asset.serial_number}</span>}
                                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -629,6 +921,39 @@ export default function ItemsStep({
                                   }`}>
                                     {asset.status === 'IN SERVICE' ? 'In Service' : asset.status === 'OUT OF SERVICE' ? 'Out of Service' : 'Retired'}
                                   </span>
+                                  {editingLocationId === asset.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <select
+                                        value={locationEditValue}
+                                        onChange={e => setLocationEditValue(e.target.value)}
+                                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-red-400"
+                                      >
+                                        <option value="">Unassigned</option>
+                                        {apparatusOptions.map(ap => (
+                                          <option key={ap.id} value={ap.id}>{ap.label}</option>
+                                        ))}
+                                      </select>
+                                      <button onClick={() => handleLocationSave(asset.id)} disabled={isPendingLocation}
+                                        className="rounded bg-red-700 px-2 py-1 text-xs font-medium text-white hover:bg-red-800 disabled:opacity-50">
+                                        {isPendingLocation ? '…' : 'Save'}
+                                      </button>
+                                      <button onClick={() => setEditingLocationId(null)} disabled={isPendingLocation}
+                                        className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50">✕</button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-zinc-400">
+                                        {assignments[asset.id] ? apparatusLabelMap[assignments[asset.id]!] : <span className="italic">Unassigned</span>}
+                                      </span>
+                                      <button onClick={() => startLocationEdit(asset.id)}
+                                        className="rounded border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-50 transition-colors">
+                                        Assign
+                                      </button>
+                                    </div>
+                                  )}
+                                  {locationError && editingLocationId === asset.id && (
+                                    <span className="text-xs text-red-600">{locationError}</span>
+                                  )}
                                 </div>
                                 <button onClick={() => { setEditingAssetId(asset.id); clear() }}
                                   className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
@@ -636,260 +961,6 @@ export default function ItemsStep({
                             )}
                           </div>
                         ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Inspection Templates Tab ── */}
-      {activeTab === 'templates' && (
-        <div>
-          <HelpPrompt id="items-templates" {...helpProps}>
-            Each inspectable item needs at least one template before it can be inspected in the field. Name it by frequency (Weekly, Monthly), then add the checklist steps below it.
-          </HelpPrompt>
-
-          {inspectableItems.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">
-              No inspectable items yet. In the Items tab, create an item with "Requires Inspection" checked — it will appear here for template setup.
-            </div>
-          ) : filteredInspectable.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-sm text-zinc-400">No templates match "{search}".</div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {filteredInspectable.map(item => {
-                const itemTemplates = templatesByItem[item.id] ?? []
-                const hasTemplates = itemTemplates.length > 0
-
-                return (
-                  <div key={item.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
-                    {/* Item header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 border-b border-zinc-200">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-zinc-900">{item.item_name}</span>
-                        {hasTemplates ? (
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                            {itemTemplates.length} template{itemTemplates.length !== 1 ? 's' : ''}
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">No template yet</span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => { setAddingTemplateFor(addingTemplateFor === item.id ? null : item.id); clear() }}
-                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-                      >
-                        {addingTemplateFor === item.id ? 'Cancel' : '+ Add Template'}
-                      </button>
-                    </div>
-
-                    {/* Add template form */}
-                    {addingTemplateFor === item.id && (
-                      <div className="p-4 border-b border-zinc-100 bg-zinc-50/50">
-                        <form action={handleCreateTemplate} className="flex flex-col gap-3">
-                          <input type="hidden" name="item_id" value={item.id} />
-                          <div className="flex gap-3">
-                            <div className="flex-1">
-                              <label className="mb-1 block text-xs font-medium text-zinc-600">Template Name <span className="text-red-500">*</span></label>
-                              <input name="template_name" type="text" required placeholder="Weekly Inspection"
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            </div>
-                            <div className="flex-1">
-                              <label className="mb-1 block text-xs font-medium text-zinc-600">Description</label>
-                              <input name="template_description" type="text" placeholder="Optional"
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            </div>
-                          </div>
-                          <button type="submit" disabled={loading}
-                            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                            {loading ? 'Adding...' : 'Add Template'}
-                          </button>
-                        </form>
-                      </div>
-                    )}
-
-                    {/* Templates list */}
-                    {itemTemplates.length === 0 ? (
-                      <div className="px-4 py-4 text-sm text-zinc-400">No templates yet — add one above to enable field inspections.</div>
-                    ) : (
-                      <div className="divide-y divide-zinc-100">
-                        {itemTemplates.map(tmpl => {
-                          const tmplSteps = stepsByTemplate[tmpl.id] ?? []
-                          const isExpanded = expandedTemplateId === tmpl.id
-
-                          return (
-                            <div key={tmpl.id}>
-                              {/* Template row */}
-                              {editingTemplateId === tmpl.id ? (
-                                <div className="p-4">
-                                  <form action={handleUpdateTemplate} className="flex flex-col gap-3">
-                                    <input type="hidden" name="id" value={tmpl.id} />
-                                    <div className="flex gap-3">
-                                      <div className="flex-1">
-                                        <input name="template_name" type="text" required defaultValue={tmpl.template_name}
-                                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                                      </div>
-                                      <div className="flex-1">
-                                        <input name="template_description" type="text" placeholder="Description" defaultValue={tmpl.template_description ?? ''}
-                                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                                      </div>
-                                      <select name="active" defaultValue={tmpl.active ? 'true' : 'false'}
-                                        className="rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                        <option value="true">Active</option>
-                                        <option value="false">Inactive</option>
-                                      </select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <button type="submit" disabled={loading}
-                                        className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                                        {loading ? 'Saving...' : 'Save'}
-                                      </button>
-                                      <button type="button" onClick={() => setEditingTemplateId(null)}
-                                        className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
-                                    </div>
-                                  </form>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-between gap-3 px-4 py-3">
-                                  <button
-                                    onClick={() => setExpandedTemplateId(isExpanded ? null : tmpl.id)}
-                                    className="flex items-center gap-2 text-left min-w-0 flex-1"
-                                  >
-                                    <span className="text-zinc-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
-                                    <span className="font-medium text-zinc-900">{tmpl.template_name}</span>
-                                    <span className="text-xs text-zinc-500">{tmplSteps.length} step{tmplSteps.length !== 1 ? 's' : ''}</span>
-                                    {!tmpl.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
-                                  </button>
-                                  <button onClick={() => { setEditingTemplateId(tmpl.id); clear() }}
-                                    className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
-                                </div>
-                              )}
-
-                              {/* Steps (expanded) */}
-                              {isExpanded && (
-                                <div className="border-t border-zinc-100 bg-zinc-50/50 px-4 py-3">
-                                  {tmplSteps.length === 0 ? (
-                                    <p className="text-sm text-zinc-400 mb-3">No steps yet — add the first checklist step below.</p>
-                                  ) : (
-                                    <div className="flex flex-col gap-2 mb-3">
-                                      {tmplSteps.map((step, idx) => (
-                                        <div key={step.id}>
-                                          {editingStepId === step.id ? (
-                                            <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                                              <form action={handleUpdateStep} className="flex flex-col gap-3">
-                                                <input type="hidden" name="id" value={step.id} />
-                                                <input name="step_text" type="text" required defaultValue={step.step_text}
-                                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                                                <div className="flex gap-3">
-                                                  <select name="step_type" defaultValue={step.step_type}
-                                                    className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                                    {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                                  </select>
-                                                  <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
-                                                    <input name="required" type="checkbox" value="true" defaultChecked={step.required} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                                                    Required
-                                                  </label>
-                                                  <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer">
-                                                    <input name="fail_if_negative" type="checkbox" value="true" defaultChecked={step.fail_if_negative} className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                                                    Fail if No
-                                                  </label>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                  <button type="submit" disabled={loading}
-                                                    className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                                                    {loading ? 'Saving...' : 'Save Step'}
-                                                  </button>
-                                                  <button type="button" onClick={() => setEditingStepId(null)}
-                                                    className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
-                                                </div>
-                                              </form>
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5">
-                                              {/* Reorder */}
-                                              <div className="flex flex-col shrink-0">
-                                                <button
-                                                  disabled={idx === 0 || loading}
-                                                  onClick={() => handleReorder(step.id, step.sort_order, tmplSteps[idx - 1].id, tmplSteps[idx - 1].sort_order)}
-                                                  className="text-zinc-300 hover:text-zinc-600 disabled:opacity-20 text-xs leading-none"
-                                                >▲</button>
-                                                <button
-                                                  disabled={idx === tmplSteps.length - 1 || loading}
-                                                  onClick={() => handleReorder(step.id, step.sort_order, tmplSteps[idx + 1].id, tmplSteps[idx + 1].sort_order)}
-                                                  className="text-zinc-300 hover:text-zinc-600 disabled:opacity-20 text-xs leading-none"
-                                                >▼</button>
-                                              </div>
-                                              <span className="text-xs font-semibold text-zinc-400 w-5 shrink-0">{idx + 1}.</span>
-                                              <span className="flex-1 text-sm text-zinc-800">{step.step_text}</span>
-                                              <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">
-                                                {STEP_TYPES.find(t => t.value === step.step_type)?.label ?? step.step_type}
-                                              </span>
-                                              {step.fail_if_negative && <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">Fail if No</span>}
-                                              <button onClick={() => { setEditingStepId(step.id); clear() }}
-                                                className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 transition-colors">Edit</button>
-                                              <button onClick={() => handleDeleteStep(step.id)} disabled={loading}
-                                                className="shrink-0 text-xs text-red-400 hover:text-red-600 disabled:opacity-30 transition-colors">✕</button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* Add step form */}
-                                  {addingStepFor === tmpl.id ? (
-                                    <div className="rounded-lg border border-zinc-200 bg-white p-3">
-                                      <form action={handleAddStep} className="flex flex-col gap-3">
-                                        <input type="hidden" name="template_id" value={tmpl.id} />
-                                        <div>
-                                          <label className="mb-1 block text-xs font-medium text-zinc-600">Step Text <span className="text-red-500">*</span></label>
-                                          <input name="step_text" type="text" required placeholder="Check cylinder pressure gauge"
-                                            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                                        </div>
-                                        <div className="flex gap-3 flex-wrap">
-                                          <div className="flex-1 min-w-36">
-                                            <label className="mb-1 block text-xs font-medium text-zinc-600">Response Type</label>
-                                            <select name="step_type" defaultValue="BOOLEAN"
-                                              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                              {STEP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                            </select>
-                                          </div>
-                                          <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer self-end pb-2">
-                                            <input name="required" type="checkbox" value="true" defaultChecked className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                                            Required
-                                          </label>
-                                          <label className="flex items-center gap-2 text-sm text-zinc-700 cursor-pointer self-end pb-2">
-                                            <input name="fail_if_negative" type="checkbox" value="true" className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                                            Fail if No
-                                          </label>
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <button type="submit" disabled={loading}
-                                            className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-                                            {loading ? 'Adding...' : 'Add Step'}
-                                          </button>
-                                          <button type="button" onClick={() => setAddingStepFor(null)}
-                                            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
-                                        </div>
-                                      </form>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => { setAddingStepFor(tmpl.id); setEditingStepId(null); clear() }}
-                                      className="w-full rounded-lg border-2 border-dashed border-zinc-200 py-2 text-sm text-zinc-400 hover:border-red-300 hover:text-red-600 transition-colors"
-                                    >
-                                      + Add Step
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
                       </div>
                     )}
                   </div>

@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import HubCard from '@/components/HubCard'
 
 export default async function EquipmentPage() {
   const supabase = await createClient()
@@ -19,10 +18,6 @@ export default async function EquipmentPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
-  const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
-
-  // Fetch apparatus for this department
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name, apparatus_type_id, station_id, active')
@@ -43,26 +38,15 @@ export default async function EquipmentPage() {
   const typeMap = Object.fromEntries((typeData ?? []).map(t => [t.id, t.name]))
   const stationMap = Object.fromEntries((stationData ?? []).map(s => [s.id, s]))
 
-  // Count items per apparatus via compartments
-  const { data: compartments } = await adminClient
-    .from('apparatus_compartments')
-    .select('id, apparatus_id')
-    .eq('active', true)
+  // Compartment counts per apparatus
+  const appIds = (apparatusRaw ?? []).map(a => a.id)
+  const { data: compartments } = appIds.length > 0
+    ? await adminClient.from('apparatus_compartments').select('id, apparatus_id').eq('active', true).in('apparatus_id', appIds)
+    : { data: [] }
 
-  const { data: locationStandards } = await adminClient
-    .from('item_location_standards')
-    .select('id, apparatus_compartment_id')
-    .eq('active', true)
-
-  const compartmentSet = new Set((compartments ?? []).map(c => c.id))
-  const compartmentToApparatus = Object.fromEntries((compartments ?? []).map(c => [c.id, c.apparatus_id]))
-
-  const itemCountMap: Record<string, number> = {}
-  for (const ls of locationStandards ?? []) {
-    const apparatusId = compartmentToApparatus[ls.apparatus_compartment_id]
-    if (apparatusId) {
-      itemCountMap[apparatusId] = (itemCountMap[apparatusId] ?? 0) + 1
-    }
+  const compCountByApparatus: Record<string, number> = {}
+  for (const c of compartments ?? []) {
+    compCountByApparatus[c.apparatus_id] = (compCountByApparatus[c.apparatus_id] ?? 0) + 1
   }
 
   const apparatus = (apparatusRaw ?? []).map(a => ({
@@ -71,79 +55,108 @@ export default async function EquipmentPage() {
     apparatus_name: a.apparatus_name,
     type_name: a.apparatus_type_id ? (typeMap[a.apparatus_type_id] ?? null) : null,
     station: a.station_id ? (stationMap[a.station_id] ?? null) : null,
-    item_count: itemCountMap[a.id] ?? 0,
+    compartment_count: compCountByApparatus[a.id] ?? 0,
   }))
+
+  // Group by station
+  const stationGroups = new Map<string | null, { label: string; items: typeof apparatus }>()
+  for (const a of apparatus) {
+    const key = a.station?.id ?? null
+    if (!stationGroups.has(key)) {
+      stationGroups.set(key, {
+        label: a.station
+          ? `Station ${a.station.station_number ? a.station.station_number + ' — ' : ''}${a.station.station_name}`
+          : 'Unassigned',
+        items: [],
+      })
+    }
+    stationGroups.get(key)!.items.push(a)
+  }
+
+  const groups = Array.from(stationGroups.entries())
+    .sort(([aKey], [bKey]) => {
+      if (aKey === null) return 1
+      if (bKey === null) return -1
+      return 0
+    })
+    .map(([, group]) => group)
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Equipment</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Apparatus, inspections, and inventory</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Inventory</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">Apparatus inventory and department storage</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        <HubCard
-          title="Inspections"
-          description="Run and review equipment inspections"
-          href="/inspections"
-        />
-        {isOfficerOrAbove && (
-          <HubCard
-            title="Assets"
-            description="Department-wide tracked asset roster"
-            href="/equipment/assets"
-          />
-        )}
-        <HubCard
-          title="Storage"
-          description="Unassigned pool, department totals, PAR levels"
-          href="/equipment/storage"
-        />
-        <HubCard
-          title="Movement Log"
-          description="History of item moves and transfers"
-          href="/equipment/movement-log"
-        />
-      </div>
-
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-zinc-700">Apparatus Equipment</h2>
-        <p className="text-xs text-zinc-400 mt-0.5">Select a unit to view and manage its compartments</p>
-      </div>
+      {/* Storage card */}
+      <Link
+        href="/equipment/storage"
+        className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 mb-6 hover:border-red-300 hover:shadow-md transition-all group"
+      >
+        <div>
+          <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Station Storage</p>
+          <p className="text-xs text-zinc-400 mt-0.5">Unassigned pool, PAR levels, and item transfers</p>
+        </div>
+        <span className="text-xs font-semibold text-red-600 group-hover:text-red-800 shrink-0">View →</span>
+      </Link>
 
       {apparatus.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
           No apparatus found for this department.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {apparatus.map(a => (
-            <Link key={a.id} href={`/equipment/${a.id}`}
-              className="rounded-xl bg-white border border-zinc-200 shadow-sm p-5 hover:border-red-300 hover:shadow-md transition-all group">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <span className="text-3xl font-bold text-zinc-900 group-hover:text-red-700 transition-colors">
-                    {a.unit_number}
-                  </span>
-                  {a.apparatus_name && (
-                    <p className="text-sm font-medium text-zinc-700 mt-0.5">{a.apparatus_name}</p>
-                  )}
-                </div>
-                <span className="text-xs font-medium text-red-600">{a.type_name ?? '—'}</span>
+        <div className="flex flex-col gap-8">
+          {groups.map(group => (
+            <div key={group.label}>
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider">{group.label}</h2>
+                <div className="flex-1 h-px bg-zinc-200" />
               </div>
-              {a.station && (
-                <p className="text-xs text-zinc-400 mb-3">
-                  Station {a.station.station_number} — {a.station.station_name}
-                </p>
-              )}
-              <div className="rounded-lg bg-zinc-50 px-3 py-2 flex items-center justify-between">
-                <p className="text-xs text-zinc-500">Item Types Assigned</p>
-                <p className="text-lg font-bold text-zinc-900">{a.item_count}</p>
+
+              <div className="flex flex-col gap-3">
+                {group.items.map(a => (
+                  <div key={a.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-bold text-zinc-900">{a.unit_number}</span>
+                        {a.apparatus_name && (
+                          <span className="text-sm text-zinc-500">{a.apparatus_name}</span>
+                        )}
+                        {a.type_name && (
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">{a.type_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        {a.compartment_count} compartment{a.compartment_count !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/inspections/vehicle-check/${a.id}`}
+                          className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          Vehicle Check
+                        </Link>
+                        <Link
+                          href={`/equipment/${a.id}`}
+                          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                        >
+                          View Inventory
+                        </Link>
+                      </div>
+                      <Link
+                        href={`/equipment/${a.id}/fuel`}
+                        className="text-xs font-medium text-zinc-400 hover:text-red-600 transition-colors"
+                      >
+                        Fuel Log →
+                      </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-zinc-100 flex justify-end">
-                <span className="text-xs font-semibold text-red-600 group-hover:text-red-800">View Equipment →</span>
-              </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

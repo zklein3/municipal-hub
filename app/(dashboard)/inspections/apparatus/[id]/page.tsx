@@ -64,6 +64,7 @@ export default async function InspectionSessionPage({
         session={result.session}
         compartments={result.compartments}
         apparatus_id={apparatus_id}
+        apparatus_unit_number={apparatus.unit_number}
         personnel_id={personnelId}
         isOfficerOrAdmin={isOfficerOrAdmin}
       />

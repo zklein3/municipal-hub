@@ -88,6 +88,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### 0e. Inventory & Equipment Setup Restructure — SHIPPED ✅ (2026-06-01)
+- Nav label: Equipment → **Inventory**
+- `/equipment` rewritten as member-focused page: Station Storage card + apparatus list (Vehicle Check, View Inventory, Fuel Log per card)
+- Equipment Setup → Items sub-tabs: **Items → Asset Categories → Assets** (templates nested inside Asset Categories per inspectable item; apparatus assignment inline on Assets tab)
+- Compartments setup: Active/All toggle (defaults Active)
+- Compartment display: `[unit_number] - [code]` everywhere in apparatus context; universal in setup
+- Asset Roster moved to Reports hub (read-only). Apparatus assignment moved to Setup → Items → Assets.
+- Scattered "Storage →" shortcut buttons removed; Storage now accessed from Inventory page card
+
 ### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
 Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
 
@@ -290,9 +299,9 @@ Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload p
 Only relevant for depts with aerial apparatus — skip until needed.
 Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, apparatus detail page.
 
-### 9. Pending Email Tasks — Blocked on Resend + fireops7.com domain migration from Wix
+### 9. Pending Email Tasks — Domain transfer initiated 2026-06-01
 
-All items below are stubbed/logged to `system_logs` in the interim. Wire up once domain is verified in Resend.
+`fireops7.com` transfer from Wix to Vercel initiated 2026-06-01. Auth code: `O;JiG{mp%#3u`. Waiting for Wix approval email → once transfer completes, verify domain in Resend, then wire up email tasks below.
 
 **When domain is ready:**
 1. **Permit Approval Email** — swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
