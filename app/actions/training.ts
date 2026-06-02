@@ -325,7 +325,10 @@ export async function verifyEnrollmentSession(enrollment_id: string, action: 've
 
   const { error } = await adminClient
     .from('course_enrollments')
-    .update({ session_status: action })
+    .update({
+      session_status: action,
+      ...(action === 'verified' ? { status: 'completed' } : {}),
+    })
     .eq('id', enrollment_id)
   if (error) { await logError(error.message, '/dept-admin/training'); return { error: error.message } }
 
