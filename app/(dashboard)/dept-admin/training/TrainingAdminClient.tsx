@@ -17,7 +17,7 @@ import {
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const checkCls = "rounded border-zinc-300 text-red-600 focus:ring-red-500"
 
-type Tab = 'certs' | 'enrollments' | 'pending' | 'events' | 'member_certs' | 'submissions'
+type Tab = 'certs' | 'enrollments' | 'pending' | 'events' | 'member_certs'
 
 interface CertType { id: string; cert_name: string; issuing_body: string | null; does_expire: boolean; expiration_interval_months: number | null; is_structured_course: boolean; show_on_run_report: boolean; active: boolean }
 interface Unit { id: string; certification_type_id: string; unit_title: string; unit_description: string | null; required_hours: number | null; sort_order: number; active: boolean }
@@ -96,7 +96,6 @@ export default function TrainingAdminClient({
 
   // Submission review state
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null)
-  const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
 
   function reset() { setError(null); setSuccess(null) }
 
@@ -127,13 +126,13 @@ export default function TrainingAdminClient({
   const totalPendingAttendance = trainingEvents.reduce((sum, e) => sum + e.pending_attendance.length, 0)
 
   const pendingSubmissions = submissions.filter(s => s.status === 'pending').length
+  const totalPendingAll = totalPending + pendingSubmissions
   const ALL_TABS: { key: Tab; label: string; adminOnly?: boolean }[] = [
     { key: 'member_certs', label: 'Member Certs' },
     { key: 'certs',        label: 'Cert Types',   adminOnly: true },
     { key: 'enrollments',  label: 'Enrollments',  adminOnly: true },
-    { key: 'pending',      label: totalPending > 0 ? `Pending (${totalPending})` : 'Pending', adminOnly: true },
+    { key: 'pending',      label: totalPendingAll > 0 ? `Pending (${totalPendingAll})` : 'Pending', adminOnly: true },
     { key: 'events',       label: totalPendingAttendance > 0 ? `Events (${totalPendingAttendance})` : 'Events', adminOnly: true },
-    { key: 'submissions',  label: pendingSubmissions > 0 ? `Submissions (${pendingSubmissions})` : 'Submissions' },
   ]
   const TABS = ALL_TABS.filter(t => !t.adminOnly || isAdmin)
 
@@ -611,7 +610,106 @@ export default function TrainingAdminClient({
             </div>
           )}
 
-          {pendingProgress.length === 0 && pendingSessions.length === 0 ? (
+          {/* Outside training submissions */}
+          {pendingSubmissions > 0 && (
+            <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+              <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-200">
+                <p className="text-sm font-semibold text-zinc-900">Outside Training</p>
+                <p className="text-xs text-zinc-400">{pendingSubmissions} pending</p>
+              </div>
+              <div className="flex flex-col gap-0 divide-y divide-zinc-100">
+                {submissions.filter(s => s.status === 'pending').map(sub => {
+                  const expanded = expandedSubmissionId === sub.id
+                  return (
+                    <div key={sub.id} className="overflow-hidden">
+                      <button className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-zinc-50 transition-colors"
+                        onClick={() => setExpandedSubmissionId(expanded ? null : sub.id)}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-zinc-900 truncate">{sub.topic}</p>
+                          <div className="flex gap-3 text-xs text-zinc-400 mt-0.5 flex-wrap">
+                            <span>{sub.member_name}</span>
+                            <span>{new Date(sub.course_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span>{sub.hours}h</span>
+                            {sub.provider && <span>{sub.provider}</span>}
+                          </div>
+                        </div>
+                        <span className="text-zinc-400 text-sm shrink-0">{expanded ? '▲' : '▼'}</span>
+                      </button>
+
+                      {expanded && (
+                        <div className="border-t border-zinc-100 px-5 py-4 flex flex-col gap-4 bg-zinc-50">
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                            {sub.location && <><span className="text-zinc-400">Location</span><span className="text-zinc-700">{sub.location}</span></>}
+                            {sub.purpose && <><span className="text-zinc-400">Purpose (member)</span><span className="text-zinc-700 capitalize">{sub.purpose.replace('_', ' ')}</span></>}
+                            {sub.nremt_category && <><span className="text-zinc-400">NREMT (member)</span><span className="text-zinc-700">{sub.nremt_category}</span></>}
+                            {sub.notes && <><span className="text-zinc-400">Notes</span><span className="text-zinc-700">{sub.notes}</span></>}
+                          </div>
+                          {sub.document_url && (
+                            <a href={`/api/training-doc?path=${encodeURIComponent(sub.document_url)}`} target="_blank" rel="noopener noreferrer"
+                              className="text-xs font-semibold text-blue-600 hover:text-blue-800">View Document ↗</a>
+                          )}
+                          <form action={async (fd: FormData) => {
+                            fd.append('id', sub.id)
+                            await wrap(() => reviewTrainingSubmission(fd))
+                            setExpandedSubmissionId(null)
+                          }} className="flex flex-col gap-3 pt-2 border-t border-zinc-200">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-600 mb-1">Purpose</label>
+                                <select name="approved_purpose" defaultValue={sub.purpose ?? ''}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                                  <option value="">— Not classified —</option>
+                                  <option value="recert">Recertification</option>
+                                  <option value="initial_cert">Initial Certification</option>
+                                  <option value="continuing_ed">Continuing Education</option>
+                                  <option value="other">Other</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-600 mb-1">NREMT Category</label>
+                                <select name="approved_nremt_category" defaultValue={sub.nremt_category ?? ''}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                                  <option value="">— None —</option>
+                                  <option value="AIRWAY">Airway, Respiration &amp; Ventilation</option>
+                                  <option value="CARDIOLOGY">Cardiology &amp; Resuscitation</option>
+                                  <option value="TRAUMA">Trauma</option>
+                                  <option value="MEDICAL">Medical; Obstetrics &amp; Gynecology</option>
+                                  <option value="OPERATIONS">EMS Operations</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-zinc-600 mb-1">Link to Cert Type <span className="font-normal text-zinc-400">(issues cert on approval)</span></label>
+                              <select name="cert_type_id"
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                                <option value="">— Training record only —</option>
+                                {certTypes.filter(c => c.active).map(c => (
+                                  <option key={c.id} value={c.id}>{c.cert_name}{c.issuing_body ? ` — ${c.issuing_body}` : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-zinc-600 mb-1">Review Note <span className="font-normal text-zinc-400">(optional — visible to member)</span></label>
+                              <input name="reviewer_notes" placeholder="e.g. Hours applied to EMT recert"
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            </div>
+                            <div className="flex gap-3">
+                              <button type="submit" name="action" value="approve" disabled={loading}
+                                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">Approve</button>
+                              <button type="submit" name="action" value="reject" disabled={loading}
+                                className="flex-1 rounded-lg bg-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-300 disabled:opacity-50">Reject</button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {pendingProgress.length === 0 && pendingSessions.length === 0 && pendingSubmissions === 0 ? (
             <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">No pending submissions.</div>
           ) : pendingProgress.length > 0 ? (
             <div className="flex flex-col gap-3">
@@ -881,144 +979,6 @@ export default function TrainingAdminClient({
         </div>
       </div>
 
-      {/* ── SUBMISSIONS ─────────────────────────────────────────────────────── */}
-      {tab === 'submissions' && (
-        <div>
-          {/* Filter bar */}
-          <div className="flex gap-2 mb-4">
-            {(['pending', 'approved', 'rejected'] as const).map(f => (
-              <button key={f} onClick={() => setSubmissionFilter(f)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors ${
-                  submissionFilter === f ? 'bg-red-700 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                }`}>
-                {f}{f === 'pending' && pendingSubmissions > 0 ? ` (${pendingSubmissions})` : ''}
-              </button>
-            ))}
-          </div>
-
-          {submissions.filter(s => s.status === submissionFilter).length === 0 ? (
-            <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-              No {submissionFilter} submissions.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {submissions.filter(s => s.status === submissionFilter).map(sub => {
-                const expanded = expandedSubmissionId === sub.id
-                return (
-                  <div key={sub.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
-                    {/* Header row */}
-                    <button className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-zinc-50 transition-colors"
-                      onClick={() => setExpandedSubmissionId(expanded ? null : sub.id)}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-zinc-900 truncate">{sub.topic}</p>
-                        <div className="flex gap-3 text-xs text-zinc-400 mt-0.5 flex-wrap">
-                          <span>{sub.member_name}</span>
-                          <span>{new Date(sub.course_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          <span>{sub.hours}h</span>
-                          {sub.provider && <span>{sub.provider}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {sub.status === 'pending' && <span className="rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5 text-xs font-medium">Pending</span>}
-                        {sub.status === 'approved' && <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium">Approved</span>}
-                        {sub.status === 'rejected' && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-medium">Rejected</span>}
-                        <span className="text-zinc-400 text-sm">{expanded ? '▲' : '▼'}</span>
-                      </div>
-                    </button>
-
-                    {expanded && (
-                      <div className="border-t border-zinc-100 px-5 py-4 flex flex-col gap-4">
-                        {/* Details */}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                          {sub.location && <><span className="text-zinc-400 text-xs">Location</span><span className="text-zinc-800 text-xs">{sub.location}</span></>}
-                          {sub.purpose && <><span className="text-zinc-400 text-xs">Purpose (member)</span><span className="text-zinc-800 text-xs capitalize">{sub.purpose.replace('_', ' ')}</span></>}
-                          {sub.nremt_category && <><span className="text-zinc-400 text-xs">NREMT Category (member)</span><span className="text-zinc-800 text-xs">{sub.nremt_category}</span></>}
-                          {sub.notes && <><span className="text-zinc-400 text-xs">Notes</span><span className="text-zinc-800 text-xs">{sub.notes}</span></>}
-                          {sub.reviewer_notes && <><span className="text-zinc-400 text-xs">Review Note</span><span className="text-zinc-800 text-xs">{sub.reviewer_notes}</span></>}
-                        </div>
-
-                        {/* Document photo */}
-                        {sub.document_url && (
-                          <div>
-                            <p className="text-xs font-medium text-zinc-500 mb-1">Attached Document</p>
-                            <a href={`/api/training-doc?path=${encodeURIComponent(sub.document_url)}`} target="_blank" rel="noopener noreferrer"
-                              className="text-xs font-semibold text-blue-600 hover:text-blue-800">View Document ↗</a>
-                          </div>
-                        )}
-
-                        {/* Review form — pending only */}
-                        {sub.status === 'pending' && (
-                          <form action={async (fd: FormData) => {
-                            fd.append('id', sub.id)
-                            await wrap(() => reviewTrainingSubmission(fd))
-                            setExpandedSubmissionId(null)
-                          }} className="flex flex-col gap-3 pt-2 border-t border-zinc-100">
-                            <p className="text-xs font-semibold text-zinc-700 uppercase tracking-wide">Review</p>
-
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-medium text-zinc-600 mb-1">Purpose</label>
-                                <select name="approved_purpose" defaultValue={sub.purpose ?? ''}
-                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                  <option value="">— Not classified —</option>
-                                  <option value="recert">Recertification</option>
-                                  <option value="initial_cert">Initial Certification</option>
-                                  <option value="continuing_ed">Continuing Education</option>
-                                  <option value="other">Other</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-zinc-600 mb-1">NREMT Category</label>
-                                <select name="approved_nremt_category" defaultValue={sub.nremt_category ?? ''}
-                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                  <option value="">— None —</option>
-                                  <option value="AIRWAY">Airway, Respiration &amp; Ventilation</option>
-                                  <option value="CARDIOLOGY">Cardiology &amp; Resuscitation</option>
-                                  <option value="TRAUMA">Trauma</option>
-                                  <option value="MEDICAL">Medical; Obstetrics &amp; Gynecology</option>
-                                  <option value="OPERATIONS">EMS Operations</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-600 mb-1">Link to Cert Type <span className="font-normal text-zinc-400">(issues cert on approval)</span></label>
-                              <select name="cert_type_id"
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                                <option value="">— Training record only —</option>
-                                {certTypes.filter(c => c.active).map(c => (
-                                  <option key={c.id} value={c.id}>{c.cert_name}{c.issuing_body ? ` — ${c.issuing_body}` : ''}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-600 mb-1">Review Note <span className="font-normal text-zinc-400">(optional)</span></label>
-                              <input name="reviewer_notes" placeholder="Visible to member"
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            </div>
-
-                            <div className="flex gap-3">
-                              <button type="submit" name="action" value="approve" disabled={loading}
-                                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">
-                                {loading ? '...' : 'Approve'}
-                              </button>
-                              <button type="submit" name="action" value="reject" disabled={loading}
-                                className="flex-1 rounded-lg bg-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-300 disabled:opacity-50">
-                                {loading ? '...' : 'Reject'}
-                              </button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
