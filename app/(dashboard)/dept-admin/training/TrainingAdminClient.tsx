@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   createCertificationType, updateCertificationType,
   createCourseUnit, updateCourseUnit,
-  enrollMember, enrollAllMembers, updateEnrollmentStatus,
+  enrollMember, enrollAllMembers, updateEnrollmentStatus, deleteEnrollment,
   verifyProgress, verifyTrainingAttendance,
   verifyEnrollmentSession,
   createTrainingEvent, logTrainingAttendance,
@@ -76,6 +76,9 @@ export default function TrainingAdminClient({
   const [enrollMode, setEnrollMode] = useState<'course' | 'direct'>('course')
   const [enrollAll, setEnrollAll] = useState(false)
   const [directCertExpires, setDirectCertExpires] = useState(false)
+
+  // Enrollment filter
+  const [showActiveEnrollmentsOnly, setShowActiveEnrollmentsOnly] = useState(true)
 
   // Member cert edit state
   const [editingMemberCertId, setEditingMemberCertId] = useState<string | null>(null)
@@ -543,34 +546,57 @@ export default function TrainingAdminClient({
               )}
             </div>
           )}
+          {/* Filter toggle */}
+          {enrollments.some(e => e.status !== 'active') && (
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setShowActiveEnrollmentsOnly(v => !v)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                {showActiveEnrollmentsOnly ? 'Show All' : 'Active Only'}
+              </button>
+            </div>
+          )}
+
           <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
             {enrollments.length === 0 ? (
               <div className="px-6 py-12 text-center text-sm text-zinc-400">No enrollments yet.</div>
             ) : (
               <div className="divide-y divide-zinc-100">
-                {enrollments.map(en => {
-                  const cert = certTypes.find(c => c.id === en.certification_type_id)
-                  const certUnits = unitsByCert[en.certification_type_id] ?? []
-                  const pending = pendingProgress.filter(p => p.enrollment_id === en.id)
-                  return (
-                    <div key={en.id} className="flex items-center px-5 py-4 gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-zinc-900">{en.name}</p>
-                        <p className="text-xs text-zinc-400">{cert?.cert_name ?? '—'}</p>
-                        {certUnits.length > 0 && <p className="text-xs text-zinc-400">{pending.length} pending / {certUnits.filter(u => u.active).length} units</p>}
+                {enrollments
+                  .filter(en => showActiveEnrollmentsOnly ? en.status === 'active' : true)
+                  .map(en => {
+                    const cert = certTypes.find(c => c.id === en.certification_type_id)
+                    const certUnits = unitsByCert[en.certification_type_id] ?? []
+                    const pending = pendingProgress.filter(p => p.enrollment_id === en.id)
+                    return (
+                      <div key={en.id} className="flex items-center px-5 py-4 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-zinc-900">{en.name}</p>
+                          <p className="text-xs text-zinc-400">{cert?.cert_name ?? '—'}</p>
+                          {certUnits.length > 0 && <p className="text-xs text-zinc-400">{pending.length} pending / {certUnits.filter(u => u.active).length} units</p>}
+                        </div>
+                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium shrink-0 ${en.status === 'active' ? 'bg-green-100 text-green-700' : en.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                          {en.status.charAt(0).toUpperCase() + en.status.slice(1)}
+                        </span>
+                        {en.status === 'active' && (
+                          <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'withdrawn'))} className="text-xs text-zinc-400 hover:text-red-600 shrink-0">Withdraw</button>
+                        )}
+                        {en.status === 'withdrawn' && (
+                          <div className="flex gap-3 shrink-0">
+                            <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'active'))} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-enroll</button>
+                            <button onClick={() => { if (confirm(`Remove ${en.name}'s enrollment? This cannot be undone.`)) wrap(() => deleteEnrollment(en.id)) }}
+                              className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                          </div>
+                        )}
+                        {en.status === 'completed' && isAdmin && (
+                          <button onClick={() => { if (confirm(`Remove ${en.name}'s completed enrollment record? The issued cert will not be affected.`)) wrap(() => deleteEnrollment(en.id)) }}
+                            className="text-xs text-zinc-400 hover:text-red-600 shrink-0">Remove</button>
+                        )}
                       </div>
-                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${en.status === 'active' ? 'bg-green-100 text-green-700' : en.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                        {en.status.charAt(0).toUpperCase() + en.status.slice(1)}
-                      </span>
-                      {en.status === 'active' && (
-                        <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'withdrawn'))} className="text-xs text-zinc-400 hover:text-red-600">Withdraw</button>
-                      )}
-                      {en.status === 'withdrawn' && (
-                        <button onClick={() => wrap(() => updateEnrollmentStatus(en.id, 'active'))} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-enroll</button>
-                      )}
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                {enrollments.filter(en => showActiveEnrollmentsOnly ? en.status === 'active' : true).length === 0 && (
+                  <div className="px-6 py-8 text-center text-sm text-zinc-400">No active enrollments.</div>
+                )}
               </div>
             )}
           </div>

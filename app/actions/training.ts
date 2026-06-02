@@ -605,6 +605,31 @@ export async function saveCertSignature(formData: FormData) {
   return { success: true, signedAt }
 }
 
+// ─── ADMIN: Delete Enrollment ────────────────────────────────────────────────
+export async function deleteEnrollment(enrollmentId: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  // Must be withdrawn or completed — never delete an active enrollment
+  const { data: enList } = await adminClient
+    .from('course_enrollments')
+    .select('status')
+    .eq('id', enrollmentId)
+    .eq('department_id', ctx.department_id!)
+  const en = enList?.[0]
+  if (!en) return { error: 'Enrollment not found.' }
+  if (en.status === 'active') return { error: 'Withdraw the enrollment before removing it.' }
+
+  // Delete progress records first, then the enrollment
+  await adminClient.from('member_course_progress').delete().eq('enrollment_id', enrollmentId)
+  const { error: dbErr } = await adminClient.from('course_enrollments').delete().eq('id', enrollmentId)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/training'); return { error: dbErr.message } }
+
+  revalidatePath('/dept-admin/training')
+  return { success: true }
+}
+
 // ─── MEMBER: Parse Training Document Photo ───────────────────────────────────
 export async function parseTrainingPhoto(formData: FormData): Promise<{
   topic?: string; course_date?: string; hours?: string; provider?: string; location?: string; error?: string
