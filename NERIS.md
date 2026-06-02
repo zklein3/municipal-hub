@@ -234,6 +234,51 @@ NERIS uses a two-sided enrollment model — FireOps7 is the **vendor**, departme
 
 ---
 
+## Special Incident Modifiers
+
+Special incident modifiers are temporary NERIS additions that allow agencies to tag incidents associated with major national or international events. They are applied alongside the standard incident type — they do not replace it.
+
+**How to submit:** The modifier field name and payload structure are TBD pending API docs from FSRI. When confirmed, add to `buildNerisPayload` in `app/actions/neris.ts` and expose as a checkbox/toggle on the NERIS data entry form (`/incidents/[id]/neris`).
+
+---
+
+### FIFA World Cup 2026
+
+**Modifier:** `WORLD_CUP_2026` (value TBD — confirm exact enum with FSRI)
+**Active:** June–July 2026 (tournament window)
+**Source:** NERIS Special Incident Modifier Guidance — FIFA World Cup 2026 (FSRI, 2026)
+
+**Purpose:** Identifies incidents directly or indirectly associated with FIFA World Cup 2026 activities — games, watch parties, celebrations, crowd gatherings, and public safety standbys. Used to measure operational impacts, resource demands, and community effects at a national level.
+
+#### When to Apply
+
+| Incident Type | Apply When |
+|---|---|
+| **Medical** | Incident occurs at or is directly tied to a sanctioned World Cup facility or event — heat emergencies at outdoor viewing events, alcohol-related medical calls, crowd surge injuries, stampedes, spectator injuries, field intrusions, medical from celebratory crowd behavior, or EMS standbys for large gatherings |
+| **Law Enforcement Assist** | Crowd control, riot/disorderly crowd, public safety standbys, security incidents, civil disturbances from celebrations or protests, large-scale crowd management |
+| **Fire & Rescue** | Celebratory fires (fireworks, outdoor grills), vehicle fires in event parking areas, rescue incidents at fan zones or gathering locations, MVA inside match parking area |
+
+**Examples where it applies:**
+- Patient with heat emergency at a designated fan fest
+- Crowd rush injury after a match-winning goal
+- Ambulance unit on standby for a large event gathering
+- Car fire in an official World Cup parking lot
+- Unit staged for suspicious package at event venue
+
+#### When NOT to Apply
+
+Do not add the modifier if there is no reasonable connection between the incident and World Cup activities. Geographic proximity to an event alone does not qualify — there must be a direct link.
+
+**Examples where it does NOT apply:**
+- Routine medical call in a residential neighborhood with no World Cup connection
+- MVA near an event venue but unrelated to the World Cup
+- House fire from unattended food while occupants watched the game on TV
+- Medical emergency in a restaurant where the patient happens to be wearing a World Cup shirt
+
+**Key principle:** If the World Cup event, gathering, celebration, or associated activity *contributed to the need for emergency response*, apply the modifier. If the connection is incidental or the incident would have happened regardless, do not apply it.
+
+---
+
 ## Notes
 
 - NERIS ID is epoch milliseconds of incident start time (system-generated, not dept-assigned)

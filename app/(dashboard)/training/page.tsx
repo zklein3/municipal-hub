@@ -120,6 +120,14 @@ export default async function TrainingPage() {
     }))
   }
 
+  // My outside training submissions (all statuses — member sees their own history)
+  const { data: mySubmissions } = await adminClient
+    .from('training_submissions')
+    .select('id, topic, course_date, hours, provider, location, status, purpose, nremt_category, approved_purpose, approved_nremt_category, reviewer_notes, submitted_at')
+    .eq('personnel_id', me.id)
+    .eq('department_id', department_id)
+    .order('course_date', { ascending: false })
+
   // Count expiring certs (within 90 days)
   const today = new Date()
   const in90 = new Date(); in90.setDate(today.getDate() + 90)
@@ -168,6 +176,7 @@ export default async function TrainingPage() {
         myName={`${me.first_name} ${me.last_name}`}
         isOfficerOrAbove={isOfficerOrAbove}
         officerAttendance={officerAttendance}
+        mySubmissions={mySubmissions ?? []}
       />
     </div>
   )

@@ -97,10 +97,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - DB: `event_series` + `is_training`, `training_hours`, `training_cert_type_id`; `training_events` + `event_instance_id`, `cancelled`
 - Apparatus ISO specs: `turning_radius_ft` + `gvwr_lbs` added to `apparatus_iso_specs`, ISO report + apparatus detail updated
 
-**Still pending from training work:**
-- Member self-submit "Log Training" for standalone sessions (EMS conference use case) — no officer setup required
-- Training page member UX redesign (hub-and-spoke, similar to equipment)
-
 ### 0e. Inventory & Equipment Setup Restructure — SHIPPED ✅ (2026-06-01)
 - Nav label: Equipment → **Inventory**
 - `/equipment` rewritten as member-focused page: Station Storage card + apparatus list (Vehicle Check, View Inventory, Fuel Log per card)
@@ -153,22 +149,26 @@ Standalone truck check at `/inspections/vehicle-check/[id]` — separate from co
 - Print ↗ button opens `/print/run-sheet?id=...` in new tab
 - Card added to `/reports` hub (officers + admins)
 
-### 1. Training — ✅ Most gaps resolved (2026-05-24)
-Built 2026-05-17. Enhanced 2026-05-24.
+### 1. Training — ✅ Core complete (2026-06-02)
+Built 2026-05-17. Enhanced 2026-05-24. Outside training submission flow added 2026-06-02.
 
 **What's working:**
 - Unified member training page (My Training list + My Certifications)
 - Simple cert: assign → training date → member logs attendance → officer verifies → cert issued → member signs
 - Training event with cert type: bulk log attendance → cert auto-issued to all
-- Direct cert entry (admin): picks cert type or enters custom name, dates, cert number — all fields stacked (no cutoff on medium screens)
+- Direct cert entry (admin): picks cert type or enters custom name, dates, cert number
 - Dept-wide enrollment: "Assign to All Active Members" toggle
 - Cert signatures on all records (CertSignaturePadModal)
-- **Member Certs tab** in Training Admin: officers see all cert records (read-only); admins can edit any cert record (dates, cert number, issuing body, active status)
-- `show_on_run_report` flag on cert types — admin checks it per cert type to control run sheet display
+- **Member Certs tab** in Training Admin: officers read-only, admins can edit
+- `show_on_run_report` flag on cert types — controls run sheet cert display
+- **Outside training submission** — member logs external classes (conference, seminar) via "Log Outside Training" button on `/training`. Optional photo upload → Claude Haiku parses image and pre-fills fields. Optional purpose + NREMT category dropdowns. Sits as `pending` until officer/admin approves via Submissions tab in Training Admin. Approval can link to a cert type (auto-issues cert for recert/initial_cert). All submissions (pending/approved/rejected) visible on member training page with status badge and reviewer notes.
+
+**NREMT categories (built in):** AIRWAY | CARDIOLOGY | TRAUMA | MEDICAL | OPERATIONS
 
 **Known gaps still open:**
 - Training event cert issuance deduplication (same-day check only — may double-issue if event re-verified)
 - No expiry notification for certs approaching expiration
+- Outside training print record (deferred — needs Vercel push to test)
 
 ### 2. NERIS — Payload validation in progress ✳️ (2026-05-22)
 V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.local.

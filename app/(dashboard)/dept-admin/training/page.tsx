@@ -151,6 +151,24 @@ export default async function TrainingAdminPage() {
     return acc
   }, {})
 
+  // Training submissions (outside classes logged by members)
+  const { data: submissionsRaw } = await adminClient
+    .from('training_submissions')
+    .select('id, personnel_id, topic, course_date, hours, provider, location, notes, document_url, purpose, nremt_category, status, submitted_at, reviewer_notes')
+    .eq('department_id', department_id)
+    .order('submitted_at', { ascending: false })
+
+  const submissionPersonnelIds = [...new Set((submissionsRaw ?? []).map(s => s.personnel_id))]
+  const { data: submissionPersonnelRaw } = submissionPersonnelIds.length > 0
+    ? await adminClient.from('personnel').select('id, first_name, last_name').in('id', submissionPersonnelIds)
+    : { data: [] }
+  const submissionNameMap = Object.fromEntries((submissionPersonnelRaw ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
+
+  const submissions = (submissionsRaw ?? []).map(s => ({
+    ...s,
+    member_name: submissionNameMap[s.personnel_id] ?? '—',
+  }))
+
   return (
     <TrainingAdminClient
       certTypes={certTypes ?? []}
@@ -168,6 +186,7 @@ export default async function TrainingAdminPage() {
       }))}
       linkedEventTitles={adminLinkedEventTitles}
       memberCerts={memberCerts}
+      submissions={submissions}
       isAdmin={isAdmin}
       departmentId={department_id}
     />

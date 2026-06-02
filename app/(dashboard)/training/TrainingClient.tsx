@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { submitUnitProgress, selfReportTrainingAttendance, logCertSession, saveCertSignature } from '@/app/actions/training'
 import SignaturePadModal from '@/components/SignaturePadModal'
 import CertSignaturePadModal from '@/components/CertSignaturePadModal'
+import LogOutsideTrainingModal from '@/components/LogOutsideTrainingModal'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
@@ -33,6 +34,27 @@ interface AttendanceRecord {
   id: string; event_id: string; personnel_id: string; status: string
   signed_at: string | null; signature_url: string | null; member_name: string
 }
+interface MySubmission {
+  id: string; topic: string; course_date: string; hours: number
+  provider: string | null; location: string | null; status: string
+  purpose: string | null; nremt_category: string | null
+  approved_purpose: string | null; approved_nremt_category: string | null
+  reviewer_notes: string | null; submitted_at: string
+}
+
+const NREMT_LABELS: Record<string, string> = {
+  AIRWAY: 'Airway, Respiration & Ventilation',
+  CARDIOLOGY: 'Cardiology & Resuscitation',
+  TRAUMA: 'Trauma',
+  MEDICAL: 'Medical; Obstetrics & Gynecology',
+  OPERATIONS: 'EMS Operations',
+}
+const PURPOSE_LABELS: Record<string, string> = {
+  recert: 'Recertification',
+  initial_cert: 'Initial Certification',
+  continuing_ed: 'Continuing Education',
+  other: 'Other',
+}
 
 function isExpiringSoon(d: string | null) {
   if (!d) return false
@@ -55,13 +77,14 @@ function fmtDate(d: string) {
 
 export default function TrainingClient({
   enrollments, certTypes, units, myProgress, myCerts, trainingEvents,
-  linkedEventTitles = {}, myPersonnelId, myName, isOfficerOrAbove, officerAttendance = [],
+  linkedEventTitles = {}, myPersonnelId, myName, isOfficerOrAbove, officerAttendance = [], mySubmissions = [],
 }: {
   enrollments: Enrollment[]; certTypes: CertType[]; units: Unit[]
   myProgress: Progress[]; myCerts: Certification[]; trainingEvents: TrainingEvent[]
   linkedEventTitles?: Record<string, string>
   myPersonnelId: string; myName: string; isOfficerOrAbove: boolean
   officerAttendance?: AttendanceRecord[]
+  mySubmissions?: MySubmission[]
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -71,6 +94,7 @@ export default function TrainingClient({
   const [signingEventId, setSigningEventId] = useState<string | null>(null)
   const [sigPadTarget, setSigPadTarget] = useState<{ eventId: string; personnelId: string; memberName: string; eventTopic: string } | null>(null)
   const [certSigTarget, setCertSigTarget] = useState<{ certId: string; certName: string } | null>(null)
+  const [showOutsideTraining, setShowOutsideTraining] = useState(false)
   const [localSignatures, setLocalSignatures] = useState<Record<string, string>>({})
   const [localCertSignatures, setLocalCertSignatures] = useState<Record<string, string>>({})
 
@@ -125,10 +149,12 @@ export default function TrainingClient({
   type TrainingItem =
     | { kind: 'event'; data: TrainingEvent; sortDate: string }
     | { kind: 'enrollment'; data: Enrollment; sortDate: string }
+    | { kind: 'submission'; data: MySubmission; sortDate: string }
 
   const items: TrainingItem[] = [
     ...trainingEvents.map(e => ({ kind: 'event' as const, data: e, sortDate: e.event_date })),
     ...activeEnrollments.map(e => ({ kind: 'enrollment' as const, data: e, sortDate: e.training_date ?? e.enrolled_at?.split('T')[0] ?? today })),
+    ...mySubmissions.map(s => ({ kind: 'submission' as const, data: s, sortDate: s.course_date })),
   ].sort((a, b) => {
     // Upcoming first (ascending), then past descending
     const aDate = new Date(a.sortDate); const bDate = new Date(b.sortDate)
@@ -151,7 +177,13 @@ export default function TrainingClient({
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
       {/* ── MY TRAINING ──────────────────────────────────────────────────────── */}
-      <h2 className="text-base font-semibold text-zinc-700 mb-3">My Training</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold text-zinc-700">My Training</h2>
+        <button onClick={() => setShowOutsideTraining(true)}
+          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
+          + Log Outside Training
+        </button>
+      </div>
 
       {items.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400 mb-8">
@@ -273,6 +305,53 @@ export default function TrainingClient({
                       )}
                     </div>
                   )}
+                </div>
+              )
+            }
+
+            // Submission item
+            if (item.kind === 'submission') {
+              const sub = item.data
+              const cat = sub.approved_nremt_category ?? sub.nremt_category
+              const purpose = sub.approved_purpose ?? sub.purpose
+              return (
+                <div key={`sub-${sub.id}`} className="rounded-xl bg-white shadow-sm border border-zinc-200 px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 text-center w-10">
+                      <p className="text-xs font-semibold text-zinc-400 uppercase">
+                        {new Date(sub.course_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                      </p>
+                      <p className="text-xl font-bold text-zinc-900 leading-none">
+                        {new Date(sub.course_date + 'T00:00:00').getDate()}
+                      </p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-zinc-900">{sub.topic}</p>
+                      <div className="flex gap-3 text-xs text-zinc-400 mt-0.5 flex-wrap">
+                        {sub.provider && <span>{sub.provider}</span>}
+                        {sub.location && <span>📍 {sub.location}</span>}
+                        <span>{sub.hours}h</span>
+                        {purpose && <span className="text-blue-600 font-medium">{PURPOSE_LABELS[purpose] ?? purpose}</span>}
+                        {cat && <span className="text-purple-600 font-medium">{NREMT_LABELS[cat] ?? cat}</span>}
+                      </div>
+                      {sub.reviewer_notes && (
+                        <p className={`text-xs mt-1 ${sub.status === 'rejected' ? 'text-red-600' : 'text-zinc-500'}`}>
+                          Note: {sub.reviewer_notes}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0">
+                      {sub.status === 'pending' && (
+                        <span className="rounded-full bg-yellow-100 text-yellow-700 px-2 py-0.5 text-xs font-medium">Pending Review</span>
+                      )}
+                      {sub.status === 'approved' && (
+                        <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium">✓ Approved</span>
+                      )}
+                      {sub.status === 'rejected' && (
+                        <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-medium">Rejected</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             }
@@ -474,6 +553,10 @@ export default function TrainingClient({
           setSigPadTarget(null)
         }}
       />
+    )}
+
+    {showOutsideTraining && (
+      <LogOutsideTrainingModal onClose={() => setShowOutsideTraining(false)} />
     )}
 
     {certSigTarget && (

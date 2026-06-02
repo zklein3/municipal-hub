@@ -605,6 +605,204 @@ export async function saveCertSignature(formData: FormData) {
   return { success: true, signedAt }
 }
 
+// ─── MEMBER: Parse Training Document Photo ───────────────────────────────────
+export async function parseTrainingPhoto(formData: FormData): Promise<{
+  topic?: string; course_date?: string; hours?: string; provider?: string; location?: string; error?: string
+}> {
+  const ctx = await getContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+
+  const file = formData.get('photo') as File | null
+  if (!file || file.size === 0) return { error: 'No file provided.' }
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!allowedTypes.includes(file.type)) return { error: 'Unsupported file type. Use JPG, PNG, or WEBP.' }
+
+  const arrayBuffer = await file.arrayBuffer()
+  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const mediaType = file.type as 'image/jpeg' | 'image/png' | 'image/webp'
+
+  const prompt = `Parse this training document, certificate, or course description image. Extract:
+- topic: Course or class name/title
+- course_date: Date in YYYY-MM-DD format (null if not found)
+- hours: CE/training hours as a decimal number (null if not found)
+- provider: Organization, institution, or instructor name (null if not found)
+- location: City, state, or venue (null if not found)
+
+Respond with ONLY a JSON object using these exact keys. No explanation.
+Example: {"topic":"Respiratory Distress Management","course_date":"2026-06-01","hours":1.5,"provider":"NAEMSP","location":"Kansas City, MO"}`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': process.env.ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    }),
+  })
+
+  if (!response.ok) return { error: 'Failed to contact AI service.' }
+
+  const result = await response.json()
+  const text = result.content?.[0]?.text ?? ''
+
+  try {
+    const parsed = JSON.parse(text)
+    return {
+      topic: parsed.topic ?? undefined,
+      course_date: parsed.course_date ?? undefined,
+      hours: parsed.hours != null ? String(parsed.hours) : undefined,
+      provider: parsed.provider ?? undefined,
+      location: parsed.location ?? undefined,
+    }
+  } catch {
+    return { error: 'Could not parse AI response.' }
+  }
+}
+
+// ─── MEMBER: Submit Outside Training ─────────────────────────────────────────
+export async function submitOutsideTraining(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.department_id) return { error: 'Not authenticated.' }
+
+  const topic = (formData.get('topic') as string)?.trim()
+  const course_date = formData.get('course_date') as string
+  const hours = parseFloat(formData.get('hours') as string)
+
+  if (!topic) return { error: 'Course name is required.' }
+  if (!course_date) return { error: 'Course date is required.' }
+  if (!hours || hours <= 0) return { error: 'Hours must be greater than 0.' }
+
+  const adminClient = createAdminClient()
+  let document_url: string | null = null
+
+  const photo = formData.get('photo') as File | null
+  if (photo && photo.size > 0) {
+    const arrayBuffer = await photo.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const ext = photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg'
+    const path = `${ctx.department_id}/${ctx.me.id}/${Date.now()}.${ext}`
+
+    const { error: uploadErr } = await adminClient.storage
+      .from('training-docs')
+      .upload(path, buffer, { contentType: photo.type, upsert: false })
+
+    if (uploadErr) {
+      await logError(uploadErr.message, 'submitOutsideTraining/upload')
+      return { error: 'Failed to upload document. Try again or submit without the photo.' }
+    }
+    document_url = path
+  }
+
+  const { error: dbErr } = await adminClient.from('training_submissions').insert({
+    department_id: ctx.department_id,
+    personnel_id: ctx.me.id,
+    topic,
+    course_date,
+    hours,
+    provider: (formData.get('provider') as string) || null,
+    location: (formData.get('location') as string) || null,
+    notes: (formData.get('notes') as string) || null,
+    document_url,
+    purpose: (formData.get('purpose') as string) || null,
+    nremt_category: (formData.get('nremt_category') as string) || null,
+  })
+
+  if (dbErr) { await logError(dbErr.message, '/training'); return { error: dbErr.message } }
+  revalidatePath('/training')
+  return { success: true }
+}
+
+// ─── ADMIN/OFFICER: Review Training Submission ────────────────────────────────
+export async function reviewTrainingSubmission(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+
+  const adminClient = createAdminClient()
+  const id = formData.get('id') as string
+  const action = formData.get('action') as 'approve' | 'reject'
+  const reviewer_notes = (formData.get('reviewer_notes') as string) || null
+
+  if (!id || !action) return { error: 'Missing required fields.' }
+
+  const { data: subList } = await adminClient
+    .from('training_submissions')
+    .select('*')
+    .eq('id', id)
+    .eq('department_id', ctx.department_id!)
+  const sub = subList?.[0]
+  if (!sub) return { error: 'Submission not found.' }
+
+  const now = new Date().toISOString()
+
+  if (action === 'reject') {
+    const { error: dbErr } = await adminClient.from('training_submissions').update({
+      status: 'rejected', reviewer_id: ctx.me.id, reviewed_at: now, reviewer_notes, updated_at: now,
+    }).eq('id', id)
+    if (dbErr) { await logError(dbErr.message, '/dept-admin/training'); return { error: dbErr.message } }
+    revalidatePath('/dept-admin/training')
+    revalidatePath('/training')
+    return { success: true }
+  }
+
+  // Approve — use admin-confirmed values, fall back to member's suggestions
+  const approved_purpose = (formData.get('approved_purpose') as string) || sub.purpose || null
+  const approved_nremt_category = (formData.get('approved_nremt_category') as string) || sub.nremt_category || null
+  const cert_type_id = (formData.get('cert_type_id') as string) || null
+
+  const { error: dbErr } = await adminClient.from('training_submissions').update({
+    status: 'approved', reviewer_id: ctx.me.id, reviewed_at: now, reviewer_notes,
+    approved_purpose, approved_nremt_category,
+    cert_type_id: cert_type_id || null,
+    updated_at: now,
+  }).eq('id', id)
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/training'); return { error: dbErr.message } }
+
+  // If a cert type is linked and purpose is recert or initial_cert → issue cert record
+  if (cert_type_id && (approved_purpose === 'recert' || approved_purpose === 'initial_cert')) {
+    const { data: ctList } = await adminClient
+      .from('certification_types')
+      .select('cert_name, issuing_body, does_expire, expiration_interval_months')
+      .eq('id', cert_type_id)
+    const ct = ctList?.[0]
+    if (ct) {
+      let expiration_date: string | null = null
+      if (ct.does_expire && ct.expiration_interval_months) {
+        const exp = new Date(sub.course_date)
+        exp.setMonth(exp.getMonth() + ct.expiration_interval_months)
+        expiration_date = exp.toISOString().split('T')[0]
+      }
+      await adminClient.from('member_certifications').insert({
+        department_id: ctx.department_id,
+        personnel_id: sub.personnel_id,
+        cert_name: ct.cert_name,
+        issuing_body: ct.issuing_body,
+        issued_date: sub.course_date,
+        expiration_date,
+        source: 'self_report',
+        notes: `Approved from outside training: ${sub.topic}${sub.provider ? ` — ${sub.provider}` : ''}`,
+        active: true,
+      })
+    }
+  }
+
+  revalidatePath('/dept-admin/training')
+  revalidatePath('/training')
+  return { success: true }
+}
+
 // ─── Cancel standalone training event ────────────────────────────────────────
 
 export async function cancelTrainingEvent(id: string) {

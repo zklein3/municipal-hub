@@ -57,6 +57,10 @@
 - BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
 - Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings, on/off marketing toggle
 - Training — unified member training page, direct cert entry, dept-wide enrollment, cert signatures, auto-cert issuance from events
+- Outside training submissions — member-initiated log for external classes/conferences. Photo upload → Claude Haiku AI parse pre-fills fields. Purpose + NREMT category dropdowns (AIRWAY/CARDIOLOGY/TRAUMA/MEDICAL/OPERATIONS). Officer/admin reviews via Submissions tab in Training Admin; approval optionally links to cert type and auto-issues cert record. All submissions visible on member `/training` page with status + reviewer notes.
+- NERIS Special Incident Modifiers section added to `NERIS.md` — FIFA World Cup 2026 modifier documented with when-to-apply guidance
+- Security: enabled RLS on `qr_debug_scans` (was fully open — resolved Supabase critical alert)
+- Storage bucket `training-docs` created for outside training document photos
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
 
