@@ -18,6 +18,8 @@ export default async function EquipmentPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
+  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
+
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name, apparatus_type_id, station_id, active')
@@ -88,17 +90,31 @@ export default async function EquipmentPage() {
         <p className="text-sm text-zinc-500 mt-0.5">Apparatus inventory and department storage</p>
       </div>
 
-      {/* Storage card */}
-      <Link
-        href="/equipment/storage"
-        className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 mb-6 hover:border-red-300 hover:shadow-md transition-all group"
-      >
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Station Storage</p>
-          <p className="text-xs text-zinc-400 mt-0.5">Unassigned pool, PAR levels, and item transfers</p>
-        </div>
-        <span className="text-xs font-semibold text-red-600 group-hover:text-red-800 shrink-0">View →</span>
-      </Link>
+      {/* Top cards */}
+      <div className="flex flex-col gap-3 mb-6">
+        <Link
+          href="/equipment/storage"
+          className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 hover:border-red-300 hover:shadow-md transition-all group"
+        >
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Station Storage</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Unassigned pool, PAR levels, and item transfers</p>
+          </div>
+          <span className="text-xs font-semibold text-red-600 group-hover:text-red-800 shrink-0">View →</span>
+        </Link>
+        {isOfficerOrAbove && (
+          <Link
+            href="/medical"
+            className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 hover:border-red-300 hover:shadow-md transition-all group"
+          >
+            <div>
+              <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Medical Storeroom</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Medical supplies, medications, and expiration tracking</p>
+            </div>
+            <span className="text-xs font-semibold text-red-600 group-hover:text-red-800 shrink-0">View →</span>
+          </Link>
+        )}
+      </div>
 
       {apparatus.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">

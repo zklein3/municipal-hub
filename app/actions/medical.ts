@@ -149,6 +149,83 @@ export async function updateStoreroomPar(inventory_id: string, par_level: number
   return { success: true }
 }
 
+// ─── Receive Stock ────────────────────────────────────────────────────────────
+
+export async function receiveStock(data: {
+  storeroom_inventory_id: string
+  lot_number: string | null
+  expiration_date: string | null
+  quantity_received: number
+  notes: string | null
+  signer_1_id: string | null
+  signer_2_id: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  const adminClient = createAdminClient()
+
+  if (!data.storeroom_inventory_id || data.quantity_received < 1)
+    return { error: 'Supply type and quantity are required.' }
+
+  // Fetch inventory row to get storeroom + supply type for transaction
+  const { data: invRow } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('storeroom_id, supply_type_id, department_id')
+    .eq('id', data.storeroom_inventory_id)
+    .single()
+  if (!invRow) return { error: 'Inventory record not found.' }
+
+  // Verify supply type signature requirements are satisfied
+  const { data: supplyType } = await adminClient
+    .from('medical_supply_types')
+    .select('required_signatures, name')
+    .eq('id', invRow.supply_type_id)
+    .single()
+
+  const sigsRequired = supplyType?.required_signatures ?? 0
+  if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required for this supply type.' }
+  if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A second signer is required for controlled substances.' }
+
+  const now = new Date().toISOString()
+
+  // Create the lot
+  const { data: lot, error: lotErr } = await adminClient.from('medical_stock_lots').insert({
+    storeroom_inventory_id: data.storeroom_inventory_id,
+    department_id: invRow.department_id,
+    lot_number: data.lot_number || null,
+    expiration_date: data.expiration_date || null,
+    quantity_received: data.quantity_received,
+    quantity_remaining: data.quantity_received,
+    received_date: now.split('T')[0],
+    received_by: ctx.me.id,
+    notes: data.notes || null,
+    active: true,
+  }).select('id').single()
+
+  if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
+
+  // Create the transaction record
+  const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+    department_id: invRow.department_id,
+    storeroom_id: invRow.storeroom_id,
+    supply_type_id: invRow.supply_type_id,
+    lot_id: lot.id,
+    transaction_type: 'received',
+    quantity: data.quantity_received,
+    performed_by: ctx.me.id,
+    signer_1_id: data.signer_1_id || null,
+    signer_1_at: data.signer_1_id ? now : null,
+    signer_2_id: data.signer_2_id || null,
+    signer_2_at: data.signer_2_id ? now : null,
+    notes: data.notes || null,
+  })
+
+  if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+  revalidatePath('/medical')
+  return { success: true }
+}
+
 export async function removeSupplyFromStoreroom(inventory_id: string) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
