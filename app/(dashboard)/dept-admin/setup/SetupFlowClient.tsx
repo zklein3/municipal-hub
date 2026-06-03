@@ -6,12 +6,14 @@ import StationsStep from './StationsStep'
 import ApparatusStep from './ApparatusStep'
 import CompartmentsStep from './CompartmentsStep'
 import ItemsStep from './ItemsStep'
+import InventoryStep from './InventoryStep'
 
 const TABS = [
   { id: 'stations',     label: 'Stations'      },
   { id: 'apparatus',    label: 'Apparatus'     },
   { id: 'compartments', label: 'Compartments'  },
   { id: 'items',        label: 'Items'         },
+  { id: 'inventory',    label: 'Inventory'     },
 ]
 
 
@@ -138,6 +140,13 @@ export default function SetupFlowClient({
                 label: a.unit_number + (a.apparatus_name ? ` — ${a.apparatus_name}` : ''),
               }))}
               {...helpProps}
+            />
+          )}
+          {activeTab === 'inventory' && (
+            <InventoryStep
+              apparatus={apparatus}
+              allItems={items}
+              allCategories={categories}
             />
           )}
         </div>

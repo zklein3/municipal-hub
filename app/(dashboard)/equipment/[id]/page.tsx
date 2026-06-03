@@ -203,11 +203,11 @@ export default async function EquipmentDetailPage({
     <EquipmentDetailClient
       apparatus={apparatusWithRefs}
       compartments={compartments}
-      allItems={allItems ?? []}
-      allCategories={allCategories ?? []}
+      allItems={[]}
+      allCategories={[]}
       allApparatus={allApparatus}
-      isAdmin={isAdmin}
-      isOfficerOrAbove={isOfficerOrAbove}
+      isAdmin={false}
+      isOfficerOrAbove={false}
       backHref={from}
     />
   )

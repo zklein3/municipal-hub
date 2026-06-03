@@ -343,6 +343,69 @@ export async function moveAssetsToStorage(asset_ids: string[]) {
   return { success: true }
 }
 
+// ─── Get Apparatus Inventory (for admin setup tab) ────────────────────────────
+export async function getApparatusInventory(apparatus_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.', compartments: [] }
+  const adminClient = createAdminClient()
+
+  const { data: compartmentLinks } = await adminClient
+    .from('apparatus_compartments')
+    .select('id, compartment_name_id')
+    .eq('apparatus_id', apparatus_id)
+    .eq('active', true)
+
+  const compartmentNameIds = (compartmentLinks ?? []).map(c => c.compartment_name_id).filter(Boolean)
+  const { data: compartmentNames } = compartmentNameIds.length > 0
+    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compartmentNameIds)
+    : { data: [] }
+
+  const compartmentIds = (compartmentLinks ?? []).map(c => c.id)
+  const { data: locationStandards } = compartmentIds.length > 0
+    ? await adminClient.from('item_location_standards').select('id, apparatus_compartment_id, item_id, expected_quantity, minimum_quantity').in('apparatus_compartment_id', compartmentIds).eq('active', true)
+    : { data: [] }
+
+  const itemIds = (locationStandards ?? []).map(ls => ls.item_id).filter(Boolean)
+  const { data: itemData } = itemIds.length > 0
+    ? await adminClient.from('items').select('id, item_name, category_id, requires_inspection').in('id', itemIds)
+    : { data: [] }
+
+  const catIds = (itemData ?? []).map(i => i.category_id).filter(Boolean)
+  const { data: catData } = catIds.length > 0
+    ? await adminClient.from('item_categories').select('id, category_name').in('id', catIds)
+    : { data: [] }
+
+  const nameMap = Object.fromEntries((compartmentNames ?? []).map(c => [c.id, c]))
+  const itemMap = Object.fromEntries((itemData ?? []).map(i => [i.id, i]))
+  const catMap = Object.fromEntries((catData ?? []).map(c => [c.id, c.category_name]))
+
+  const compartments = (compartmentLinks ?? [])
+    .map(c => {
+      const cn = nameMap[c.compartment_name_id]
+      const items = (locationStandards ?? [])
+        .filter(ls => ls.apparatus_compartment_id === c.id)
+        .map(ls => ({
+          id: ls.id,
+          item_id: ls.item_id,
+          item_name: itemMap[ls.item_id]?.item_name ?? '—',
+          category_name: catMap[itemMap[ls.item_id]?.category_id] ?? '—',
+          requires_inspection: itemMap[ls.item_id]?.requires_inspection ?? false,
+          expected_quantity: ls.expected_quantity,
+          minimum_quantity: ls.minimum_quantity,
+        }))
+      return {
+        id: c.id,
+        compartment_code: cn?.compartment_code ?? '—',
+        compartment_name: cn?.compartment_name ?? null,
+        sort_order: cn?.sort_order ?? 999,
+        items,
+      }
+    })
+    .sort((a, b) => a.sort_order - b.sort_order)
+
+  return { compartments }
+}
+
 // ─── Assign Item to Compartment ───────────────────────────────────────────────
 export async function assignItemToCompartment(formData: FormData) {
   const ctx = await getContext()
