@@ -156,6 +156,23 @@ export default function MedicalStoreClient({
     )
   }
 
+  // Compute alerts across all storerooms
+  const now = new Date()
+  const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  type Alert = { level: 'red' | 'amber'; message: string }
+  const alerts: Alert[] = []
+  for (const inv of inventory) {
+    const supply = supplyMap[inv.supply_type_id]
+    if (!supply) continue
+    const invLots = lots.filter(l => l.storeroom_inventory_id === inv.id)
+    const total = invLots.reduce((s, l) => s + l.quantity_remaining, 0)
+    const expiredLots = invLots.filter(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < now)
+    const expiringLots = invLots.filter(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') >= now && new Date(l.expiration_date + 'T00:00:00') <= soon)
+    if (expiredLots.length > 0) alerts.push({ level: 'red', message: `${supply.name}: ${expiredLots.length} expired lot${expiredLots.length !== 1 ? 's' : ''}` })
+    if (expiringLots.length > 0) alerts.push({ level: 'amber', message: `${supply.name}: expiring within 30 days` })
+    if (inv.par_level > 0 && total < inv.par_level) alerts.push({ level: total === 0 ? 'red' : 'amber', message: `${supply.name}: ${total} on hand, PAR is ${inv.par_level}` })
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
@@ -165,6 +182,24 @@ export default function MedicalStoreClient({
 
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+
+      {/* Alerts panel */}
+      {alerts.length > 0 && (
+        <div className="mb-5 flex flex-col gap-2">
+          {alerts.filter(a => a.level === 'red').map((a, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+              <span className="text-red-600 font-bold shrink-0">⚠</span>
+              <p className="text-sm text-red-700 font-medium">{a.message}</p>
+            </div>
+          ))}
+          {alerts.filter(a => a.level === 'amber').map((a, i) => (
+            <div key={i} className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+              <span className="text-amber-600 font-bold shrink-0">!</span>
+              <p className="text-sm text-amber-700">{a.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Storeroom selector */}
       {storerooms.length > 1 && (

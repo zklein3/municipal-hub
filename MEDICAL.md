@@ -33,7 +33,7 @@ Compartment P1 — Engine 32
 
 ---
 
-## Phase 1 — Medical Storeroom Foundation ✳️ IN PROGRESS
+## Phase 1 — Medical Storeroom Foundation ✅ COMPLETE (2026-06-03)
 
 ### Step 1 — DB Migration ✅ DONE (2026-06-03)
 Five new tables:
@@ -67,12 +67,9 @@ Officer flow on storeroom page:
 - Expandable rows show individual lots with lot numbers + expiration dates
 - "Receive Stock" button per supply type
 
-### Step 6 — Notifications
-Background check (or on page load) fires in-app inbox notifications to officers when:
-- Quantity drops below PAR
-- Any lot expiring within 30 days
-- Any lot has passed expiration date
-- Notification cleared when issue is resolved
+### Step 6 — Notifications ✅ DONE (2026-06-03)
+- Alerts panel on /medical page: expired lots (red), expiring within 30 days (amber), below PAR (red/amber) — computed from fetched data, no extra queries
+- Inbox sidebar badge count includes medical alert count (expiring/expired lots within 30 days) for officers
 
 ---
 

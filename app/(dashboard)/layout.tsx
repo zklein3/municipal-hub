@@ -47,7 +47,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let pendingSignatureCount = 0
   if (!isSysAdmin && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
-    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }, { count: sigCount }] = await Promise.all([
+    const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }, { count: sigCount }, { count: medicalAlertCount }] = await Promise.all([
       adminClient.from('announcements').select('id').eq('department_id', user.department_id),
       adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
       isOfficerOrAbove
@@ -58,10 +59,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
         : Promise.resolve({ data: [] }),
       adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris').eq('id', user.department_id).single(),
       adminClient.from('incident_signatures').select('id', { count: 'exact', head: true }).eq('personnel_id', user.id).is('signed_at', null),
+      isOfficerOrAbove
+        ? adminClient.from('medical_stock_lots').select('id', { count: 'exact', head: true }).eq('department_id', user.department_id).eq('active', true).gt('quantity_remaining', 0).lte('expiration_date', thirtyDaysOut)
+        : Promise.resolve({ count: 0, data: null, error: null }),
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
-    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0)
+    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0) + (medicalAlertCount ?? 0)
     pendingSignatureCount = sigCount ?? 0
     publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
     moduleOperations = (deptFlags as any)?.module_operations ?? false
