@@ -24,8 +24,6 @@ export default async function OperationsPage() {
   if (!myDept) redirect('/dashboard')
 
   const departmentId = myDept.department_id
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
-
   const { data: deptFlags } = await adminClient
     .from('departments')
     .select('module_operations, public_site_enabled')
@@ -33,24 +31,14 @@ export default async function OperationsPage() {
     .single()
 
   const moduleOperations = (deptFlags as any)?.module_operations ?? false
-  const publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
 
   const [
     { data: allAnnouncements },
     { data: readIds },
-    permitsResult,
-    requestsResult,
     incidentsResult,
-    { count: pendingSigCount },
   ] = await Promise.all([
     adminClient.from('announcements').select('id').eq('department_id', departmentId),
     adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', me.id),
-    isOfficerOrAbove && publicSiteEnabled
-      ? adminClient.from('burn_permits').select('id', { count: 'exact', head: true }).eq('department_id', departmentId).eq('status', 'pending')
-      : Promise.resolve({ count: 0, data: null, error: null }),
-    isOfficerOrAbove && publicSiteEnabled
-      ? adminClient.from('public_record_requests').select('id', { count: 'exact', head: true }).eq('department_id', departmentId).eq('status', 'pending')
-      : Promise.resolve({ count: 0, data: null, error: null }),
     moduleOperations
       ? adminClient.from('incidents')
           .select('id, incident_number, incident_type, incident_date, address, city')
@@ -58,17 +46,10 @@ export default async function OperationsPage() {
           .order('incident_date', { ascending: false })
           .limit(5)
       : Promise.resolve({ data: [], error: null }),
-    adminClient.from('incident_signatures')
-      .select('id', { count: 'exact', head: true })
-      .eq('personnel_id', me.id)
-      .is('signed_at', null),
   ])
 
   const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
   const unreadCount = (allAnnouncements ?? []).filter(a => !readSet.has(a.id)).length
-  const pendingInboxCount = ((permitsResult as any).count ?? 0) + ((requestsResult as any).count ?? 0)
-  const pendingSignatures = pendingSigCount ?? 0
-  const totalInboxCount = pendingInboxCount + pendingSignatures
   const recentIncidents = (incidentsResult as any).data ?? []
 
   function formatIncidentDate(d: string) {
@@ -106,19 +87,6 @@ export default async function OperationsPage() {
           stat={unreadCount > 0 ? unreadCount : null}
           statLabel="Unread"
           alert={unreadCount > 0}
-        />
-        <HubCard
-          title="Fuel Log"
-          description="Log and review apparatus fuel entries"
-          href="/fuel"
-        />
-        <HubCard
-          title="Inbox"
-          description={isOfficerOrAbove ? 'Signatures, burn permits, and records requests' : 'Pending run signatures'}
-          href="/inbox"
-          stat={totalInboxCount > 0 ? totalInboxCount : null}
-          statLabel={pendingSignatures > 0 && !isOfficerOrAbove ? `${pendingSignatures} signature${pendingSignatures !== 1 ? 's' : ''}` : 'Pending'}
-          alert={totalInboxCount > 0}
         />
       </div>
 

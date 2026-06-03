@@ -69,8 +69,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     moduleNeris = (deptFlags as any)?.module_neris ?? false
   }
 
-  const opsBadge = (announcementUnreadCount + inboxPendingCount + pendingSignatureCount) > 0
-    ? announcementUnreadCount + inboxPendingCount + pendingSignatureCount
+  const opsBadge = announcementUnreadCount > 0 ? announcementUnreadCount : undefined
+  const inboxBadge = (inboxPendingCount + pendingSignatureCount) > 0
+    ? inboxPendingCount + pendingSignatureCount
     : undefined
 
   const navGroups: NavGroup[] = isSysAdmin ? [
@@ -78,6 +79,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ] : [
     { items: [{ href: '/dashboard', label: 'Dashboard' }] },
     { items: [{ href: '/operations', label: 'Operations', badge: opsBadge }] },
+    { items: [{ href: '/inbox', label: 'Inbox', badge: inboxBadge }] },
     { items: [{ href: '/personnel', label: 'Personnel' }] },
     { items: [{ href: '/training', label: 'Training' }] },
     { items: [{ href: '/equipment', label: 'Inventory' }] },

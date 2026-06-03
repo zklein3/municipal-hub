@@ -17,6 +17,7 @@ function getParentHub(pathname: string): { label: string; href: string } | null 
   if (
     pathname.startsWith('/incidents') ||
     pathname.startsWith('/announcements') ||
+    pathname.startsWith('/accountability') ||
     pathname === '/fuel' ||
     pathname.startsWith('/fuel') ||
     pathname === '/inbox'

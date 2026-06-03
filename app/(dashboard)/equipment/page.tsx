@@ -131,26 +131,24 @@ export default async function EquipmentPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <div className="flex gap-2">
-                        <Link
-                          href={`/inspections/vehicle-check/${a.id}`}
-                          className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
-                        >
-                          Vehicle Check
-                        </Link>
-                        <Link
-                          href={`/equipment/${a.id}`}
-                          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
-                        >
-                          View Inventory
-                        </Link>
-                      </div>
+                    <div className="flex flex-wrap justify-end gap-2 shrink-0">
+                      <Link
+                        href={`/inspections/vehicle-check/${a.id}`}
+                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                      >
+                        Vehicle Check
+                      </Link>
+                      <Link
+                        href={`/equipment/${a.id}`}
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                      >
+                        View Inventory
+                      </Link>
                       <Link
                         href={`/equipment/${a.id}/fuel`}
-                        className="text-xs font-medium text-zinc-400 hover:text-red-600 transition-colors"
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
                       >
-                        Fuel Log →
+                        Fuel Log
                       </Link>
                     </div>
                   </div>
