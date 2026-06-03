@@ -413,7 +413,7 @@ export default function EquipmentDetailClient({
                             )}
                           </div>
                         )}
-                        {isOfficerOrAbove && editingQty !== item.id && (
+                        {editingQty !== item.id && (
                           <div className="flex items-center gap-3">
                             <button
                               onClick={() => openMoveModal(item, c.id)}
@@ -422,30 +422,32 @@ export default function EquipmentDetailClient({
                             >
                               Move
                             </button>
-                            {confirmRemoveId === item.id ? (
-                              <>
+                            {isOfficerOrAbove && (
+                              confirmRemoveId === item.id ? (
+                                <>
+                                  <button
+                                    onClick={() => { handleRemove(item.id); setConfirmRemoveId(null) }}
+                                    disabled={loading}
+                                    className="text-xs text-red-600 hover:text-red-800 font-semibold disabled:opacity-50"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmRemoveId(null)}
+                                    className="text-xs text-zinc-400 hover:text-zinc-600"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
                                 <button
-                                  onClick={() => { handleRemove(item.id); setConfirmRemoveId(null) }}
+                                  onClick={() => setConfirmRemoveId(item.id)}
                                   disabled={loading}
-                                  className="text-xs text-red-600 hover:text-red-800 font-semibold disabled:opacity-50"
+                                  className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                                 >
-                                  Confirm
+                                  Remove
                                 </button>
-                                <button
-                                  onClick={() => setConfirmRemoveId(null)}
-                                  className="text-xs text-zinc-400 hover:text-zinc-600"
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => setConfirmRemoveId(item.id)}
-                                disabled={loading}
-                                className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
-                              >
-                                Remove
-                              </button>
+                              )
                             )}
                           </div>
                         )}
@@ -472,35 +474,37 @@ export default function EquipmentDetailClient({
               <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{moveError}</div>
             )}
 
-            <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
-              <p className="text-xs font-semibold text-blue-800 mb-2">Storage</p>
-              {moveTarget.canMoveToStorage ? (
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-blue-700 mb-1">
-                      Quantity (max {moveTarget.expectedQuantity})
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max={moveTarget.expectedQuantity}
-                      value={moveStorageQty}
-                      onChange={e => setMoveStorageQty(e.target.value)}
-                      className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+            {isOfficerOrAbove && (
+              <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+                <p className="text-xs font-semibold text-blue-800 mb-2">Storage</p>
+                {moveTarget.canMoveToStorage ? (
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-blue-700 mb-1">
+                        Quantity (max {moveTarget.expectedQuantity})
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={moveTarget.expectedQuantity}
+                        value={moveStorageQty}
+                        onChange={e => setMoveStorageQty(e.target.value)}
+                        className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleMoveToStorage}
+                      disabled={moveLoading || !moveStorageQty || parseInt(moveStorageQty) < 1 || parseInt(moveStorageQty) > moveTarget.expectedQuantity}
+                      className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                    >
+                      Move to Storage
+                    </button>
                   </div>
-                  <button
-                    onClick={handleMoveToStorage}
-                    disabled={moveLoading || !moveStorageQty || parseInt(moveStorageQty) < 1 || parseInt(moveStorageQty) > moveTarget.expectedQuantity}
-                    className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
-                  >
-                    Move to Storage
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-blue-700">Storage moves are currently available for quantity-tracked items only.</p>
-              )}
-            </div>
+                ) : (
+                  <p className="text-xs text-blue-700">Storage moves are currently available for quantity-tracked items only.</p>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               <div>
