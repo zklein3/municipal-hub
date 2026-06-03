@@ -27,9 +27,9 @@ function getParentHub(pathname: string): { label: string; href: string } | null 
   if (pathname.startsWith('/events') || pathname.startsWith('/training'))
     return { label: 'Training', href: '/training' }
 
-  // Equipment sub-pages
+  // Inventory sub-pages
   if (pathname.startsWith('/equipment') || pathname.startsWith('/inspections'))
-    return { label: 'Equipment', href: '/equipment' }
+    return { label: 'Inventory', href: '/equipment' }
 
   // Personnel sub-pages
   if (pathname.startsWith('/personnel'))

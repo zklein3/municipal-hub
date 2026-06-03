@@ -73,7 +73,7 @@ export default async function FuelPage() {
         <p className="text-sm text-zinc-500 mt-0.5">Department-wide fuel tracking</p>
       </div>
       <div className="mb-5">
-        <BackButton href="/dashboard" />
+        <BackButton />
       </div>
       <FuelClient
         entries={entries}
