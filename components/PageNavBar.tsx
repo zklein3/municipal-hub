@@ -39,6 +39,10 @@ function getParentHub(pathname: string): { label: string; href: string } | null 
   if (pathname.startsWith('/reports'))
     return { label: 'Reports', href: '/reports' }
 
+  // Medical sub-pages
+  if (pathname.startsWith('/medical'))
+    return { label: 'Inventory', href: '/equipment' }
+
   // Dept Admin sub-pages
   if (pathname.startsWith('/dept-admin'))
     return { label: 'Dept Admin', href: '/dept-admin' }

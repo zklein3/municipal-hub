@@ -71,6 +71,11 @@ export default async function DeptAdminPage() {
           href="/dept-admin/events"
         />
         <HubCard
+          title="Medical"
+          description="Supply types, storerooms, and medical inventory setup"
+          href="/dept-admin/medical"
+        />
+        <HubCard
           title="Training & Certs"
           description="Certification types, courses, and training setup"
           href="/dept-admin/training"
