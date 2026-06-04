@@ -86,7 +86,59 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ---
 
+## Infrastructure & Business Roadmap
+
+### Current State
+- **Vercel** (free tier) + **Supabase** (free tier) — both production-grade platforms, not toys
+- Architecture is standard PostgreSQL + Next.js — fully portable, no lock-in
+- NERIS certified and approaching first live department
+
+### Upgrade Trigger — First Paying Department or NERIS Live
+- **Vercel Pro** — $20/month: removes cold starts, adds SLA, 60s function timeout
+- **Supabase Pro** — $25/month: 8GB storage, no pausing, daily backups, point-in-time recovery
+- **Total: ~$50/month** for production-grade setup
+
+### Long-Term Infrastructure Path
+1. **Now:** Vercel + Supabase (current)
+2. **5–10 depts:** Evaluate Neon (managed Postgres, more control than Supabase)
+3. **Enterprise:** AWS RDS PostgreSQL — SOC 2, encryption, multi-region. Migration = connection string change.
+
+### Backup Strategy ✅ (2026-06-04)
+- `.github/workflows/weekly-backup.yml` — runs every Sunday 2 AM UTC, `pg_dump` → gzip → Backblaze B2, keeps 12 weeks
+- **Secrets needed in GitHub repo settings:** `SUPABASE_DB_PASSWORD`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`
+
+### PWA ✅ (2026-06-04)
+- `public/manifest.json` + `public/sw.js` + root layout meta tags deployed
+- Members can Add to Home Screen on Android/Chrome now; iOS works via Safari Share
+- **To complete for iOS:** generate real 192×512 PNG icons → drop in `public/icons/`
+- Push notifications: separate future phase
+
+### Native App — Capacitor (after Winslow operational + funded)
+- `capacitor.config.ts` scaffolded, `@capacitor/core` + `@capacitor/cli` installed
+- When funded: `npx cap add ios && npx cap add android`, add PNG icons, submit to stores
+- Apple Developer ($99/year) + Google Play ($25 one-time)
+
+### Infrastructure Remaining
+- **Upgrade Vercel + Supabase** — trigger: first paying dept or NERIS live (~$50/month)
+- **Capacitor** — after Winslow funded
+
+---
+
 ## IMMEDIATE NEXT — Resume Here Next Session
+
+### Medical Supply Module — COMPLETE ✅ (2026-06-04)
+
+**All 4 phases shipped.** Key files: `app/(dashboard)/medical/`, `app/(dashboard)/dept-admin/medical/`, `app/actions/medical.ts`, `app/(dashboard)/inbox/RestockTab.tsx`, `app/(dashboard)/reports/medical/`, `app/print/medical-cs-log/`
+
+- **Phase 1:** DB tables, admin supply/storeroom management, receive stock, alerts panel, inbox badge
+- **Phase 2:** Dispense/Use (FIFO, dual-sig), Waste (reason + dual-sig), Transfer (storeroom-to-storeroom, tx pair), Transaction History (90-day ledger, filters, Print CS Log button)
+- **Phase 3:** Apparatus bags (`apparatus_id` on storerooms), apparatus detail bag card, CS log print page (`/print/medical-cs-log`), Medical Reports page (`/reports/medical`)
+- **Phase 4:** Stock adjustment (admin, absolute qty, reason), Low-stock/expiry email alerts (`medical-stock-alerts` edge function, daily 6AM UTC), Module flag (`module_medical` on departments, sys admin toggle), Reorder requests (member flags low stock → Restock tab in inbox for officers)
+
+**DB tables:** `medical_supply_types`, `medical_storerooms` (+`apparatus_id`), `medical_storeroom_inventory`, `medical_stock_lots`, `medical_stock_transactions`, `medical_reorder_requests`
+**Transaction types:** `received` | `dispensed` | `wasted` | `transferred_out` | `transferred_in` | `adjusted`
+
+---
 
 ### 0f. Events Restructure + Training Toggle — SHIPPED ✅ (2026-06-01)
 - `/events` → clean member page (cards, Log Attendance, Sign, Can't Attend). Officers see "Manage Events →" top right.

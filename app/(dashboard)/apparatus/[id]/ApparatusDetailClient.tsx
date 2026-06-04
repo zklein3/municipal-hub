@@ -102,6 +102,7 @@ export default function ApparatusDetailClient({
   departmentId,
   isoSpecs,
   pumpTests,
+  medicalBag,
 }: {
   apparatus: Apparatus
   stations: Station[]
@@ -113,6 +114,7 @@ export default function ApparatusDetailClient({
   departmentId: string
   isoSpecs: IsoSpecs
   pumpTests: PumpTest[]
+  medicalBag: { storeroom_id: string; name: string; supply_count: number; alert_count: number } | null
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -371,6 +373,38 @@ export default function ApparatusDetailClient({
           </div>
         )}
       </div>
+
+      {/* Medical Bag */}
+      {medicalBag && (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-base font-semibold text-zinc-900">Medical Bag</h2>
+            <a href="/medical" className="text-xs font-semibold text-red-600 hover:text-red-800">
+              View Storeroom →
+            </a>
+          </div>
+          <p className="text-sm text-zinc-500 mb-3">{medicalBag.name}</p>
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-zinc-900">{medicalBag.supply_count}</p>
+              <p className="text-xs text-zinc-400">supply type{medicalBag.supply_count !== 1 ? 's' : ''}</p>
+            </div>
+            {medicalBag.alert_count > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-2">
+                <span className="text-red-600 font-bold text-sm">⚠</span>
+                <p className="text-sm font-semibold text-red-700">
+                  {medicalBag.alert_count} item{medicalBag.alert_count !== 1 ? 's' : ''} need attention
+                </p>
+              </div>
+            )}
+            {medicalBag.alert_count === 0 && medicalBag.supply_count > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-2">
+                <p className="text-sm font-semibold text-green-700">All stock good</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ISO Specs */}
       {isOfficerOrAbove && (

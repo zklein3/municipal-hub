@@ -133,6 +133,42 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .eq('apparatus_id', id)
     .order('test_date', { ascending: false })
 
+  // Medical bag linked to this apparatus
+  const { data: bagStoreroomList } = await adminClient
+    .from('medical_storerooms')
+    .select('id, name')
+    .eq('apparatus_id', id)
+    .eq('active', true)
+    .limit(1)
+  const bagStoreroom = bagStoreroomList?.[0] ?? null
+
+  let medicalBag: { storeroom_id: string; name: string; supply_count: number; alert_count: number } | null = null
+  if (bagStoreroom) {
+    const { data: bagInv } = await adminClient
+      .from('medical_storeroom_inventory')
+      .select('id, par_level, supply_type_id')
+      .eq('storeroom_id', bagStoreroom.id)
+    const invIds = (bagInv ?? []).map(i => i.id)
+    const { data: bagLots } = invIds.length > 0
+      ? await adminClient
+          .from('medical_stock_lots')
+          .select('storeroom_inventory_id, quantity_remaining, expiration_date')
+          .in('storeroom_inventory_id', invIds)
+          .eq('active', true)
+      : { data: [] }
+    const now = new Date()
+    const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    let alertCount = 0
+    for (const inv of bagInv ?? []) {
+      const invLots = (bagLots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
+      const total = invLots.reduce((s, l) => s + l.quantity_remaining, 0)
+      if (invLots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < now)) alertCount++
+      else if (invLots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') <= soon)) alertCount++
+      else if (inv.par_level > 0 && total < inv.par_level) alertCount++
+    }
+    medicalBag = { storeroom_id: bagStoreroom.id, name: bagStoreroom.name, supply_count: (bagInv ?? []).length, alert_count: alertCount }
+  }
+
   // Build clean apparatus object
   const apparatusWithRefs = {
     ...apparatus,
@@ -152,6 +188,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       departmentId={myDept.department_id}
       isoSpecs={isoSpecs}
       pumpTests={pumpTests ?? []}
+      medicalBag={medicalBag}
     />
   )
 }

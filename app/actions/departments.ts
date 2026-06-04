@@ -65,7 +65,7 @@ export async function saveDeptInspectionSettings(formData: FormData) {
 
 export async function updateDepartmentModules(
   departmentId: string,
-  modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; public_site_enabled?: boolean }
+  modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; module_medical?: boolean; public_site_enabled?: boolean }
 ) {
   const supabase = await createClient()
   const { error } = await supabase

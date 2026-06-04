@@ -24,6 +24,9 @@ export default async function ReportsPage() {
 
   const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
 
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const moduleMedical = deptRow?.module_medical ?? false
+
   return (
     <div>
       <div className="mb-6">
@@ -76,6 +79,13 @@ export default async function ReportsPage() {
               description="Apparatus fuel usage and cost tracking"
               href="/reports/fuel"
             />
+            {moduleMedical && (
+              <HubCard
+                title="Medical Supplies"
+                description="Stock levels, consumption summary, and expiring lots"
+                href="/reports/medical"
+              />
+            )}
           </>
         )}
       </div>

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { updateDepartmentModules } from '@/app/actions/departments'
 
 interface Bundle {
-  key: 'module_operations' | 'module_iso' | 'module_neris' | 'public_site_enabled'
+  key: 'module_operations' | 'module_iso' | 'module_neris' | 'module_medical' | 'public_site_enabled'
   label: string
   description: string
   features: string[]
@@ -16,12 +16,14 @@ export default function ModulesTab({
   moduleOperations,
   moduleIso,
   moduleNeris,
+  moduleMedical,
   publicSiteEnabled,
 }: {
   departmentId: string
   moduleOperations: boolean
   moduleIso: boolean
   moduleNeris: boolean
+  moduleMedical: boolean
   publicSiteEnabled: boolean
 }) {
   const [saving, setSaving] = useState<string | null>(null)
@@ -30,6 +32,7 @@ export default function ModulesTab({
     module_operations: moduleOperations,
     module_iso: moduleIso,
     module_neris: moduleNeris,
+    module_medical: moduleMedical,
     public_site_enabled: publicSiteEnabled,
   })
 
@@ -67,6 +70,13 @@ export default function ModulesTab({
       description: 'ISO grading tools including hose inventory, hydrant tracking, and the ISO report.',
       features: ['Hose inventory & testing records', 'Hydrant tracking', 'ISO audit report'],
       enabled: state.module_iso,
+    },
+    {
+      key: 'module_medical',
+      label: 'Bundle D — Medical Supplies',
+      description: 'Medical storeroom inventory, controlled substance tracking, and supply alerts.',
+      features: ['Medical storeroom inventory & PAR levels', 'Receive, dispense, waste, and transfer stock', 'Controlled substance dual-signature log', 'Apparatus bag tracking', 'Daily low-stock & expiry email alerts'],
+      enabled: state.module_medical,
     },
     {
       key: 'public_site_enabled',

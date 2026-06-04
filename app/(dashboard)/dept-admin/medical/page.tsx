@@ -18,12 +18,16 @@ export default async function MedicalAdminPage() {
   const myDept = myDeptList?.[0]
   if (!myDept || myDept.system_role !== 'admin') redirect('/dashboard')
 
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  if (!deptRow?.module_medical) redirect('/dept-admin')
+
   const department_id = myDept.department_id
 
   const [
     { data: supplyTypes },
     { data: storerooms },
     { data: stations },
+    { data: apparatusList },
   ] = await Promise.all([
     adminClient.from('medical_supply_types')
       .select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures, notes, active')
@@ -31,13 +35,17 @@ export default async function MedicalAdminPage() {
       .order('category')
       .order('name'),
     adminClient.from('medical_storerooms')
-      .select('id, name, station_id, notes, active')
+      .select('id, name, station_id, apparatus_id, notes, active')
       .eq('department_id', department_id)
       .order('name'),
     adminClient.from('stations')
       .select('id, station_name, station_number')
       .eq('department_id', department_id)
       .order('station_number'),
+    adminClient.from('apparatus')
+      .select('id, unit_number, apparatus_types(name)')
+      .eq('department_id', department_id)
+      .order('unit_number'),
   ])
 
   // Storeroom inventory (supply types assigned to each storeroom)
@@ -48,11 +56,18 @@ export default async function MedicalAdminPage() {
         .in('storeroom_id', storeroomIds)
     : { data: [] }
 
+  const apparatus = (apparatusList ?? []).map(a => ({
+    id: a.id,
+    unit_number: a.unit_number,
+    type_name: (a.apparatus_types as any)?.name ?? null,
+  }))
+
   return (
     <MedicalAdminClient
       supplyTypes={supplyTypes ?? []}
       storerooms={storerooms ?? []}
       stations={stations ?? []}
+      apparatus={apparatus}
       storeroomInventory={storeroomInventory ?? []}
       departmentId={department_id}
     />

@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import BurnPermitsTab from './BurnPermitsTab'
 import RecordRequestsTab from './RecordRequestsTab'
+import RestockTab, { type RestockRequest } from './RestockTab'
 import IncidentSignaturePadModal from '../signatures/IncidentSignaturePadModal'
 import EventAttendanceSignaturePadModal from '../signatures/EventAttendanceSignaturePadModal'
 
-type Tab = 'permits' | 'records' | 'signatures'
+type Tab = 'permits' | 'records' | 'signatures' | 'restock'
 
 type IncidentSignatureRow = {
   type: 'incident'
@@ -49,9 +50,11 @@ export default function InboxClient({
   permits,
   requests,
   signatureRows,
+  restockRequests,
   memberName,
   initialTab,
   isOfficerOrAbove,
+  moduleMedical,
   deptName,
   burnPermitCountyInfo,
   burnPermitRestrictions,
@@ -59,9 +62,11 @@ export default function InboxClient({
   permits: any[]
   requests: any[]
   signatureRows: SignatureRow[]
+  restockRequests: RestockRequest[]
   memberName: string
   initialTab: Tab
   isOfficerOrAbove: boolean
+  moduleMedical: boolean
   deptName: string | null
   burnPermitCountyInfo: string | null
   burnPermitRestrictions: string | null
@@ -143,6 +148,23 @@ export default function InboxClient({
                 </span>
               )}
             </button>
+            {moduleMedical && (
+              <button
+                onClick={() => setTab('restock')}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  tab === 'restock' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+                }`}
+              >
+                Restock
+                {restockRequests.length > 0 && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                    tab === 'restock' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {restockRequests.length}
+                  </span>
+                )}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -249,6 +271,10 @@ export default function InboxClient({
 
       {tab === 'records' && isOfficerOrAbove && (
         <RecordRequestsTab requests={requests} />
+      )}
+
+      {tab === 'restock' && isOfficerOrAbove && moduleMedical && (
+        <RestockTab requests={restockRequests} />
       )}
 
       {activeSig && activeSig.type === 'incident' && (

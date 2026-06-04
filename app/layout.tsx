@@ -15,6 +15,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FireOps7",
   description: "Fire department operations management",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "FireOps7",
+  },
+  icons: {
+    icon: "/icons/icon.svg",
+    apple: "/icons/icon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +34,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <meta name="theme-color" content="#991b1b" />
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+          }
+        `}} />
+      </body>
     </html>
   );
 }

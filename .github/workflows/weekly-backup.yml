@@ -1,0 +1,72 @@
+name: Weekly Database Backup
+
+on:
+  schedule:
+    # Every Sunday at 2:00 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d)
+          FILENAME="fireops7-backup-${TIMESTAMP}.sql.gz"
+          pg_dump \
+            --host=db.kolrhnxozeroaselapzn.supabase.co \
+            --port=5432 \
+            --username=postgres \
+            --dbname=postgres \
+            --no-owner \
+            --no-acl \
+            --clean \
+            --if-exists \
+            | gzip > "/tmp/${FILENAME}"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          echo "Backup created: $(du -h /tmp/${FILENAME} | cut -f1)"
+
+      - name: Upload to Backblaze B2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+        run: |
+          aws s3 cp "/tmp/${FILENAME}" \
+            "s3://${{ secrets.B2_BUCKET_NAME }}/${FILENAME}" \
+            --endpoint-url https://s3.us-east-005.backblazeb2.com
+
+      - name: Prune old backups (keep 12 weeks)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: us-east-005
+        run: |
+          CUTOFF=$(date -d '84 days ago' +%Y-%m-%d)
+          aws s3 ls "s3://${{ secrets.B2_BUCKET_NAME }}/" \
+            --endpoint-url https://s3.us-east-005.backblazeb2.com \
+            | awk '{print $4}' \
+            | while read FILE; do
+                FILE_DATE=$(echo "$FILE" | grep -oP '\d{4}-\d{2}-\d{2}')
+                if [[ "$FILE_DATE" < "$CUTOFF" ]]; then
+                  echo "Deleting old backup: $FILE"
+                  aws s3 rm "s3://${{ secrets.B2_BUCKET_NAME }}/$FILE" \
+                    --endpoint-url https://s3.us-east-005.backblazeb2.com
+                fi
+              done
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Database backup failed for $(date +%Y-%m-%d). Check workflow logs."

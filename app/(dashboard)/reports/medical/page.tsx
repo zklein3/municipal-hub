@@ -1,0 +1,292 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+
+const CATEGORY_LABELS: Record<string, string> = { medication: 'Medication', supply: 'Supply', equipment: 'Equipment' }
+const CATEGORY_COLORS: Record<string, string> = {
+  medication: 'bg-red-100 text-red-700',
+  supply: 'bg-blue-100 text-blue-700',
+  equipment: 'bg-zinc-100 text-zinc-600',
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return '—'
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+export default async function MedicalReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>
+}) {
+  const { days } = await searchParams
+  const windowDays = parseInt(days ?? '30') || 30
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const adminClient = createAdminClient()
+
+  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) redirect('/login')
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept) redirect('/dashboard')
+
+  const isOfficerOrAbove = ['admin', 'officer'].includes(myDept.system_role) || me.is_sys_admin
+  if (!isOfficerOrAbove) redirect('/reports')
+
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  if (!deptRow?.module_medical && !me.is_sys_admin) redirect('/reports')
+
+  const department_id = myDept.department_id
+  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
+
+  // Storerooms
+  const { data: storerooms } = await adminClient
+    .from('medical_storerooms')
+    .select('id, name, apparatus_id')
+    .eq('department_id', department_id)
+    .eq('active', true)
+  const storeroomIds = (storerooms ?? []).map(s => s.id)
+  const storeroomMap = Object.fromEntries((storerooms ?? []).map(s => [s.id, s.name]))
+
+  // Supply types
+  const { data: supplyTypes } = await adminClient
+    .from('medical_supply_types')
+    .select('id, name, category, unit_of_measure, is_controlled')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .order('category').order('name')
+  const supplyMap = Object.fromEntries((supplyTypes ?? []).map(s => [s.id, s]))
+
+  if (storeroomIds.length === 0) {
+    return (
+      <div className="max-w-2xl">
+        <div className="mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Supplies Report</h1>
+        </div>
+        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+          No medical storerooms configured.
+        </div>
+      </div>
+    )
+  }
+
+  // Storeroom inventory (for stock vs PAR)
+  const { data: inventory } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('id, storeroom_id, supply_type_id, par_level')
+    .in('storeroom_id', storeroomIds)
+  const invIds = (inventory ?? []).map(i => i.id)
+
+  // Active lots (for stock levels + expiring)
+  const { data: lots } = invIds.length > 0
+    ? await adminClient
+        .from('medical_stock_lots')
+        .select('id, storeroom_inventory_id, quantity_remaining, expiration_date, lot_number')
+        .in('storeroom_inventory_id', invIds)
+        .eq('active', true)
+        .gt('quantity_remaining', 0)
+    : { data: [] }
+
+  // Consumption transactions in window
+  const { data: transactions } = storeroomIds.length > 0
+    ? await adminClient
+        .from('medical_stock_transactions')
+        .select('supply_type_id, storeroom_id, transaction_type, quantity')
+        .in('storeroom_id', storeroomIds)
+        .in('transaction_type', ['dispensed', 'wasted'])
+        .gte('created_at', since)
+    : { data: [] }
+
+  // ── Build consumption summary ──────────────────────────────────────────────
+  const consumptionBySupply: Record<string, { dispensed: number; wasted: number }> = {}
+  for (const tx of transactions ?? []) {
+    if (!consumptionBySupply[tx.supply_type_id]) consumptionBySupply[tx.supply_type_id] = { dispensed: 0, wasted: 0 }
+    if (tx.transaction_type === 'dispensed') consumptionBySupply[tx.supply_type_id]!.dispensed += tx.quantity
+    if (tx.transaction_type === 'wasted') consumptionBySupply[tx.supply_type_id]!.wasted += tx.quantity
+  }
+  const consumptionRows = Object.entries(consumptionBySupply)
+    .map(([id, c]) => ({ id, ...c, total: c.dispensed + c.wasted }))
+    .sort((a, b) => b.total - a.total)
+
+  // ── Build stock vs PAR table ───────────────────────────────────────────────
+  const stockRows = (inventory ?? []).map(inv => {
+    const supply = supplyMap[inv.supply_type_id]
+    const invLots = (lots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
+    const total = invLots.reduce((s, l) => s + l.quantity_remaining, 0)
+    const status = total === 0 ? 'empty' : total < inv.par_level ? 'low' : 'good'
+    return { inv, supply, total, status, storeroomName: storeroomMap[inv.storeroom_id] ?? '—' }
+  }).sort((a, b) => {
+    const order: Record<string, number> = { empty: 0, low: 1, good: 2 }
+    return (order[a.status] ?? 3) - (order[b.status] ?? 3)
+  })
+
+  // ── Expiring lots (within 60 days) ────────────────────────────────────────
+  const now = new Date()
+  const in60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
+  const expiringLots = (lots ?? [])
+    .filter(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') <= in60)
+    .map(l => {
+      const inv = (inventory ?? []).find(i => i.id === l.storeroom_inventory_id)
+      const supply = inv ? supplyMap[inv.supply_type_id] : null
+      const storeName = inv ? storeroomMap[inv.storeroom_id] ?? '—' : '—'
+      const expDate = new Date(l.expiration_date! + 'T00:00:00')
+      const isExpired = expDate < now
+      return { lot: l, supply, storeName, isExpired }
+    })
+    .sort((a, b) => (a.lot.expiration_date ?? '').localeCompare(b.lot.expiration_date ?? ''))
+
+  const dayOptions = [7, 30, 60, 90]
+
+  return (
+    <div className="max-w-2xl">
+      <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Supplies Report</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Stock levels, consumption, and expiration</p>
+        </div>
+        <a href="/print/medical-cs-log" target="_blank" rel="noopener noreferrer"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+          Print CS Log ↗
+        </a>
+      </div>
+
+      {/* ── Stock vs PAR ──────────────────────────────────────────────────── */}
+      <section className="mb-8">
+        <h2 className="text-base font-semibold text-zinc-900 mb-3">Current Stock vs PAR</h2>
+        {stockRows.length === 0 ? (
+          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-8 text-center text-sm text-zinc-400">No supply types assigned to any storeroom.</div>
+        ) : (
+          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+            {stockRows.map(({ inv, supply, total, status, storeroomName }) => (
+              <div key={inv.id} className="flex items-center px-5 py-3 gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-zinc-900">{supply?.name ?? '—'}</p>
+                    {supply && <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CATEGORY_COLORS[supply.category] ?? ''}`}>{CATEGORY_LABELS[supply.category] ?? supply.category}</span>}
+                    {supply?.is_controlled && <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">{storeroomName}</p>
+                </div>
+                <div className="flex items-center gap-4 shrink-0 text-right">
+                  <div>
+                    <p className="text-xs text-zinc-400">PAR</p>
+                    <p className="text-sm font-semibold text-zinc-600">{inv.par_level}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-400">On Hand</p>
+                    <p className={`text-sm font-bold ${status === 'empty' ? 'text-red-600' : status === 'low' ? 'text-orange-600' : 'text-green-700'}`}>
+                      {total} {supply?.unit_of_measure ?? ''}
+                    </p>
+                  </div>
+                  <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${
+                    status === 'empty' ? 'bg-red-100 text-red-700' :
+                    status === 'low' ? 'bg-orange-100 text-orange-700' :
+                    'bg-green-100 text-green-700'
+                  }`}>
+                    {status === 'empty' ? 'Empty' : status === 'low' ? 'Below PAR' : 'Good'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Consumption Summary ───────────────────────────────────────────── */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 className="text-base font-semibold text-zinc-900">Consumption</h2>
+          <div className="flex gap-1">
+            {dayOptions.map(d => (
+              <a key={d} href={`?days=${d}`}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold border transition-colors ${
+                  windowDays === d ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'
+                }`}>
+                {d}d
+              </a>
+            ))}
+          </div>
+        </div>
+        {consumptionRows.length === 0 ? (
+          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-8 text-center text-sm text-zinc-400">
+            No dispensing or waste recorded in the last {windowDays} days.
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+            {consumptionRows.map(row => {
+              const supply = supplyMap[row.id]
+              return (
+                <div key={row.id} className="flex items-center px-5 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900">{supply?.name ?? '—'}</p>
+                    <p className="text-xs text-zinc-400">{supply?.unit_of_measure ?? ''}</p>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0 text-right text-xs">
+                    <div>
+                      <p className="text-zinc-400">Used</p>
+                      <p className="font-semibold text-blue-700">{row.dispensed}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-400">Wasted</p>
+                      <p className="font-semibold text-red-600">{row.wasted}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-400">Total</p>
+                      <p className="font-bold text-zinc-900">{row.total}</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ── Expiring Lots ─────────────────────────────────────────────────── */}
+      <section>
+        <h2 className="text-base font-semibold text-zinc-900 mb-3">
+          Expiring / Expired Lots
+          <span className="ml-2 text-sm font-normal text-zinc-400">(within 60 days)</span>
+        </h2>
+        {expiringLots.length === 0 ? (
+          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-8 text-center text-sm text-zinc-400">
+            No lots expiring within 60 days.
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
+            {expiringLots.map(({ lot, supply, storeName, isExpired }) => (
+              <div key={lot.id} className="flex items-center px-5 py-3 gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900">{supply?.name ?? '—'}</p>
+                  <p className="text-xs text-zinc-400">
+                    {storeName}{lot.lot_number ? ` · Lot ${lot.lot_number}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 shrink-0 text-right">
+                  <div>
+                    <p className="text-xs text-zinc-400">Qty</p>
+                    <p className="text-sm font-semibold text-zinc-900">{lot.quantity_remaining} {supply?.unit_of_measure ?? ''}</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${isExpired ? 'text-red-600' : 'text-amber-600'}`}>
+                      {isExpired ? '⚠ Expired' : 'Exp'} {fmtDate(lot.expiration_date)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}

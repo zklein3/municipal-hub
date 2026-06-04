@@ -136,6 +136,13 @@ Items flagged during development — address during next cleanup pass:
 ### Debug / Scratch
 - `qr_debug_scans` — raw QR scan strings for format analysis. RLS disabled. Not for production use.
 
+### Medical Supply
+- `medical_supply_types` — dept supply catalog (`department_id`, `name`, `category` medication/supply/equipment, `unit_of_measure`, `is_controlled`, `tracks_expiration`, `required_signatures`, `notes`, `active`)
+- `medical_storerooms` — storage locations (`department_id`, `station_id`, `name`, `notes`, `active`)
+- `medical_storeroom_inventory` — supply types per storeroom with PAR level (`storeroom_id`, `supply_type_id`, `department_id`, `par_level`)
+- `medical_stock_lots` — physical stock batches (`storeroom_inventory_id`, `department_id`, `lot_number`, `expiration_date`, `quantity_received`, `quantity_remaining`, `received_date`, `received_by`, `notes`, `active`)
+- `medical_stock_transactions` — full ledger (`department_id`, `storeroom_id`, `supply_type_id`, `lot_id`, `transaction_type` received/dispensed/wasted/transferred_out/transferred_in, `quantity`, `performed_by`, `signer_1_id`, `signer_1_at`, `signer_2_id`, `signer_2_at`, `notes`)
+
 ### Key Fields Added Over Time
 - `apparatus.qr_code`, `apparatus.exclude_from_iso`
 - `apparatus_compartments.qr_code`
@@ -151,6 +158,57 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-06-04 — Medical Supply Phase 3 + Phase 4 + Infrastructure
+
+**Medical Phase 3:**
+- `apparatus_id` (nullable FK) added to `medical_storerooms`; admin storeroom form adds "Apparatus (bag)" dropdown
+- `/medical` shows apparatus unit+type as sub-label for apparatus-linked storerooms
+- Apparatus detail page: Medical Bag card (supply count, alert count, "View Storeroom →") appears when storeroom linked
+- `/print/medical-cs-log` — printable controlled substance transaction log, filterable by date/storeroom/supply; "Print CS Log ↗" button in History tab
+- `/reports/medical` — Medical Supplies report: stock vs PAR table (sorted worst-first), consumption summary (7/30/60/90d toggle), expiring lots within 60 days; Medical Supplies card added to Reports hub (gated on `module_medical`)
+
+**Medical Phase 4:**
+- `adjustStock` action + "Adjust" button (admin-only, per lot) — sets absolute quantity, records `adjusted` transaction with reason + delta note
+- `medical-stock-alerts` edge function deployed — daily cron 6 AM UTC; checks all depts for expired/expiring/below-PAR lots; sends one email per dept per day (deduped via `system_logs`); skips if no issues
+- `module_medical` boolean added to `departments` (existing depts with storerooms auto-set `true`); gated on `/medical`, `/dept-admin/medical`, `/reports/medical`; toggle in sys admin Modules tab (Bundle D)
+- `medical_reorder_requests` table — pending/fulfilled/dismissed; "Request Restock" button on low/empty inventory cards (deduped); Restock tab in Inbox for officers+ (only shown when `module_medical = true`)
+
+**Infrastructure (2026-06-04):**
+- PWA: `public/manifest.json` + `public/sw.js` + root layout meta tags; SVG icon; SW registration script
+- Weekly backup: `.github/workflows/weekly-backup.yml` — Sunday 2 AM UTC, pg_dump → gzip → Backblaze B2, 12-week retention
+- Capacitor: `capacitor.config.ts` + `@capacitor/core` installed (skeleton only — awaiting Winslow funding for store submission)
+
+### 2026-06-04 — Infrastructure & Business Strategy Discussion
+
+**Decisions locked:**
+- Vercel + Supabase free tier is appropriate until first paying department or NERIS goes live
+- Upgrade trigger: Vercel Pro ($20) + Supabase Pro ($25) = ~$50/month total
+- Long-term DB path: Supabase → Neon → AWS RDS PostgreSQL (migration = connection string change)
+- Independent backup strategy: weekly pg_dump → Backblaze B2 (~$6/TB/month)
+- Native app via Capacitor (wraps existing Next.js) — after Winslow operational + funded; ~2–3 weeks, $99/yr Apple + $25 Google Play
+
+**PWA decision:** Add manifest.json + service worker as a fast win — members get home screen icon and full-screen launch today, no app store needed. Push notifications are a separate phase.
+
+**Build roadmap agreed:**
+1. PWA support (manifest + service worker)
+2. Upgrade paid tiers (ops decision, no build)
+3. Automated weekly backup edge function → Backblaze B2
+4. Capacitor native app wrapper (after Winslow funded)
+
+### 2026-06-04 — Medical Supply Phase 1 + Phase 2
+
+**Phase 1 (Steps 1–5):**
+- DB: `medical_supply_types`, `medical_storerooms`, `medical_storeroom_inventory`, `medical_stock_lots`, `medical_stock_transactions`
+- Dept Admin → Medical (`/dept-admin/medical`) — 2 tabs: Supply Types (create/edit, controlled flag, expiration flag, required signatures, categories) + Storerooms (create/edit, station link, assign supply types with PAR levels)
+- Member page (`/medical`) — storeroom selector, inventory cards with status badges (Good/Low/Expiring/Expired/Empty), lot detail expand, Receive Stock flow (lot number, expiration date, quantity, dual-sig for controlled), alerts panel (expired lots, expiring lots, below PAR)
+- Inbox badge includes medical alert count; Dept Admin hub card added
+
+**Phase 2 (Steps 1–4):**
+- **Dispense/Use** — `dispenseStock` action; "Use" button on inventory card; modal with FIFO lot selector, quantity, notes, dual-sig for controlled; lot `quantity_remaining` decremented, auto-deactivates at 0; `dispensed` transaction written
+- **Waste** — `wasteStock` action; "Waste" button per lot in expanded view; reason dropdown (Expired/Damaged/Contaminated/Recalled/Other), quantity with max cap, dual-sig for controlled; `wasted` transaction written
+- **Transfer** — `transferStock` action; "Transfer" button per lot (hidden when only 1 storeroom); destination must have supply type assigned; deducts source lot, creates new lot in destination preserving lot/expiration data; `transferred_out` + `transferred_in` transaction pair
+- **Transaction History** — Inventory|History tab toggle on `/medical`; last 90 days / 200 records; filters: storeroom, supply type, transaction type; each row: color-coded type badge, supply name, ±qty, lot#, performed by, signers, notes; flat fetch + JS join for names/lot numbers
 
 ### 2026-05-23 — Incident Signatures + Run Sheet Print
 

@@ -93,10 +93,11 @@ export default async function InboxPage({
   let permits: any[] = []
   let requestsRaw: any[] = []
   let deptConfig: any = null
+  let restockRequests: any[] = []
 
   if (isOfficerOrAbove && department_id) {
     const [deptRes, permitsRes, recordsRes] = await Promise.all([
-      adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions').eq('id', department_id).single(),
+      adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions, module_medical').eq('id', department_id).single(),
       adminClient.from('burn_permits')
         .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, approved_by_personnel_id, officer_signed_at, created_at')
         .eq('department_id', department_id).order('created_at', { ascending: false }),
@@ -105,6 +106,46 @@ export default async function InboxPage({
         .eq('department_id', department_id).order('created_at', { ascending: false }),
     ])
     deptConfig = deptRes.data
+
+    // Reorder requests (medical module)
+    if (deptConfig?.module_medical) {
+      const { data: reorderRaw } = await adminClient
+        .from('medical_reorder_requests')
+        .select('id, storeroom_inventory_id, requested_by, notes, created_at')
+        .eq('department_id', department_id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+
+      if (reorderRaw && reorderRaw.length > 0) {
+        const invIds = reorderRaw.map((r: any) => r.storeroom_inventory_id)
+        const [{ data: invRows }, { data: requesterRows }] = await Promise.all([
+          adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id').in('id', invIds),
+          adminClient.from('personnel').select('id, first_name, last_name')
+            .in('id', reorderRaw.map((r: any) => r.requested_by).filter(Boolean)),
+        ])
+        const srIds = [...new Set((invRows ?? []).map((i: any) => i.storeroom_id))]
+        const supplyIds = [...new Set((invRows ?? []).map((i: any) => i.supply_type_id))]
+        const [{ data: srRows }, { data: supplyRows }] = await Promise.all([
+          adminClient.from('medical_storerooms').select('id, name').in('id', srIds),
+          adminClient.from('medical_supply_types').select('id, name').in('id', supplyIds),
+        ])
+        const invMap = Object.fromEntries((invRows ?? []).map((i: any) => [i.id, i]))
+        const srMap = Object.fromEntries((srRows ?? []).map((s: any) => [s.id, s.name]))
+        const supMap = Object.fromEntries((supplyRows ?? []).map((s: any) => [s.id, s.name]))
+        const reqMap = Object.fromEntries((requesterRows ?? []).map((p: any) => [p.id, `${p.first_name} ${p.last_name}`.trim()]))
+        restockRequests = reorderRaw.map((r: any) => {
+          const inv = invMap[r.storeroom_inventory_id]
+          return {
+            id: r.id,
+            supply_name: inv ? (supMap[inv.supply_type_id] ?? '—') : '—',
+            storeroom_name: inv ? (srMap[inv.storeroom_id] ?? '—') : '—',
+            requested_by_name: r.requested_by ? (reqMap[r.requested_by] ?? null) : null,
+            notes: r.notes,
+            created_at: r.created_at,
+          }
+        })
+      }
+    }
     const permitsRaw = permitsRes.data ?? []
     requestsRaw = recordsRes.data ?? []
 
@@ -121,7 +162,8 @@ export default async function InboxPage({
     }))
   }
 
-  const validTabs = ['permits', 'records', 'signatures']
+  const moduleMedical = deptConfig?.module_medical ?? false
+  const validTabs = ['permits', 'records', 'signatures', ...(moduleMedical && isOfficerOrAbove ? ['restock'] : [])]
   const initialTab = validTabs.includes(tab ?? '') ? tab! : (isOfficerOrAbove ? 'permits' : 'signatures')
 
   return (
@@ -129,9 +171,11 @@ export default async function InboxPage({
       permits={permits}
       requests={requestsRaw}
       signatureRows={signatureRows}
+      restockRequests={restockRequests}
       memberName={`${me.first_name} ${me.last_name}`.trim()}
       initialTab={initialTab as any}
       isOfficerOrAbove={isOfficerOrAbove}
+      moduleMedical={moduleMedical}
       deptName={deptConfig?.name ?? null}
       burnPermitCountyInfo={deptConfig?.burn_permit_county_info ?? null}
       burnPermitRestrictions={deptConfig?.burn_permit_restrictions ?? null}

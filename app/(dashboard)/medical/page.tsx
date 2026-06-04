@@ -25,13 +25,17 @@ export default async function MedicalPage() {
   const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
   if (!isOfficerOrAbove) redirect('/equipment')
 
+  // Module gate
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  if (!deptRow?.module_medical && !me.is_sys_admin) redirect('/dashboard')
+
   const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
   const department_id = myDept.department_id
 
   // Storerooms
   const { data: storerooms } = await adminClient
     .from('medical_storerooms')
-    .select('id, name, station_id')
+    .select('id, name, station_id, apparatus_id')
     .eq('department_id', department_id)
     .eq('active', true)
     .order('name')
@@ -87,6 +91,52 @@ export default async function MedicalPage() {
     ? await adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
     : { data: [] }
 
+  // Apparatus for display (apparatus-linked storerooms)
+  const apparatusIds = [...new Set((storerooms ?? []).map(s => s.apparatus_id).filter(Boolean))] as string[]
+  const { data: apparatusList } = apparatusIds.length > 0
+    ? await adminClient.from('apparatus').select('id, unit_number, apparatus_types(name)').in('id', apparatusIds)
+    : { data: [] }
+  const apparatusMap = Object.fromEntries(
+    (apparatusList ?? []).map(a => [a.id, {
+      unit_number: a.unit_number,
+      type_name: (a.apparatus_types as any)?.name ?? null,
+    }])
+  )
+
+  // Pending reorder requests for this dept's storerooms
+  const { data: reorderRequests } = storeroomIds.length > 0
+    ? await adminClient
+        .from('medical_reorder_requests')
+        .select('id, storeroom_inventory_id, status')
+        .in('storeroom_inventory_id',
+          (await adminClient.from('medical_storeroom_inventory').select('id').in('storeroom_id', storeroomIds)).data?.map(i => i.id) ?? []
+        )
+        .eq('status', 'pending')
+    : { data: [] }
+  const pendingReorderIds = new Set((reorderRequests ?? []).map(r => r.storeroom_inventory_id))
+
+  // Transaction history — last 90 days
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: transactions } = storeroomIds.length > 0
+    ? await adminClient
+        .from('medical_stock_transactions')
+        .select('id, storeroom_id, supply_type_id, lot_id, transaction_type, quantity, performed_by, signer_1_id, signer_2_id, notes, created_at')
+        .in('storeroom_id', storeroomIds)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    : { data: [] }
+
+  // Lot number lookup for history (include inactive lots referenced in transactions)
+  const txLotIds = [...new Set((transactions ?? []).map(t => t.lot_id).filter(Boolean))] as string[]
+  const { data: txLots } = txLotIds.length > 0
+    ? await adminClient.from('medical_stock_lots').select('id, lot_number').in('id', txLotIds)
+    : { data: [] }
+  const lotNumberMap = Object.fromEntries((txLots ?? []).map(l => [l.id, l.lot_number]))
+
+  // Personnel id→name map for history display
+  const personnelMap = Object.fromEntries(personnel.map(p => [p.id, p.name]))
+
   return (
     <MedicalStoreClient
       storerooms={storerooms ?? []}
@@ -95,8 +145,13 @@ export default async function MedicalPage() {
       lots={lots ?? []}
       personnel={personnel}
       stations={stations ?? []}
+      apparatusMap={apparatusMap}
       isAdmin={isAdmin}
       myPersonnelId={me.id}
+      transactions={transactions ?? []}
+      lotNumberMap={lotNumberMap}
+      personnelMap={personnelMap}
+      pendingReorderIds={pendingReorderIds}
     />
   )
 }
