@@ -159,6 +159,26 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-04 — Medical Bag System + UX Fixes
+
+**Bag template system:**
+- `medical_bag_templates` + `medical_bag_template_items` tables — define standard loadouts (Trauma Box, ALS Bag, etc.)
+- `medical_storerooms` gains `template_id` + `inventory_mode` (standard/independent)
+- **Dept Admin → Medical → Bags tab** — create bag types, define supply inventory with PAR, assign to multiple apparatus inline. Deployment creates `medical_storerooms` record with inventory copied from template.
+- `MedicalBagsSection.tsx` — reusable component: Use/Receive/Restock modals, lot display, mode toggle (Standard ↕ / Independent ↕), admin "Manage in Medical →" link
+- Bags appear in **View Inventory** (`/equipment/[id]`) alongside compartments — unified inventory view
+- Storerooms (station-based, no apparatus) shown on `/medical` member page; bags filtered out
+
+**Permission model finalized:**
+- Transfer non-controlled: all members | Transfer controlled: officer+ only (checked in `transferStock` action)
+- Dispense/use: all members | Receive/waste/transfer: officer+ | Adjust: admin
+
+**UX fixes:**
+- Supply type create form: storeroom assignment inline (checkbox + PAR per storeroom)
+- Storeroom admin form: apparatus dropdown removed (bags managed from Bags tab only)
+- `isAdmin`/`isOfficerOrAbove` were hardcoded `false` on equipment detail page — fixed
+- Trauma Box storeroom (test record) deleted from DB
+
 ### 2026-06-04 — Medical Supply Phase 3 + Phase 4 + Infrastructure
 
 **Medical Phase 3:**
