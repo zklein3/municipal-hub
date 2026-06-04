@@ -78,6 +78,110 @@ export async function updateMedicalSupplyType(formData: FormData) {
   return { success: true }
 }
 
+// ─── Bag Templates ────────────────────────────────────────────────────────────
+
+export async function createBagTemplate(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { data: row, error: dbErr } = await adminClient.from('medical_bag_templates').insert({
+    department_id: ctx.department_id,
+    name: formData.get('name') as string,
+    description: (formData.get('description') as string) || null,
+    active: true,
+  }).select('id').single()
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true, id: row.id }
+}
+
+export async function updateBagTemplate(formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { error: dbErr } = await adminClient.from('medical_bag_templates').update({
+    name: formData.get('name') as string,
+    description: (formData.get('description') as string) || null,
+    active: formData.get('active') === 'true',
+    updated_at: new Date().toISOString(),
+  }).eq('id', formData.get('id') as string)
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true }
+}
+
+export async function addTemplateItem(template_id: string, supply_type_id: string, par_level: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { error: dbErr } = await adminClient.from('medical_bag_template_items').upsert({
+    template_id, supply_type_id, par_level,
+  }, { onConflict: 'template_id,supply_type_id' })
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true }
+}
+
+export async function removeTemplateItem(item_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { error: dbErr } = await adminClient.from('medical_bag_template_items').delete().eq('id', item_id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true }
+}
+
+export async function deployBagFromTemplate(data: {
+  apparatus_id: string
+  template_id: string
+  name: string
+  inventory_mode: 'standard' | 'independent'
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  // Create the bag (storeroom linked to apparatus + template)
+  const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
+    department_id: ctx.department_id,
+    apparatus_id: data.apparatus_id,
+    template_id: data.template_id,
+    inventory_mode: data.inventory_mode,
+    name: data.name,
+    active: true,
+  }).select('id').single()
+
+  if (bagErr) { await logError(bagErr.message, '/apparatus'); return { error: bagErr.message } }
+
+  // If matching template, copy inventory items with their PAR levels
+  const { data: templateItems } = await adminClient
+    .from('medical_bag_template_items')
+    .select('supply_type_id, par_level')
+    .eq('template_id', data.template_id)
+
+  if (templateItems && templateItems.length > 0) {
+    const rows = templateItems.map(item => ({
+      storeroom_id: bag.id,
+      supply_type_id: item.supply_type_id,
+      department_id: ctx.department_id,
+      par_level: item.par_level,
+    }))
+    const { error: invErr } = await adminClient.from('medical_storeroom_inventory').insert(rows)
+    if (invErr) { await logError(invErr.message, '/apparatus'); return { error: invErr.message } }
+  }
+
+  revalidatePath(`/apparatus/${data.apparatus_id}`)
+  return { success: true }
+}
+
 // ─── Storerooms ───────────────────────────────────────────────────────────────
 
 export async function createMedicalStoreroom(formData: FormData) {

@@ -388,6 +388,8 @@ export default function ApparatusDetailClient({
           storeroomInventory={medicalBagData.storeroomInventory}
           storeroomLots={medicalBagData.storeroomLots}
           personnel={medicalBagData.personnel}
+          bagTemplates={medicalBagData.bagTemplates}
+          apparatusId={medicalBagData.apparatusId}
           isAdmin={isAdmin}
           isOfficerOrAbove={isOfficerOrAbove}
           myPersonnelId={myPersonnelId}

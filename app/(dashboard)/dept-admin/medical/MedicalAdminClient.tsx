@@ -6,6 +6,7 @@ import {
   createMedicalSupplyType, updateMedicalSupplyType,
   createMedicalStoreroom, updateMedicalStoreroom,
   assignSupplyToStoreroom, updateStoreroomPar, removeSupplyFromStoreroom,
+  createBagTemplate, updateBagTemplate, addTemplateItem, removeTemplateItem,
 } from '@/app/actions/medical'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -27,17 +28,22 @@ interface Storeroom { id: string; name: string; station_id: string | null; appar
 interface Station { id: string; station_name: string; station_number: string | null }
 interface Apparatus { id: string; unit_number: string; type_name: string | null }
 interface StoreroomInventory { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
+interface BagTemplate { id: string; name: string; description: string | null; active: boolean }
+interface TemplateItem { id: string; template_id: string; supply_type_id: string; par_level: number }
 
-type Tab = 'supplies' | 'storerooms'
+type Tab = 'supplies' | 'storerooms' | 'templates'
 
 export default function MedicalAdminClient({
-  supplyTypes, storerooms, stations, apparatus, storeroomInventory, departmentId,
+  supplyTypes, storerooms, stations, apparatus, storeroomInventory,
+  bagTemplates, templateItems, departmentId,
 }: {
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
   stations: Station[]
   apparatus: Apparatus[]
   storeroomInventory: StoreroomInventory[]
+  bagTemplates: BagTemplate[]
+  templateItems: TemplateItem[]
   departmentId: string
 }) {
   const router = useRouter()
@@ -61,6 +67,14 @@ export default function MedicalAdminClient({
   const [showStoreroomForm, setShowStoreroomForm] = useState(false)
   const [editingStoreroomId, setEditingStoreroomId] = useState<string | null>(null)
   const [storeroomActive, setStoreroomActive] = useState(true)
+
+  // Template state
+  const [showTemplateForm, setShowTemplateForm] = useState(false)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
+  const [templateActive, setTemplateActive] = useState(true)
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
+  const [addingItemToTemplate, setAddingItemToTemplate] = useState<string | null>(null)
+  const [templateItemPar, setTemplateItemPar] = useState('1')
 
   // Storeroom inventory state
   const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(null)
@@ -182,7 +196,7 @@ export default function MedicalAdminClient({
 
       {/* Tabs */}
       <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit">
-        {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms']] as const).map(([key, label]) => (
+        {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms'], ['templates', 'Bag Templates']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
             {label}
@@ -558,6 +572,160 @@ export default function MedicalAdminClient({
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── BAG TEMPLATES TAB ─────────────────────────────────────────────── */}
+      {tab === 'templates' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-zinc-500">{bagTemplates.filter(t => t.active).length} active template{bagTemplates.filter(t => t.active).length !== 1 ? 's' : ''}</p>
+            <button onClick={() => { setShowTemplateForm(true); setEditingTemplateId(null); setTemplateActive(true) }}
+              className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">
+              + Add Template
+            </button>
+          </div>
+
+          {/* Create / Edit template form */}
+          {showTemplateForm && (
+            <div className="mb-6 rounded-xl bg-white border border-zinc-200 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-zinc-900 mb-4">
+                {editingTemplateId ? 'Edit Template' : 'New Bag Template'}
+              </h2>
+              <form action={async (fd) => {
+                fd.set('active', templateActive ? 'true' : 'false')
+                const r = await wrap(() => editingTemplateId ? updateBagTemplate(fd) : createBagTemplate(fd))
+                if (!r?.error) { setShowTemplateForm(false); setEditingTemplateId(null) }
+              }} className="flex flex-col gap-3">
+                {editingTemplateId && <input type="hidden" name="id" value={editingTemplateId} />}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Name <span className="text-red-500">*</span></label>
+                  <input name="name" required placeholder="e.g. Trauma Box, ALS Bag, BLS First In" className={inputCls}
+                    defaultValue={editingTemplateId ? bagTemplates.find(t => t.id === editingTemplateId)?.name : ''} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Description</label>
+                  <input name="description" placeholder="Optional" className={inputCls}
+                    defaultValue={editingTemplateId ? (bagTemplates.find(t => t.id === editingTemplateId)?.description ?? '') : ''} />
+                </div>
+                {editingTemplateId && (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={templateActive} onChange={e => setTemplateActive(e.target.checked)}
+                      className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                    <span className="text-sm text-zinc-700">Active</span>
+                  </label>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button type="submit" disabled={loading}
+                    className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                    {loading ? 'Saving...' : editingTemplateId ? 'Save Changes' : 'Create'}
+                  </button>
+                  <button type="button" onClick={() => { setShowTemplateForm(false); setEditingTemplateId(null) }}
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {bagTemplates.length === 0 ? (
+            <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+              No bag templates yet. Create one to define a standard loadout you can deploy to any apparatus.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {bagTemplates.map(tmpl => {
+                const items = templateItems.filter(i => i.template_id === tmpl.id)
+                const isExpanded = expandedTemplateId === tmpl.id
+                const unassigned = supplyTypes.filter(s => s.active && !items.some(i => i.supply_type_id === s.id))
+                return (
+                  <div key={tmpl.id} className={`rounded-xl bg-white border border-zinc-200 overflow-hidden ${!tmpl.active ? 'opacity-60' : ''}`}>
+                    <div className="flex items-center px-5 py-4 gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900">{tmpl.name}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          {items.length} supply type{items.length !== 1 ? 's' : ''} defined
+                          {tmpl.description && <span> · {tmpl.description}</span>}
+                          {!tmpl.active && <span className="ml-1 text-zinc-400">· Inactive</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button onClick={() => setExpandedTemplateId(isExpanded ? null : tmpl.id)}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                          {isExpanded ? 'Hide' : 'Manage'}
+                        </button>
+                        <button onClick={() => { setEditingTemplateId(tmpl.id); setTemplateActive(tmpl.active); setShowTemplateForm(true) }}
+                          className="text-xs text-zinc-400 hover:text-zinc-700">Edit</button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Standard Inventory</p>
+                          {unassigned.length > 0 && (
+                            <button onClick={() => setAddingItemToTemplate(addingItemToTemplate === tmpl.id ? null : tmpl.id)}
+                              className="text-xs font-semibold text-red-600 hover:text-red-800">
+                              {addingItemToTemplate === tmpl.id ? 'Cancel' : '+ Add Supply'}
+                            </button>
+                          )}
+                        </div>
+
+                        {addingItemToTemplate === tmpl.id && (
+                          <div className="flex gap-2 mb-4">
+                            <select id={`template-supply-${tmpl.id}`} className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                              <option value="">Select supply type...</option>
+                              {unassigned.map(s => <option key={s.id} value={s.id}>{s.name}{s.is_controlled ? ' (Controlled)' : ''}</option>)}
+                            </select>
+                            <div className="w-20">
+                              <input type="number" min="1" placeholder="PAR" value={templateItemPar}
+                                onChange={e => setTemplateItemPar(e.target.value)}
+                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            </div>
+                            <button disabled={loading} onClick={async () => {
+                              const sel = document.getElementById(`template-supply-${tmpl.id}`) as HTMLSelectElement
+                              if (!sel.value) return
+                              const r = await wrap(() => addTemplateItem(tmpl.id, sel.value, parseInt(templateItemPar) || 1))
+                              if (!r?.error) { setAddingItemToTemplate(null); setTemplateItemPar('1') }
+                            }} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                              Add
+                            </button>
+                          </div>
+                        )}
+
+                        {items.length === 0 ? (
+                          <p className="text-xs text-zinc-400">No supplies defined yet. Add supplies to set the standard loadout.</p>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {items.map(item => {
+                              const supply = supplyTypes.find(s => s.id === item.supply_type_id)
+                              return (
+                                <div key={item.id} className="flex items-center justify-between bg-white rounded-lg border border-zinc-200 px-4 py-2.5 gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium text-zinc-900">{supply?.name ?? '—'}</p>
+                                      {supply?.is_controlled && <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
+                                    </div>
+                                    <p className="text-xs text-zinc-400">{supply?.unit_of_measure}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <span className="text-xs text-zinc-500">PAR: {item.par_level}</span>
+                                    <button onClick={() => wrap(() => removeTemplateItem(item.id))} disabled={loading}
+                                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50">Remove</button>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
                       </div>

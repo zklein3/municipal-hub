@@ -62,6 +62,21 @@ export default async function MedicalAdminPage() {
     type_name: (a.apparatus_types as any)?.name ?? null,
   }))
 
+  // Bag templates
+  const { data: bagTemplates } = await adminClient
+    .from('medical_bag_templates')
+    .select('id, name, description, active')
+    .eq('department_id', department_id)
+    .order('name')
+
+  const templateIds = (bagTemplates ?? []).map(t => t.id)
+  const { data: templateItems } = templateIds.length > 0
+    ? await adminClient
+        .from('medical_bag_template_items')
+        .select('id, template_id, supply_type_id, par_level')
+        .in('template_id', templateIds)
+    : { data: [] }
+
   return (
     <MedicalAdminClient
       supplyTypes={supplyTypes ?? []}
@@ -69,6 +84,8 @@ export default async function MedicalAdminPage() {
       stations={stations ?? []}
       apparatus={apparatus}
       storeroomInventory={storeroomInventory ?? []}
+      bagTemplates={bagTemplates ?? []}
+      templateItems={templateItems ?? []}
       departmentId={department_id}
     />
   )
