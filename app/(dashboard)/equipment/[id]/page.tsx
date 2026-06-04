@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import EquipmentDetailClient from './EquipmentDetailClient'
+import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
 
 export default async function EquipmentDetailPage({
   params,
@@ -199,16 +200,87 @@ export default async function EquipmentDetailPage({
     station: (stationData ?? [])[0] ?? null,
   }
 
+  // Medical bags
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const moduleMedical = deptRow?.module_medical ?? false
+
+  let medicalBagData: any = null
+  if (moduleMedical) {
+    const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
+      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).order('name'),
+      adminClient.from('medical_bag_templates').select('id, name').eq('department_id', myDept.department_id).eq('active', true).order('name'),
+      adminClient.from('medical_storerooms').select('id, name').eq('department_id', myDept.department_id).eq('active', true).is('apparatus_id', null).order('name'),
+      adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', myDept.department_id).eq('active', true),
+    ])
+
+    const bagIds = (bags ?? []).map(b => b.id)
+    const { data: bagInventory } = bagIds.length > 0
+      ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', bagIds)
+      : { data: [] }
+    const bagInvIds = (bagInventory ?? []).map(i => i.id)
+    const supplyTypeIds = [...new Set((bagInventory ?? []).map((i: any) => i.supply_type_id))]
+
+    const [{ data: bagLots }, { data: supplyTypes }] = await Promise.all([
+      bagInvIds.length > 0
+        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date').in('storeroom_inventory_id', bagInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
+        : Promise.resolve({ data: [] }),
+      supplyTypeIds.length > 0
+        ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', supplyTypeIds)
+        : Promise.resolve({ data: [] }),
+    ])
+
+    const storeroomIds = (deptStorerooms ?? []).map((s: any) => s.id)
+    const { data: storeroomInventory } = storeroomIds.length > 0 && supplyTypeIds.length > 0
+      ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id').in('storeroom_id', storeroomIds).in('supply_type_id', supplyTypeIds)
+      : { data: [] }
+    const srcInvIds = (storeroomInventory ?? []).map((i: any) => i.id)
+    const { data: storeroomLots } = srcInvIds.length > 0
+      ? await adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, quantity_remaining, expiration_date').in('storeroom_inventory_id', srcInvIds).eq('active', true).gt('quantity_remaining', 0)
+      : { data: [] }
+
+    const personnel = (deptPersonnel ?? [])
+      .map((dp: any) => ({ id: (dp.personnel as any)?.id ?? dp.personnel_id, name: [(dp.personnel as any)?.first_name, (dp.personnel as any)?.last_name].filter(Boolean).join(' ') }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+    medicalBagData = {
+      bags: bags ?? [], bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
+      supplyTypes: supplyTypes ?? [], deptStorerooms: deptStorerooms ?? [],
+      storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
+      personnel, bagTemplates: bagTemplates ?? [], apparatusId: id,
+    }
+  }
+
   return (
-    <EquipmentDetailClient
-      apparatus={apparatusWithRefs}
-      compartments={compartments}
-      allItems={[]}
-      allCategories={[]}
-      allApparatus={allApparatus}
-      isAdmin={false}
-      isOfficerOrAbove={false}
-      backHref={from}
-    />
+    <div>
+      <EquipmentDetailClient
+        apparatus={apparatusWithRefs}
+        compartments={compartments}
+        allItems={[]}
+        allCategories={[]}
+        allApparatus={allApparatus}
+        isAdmin={isAdmin}
+        isOfficerOrAbove={isOfficerOrAbove}
+        backHref={from}
+      />
+      {medicalBagData && (
+        <div className="max-w-2xl mt-2">
+          <MedicalBagsSection
+            bags={medicalBagData.bags}
+            bagInventory={medicalBagData.bagInventory}
+            bagLots={medicalBagData.bagLots}
+            supplyTypes={medicalBagData.supplyTypes}
+            deptStorerooms={medicalBagData.deptStorerooms}
+            storeroomInventory={medicalBagData.storeroomInventory}
+            storeroomLots={medicalBagData.storeroomLots}
+            personnel={medicalBagData.personnel}
+            bagTemplates={medicalBagData.bagTemplates}
+            apparatusId={medicalBagData.apparatusId}
+            isAdmin={isAdmin}
+            isOfficerOrAbove={isOfficerOrAbove}
+            myPersonnelId={me.id}
+          />
+        </div>
+      )}
+    </div>
   )
 }

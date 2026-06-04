@@ -169,14 +169,6 @@ export default async function EquipmentPage() {
                       >
                         Fuel Log
                       </Link>
-                      {moduleMedical && (
-                        <Link
-                          href={`/apparatus/${a.id}`}
-                          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
-                        >
-                          Medical Bags
-                        </Link>
-                      )}
                     </div>
                   </div>
                 ))}
