@@ -182,6 +182,60 @@ export async function deployBagFromTemplate(data: {
   return { success: true }
 }
 
+export async function assignBagToApparatus(data: {
+  template_id: string
+  apparatus_id: string
+  name: string
+  inventory_mode: 'standard' | 'independent'
+}) {
+  return deployBagFromTemplate({
+    apparatus_id: data.apparatus_id,
+    template_id: data.template_id,
+    name: data.name,
+    inventory_mode: data.inventory_mode,
+  })
+}
+
+export async function removeBagFromApparatus(storeroom_id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { data: lots } = await adminClient
+    .from('medical_stock_lots')
+    .select('id')
+    .eq('storeroom_inventory_id', storeroom_id)
+    .gt('quantity_remaining', 0)
+    .limit(1)
+
+  if (lots && lots.length > 0)
+    return { error: 'Cannot remove — bag has active stock. Waste or transfer stock first.' }
+
+  const { error: dbErr } = await adminClient
+    .from('medical_storerooms')
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('id', storeroom_id)
+
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true }
+}
+
+export async function updateBagInventoryMode(storeroom_id: string, mode: 'standard' | 'independent') {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+
+  const { error: dbErr } = await adminClient
+    .from('medical_storerooms')
+    .update({ inventory_mode: mode, updated_at: new Date().toISOString() })
+    .eq('id', storeroom_id)
+
+  if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/medical')
+  return { success: true }
+}
+
 // ─── Storerooms ───────────────────────────────────────────────────────────────
 
 export async function createMedicalStoreroom(formData: FormData) {

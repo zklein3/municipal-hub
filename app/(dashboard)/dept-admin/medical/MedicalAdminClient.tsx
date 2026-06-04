@@ -7,6 +7,7 @@ import {
   createMedicalStoreroom, updateMedicalStoreroom,
   assignSupplyToStoreroom, updateStoreroomPar, removeSupplyFromStoreroom,
   createBagTemplate, updateBagTemplate, addTemplateItem, removeTemplateItem,
+  assignBagToApparatus, removeBagFromApparatus,
 } from '@/app/actions/medical'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -30,12 +31,13 @@ interface Apparatus { id: string; unit_number: string; type_name: string | null 
 interface StoreroomInventory { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface BagTemplate { id: string; name: string; description: string | null; active: boolean }
 interface TemplateItem { id: string; template_id: string; supply_type_id: string; par_level: number }
+interface BagDeployment { id: string; name: string; apparatus_id: string; template_id: string | null; inventory_mode: string | null }
 
 type Tab = 'supplies' | 'storerooms' | 'templates'
 
 export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, storeroomInventory,
-  bagTemplates, templateItems, departmentId,
+  bagTemplates, templateItems, bagDeployments, departmentId,
 }: {
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
@@ -44,6 +46,7 @@ export default function MedicalAdminClient({
   storeroomInventory: StoreroomInventory[]
   bagTemplates: BagTemplate[]
   templateItems: TemplateItem[]
+  bagDeployments: BagDeployment[]
   departmentId: string
 }) {
   const router = useRouter()
@@ -75,6 +78,10 @@ export default function MedicalAdminClient({
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
   const [addingItemToTemplate, setAddingItemToTemplate] = useState<string | null>(null)
   const [templateItemPar, setTemplateItemPar] = useState('1')
+  const [assigningToApparatus, setAssigningToApparatus] = useState<string | null>(null)
+  const [assignApparatusId, setAssignApparatusId] = useState('')
+  const [assignBagName, setAssignBagName] = useState('')
+  const [assignMode, setAssignMode] = useState<'standard' | 'independent'>('standard')
 
   // Storeroom inventory state
   const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(null)
@@ -196,7 +203,7 @@ export default function MedicalAdminClient({
 
       {/* Tabs */}
       <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit">
-        {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms'], ['templates', 'Bag Templates']] as const).map(([key, label]) => (
+        {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms'], ['templates', 'Bags']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
             {label}
@@ -570,14 +577,17 @@ export default function MedicalAdminClient({
         </div>
       )}
 
-      {/* ── BAG TEMPLATES TAB ─────────────────────────────────────────────── */}
+      {/* ── BAGS TAB ──────────────────────────────────────────────────────── */}
       {tab === 'templates' && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-zinc-500">{bagTemplates.filter(t => t.active).length} active template{bagTemplates.filter(t => t.active).length !== 1 ? 's' : ''}</p>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-sm font-medium text-zinc-700">Define your bag types and assign them to apparatus.</p>
+              <p className="text-xs text-zinc-400 mt-0.5">{bagTemplates.filter(t => t.active).length} bag type{bagTemplates.filter(t => t.active).length !== 1 ? 's' : ''} · {bagDeployments.length} deployed across apparatus</p>
+            </div>
             <button onClick={() => { setShowTemplateForm(true); setEditingTemplateId(null); setTemplateActive(true) }}
               className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">
-              + Add Template
+              + New Bag
             </button>
           </div>
 
@@ -585,7 +595,7 @@ export default function MedicalAdminClient({
           {showTemplateForm && (
             <div className="mb-6 rounded-xl bg-white border border-zinc-200 shadow-sm p-5">
               <h2 className="text-sm font-semibold text-zinc-900 mb-4">
-                {editingTemplateId ? 'Edit Template' : 'New Bag Template'}
+                {editingTemplateId ? 'Edit Bag' : 'New Bag'}
               </h2>
               <form action={async (fd) => {
                 fd.set('active', templateActive ? 'true' : 'false')
@@ -632,15 +642,18 @@ export default function MedicalAdminClient({
             <div className="flex flex-col gap-3">
               {bagTemplates.map(tmpl => {
                 const items = templateItems.filter(i => i.template_id === tmpl.id)
+                const deployments = bagDeployments.filter(d => d.template_id === tmpl.id)
                 const isExpanded = expandedTemplateId === tmpl.id
                 const unassigned = supplyTypes.filter(s => s.active && !items.some(i => i.supply_type_id === s.id))
+                const unassignedApparatus = apparatus.filter(a => !deployments.some(d => d.apparatus_id === a.id))
                 return (
                   <div key={tmpl.id} className={`rounded-xl bg-white border border-zinc-200 overflow-hidden ${!tmpl.active ? 'opacity-60' : ''}`}>
                     <div className="flex items-center px-5 py-4 gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-zinc-900">{tmpl.name}</p>
                         <p className="text-xs text-zinc-400 mt-0.5">
-                          {items.length} supply type{items.length !== 1 ? 's' : ''} defined
+                          {items.length} supply type{items.length !== 1 ? 's' : ''}
+                          {deployments.length > 0 && <span className="ml-1 text-zinc-500">· On {deployments.length} apparatus</span>}
                           {tmpl.description && <span> · {tmpl.description}</span>}
                           {!tmpl.active && <span className="ml-1 text-zinc-400">· Inactive</span>}
                         </p>
@@ -716,6 +729,93 @@ export default function MedicalAdminClient({
                         )}
                       </div>
                     )}
+
+                    {isExpanded && (
+                      <div className="border-t border-zinc-200 bg-white px-5 py-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Assigned to Apparatus</p>
+                            {unassignedApparatus.length > 0 && (
+                              <button onClick={() => {
+                                setAssigningToApparatus(assigningToApparatus === tmpl.id ? null : tmpl.id)
+                                setAssignApparatusId(unassignedApparatus[0]?.id ?? '')
+                                setAssignBagName(tmpl.name)
+                                setAssignMode('standard')
+                              }} className="text-xs font-semibold text-red-600 hover:text-red-800">
+                                {assigningToApparatus === tmpl.id ? 'Cancel' : '+ Assign to Apparatus'}
+                              </button>
+                            )}
+                          </div>
+
+                          {assigningToApparatus === tmpl.id && (
+                            <div className="mb-4 rounded-lg bg-zinc-50 border border-zinc-200 p-4 flex flex-col gap-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-zinc-700">Apparatus</label>
+                                  <select value={assignApparatusId} onChange={e => setAssignApparatusId(e.target.value)} className={inputCls}>
+                                    {unassignedApparatus.map(a => (
+                                      <option key={a.id} value={a.id}>{a.unit_number}{a.type_name ? ` — ${a.type_name}` : ''}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-zinc-700">Bag Name</label>
+                                  <input type="text" value={assignBagName} onChange={e => setAssignBagName(e.target.value)} className={inputCls} />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="mb-2 block text-xs font-medium text-zinc-700">Inventory Mode</label>
+                                <div className="flex gap-2">
+                                  {(['standard', 'independent'] as const).map(mode => (
+                                    <label key={mode} className={`flex-1 flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${assignMode === mode ? 'border-red-500 bg-red-50 text-red-800' : 'border-zinc-200 text-zinc-600'}`}>
+                                      <input type="radio" checked={assignMode === mode} onChange={() => setAssignMode(mode)} className="text-red-600" />
+                                      <div>
+                                        <p className="font-semibold text-xs">{mode === 'standard' ? 'Match Template' : 'Independent'}</p>
+                                        <p className="text-xs opacity-70">{mode === 'standard' ? 'Stays in sync' : 'Custom loadout'}</p>
+                                      </div>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                              <button disabled={loading || !assignApparatusId} onClick={async () => {
+                                const r = await wrap(() => assignBagToApparatus({
+                                  template_id: tmpl.id,
+                                  apparatus_id: assignApparatusId,
+                                  name: assignBagName || tmpl.name,
+                                  inventory_mode: assignMode,
+                                }))
+                                if (!r?.error) setAssigningToApparatus(null)
+                              }} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 w-fit">
+                                {loading ? 'Assigning...' : 'Assign'}
+                              </button>
+                            </div>
+                          )}
+
+                          {deployments.length === 0 ? (
+                            <p className="text-xs text-zinc-400">Not assigned to any apparatus yet.</p>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {deployments.map(dep => {
+                                const ap = apparatus.find(a => a.id === dep.apparatus_id)
+                                return (
+                                  <div key={dep.id} className="flex items-center justify-between bg-zinc-50 rounded-lg border border-zinc-200 px-4 py-2.5 gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-zinc-900">{dep.name}</p>
+                                      <p className="text-xs text-zinc-400">{ap ? `Unit ${ap.unit_number}${ap.type_name ? ' — ' + ap.type_name : ''}` : '—'}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${dep.inventory_mode === 'standard' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                                        {dep.inventory_mode === 'standard' ? 'Standard' : 'Independent'}
+                                      </span>
+                                      <button onClick={() => wrap(() => removeBagFromApparatus(dep.id))} disabled={loading}
+                                        className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50">Remove</button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                   </div>
                 )
               })}

@@ -70,12 +70,16 @@ export default async function MedicalAdminPage() {
     .order('name')
 
   const templateIds = (bagTemplates ?? []).map(t => t.id)
-  const { data: templateItems } = templateIds.length > 0
-    ? await adminClient
-        .from('medical_bag_template_items')
-        .select('id, template_id, supply_type_id, par_level')
-        .in('template_id', templateIds)
-    : { data: [] }
+  const [{ data: templateItems }, { data: bagDeployments }] = await Promise.all([
+    templateIds.length > 0
+      ? adminClient.from('medical_bag_template_items').select('id, template_id, supply_type_id, par_level').in('template_id', templateIds)
+      : Promise.resolve({ data: [] }),
+    adminClient.from('medical_storerooms')
+      .select('id, name, apparatus_id, template_id, inventory_mode')
+      .eq('department_id', department_id)
+      .eq('active', true)
+      .not('apparatus_id', 'is', null),
+  ])
 
   return (
     <MedicalAdminClient
@@ -86,6 +90,7 @@ export default async function MedicalAdminPage() {
       storeroomInventory={storeroomInventory ?? []}
       bagTemplates={bagTemplates ?? []}
       templateItems={templateItems ?? []}
+      bagDeployments={bagDeployments ?? []}
       departmentId={department_id}
     />
   )

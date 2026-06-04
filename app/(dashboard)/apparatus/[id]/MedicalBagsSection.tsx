@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { dispenseStock, receiveStock, transferStock, deployBagFromTemplate } from '@/app/actions/medical'
+import { dispenseStock, receiveStock, transferStock, updateBagInventoryMode } from '@/app/actions/medical'
 
 interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -62,9 +62,6 @@ export default function MedicalBagsSection({
   type UseForm = { invId: string; lotId: string; supplyName: string; unitOfMeasure: string; isControlled: boolean; requiredSigs: number; quantity: string; notes: string; signer1Id: string; signer2Id: string }
   type ReceiveForm = { invId: string; supplyName: string; tracksExp: boolean; requiredSigs: number; lotNumber: string; expirationDate: string; quantity: string; notes: string; signer1Id: string; signer2Id: string }
   type RestockForm = { invId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string; isControlled: boolean; destStoreroomId: string; srcInvId: string; srcLotId: string; quantity: string; notes: string }
-
-  type DeployForm = { templateId: string; name: string; inventoryMode: 'standard' | 'independent' }
-  const [deployForm, setDeployForm] = useState<DeployForm | null>(null)
 
   const [useForm, setUseForm] = useState<UseForm | null>(null)
   const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
@@ -140,14 +137,12 @@ export default function MedicalBagsSection({
     setLoading(false)
   }
 
-  async function handleDeploySubmit() {
-    if (!deployForm) return
-    if (!deployForm.templateId) { setError('Select a template.'); return }
-    if (!deployForm.name.trim()) { setError('Name is required.'); return }
-    setError(null); setLoading(true)
-    const r = await deployBagFromTemplate({ apparatus_id: apparatusId, template_id: deployForm.templateId, name: deployForm.name, inventory_mode: deployForm.inventoryMode })
+  async function handleModeToggle(bagId: string, currentMode: string | null) {
+    const newMode = currentMode === 'standard' ? 'independent' : 'standard'
+    setLoading(true)
+    const r = await updateBagInventoryMode(bagId, newMode)
     if (r?.error) setError(r.error)
-    else { setSuccess(`"${deployForm.name}" deployed.`); setDeployForm(null); router.refresh() }
+    else router.refresh()
     setLoading(false)
   }
 
@@ -158,15 +153,7 @@ export default function MedicalBagsSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Medical Bags</h2>
         {isAdmin && (
-          <div className="flex items-center gap-3">
-            {bagTemplates.length > 0 && (
-              <button onClick={() => setDeployForm({ templateId: bagTemplates[0].id, name: bagTemplates[0].name, inventoryMode: 'standard' })}
-                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
-                + Deploy Bag
-              </button>
-            )}
-            <a href="/dept-admin/medical?tab=templates" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Templates →</a>
-          </div>
+          <a href="/dept-admin/medical" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage in Medical →</a>
         )}
       </div>
 
@@ -175,13 +162,8 @@ export default function MedicalBagsSection({
 
       {bags.length === 0 && (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-6 py-8 text-center text-sm text-zinc-400">
-          No bags deployed to this apparatus yet.
-          {isAdmin && bagTemplates.length > 0 && (
-            <span> <button onClick={() => setDeployForm({ templateId: bagTemplates[0].id, name: bagTemplates[0].name, inventoryMode: 'standard' })} className="text-red-600 font-semibold hover:underline">Deploy a bag →</button></span>
-          )}
-          {isAdmin && bagTemplates.length === 0 && (
-            <span> <a href="/dept-admin/medical" className="text-red-600 font-semibold hover:underline">Create a template first →</a></span>
-          )}
+          No bags assigned to this apparatus.
+          {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 font-semibold hover:underline">Assign one in Medical Admin →</a></span>}
         </div>
       )}
 
@@ -203,14 +185,17 @@ export default function MedicalBagsSection({
         return (
           <div key={bag.id}>
             {bags.length === 1 && (
-              <div className="flex items-center gap-2 mb-3">
-                <p className="text-sm font-medium text-zinc-700">{bag.name}</p>
-                {bag.inventory_mode && (
-                  <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${bag.inventory_mode === 'standard' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                    {bag.inventory_mode === 'standard' ? 'Standard' : 'Independent'}
-                  </span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium text-zinc-700">{bag.name}</p>
+                  {bag.template_id && (() => { const tmpl = bagTemplates.find(t => t.id === bag.template_id); return tmpl ? <span className="text-xs text-zinc-400">{tmpl.name}</span> : null })()}
+                </div>
+                {isAdmin && bag.inventory_mode && (
+                  <button onClick={() => handleModeToggle(bag.id, bag.inventory_mode)} disabled={loading}
+                    className={`text-xs rounded-full px-2.5 py-1 font-semibold border transition-colors ${bag.inventory_mode === 'standard' ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' : 'bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>
+                    {bag.inventory_mode === 'standard' ? 'Standard ↕' : 'Independent ↕'}
+                  </button>
                 )}
-                {bag.template_id && (() => { const tmpl = bagTemplates.find(t => t.id === bag.template_id); return tmpl ? <span className="text-xs text-zinc-400">{tmpl.name}</span> : null })()}
               </div>
             )}
             {inv.length === 0 ? (
@@ -302,69 +287,6 @@ export default function MedicalBagsSection({
           </div>
         )
       })}
-
-      {/* Deploy Bag Modal */}
-      {deployForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
-            <h2 className="text-base font-bold text-zinc-900 mb-1">Deploy Bag</h2>
-            <p className="text-sm text-zinc-500 mb-5">Add a medical bag to this apparatus</p>
-            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Template <span className="text-red-500">*</span></label>
-                <select value={deployForm.templateId}
-                  onChange={e => {
-                    const tmpl = bagTemplates.find(t => t.id === e.target.value)
-                    setDeployForm(f => f ? { ...f, templateId: e.target.value, name: tmpl?.name ?? f.name } : f)
-                  }}
-                  className={inputCls}>
-                  {bagTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Bag Name <span className="text-red-500">*</span></label>
-                <input type="text" value={deployForm.name}
-                  onChange={e => setDeployForm(f => f ? { ...f, name: e.target.value } : f)}
-                  placeholder="e.g. Drug Box, ALS Bag, Trauma Kit"
-                  className={inputCls} />
-                <p className="text-xs text-zinc-400 mt-1">You can rename it — defaults to the template name</p>
-              </div>
-              <div>
-                <label className="mb-2 block text-xs font-medium text-zinc-700">Inventory Mode <span className="text-red-500">*</span></label>
-                <div className="flex flex-col gap-2">
-                  {(['standard', 'independent'] as const).map(mode => (
-                    <label key={mode} className="flex items-start gap-3 cursor-pointer rounded-lg border px-4 py-3 transition-colors"
-                      style={{ borderColor: deployForm.inventoryMode === mode ? '#991b1b' : '#e4e4e7', background: deployForm.inventoryMode === mode ? '#fef2f2' : 'white' }}>
-                      <input type="radio" name="inventoryMode" value={mode} checked={deployForm.inventoryMode === mode}
-                        onChange={() => setDeployForm(f => f ? { ...f, inventoryMode: mode } : f)}
-                        className="mt-0.5 text-red-600 focus:ring-red-500" />
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900">{mode === 'standard' ? 'Match Template' : 'Independent'}</p>
-                        <p className="text-xs text-zinc-500 mt-0.5">
-                          {mode === 'standard'
-                            ? 'Inventory mirrors the template. PAR levels stay in sync.'
-                            : 'Custom inventory for this bag. Template is just a starting point.'}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleDeploySubmit} disabled={loading}
-                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                {loading ? 'Deploying...' : 'Deploy Bag'}
-              </button>
-              <button onClick={() => { setDeployForm(null); setError(null) }}
-                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Use Modal */}
       {useForm && (
