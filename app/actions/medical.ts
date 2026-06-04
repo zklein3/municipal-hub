@@ -35,7 +35,7 @@ export async function createMedicalSupplyType(formData: FormData) {
   const required_signatures = parseInt(formData.get('required_signatures') as string) || 0
   const enforced_sigs = is_controlled ? Math.max(required_signatures, 2) : required_signatures
 
-  const { error: dbErr } = await adminClient.from('medical_supply_types').insert({
+  const { data: newRow, error: dbErr } = await adminClient.from('medical_supply_types').insert({
     department_id: ctx.department_id,
     name: formData.get('name') as string,
     category: formData.get('category') as string,
@@ -45,11 +45,11 @@ export async function createMedicalSupplyType(formData: FormData) {
     required_signatures: enforced_sigs,
     notes: (formData.get('notes') as string) || null,
     active: true,
-  })
+  }).select('id').single()
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
   revalidatePath('/dept-admin/medical')
-  return { success: true }
+  return { success: true, id: newRow.id }
 }
 
 export async function updateMedicalSupplyType(formData: FormData) {

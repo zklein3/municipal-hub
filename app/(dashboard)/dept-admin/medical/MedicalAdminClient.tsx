@@ -54,6 +54,9 @@ export default function MedicalAdminClient({
   const [requiredSigs, setRequiredSigs] = useState(0)
   const [supplyActive, setSupplyActive] = useState(true)
 
+  // Storeroom assignment state (for supply type form)
+  const [assignStoreroomPars, setAssignStoreroomPars] = useState<Record<string, string>>({})
+
   // Storeroom form state
   const [showStoreroomForm, setShowStoreroomForm] = useState(false)
   const [editingStoreroomId, setEditingStoreroomId] = useState<string | null>(null)
@@ -82,6 +85,7 @@ export default function MedicalAdminClient({
     setTracksExpiration(false)
     setRequiredSigs(0)
     setSupplyActive(true)
+    setAssignStoreroomPars({})
     setShowSupplyForm(true)
   }
 
@@ -91,6 +95,7 @@ export default function MedicalAdminClient({
     setTracksExpiration(s.tracks_expiration)
     setRequiredSigs(s.required_signatures)
     setSupplyActive(s.active)
+    setAssignStoreroomPars({})
     setShowSupplyForm(true)
   }
 
@@ -99,11 +104,30 @@ export default function MedicalAdminClient({
     formData.set('tracks_expiration', tracksExpiration ? 'true' : 'false')
     formData.set('required_signatures', String(isControlled ? Math.max(requiredSigs, 2) : requiredSigs))
     formData.set('active', supplyActive ? 'true' : 'false')
-    const r = await wrap(() => editingSupplyId
-      ? updateMedicalSupplyType(formData)
-      : createMedicalSupplyType(formData)
-    )
-    if (!r?.error) { setShowSupplyForm(false); setEditingSupplyId(null) }
+
+    reset(); setLoading(true)
+    const r = editingSupplyId
+      ? await updateMedicalSupplyType(formData)
+      : await createMedicalSupplyType(formData)
+
+    if (r?.error) { setError(r.error); setLoading(false); return }
+
+    // Assign to any checked storerooms
+    const supplyTypeId = editingSupplyId ?? (r as any).id
+    const checkedEntries = Object.entries(assignStoreroomPars)
+    for (const [storeroomId, parStr] of checkedEntries) {
+      const fd = new FormData()
+      fd.set('storeroom_id', storeroomId)
+      fd.set('supply_type_id', supplyTypeId)
+      fd.set('par_level', parStr || '0')
+      await assignSupplyToStoreroom(fd)
+    }
+
+    router.refresh()
+    setLoading(false)
+    setShowSupplyForm(false)
+    setEditingSupplyId(null)
+    setAssignStoreroomPars({})
   }
 
   async function handleStoreroomSubmit(formData: FormData) {
@@ -254,6 +278,54 @@ export default function MedicalAdminClient({
                     <span className="text-sm text-zinc-700">Active</span>
                   </label>
                 )}
+
+                {/* Storeroom assignment */}
+                {(() => {
+                  const alreadyAssigned = editingSupplyId
+                    ? new Set(storeroomInventory.filter(i => i.supply_type_id === editingSupplyId).map(i => i.storeroom_id))
+                    : new Set<string>()
+                  const availableRooms = storerooms.filter(s => s.active && !alreadyAssigned.has(s.id))
+                  if (availableRooms.length === 0 && !editingSupplyId) return null
+                  return (
+                    <div className="border-t border-zinc-100 pt-3 mt-1">
+                      <p className="text-xs font-semibold text-zinc-700 mb-2">
+                        {editingSupplyId ? 'Also assign to storerooms' : 'Assign to storerooms (optional)'}
+                      </p>
+                      {availableRooms.length === 0 ? (
+                        <p className="text-xs text-zinc-400">Assigned to all active storerooms.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {availableRooms.map(room => {
+                            const checked = room.id in assignStoreroomPars
+                            return (
+                              <div key={room.id} className="flex items-center gap-3">
+                                <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                  <input type="checkbox" checked={checked}
+                                    onChange={e => setAssignStoreroomPars(prev => {
+                                      const next = { ...prev }
+                                      if (e.target.checked) next[room.id] = '0'
+                                      else delete next[room.id]
+                                      return next
+                                    })}
+                                    className="rounded border-zinc-300 text-red-600 focus:ring-red-500 shrink-0" />
+                                  <span className="text-sm text-zinc-800 truncate">{room.name}</span>
+                                </label>
+                                {checked && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <label className="text-xs text-zinc-500">PAR</label>
+                                    <input type="number" min="0" value={assignStoreroomPars[room.id] ?? '0'}
+                                      onChange={e => setAssignStoreroomPars(prev => ({ ...prev, [room.id]: e.target.value }))}
+                                      className="w-16 rounded-lg border border-zinc-300 px-2 py-1 text-xs text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <div className="flex gap-2 pt-1">
                   <button type="submit" disabled={loading}
