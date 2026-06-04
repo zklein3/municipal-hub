@@ -20,6 +20,9 @@ export default async function EquipmentPage() {
 
   const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
 
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const moduleMedical = deptRow?.module_medical ?? false
+
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name, apparatus_type_id, station_id, active')
@@ -166,6 +169,14 @@ export default async function EquipmentPage() {
                       >
                         Fuel Log
                       </Link>
+                      {moduleMedical && (
+                        <Link
+                          href={`/apparatus/${a.id}`}
+                          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                        >
+                          Medical Bags
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}
