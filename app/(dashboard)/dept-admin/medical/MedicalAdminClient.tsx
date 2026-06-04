@@ -424,31 +424,17 @@ export default function MedicalAdminClient({
                   <input name="name" required placeholder="e.g. Station 1 Drug Safe" className={inputCls}
                     defaultValue={editingStoreroomId ? storerooms.find(s => s.id === editingStoreroomId)?.name : ''} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
-                    <select name="station_id" className={inputCls}
-                      defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
-                      <option value="">No station</option>
-                      {stations.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.station_number ? `Stn ${s.station_number} — ` : ''}{s.station_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Apparatus (bag)</label>
-                    <select name="apparatus_id" className={inputCls}
-                      defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.apparatus_id ?? '') : ''}>
-                      <option value="">Not on apparatus</option>
-                      {apparatus.map(a => (
-                        <option key={a.id} value={a.id}>
-                          {a.unit_number}{a.type_name ? ` — ${a.type_name}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
+                  <select name="station_id" className={inputCls}
+                    defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
+                    <option value="">No station assigned</option>
+                    {stations.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.station_number ? `Station ${s.station_number} — ` : ''}{s.station_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
