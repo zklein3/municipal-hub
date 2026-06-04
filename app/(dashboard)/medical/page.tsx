@@ -22,14 +22,12 @@ export default async function MedicalPage() {
   const myDept = myDeptList?.[0]
   if (!myDept) redirect('/dashboard')
 
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
-  if (!isOfficerOrAbove) redirect('/equipment')
-
-  // Module gate
+  // Module gate — all dept members can access if module is enabled
   const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
   if (!deptRow?.module_medical && !me.is_sys_admin) redirect('/dashboard')
 
   const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
+  const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
   const department_id = myDept.department_id
 
   // Storerooms
@@ -147,6 +145,7 @@ export default async function MedicalPage() {
       stations={stations ?? []}
       apparatusMap={apparatusMap}
       isAdmin={isAdmin}
+      isOfficerOrAbove={isOfficerOrAbove}
       myPersonnelId={me.id}
       transactions={transactions ?? []}
       lotNumberMap={lotNumberMap}

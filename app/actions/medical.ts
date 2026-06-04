@@ -237,7 +237,7 @@ export async function dispenseStock(data: {
   signer_2_id: string | null
 }) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
 
   if (!data.lot_id || data.quantity < 1)
@@ -534,7 +534,7 @@ export async function adjustStock(data: {
 
 export async function submitReorderRequest(inventory_id: string, notes: string | null) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
 
   const { data: inv } = await adminClient

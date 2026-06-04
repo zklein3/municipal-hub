@@ -128,7 +128,7 @@ function fmtDate(d: string | null) {
 }
 
 export default function MedicalStoreClient({
-  storerooms, inventory, supplyTypes, lots, personnel, stations, apparatusMap, isAdmin, myPersonnelId, pendingReorderIds,
+  storerooms, inventory, supplyTypes, lots, personnel, stations, apparatusMap, isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap,
 }: {
   storerooms: Storeroom[]
@@ -139,6 +139,7 @@ export default function MedicalStoreClient({
   stations: Station[]
   apparatusMap: Record<string, { unit_number: string; type_name: string | null }>
   isAdmin: boolean
+  isOfficerOrAbove: boolean
   myPersonnelId: string
   transactions: Transaction[]
   lotNumberMap: Record<string, string | null>
@@ -687,10 +688,12 @@ export default function MedicalStoreClient({
                       className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       Use
                     </button>
-                    <button onClick={() => openReceive(inv)}
-                      className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
-                      Receive
-                    </button>
+                    {isOfficerOrAbove && (
+                      <button onClick={() => openReceive(inv)}
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
+                        Receive
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -724,11 +727,13 @@ export default function MedicalStoreClient({
                                   <p className="text-lg font-bold text-zinc-900">{lot.quantity_remaining}</p>
                                   <p className="text-xs text-zinc-400">{supply.unit_of_measure}</p>
                                 </div>
-                                <button onClick={() => openWaste(inv, lot)}
-                                  className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600">
-                                  Waste
-                                </button>
-                                {storerooms.length > 1 && (
+                                {isOfficerOrAbove && (
+                                  <button onClick={() => openWaste(inv, lot)}
+                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600">
+                                    Waste
+                                  </button>
+                                )}
+                                {isOfficerOrAbove && storerooms.length > 1 && (
                                   <button onClick={() => openTransfer(inv, lot)}
                                     className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600">
                                     Transfer
