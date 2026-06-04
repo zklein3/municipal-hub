@@ -36,6 +36,7 @@ export default async function MedicalPage() {
     .select('id, name, station_id, apparatus_id')
     .eq('department_id', department_id)
     .eq('active', true)
+    .is('apparatus_id', null)
     .order('name')
 
   const storeroomIds = (storerooms ?? []).map(s => s.id)

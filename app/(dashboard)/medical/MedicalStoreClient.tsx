@@ -733,7 +733,7 @@ export default function MedicalStoreClient({
                                     Waste
                                   </button>
                                 )}
-                                {isOfficerOrAbove && storerooms.length > 1 && (
+                                {storerooms.length > 1 && (isOfficerOrAbove || !supply.is_controlled) && (
                                   <button onClick={() => openTransfer(inv, lot)}
                                     className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600">
                                     Transfer

@@ -133,40 +133,98 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .eq('apparatus_id', id)
     .order('test_date', { ascending: false })
 
-  // Medical bag linked to this apparatus
-  const { data: bagStoreroomList } = await adminClient
-    .from('medical_storerooms')
-    .select('id, name')
-    .eq('apparatus_id', id)
-    .eq('active', true)
-    .limit(1)
-  const bagStoreroom = bagStoreroomList?.[0] ?? null
+  // Medical bags — only if module enabled
+  const { data: modRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const moduleMedical = modRow?.module_medical ?? false
 
-  let medicalBag: { storeroom_id: string; name: string; supply_count: number; alert_count: number } | null = null
-  if (bagStoreroom) {
-    const { data: bagInv } = await adminClient
-      .from('medical_storeroom_inventory')
-      .select('id, par_level, supply_type_id')
-      .eq('storeroom_id', bagStoreroom.id)
-    const invIds = (bagInv ?? []).map(i => i.id)
-    const { data: bagLots } = invIds.length > 0
-      ? await adminClient
-          .from('medical_stock_lots')
-          .select('storeroom_inventory_id, quantity_remaining, expiration_date')
-          .in('storeroom_inventory_id', invIds)
+  let medicalBagData: {
+    bags: { id: string; name: string }[]
+    bagInventory: { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[]
+    bagLots: { id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null; quantity_received: number; quantity_remaining: number; received_date: string }[]
+    supplyTypes: { id: string; name: string; category: string; unit_of_measure: string; is_controlled: boolean; tracks_expiration: boolean; required_signatures: number }[]
+    deptStorerooms: { id: string; name: string }[]
+    storeroomInventory: { id: string; storeroom_id: string; supply_type_id: string }[]
+    storeroomLots: { id: string; storeroom_inventory_id: string; lot_number: string | null; quantity_remaining: number; expiration_date: string | null }[]
+    personnel: { id: string; name: string }[]
+  } | null = null
+
+  if (moduleMedical) {
+    const { data: bags } = await adminClient
+      .from('medical_storerooms')
+      .select('id, name')
+      .eq('apparatus_id', id)
+      .eq('active', true)
+      .order('name')
+
+    if (bags && bags.length > 0) {
+      const bagIds = bags.map(b => b.id)
+      const { data: bagInventory } = await adminClient
+        .from('medical_storeroom_inventory')
+        .select('id, storeroom_id, supply_type_id, par_level')
+        .in('storeroom_id', bagIds)
+      const bagInvIds = (bagInventory ?? []).map(i => i.id)
+      const supplyTypeIds = [...new Set((bagInventory ?? []).map(i => i.supply_type_id))]
+
+      const [{ data: bagLots }, { data: supplyTypes }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
+        bagInvIds.length > 0
+          ? adminClient.from('medical_stock_lots')
+              .select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date')
+              .in('storeroom_inventory_id', bagInvIds)
+              .eq('active', true)
+              .gt('quantity_remaining', 0)
+              .order('expiration_date', { ascending: true, nullsFirst: false })
+          : Promise.resolve({ data: [] }),
+        supplyTypeIds.length > 0
+          ? adminClient.from('medical_supply_types')
+              .select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures')
+              .in('id', supplyTypeIds)
+          : Promise.resolve({ data: [] }),
+        adminClient.from('medical_storerooms')
+          .select('id, name')
+          .eq('department_id', myDept.department_id)
           .eq('active', true)
-      : { data: [] }
-    const now = new Date()
-    const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-    let alertCount = 0
-    for (const inv of bagInv ?? []) {
-      const invLots = (bagLots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
-      const total = invLots.reduce((s, l) => s + l.quantity_remaining, 0)
-      if (invLots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < now)) alertCount++
-      else if (invLots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') <= soon)) alertCount++
-      else if (inv.par_level > 0 && total < inv.par_level) alertCount++
+          .is('apparatus_id', null)
+          .order('name'),
+        adminClient.from('department_personnel')
+          .select('personnel_id, personnel(id, first_name, last_name)')
+          .eq('department_id', myDept.department_id)
+          .eq('active', true),
+      ])
+
+      const storeroomIds = (deptStorerooms ?? []).map(s => s.id)
+      const { data: storeroomInventory } = storeroomIds.length > 0
+        ? await adminClient.from('medical_storeroom_inventory')
+            .select('id, storeroom_id, supply_type_id')
+            .in('storeroom_id', storeroomIds)
+            .in('supply_type_id', supplyTypeIds)
+        : { data: [] }
+      const srcInvIds = (storeroomInventory ?? []).map(i => i.id)
+      const { data: storeroomLots } = srcInvIds.length > 0
+        ? await adminClient.from('medical_stock_lots')
+            .select('id, storeroom_inventory_id, lot_number, quantity_remaining, expiration_date')
+            .in('storeroom_inventory_id', srcInvIds)
+            .eq('active', true)
+            .gt('quantity_remaining', 0)
+        : { data: [] }
+
+      const personnel = (deptPersonnel ?? [])
+        .map(dp => ({
+          id: (dp.personnel as any)?.id ?? dp.personnel_id,
+          name: [(dp.personnel as any)?.first_name, (dp.personnel as any)?.last_name].filter(Boolean).join(' '),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      medicalBagData = {
+        bags,
+        bagInventory: bagInventory ?? [],
+        bagLots: bagLots ?? [],
+        supplyTypes: supplyTypes ?? [],
+        deptStorerooms: deptStorerooms ?? [],
+        storeroomInventory: storeroomInventory ?? [],
+        storeroomLots: storeroomLots ?? [],
+        personnel,
+      }
     }
-    medicalBag = { storeroom_id: bagStoreroom.id, name: bagStoreroom.name, supply_count: (bagInv ?? []).length, alert_count: alertCount }
   }
 
   // Build clean apparatus object
@@ -188,7 +246,8 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       departmentId={myDept.department_id}
       isoSpecs={isoSpecs}
       pumpTests={pumpTests ?? []}
-      medicalBag={medicalBag}
+      medicalBagData={medicalBagData}
+      myPersonnelId={me.id}
     />
   )
 }

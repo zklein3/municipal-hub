@@ -383,7 +383,7 @@ export async function transferStock(data: {
   notes: string | null
 }) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
 
   if (!data.lot_id || data.quantity < 1)
@@ -408,6 +408,15 @@ export async function transferStock(data: {
   if (!srcInv) return { error: 'Source inventory record not found.' }
   if (srcInv.storeroom_id === data.destination_storeroom_id)
     return { error: 'Source and destination storeroom must be different.' }
+
+  // Controlled substances require officer+
+  const { data: supplyTypeRow } = await adminClient
+    .from('medical_supply_types')
+    .select('is_controlled')
+    .eq('id', srcInv.supply_type_id)
+    .single()
+  if (supplyTypeRow?.is_controlled && !ctx.isOfficerOrAbove)
+    return { error: 'Controlled substances can only be transferred by officers or admins.' }
 
   // Find destination inventory row for same supply type
   const { data: destInvList } = await adminClient
