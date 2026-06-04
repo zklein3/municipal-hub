@@ -21,10 +21,6 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "FireOps7",
   },
-  icons: {
-    icon: "/icons/icon.svg",
-    apple: "/icons/icon.svg",
-  },
 };
 
 export default function RootLayout({
