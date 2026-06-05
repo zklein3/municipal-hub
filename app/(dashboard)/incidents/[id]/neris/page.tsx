@@ -23,19 +23,19 @@ export default async function NerisReportPage({
 
   const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
   const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
+  if (!myDept && !me.is_sys_admin) redirect('/dashboard')
 
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
+  const isOfficerOrAbove = myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin
   if (!isOfficerOrAbove) redirect(`/incidents/${id}`)
 
-  // Fetch incident (cover sheet)
+  // Fetch incident (cover sheet) — sys admin can access any incident
   const { data: incident } = await adminClient
     .from('incidents')
     .select('*')
     .eq('id', id)
-    .eq('department_id', myDept.department_id)
     .single()
   if (!incident) redirect('/incidents')
+  if (myDept && myDept.department_id !== incident.department_id) redirect('/incidents')
 
   // Fetch fire details if fire type
   const { data: fireDetailsList } = incident.incident_type === 'fire'
@@ -121,7 +121,7 @@ export default async function NerisReportPage({
   const { data: deptList } = await adminClient
     .from('departments')
     .select('neris_entity_id')
-    .eq('id', myDept.department_id)
+    .eq('id', incident.department_id)
   const nerisEntityId = deptList?.[0]?.neris_entity_id ?? null
   const apiEnrollmentReady = !!(
     nerisEntityId &&
@@ -148,7 +148,7 @@ export default async function NerisReportPage({
         nerisRecord={nerisRecord ?? null}
         mutualAidRows={mutualAidRows ?? []}
         requirementSummary={requirementSummary}
-        isAdmin={myDept.system_role === 'admin' || me.is_sys_admin}
+        isAdmin={myDept?.system_role === 'admin' || me.is_sys_admin}
         isOfficerOrAbove={isOfficerOrAbove}
       />
     </div>
