@@ -158,6 +158,12 @@ export default async function EquipmentPage() {
                         Vehicle Check
                       </Link>
                       <Link
+                        href={`/inspections/vehicle-check/${a.id}?next=inventory`}
+                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                      >
+                        Inspect
+                      </Link>
+                      <Link
                         href={`/equipment/${a.id}`}
                         className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
                       >

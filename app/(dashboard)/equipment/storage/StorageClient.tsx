@@ -294,9 +294,9 @@ export default function StorageClient({
               </div>
 
               {/* Actions */}
-              {(isOfficerOrAbove || isAdmin) && (
+              {(item.storage_qty > 0 || isAdmin) && (
                 <div className="flex flex-wrap gap-1.5 pt-2 border-t border-zinc-100">
-                  {isOfficerOrAbove && item.storage_qty > 0 && (
+                  {item.storage_qty > 0 && (
                     <button
                       onClick={() => openModal('add', item)}
                       className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"

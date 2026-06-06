@@ -10,10 +10,28 @@ const CATEGORY_COLORS: Record<string, string> = {
   supply: 'bg-blue-100 text-blue-700',
   equipment: 'bg-zinc-100 text-zinc-600',
 }
+const LOC_TYPE_COLORS: Record<string, string> = {
+  Storeroom: 'bg-zinc-100 text-zinc-600',
+  Bag: 'bg-purple-100 text-purple-700',
+  Compartment: 'bg-blue-100 text-blue-700',
+}
 
 function fmtDate(d: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+type StoreroomRow = { id: string; name: string; apparatus_id: string | null; compartment_id: string | null }
+
+function locationType(s: StoreroomRow): 'Storeroom' | 'Bag' | 'Compartment' {
+  if (!s.apparatus_id) return 'Storeroom'
+  if (!s.compartment_id) return 'Bag'
+  return 'Compartment'
+}
+
+function locationLabel(s: StoreroomRow, unitMap: Record<string, string>): string {
+  if (!s.apparatus_id) return s.name
+  return `${unitMap[s.apparatus_id] ?? '?'} — ${s.name}`
 }
 
 export default async function MedicalReportsPage({
@@ -48,14 +66,27 @@ export default async function MedicalReportsPage({
   const department_id = myDept.department_id
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
 
-  // Storerooms
-  const { data: storerooms } = await adminClient
+  // Storerooms — include compartment_id to distinguish Storeroom / Bag / Compartment
+  const { data: storeroomsRaw } = await adminClient
     .from('medical_storerooms')
-    .select('id, name, apparatus_id')
+    .select('id, name, apparatus_id, compartment_id')
     .eq('department_id', department_id)
     .eq('active', true)
-  const storeroomIds = (storerooms ?? []).map(s => s.id)
-  const storeroomMap = Object.fromEntries((storerooms ?? []).map(s => [s.id, s.name]))
+  const storerooms: StoreroomRow[] = (storeroomsRaw ?? []).map(s => ({
+    id: s.id,
+    name: s.name,
+    apparatus_id: s.apparatus_id ?? null,
+    compartment_id: s.compartment_id ?? null,
+  }))
+  const storeroomIds = storerooms.map(s => s.id)
+  const storeroomIndex = Object.fromEntries(storerooms.map(s => [s.id, s]))
+
+  // Apparatus unit numbers (for bags + compartments location labels)
+  const appIds = [...new Set(storerooms.map(s => s.apparatus_id).filter(Boolean) as string[])]
+  const { data: apparatusRows } = appIds.length > 0
+    ? await adminClient.from('apparatus').select('id, unit_number').in('id', appIds)
+    : { data: [] }
+  const unitMap = Object.fromEntries((apparatusRows ?? []).map(a => [a.id, a.unit_number]))
 
   // Supply types
   const { data: supplyTypes } = await adminClient
@@ -79,14 +110,14 @@ export default async function MedicalReportsPage({
     )
   }
 
-  // Storeroom inventory (for stock vs PAR)
+  // Storeroom inventory
   const { data: inventory } = await adminClient
     .from('medical_storeroom_inventory')
     .select('id, storeroom_id, supply_type_id, par_level')
     .in('storeroom_id', storeroomIds)
   const invIds = (inventory ?? []).map(i => i.id)
 
-  // Active lots (for stock levels + expiring)
+  // Active lots with remaining stock
   const { data: lots } = invIds.length > 0
     ? await adminClient
         .from('medical_stock_lots')
@@ -120,16 +151,19 @@ export default async function MedicalReportsPage({
   // ── Build stock vs PAR table ───────────────────────────────────────────────
   const stockRows = (inventory ?? []).map(inv => {
     const supply = supplyMap[inv.supply_type_id]
+    const storeroom = storeroomIndex[inv.storeroom_id]
     const invLots = (lots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
     const total = invLots.reduce((s, l) => s + l.quantity_remaining, 0)
     const status = total === 0 ? 'empty' : total < inv.par_level ? 'low' : 'good'
-    return { inv, supply, total, status, storeroomName: storeroomMap[inv.storeroom_id] ?? '—' }
+    const locType = storeroom ? locationType(storeroom) : 'Storeroom'
+    const locLabel = storeroom ? locationLabel(storeroom, unitMap) : '—'
+    return { inv, supply, total, status, locType, locLabel }
   }).sort((a, b) => {
     const order: Record<string, number> = { empty: 0, low: 1, good: 2 }
     return (order[a.status] ?? 3) - (order[b.status] ?? 3)
   })
 
-  // ── Expiring lots (within 60 days) ────────────────────────────────────────
+  // ── Expiring / expired lots (active stock only) ────────────────────────────
   const now = new Date()
   const in60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
   const expiringLots = (lots ?? [])
@@ -137,13 +171,16 @@ export default async function MedicalReportsPage({
     .map(l => {
       const inv = (inventory ?? []).find(i => i.id === l.storeroom_inventory_id)
       const supply = inv ? supplyMap[inv.supply_type_id] : null
-      const storeName = inv ? storeroomMap[inv.storeroom_id] ?? '—' : '—'
+      const storeroom = inv ? storeroomIndex[inv.storeroom_id] : null
+      const locType = storeroom ? locationType(storeroom) : 'Storeroom'
+      const locLabel = storeroom ? locationLabel(storeroom, unitMap) : '—'
       const expDate = new Date(l.expiration_date! + 'T00:00:00')
       const isExpired = expDate < now
-      return { lot: l, supply, storeName, isExpired }
+      return { lot: l, supply, locType, locLabel, isExpired }
     })
     .sort((a, b) => (a.lot.expiration_date ?? '').localeCompare(b.lot.expiration_date ?? ''))
 
+  const expiredCount = expiringLots.filter(e => e.isExpired).length
   const dayOptions = [7, 30, 60, 90]
 
   return (
@@ -153,10 +190,6 @@ export default async function MedicalReportsPage({
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Supplies Report</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Stock levels, consumption, and expiration</p>
         </div>
-        <a href="/print/medical-cs-log" target="_blank" rel="noopener noreferrer"
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
-          Print CS Log ↗
-        </a>
       </div>
 
       {/* ── Stock vs PAR ──────────────────────────────────────────────────── */}
@@ -166,15 +199,17 @@ export default async function MedicalReportsPage({
           <div className="rounded-xl bg-white border border-zinc-200 px-6 py-8 text-center text-sm text-zinc-400">No supply types assigned to any storeroom.</div>
         ) : (
           <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-            {stockRows.map(({ inv, supply, total, status, storeroomName }) => (
+            {stockRows.map(({ inv, supply, total, status, locType, locLabel }) => (
               <div key={inv.id} className="flex items-center px-5 py-3 gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-zinc-900">{supply?.name ?? '—'}</p>
                     {supply && <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CATEGORY_COLORS[supply.category] ?? ''}`}>{CATEGORY_LABELS[supply.category] ?? supply.category}</span>}
-                    {supply?.is_controlled && <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
                   </div>
-                  <p className="text-xs text-zinc-400 mt-0.5">{storeroomName}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-xs rounded-full px-1.5 py-0.5 font-medium ${LOC_TYPE_COLORS[locType]}`}>{locType}</span>
+                    <p className="text-xs text-zinc-400">{locLabel}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0 text-right">
                   <div>
@@ -251,25 +286,33 @@ export default async function MedicalReportsPage({
         )}
       </section>
 
-      {/* ── Expiring Lots ─────────────────────────────────────────────────── */}
+      {/* ── Expiring / Expired Lots ───────────────────────────────────────── */}
       <section>
-        <h2 className="text-base font-semibold text-zinc-900 mb-3">
-          Expiring / Expired Lots
-          <span className="ml-2 text-sm font-normal text-zinc-400">(within 60 days)</span>
-        </h2>
+        <div className="flex items-center gap-3 mb-3">
+          <h2 className="text-base font-semibold text-zinc-900">Expiring / Expired Lots</h2>
+          {expiredCount > 0 && (
+            <span className="rounded-full bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5">
+              {expiredCount} expired
+            </span>
+          )}
+          <span className="text-sm font-normal text-zinc-400">active stock only · within 60 days</span>
+        </div>
         {expiringLots.length === 0 ? (
           <div className="rounded-xl bg-white border border-zinc-200 px-6 py-8 text-center text-sm text-zinc-400">
             No lots expiring within 60 days.
           </div>
         ) : (
           <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
-            {expiringLots.map(({ lot, supply, storeName, isExpired }) => (
-              <div key={lot.id} className="flex items-center px-5 py-3 gap-3">
+            {expiringLots.map(({ lot, supply, locType, locLabel, isExpired }) => (
+              <div key={lot.id} className={`flex items-center px-5 py-3 gap-3 ${isExpired ? 'bg-red-50' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-zinc-900">{supply?.name ?? '—'}</p>
-                  <p className="text-xs text-zinc-400">
-                    {storeName}{lot.lot_number ? ` · Lot ${lot.lot_number}` : ''}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-xs rounded-full px-1.5 py-0.5 font-medium ${LOC_TYPE_COLORS[locType]}`}>{locType}</span>
+                    <p className="text-xs text-zinc-400">
+                      {locLabel}{lot.lot_number ? ` · Lot ${lot.lot_number}` : ''}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0 text-right">
                   <div>

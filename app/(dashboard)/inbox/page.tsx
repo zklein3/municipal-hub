@@ -94,6 +94,7 @@ export default async function InboxPage({
   let requestsRaw: any[] = []
   let deptConfig: any = null
   let restockRequests: any[] = []
+  let expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null }[] = []
 
   if (isOfficerOrAbove && department_id) {
     const [deptRes, permitsRes, recordsRes] = await Promise.all([
@@ -107,14 +108,26 @@ export default async function InboxPage({
     ])
     deptConfig = deptRes.data
 
-    // Reorder requests (medical module)
+    // Reorder requests + expired lots (medical module)
     if (deptConfig?.module_medical) {
-      const { data: reorderRaw } = await adminClient
-        .from('medical_reorder_requests')
-        .select('id, storeroom_inventory_id, requested_by, notes, created_at')
-        .eq('department_id', department_id)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
+      const today = new Date().toISOString().split('T')[0]
+
+      const [{ data: reorderRaw }, { data: expiredLotsRaw }] = await Promise.all([
+        adminClient
+          .from('medical_reorder_requests')
+          .select('id, storeroom_inventory_id, requested_by, notes, created_at')
+          .eq('department_id', department_id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+        adminClient
+          .from('medical_stock_lots')
+          .select('id, lot_number, expiration_date, quantity_remaining, storeroom_inventory_id')
+          .eq('department_id', department_id)
+          .eq('active', true)
+          .gt('quantity_remaining', 0)
+          .lt('expiration_date', today)
+          .order('expiration_date'),
+      ])
 
       if (reorderRaw && reorderRaw.length > 0) {
         const invIds = reorderRaw.map((r: any) => r.storeroom_inventory_id)
@@ -145,6 +158,31 @@ export default async function InboxPage({
           }
         })
       }
+
+      if (expiredLotsRaw && expiredLotsRaw.length > 0) {
+        const invIds = [...new Set(expiredLotsRaw.map((l: any) => l.storeroom_inventory_id))]
+        const { data: invRows } = await adminClient
+          .from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id').in('id', invIds)
+        const srIds = [...new Set((invRows ?? []).map((i: any) => i.storeroom_id))]
+        const supIds = [...new Set((invRows ?? []).map((i: any) => i.supply_type_id))]
+        const [{ data: srRows }, { data: supRows }] = await Promise.all([
+          adminClient.from('medical_storerooms').select('id, name').in('id', srIds),
+          adminClient.from('medical_supply_types').select('id, name').in('id', supIds),
+        ])
+        const invMap = Object.fromEntries((invRows ?? []).map((i: any) => [i.id, i]))
+        const srMap = Object.fromEntries((srRows ?? []).map((s: any) => [s.id, s.name]))
+        const supMap = Object.fromEntries((supRows ?? []).map((s: any) => [s.id, s.name]))
+        expiredLots = expiredLotsRaw.map((l: any) => {
+          const inv = invMap[l.storeroom_inventory_id]
+          return {
+            supply_name: inv ? (supMap[inv.supply_type_id] ?? '—') : '—',
+            storeroom_name: inv ? (srMap[inv.storeroom_id] ?? '—') : '—',
+            quantity_remaining: l.quantity_remaining,
+            expiration_date: l.expiration_date,
+            lot_number: l.lot_number,
+          }
+        })
+      }
     }
     const permitsRaw = permitsRes.data ?? []
     requestsRaw = recordsRes.data ?? []
@@ -172,6 +210,7 @@ export default async function InboxPage({
       requests={requestsRaw}
       signatureRows={signatureRows}
       restockRequests={restockRequests}
+      expiredLots={expiredLots}
       memberName={`${me.first_name} ${me.last_name}`.trim()}
       initialTab={initialTab as any}
       isOfficerOrAbove={isOfficerOrAbove}

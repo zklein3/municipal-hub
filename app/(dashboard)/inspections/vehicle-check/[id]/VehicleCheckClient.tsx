@@ -93,6 +93,7 @@ export default function VehicleCheckClient({
   personnelId,
   departmentId,
   inspectorName,
+  nextPath,
 }: {
   apparatus: Apparatus
   items: CheckItem[]
@@ -100,6 +101,7 @@ export default function VehicleCheckClient({
   personnelId: string
   departmentId: string
   inspectorName: string
+  nextPath?: string
 }) {
   const router = useRouter()
   const [itemState, setItemState] = useState<Record<string, ItemState>>(() =>
@@ -188,7 +190,7 @@ export default function VehicleCheckClient({
 
     setSubmitting(false)
     if (res.error) { setError(res.error); return }
-    router.push(`/inspections?checked=${apparatus.id}`)
+    router.push(nextPath ?? `/inspections?checked=${apparatus.id}`)
   }
 
   return (

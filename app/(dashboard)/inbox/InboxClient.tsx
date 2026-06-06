@@ -51,6 +51,7 @@ export default function InboxClient({
   requests,
   signatureRows,
   restockRequests,
+  expiredLots,
   memberName,
   initialTab,
   isOfficerOrAbove,
@@ -63,6 +64,7 @@ export default function InboxClient({
   requests: any[]
   signatureRows: SignatureRow[]
   restockRequests: RestockRequest[]
+  expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null }[]
   memberName: string
   initialTab: Tab
   isOfficerOrAbove: boolean
@@ -148,23 +150,26 @@ export default function InboxClient({
                 </span>
               )}
             </button>
-            {moduleMedical && (
-              <button
-                onClick={() => setTab('restock')}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  tab === 'restock' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
-                }`}
-              >
-                Restock
-                {restockRequests.length > 0 && (
-                  <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-                    tab === 'restock' ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'
-                  }`}>
-                    {restockRequests.length}
-                  </span>
-                )}
-              </button>
-            )}
+            {moduleMedical && (() => {
+              const restockBadge = restockRequests.length + expiredLots.length
+              return (
+                <button
+                  onClick={() => setTab('restock')}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    tab === 'restock' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+                  }`}
+                >
+                  Restock
+                  {restockBadge > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                      tab === 'restock' ? 'bg-red-500 text-white' : expiredLots.length > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {restockBadge}
+                    </span>
+                  )}
+                </button>
+              )
+            })()}
           </>
         )}
       </div>
@@ -274,7 +279,7 @@ export default function InboxClient({
       )}
 
       {tab === 'restock' && isOfficerOrAbove && moduleMedical && (
-        <RestockTab requests={restockRequests} />
+        <RestockTab requests={restockRequests} expiredLots={expiredLots} />
       )}
 
       {activeSig && activeSig.type === 'incident' && (

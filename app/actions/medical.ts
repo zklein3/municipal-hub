@@ -877,6 +877,85 @@ export async function dismissReorderRequest(request_id: string) {
   return { success: true }
 }
 
+export async function updateStockLot(data: {
+  lot_id: string
+  lot_number: string | null
+  expiration_date: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  const adminClient = createAdminClient()
+
+  const { error: dbErr } = await adminClient
+    .from('medical_stock_lots')
+    .update({ lot_number: data.lot_number || null, expiration_date: data.expiration_date || null })
+    .eq('id', data.lot_id)
+  if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+
+  revalidatePath('/medical')
+  revalidatePath('/equipment')
+  return { success: true }
+}
+
+export async function wasteExpiredLots(data: {
+  storeroom_inventory_id: string
+  waste_reason: string
+  notes: string | null
+  signer_1_id: string | null
+  signer_2_id: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
+  const adminClient = createAdminClient()
+
+  const { data: invRow } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('storeroom_id, supply_type_id, department_id')
+    .eq('id', data.storeroom_inventory_id)
+    .single()
+  if (!invRow) return { error: 'Inventory record not found.' }
+
+  const now = new Date()
+  const { data: expiredLots } = await adminClient
+    .from('medical_stock_lots')
+    .select('id, lot_number, quantity_remaining')
+    .eq('storeroom_inventory_id', data.storeroom_inventory_id)
+    .eq('active', true)
+    .gt('quantity_remaining', 0)
+    .lt('expiration_date', now.toISOString().split('T')[0])
+
+  if (!expiredLots || expiredLots.length === 0)
+    return { error: 'No expired lots found.' }
+
+  const noteText = [data.waste_reason, data.notes].filter(Boolean).join(' — ')
+
+  for (const lot of expiredLots) {
+    const { error: lotErr } = await adminClient
+      .from('medical_stock_lots')
+      .update({ quantity_remaining: 0, active: false })
+      .eq('id', lot.id)
+    if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
+
+    const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+      department_id: invRow.department_id,
+      storeroom_id: invRow.storeroom_id,
+      supply_type_id: invRow.supply_type_id,
+      lot_id: lot.id,
+      transaction_type: 'wasted',
+      quantity: lot.quantity_remaining,
+      performed_by: ctx.me.id,
+      signer_1_id: data.signer_1_id || null,
+      signer_2_id: data.signer_2_id || null,
+      notes: noteText || null,
+    })
+    if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+  }
+
+  revalidatePath('/medical')
+  revalidatePath('/equipment')
+  return { success: true, count: expiredLots.length }
+}
+
 export async function removeSupplyFromStoreroom(inventory_id: string) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }

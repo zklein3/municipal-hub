@@ -126,22 +126,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### Medical Supply Module — COMPLETE ✅ (2026-06-04)
+### Medical Supply Module — COMPLETE ✅ (2026-06-06)
 
-**Key files:** `app/(dashboard)/medical/`, `app/(dashboard)/dept-admin/medical/`, `app/actions/medical.ts`, `app/(dashboard)/apparatus/[id]/MedicalBagsSection.tsx`, `app/(dashboard)/inbox/RestockTab.tsx`, `app/(dashboard)/reports/medical/`, `app/print/medical-cs-log/`
+**Key files:** `app/(dashboard)/medical/`, `app/(dashboard)/dept-admin/medical/`, `app/actions/medical.ts`, `app/(dashboard)/apparatus/[id]/MedicalBagsSection.tsx`, `app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection.tsx`, `app/(dashboard)/inbox/RestockTab.tsx`, `app/(dashboard)/reports/medical/`, `app/print/medical-cs-log/`
 
 - **Phase 1:** DB tables, admin supply/storeroom management, receive stock, alerts panel, inbox badge
-- **Phase 2:** Dispense/Use (FIFO, dual-sig), Waste (reason + dual-sig), Transfer (controlled = officer+ only, non-controlled = all members), Transaction History (90-day ledger, filters, Print CS Log)
-- **Phase 3:** CS log print (`/print/medical-cs-log`), Medical Reports page (`/reports/medical`), `module_medical` flag + sys admin toggle
+- **Phase 2:** Dispense/Use (FIFO, dual-sig), Waste (reason + dual-sig), Transfer, Transaction History (90-day ledger, Print CS Log)
+- **Phase 3:** CS log print, Medical Reports page, `module_medical` flag + sys admin toggle
 - **Phase 4:** Stock adjustment (admin), daily alert edge function, reorder requests (inbox Restock tab)
-- **Bag system:** Template-based. Dept Admin → Medical → **Bags** tab — create bag types (e.g. Trauma Box), define standard inventory, assign to apparatus. `MedicalBagsSection` renders in `/equipment/[id]` (View Inventory) alongside compartments. Use/Restock/Receive inline. Mode toggle (Standard ↕ / Independent ↕) per bag on apparatus page.
+- **Phase 5 (2026-06-06):** Lot editing (officer+: edit `lot_number` + `expiration_date` after receipt). Batch waste expired lots — waste all expired active lots in one operation (single reason + signatures). Bidirectional Restock/Transfer on bags + compartments (all surfaces: pull in from storeroom, push out to storeroom). Inbox Restock tab now shows expired lots with remaining stock as actionable items (red section + "Waste →" link to `/medical`). Medical reports: location type badge (Storeroom / Bag / Compartment) + apparatus context in all labels; expired rows red-tinted; expired count badge.
+- **Bag system:** Template-based. Dept Admin → Medical → Bags tab. `MedicalBagsSection` + `MedicalCompartmentsSection` in apparatus View Inventory. Mode toggle (Standard ↕ / Independent ↕) per bag.
 
-**Role model:** Members = view + use + restock non-controlled. Officers+ = receive + waste + transfer + controlled restock. Admins = configure + adjust.
-**DB tables:** `medical_supply_types`, `medical_storerooms` (+`apparatus_id`, `template_id`, `inventory_mode`), `medical_storeroom_inventory`, `medical_stock_lots`, `medical_stock_transactions`, `medical_reorder_requests`, `medical_bag_templates`, `medical_bag_template_items`
+**Role model:** Members = view + use + restock non-controlled. Officers+ = receive + waste + transfer + edit lots + batch waste expired. Admins = configure + adjust.
+**Controlled substances = separate future module.** `is_controlled` flag + dual-sig fields stay as schema placeholders only — no CS compliance workflows built yet.
+**DB tables:** `medical_supply_types`, `medical_storerooms` (+`apparatus_id`, `compartment_id`, `template_id`, `inventory_mode`), `medical_storeroom_inventory`, `medical_stock_lots`, `medical_stock_transactions`, `medical_reorder_requests`, `medical_bag_templates`, `medical_bag_template_items`
 **Transaction types:** `received` | `dispensed` | `wasted` | `transferred_out` | `transferred_in` | `adjusted`
-
-**Supply type assignment:** Creating a supply type now shows storeroom checkboxes with PAR — assigns in one step.
-**Storerooms** = station storage (no apparatus). **Bags** = apparatus-linked, managed in Medical Admin Bags tab, shown in apparatus inventory view.
+**Storerooms** = station storage (`apparatus_id=null`). **Bags** = apparatus-linked (`apparatus_id` set, `compartment_id` null). **Compartment storerooms** = both set.
 
 ---
 

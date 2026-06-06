@@ -62,10 +62,16 @@ export default function MedicalBagsSection({
   type UseForm = { invId: string; lotId: string; supplyName: string; unitOfMeasure: string; isControlled: boolean; requiredSigs: number; quantity: string; notes: string; signer1Id: string; signer2Id: string }
   type ReceiveForm = { invId: string; supplyName: string; tracksExp: boolean; requiredSigs: number; lotNumber: string; expirationDate: string; quantity: string; notes: string; signer1Id: string; signer2Id: string }
   type RestockForm = { invId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string; isControlled: boolean; destStoreroomId: string; srcInvId: string; srcLotId: string; quantity: string; notes: string }
+  type TransferOutForm = {
+    srcInvId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; srcLotId: string; destStoreroomId: string
+    maxQty: number; quantity: string; notes: string
+  }
 
   const [useForm, setUseForm] = useState<UseForm | null>(null)
   const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
   const [restockForm, setRestockForm] = useState<RestockForm | null>(null)
+  const [transferOutForm, setTransferOutForm] = useState<TransferOutForm | null>(null)
 
   const supplyMap = Object.fromEntries(supplyTypes.map(s => [s.id, s]))
   const lotsFor = (invId: string) => bagLots.filter(l => l.storeroom_inventory_id === invId)
@@ -88,7 +94,6 @@ export default function MedicalBagsSection({
 
   function openRestock(inv: InventoryRow) {
     const supply = supplyMap[inv.supply_type_id]; if (!supply) return
-    // Find source inventory rows (storeroom lots for this supply type)
     const srcInvRows = storeroomInventory.filter(i => i.supply_type_id === inv.supply_type_id)
     const availableLots = storeroomLots.filter(l => srcInvRows.some(i => i.id === l.storeroom_inventory_id))
     if (availableLots.length === 0) { setError('No stock available in any storeroom for this supply.'); return }
@@ -100,6 +105,22 @@ export default function MedicalBagsSection({
       unitOfMeasure: supply.unit_of_measure, isControlled: supply.is_controlled,
       destStoreroomId: inv.storeroom_id, srcInvId: firstSrcInv?.id ?? '',
       srcLotId: firstLot.id, quantity: '1', notes: '',
+    })
+  }
+
+  function openTransferOut(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    const activeLots = lotsFor(inv.id).filter(l => l.quantity_remaining > 0)
+    if (activeLots.length === 0) { setError('No stock available to transfer.'); return }
+    const oldest = [...activeLots].sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
+    const validDests = deptStorerooms.filter(s => storeroomInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === inv.supply_type_id))
+    if (validDests.length === 0) { setError('No storeroom has this supply type assigned — transfer cannot be completed.'); return }
+    setError(null)
+    setTransferOutForm({
+      srcInvId: inv.id, supplyTypeId: inv.supply_type_id, supplyName: supply.name,
+      unitOfMeasure: supply.unit_of_measure, isControlled: supply.is_controlled,
+      srcLotId: oldest.id, destStoreroomId: validDests[0].id,
+      maxQty: oldest.quantity_remaining, quantity: '1', notes: '',
     })
   }
 
@@ -135,6 +156,31 @@ export default function MedicalBagsSection({
     if (r?.error) setError(r.error)
     else { setSuccess(`Restocked ${qty} ${restockForm.unitOfMeasure} of ${restockForm.supplyName} from storeroom.`); setRestockForm(null); router.refresh() }
     setLoading(false)
+  }
+
+  async function handleTransferOutSubmit() {
+    if (!transferOutForm) return
+    const qty = parseInt(transferOutForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (qty > transferOutForm.maxQty) { setError(`Only ${transferOutForm.maxQty} available in this lot.`); return }
+    if (!transferOutForm.destStoreroomId) { setError('Select a destination storeroom.'); return }
+    setError(null); setLoading(true)
+    const r = await transferStock({
+      source_inventory_id: transferOutForm.srcInvId,
+      lot_id: transferOutForm.srcLotId,
+      destination_storeroom_id: transferOutForm.destStoreroomId,
+      quantity: qty,
+      notes: transferOutForm.notes || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Transferred ${qty} ${transferOutForm.unitOfMeasure} of ${transferOutForm.supplyName} to storeroom.`); setTransferOutForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  function handleTransferOutLotChange(lotId: string) {
+    if (!transferOutForm) return
+    const lot = bagLots.find(l => l.id === lotId)
+    setTransferOutForm(f => f ? { ...f, srcLotId: lotId, maxQty: lot?.quantity_remaining ?? 0 } : f)
   }
 
   async function handleModeToggle(bagId: string, currentMode: string | null) {
@@ -211,8 +257,9 @@ export default function MedicalBagsSection({
                   const total = totalQty(item.id)
                   const status = getStatus(total, item.par_level, lots)
                   const isExpanded = expandedInvId === item.id
-                  const canRestock = isOfficerOrAbove || !supply.is_controlled
+                  const canAct = isOfficerOrAbove || !supply.is_controlled
                   const srcAvailable = storeroomLots.some(l => storeroomInventory.find(i => i.id === l.storeroom_inventory_id && i.supply_type_id === item.supply_type_id))
+                  const destAvailable = deptStorerooms.some(s => storeroomInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === item.supply_type_id))
 
                   return (
                     <div key={item.id} className="rounded-xl border border-zinc-200 overflow-hidden">
@@ -231,9 +278,16 @@ export default function MedicalBagsSection({
                               {isExpanded ? 'Hide' : 'Lots'}
                             </button>
                           )}
-                          {(status === 'low' || status === 'empty') && canRestock && srcAvailable && (
-                            <button onClick={() => openRestock(item)} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100">
+                          {canAct && srcAvailable && (
+                            <button onClick={() => openRestock(item)}
+                              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${(status === 'low' || status === 'empty') ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50'}`}>
                               Restock
+                            </button>
+                          )}
+                          {canAct && total > 0 && destAvailable && (
+                            <button onClick={() => openTransferOut(item)}
+                              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                              Transfer
                             </button>
                           )}
                           <button onClick={() => openUse(item)} disabled={total === 0}
@@ -422,6 +476,68 @@ export default function MedicalBagsSection({
               <div className="flex gap-3 mt-6">
                 <button onClick={handleRestockSubmit} disabled={loading} className="flex-1 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">{loading ? 'Saving...' : 'Confirm Restock'}</button>
                 <button onClick={() => { setRestockForm(null); setError(null) }} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Transfer Out Modal */}
+      {transferOutForm && (() => {
+        const activeLots = bagLots.filter(l => l.storeroom_inventory_id === transferOutForm.srcInvId && l.quantity_remaining > 0)
+          .sort((a, b) => a.received_date.localeCompare(b.received_date))
+        const selectedLot = bagLots.find(l => l.id === transferOutForm.srcLotId)
+        const validDests = deptStorerooms.filter(s => storeroomInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === transferOutForm.supplyTypeId))
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+              <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer to Storeroom</h2>
+              <p className="text-sm text-zinc-500 mb-5">
+                {transferOutForm.supplyName}
+                {transferOutForm.isControlled && <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">Controlled</span>}
+              </p>
+              {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+              <div className="flex flex-col gap-3">
+                {activeLots.length > 1 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Source Lot</label>
+                    <select value={transferOutForm.srcLotId} onChange={e => handleTransferOutLotChange(e.target.value)} className={inputCls}>
+                      {activeLots.map(l => (
+                        <option key={l.id} value={l.id}>
+                          {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} · {l.quantity_remaining} available
+                          {l.expiration_date ? ` · Exp ${fmtDate(l.expiration_date)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Destination Storeroom <span className="text-red-500">*</span></label>
+                  <select value={transferOutForm.destStoreroomId} onChange={e => setTransferOutForm(f => f ? { ...f, destStoreroomId: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select storeroom…</option>
+                    {validDests.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Quantity <span className="text-red-500">*</span>
+                    {selectedLot && <span className="ml-1 text-zinc-400 font-normal">({selectedLot.quantity_remaining} available)</span>}
+                  </label>
+                  <input type="number" min="1" max={transferOutForm.maxQty} value={transferOutForm.quantity}
+                    onChange={e => setTransferOutForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                  <input type="text" value={transferOutForm.notes} placeholder="Optional"
+                    onChange={e => setTransferOutForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={handleTransferOutSubmit} disabled={loading || !transferOutForm.destStoreroomId}
+                  className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
+                  {loading ? 'Saving...' : 'Confirm Transfer'}
+                </button>
+                <button onClick={() => { setTransferOutForm(null); setError(null) }} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">Cancel</button>
               </div>
             </div>
           </div>

@@ -539,7 +539,7 @@ export async function moveItemToCompartment(location_standard_id: string, target
 // ─── Move Quantity to Storage ─────────────────────────────────────────────────
 export async function moveQuantityToStorage(location_standard_id: string, quantity: number) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can move inventory.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   if (quantity < 1) return { error: 'Quantity must be at least 1.' }
   const department_id = ctx.department_id
   if (!department_id) return { error: 'Department not found.' }
@@ -608,10 +608,9 @@ export async function moveQuantityFromStorage(
   quantity: number,
 ) {
   const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can move inventory.' }
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
   if (quantity < 1) return { error: 'Quantity must be at least 1.' }
   const department_id = ctx.department_id
-  if (!department_id) return { error: 'Department not found.' }
   const adminClient = createAdminClient()
 
   const { data: storageList } = await adminClient

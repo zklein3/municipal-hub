@@ -6,7 +6,8 @@
 - `HubCard` component — reusable card with title, description, stat badge, alert state
 - `PageNavBar` — global Back + hub breadcrumb on every dashboard page (pathname-driven, no per-page wiring)
 - Operations hub (`/operations`) — Incidents, Announcements, Fuel Log, Public Inbox cards + recent incidents list
-- Inventory page (`/equipment`) — member-focused. Station Storage card at top + apparatus list grouped by station. Each apparatus card: Vehicle Check (blue), View Inventory (red), Fuel Log → link. No admin hub cards for members.
+- Inventory page (`/equipment`) — member-focused. Station Storage card at top + apparatus list grouped by station. Each apparatus card: Vehicle Check | Inspect (vehicle check → auto-advance to compartment inventory via `?next=inventory`) | View Inventory | Fuel Log. No admin hub cards for members.
+- Member movement permissions — all members can move items to/from storage and compartment-to-compartment. Officer gate removed from `moveQuantityToStorage` / `moveQuantityFromStorage`. Audit trail (item_movement_log) provides accountability. Only item creation remains officer/admin gated.
 - Asset Roster (`/reports/assets` via `/equipment/assets`) — moved to Reports hub as read-only officer/admin audit view. Apparatus assignment now lives in Equipment Setup → Items → Assets tab.
 - Compartment display — `[unit_number] - [code]` (e.g. `24 - D1`) everywhere a compartment appears in apparatus context (inventory detail, inspection pages, move dropdowns). Setup screen stays universal (code only).
 - Reports hub (`/reports`) — tile grid, role-adaptive (members see My Activity only, officers+ see all)
@@ -57,6 +58,11 @@
 - BackButton component — `href` prop for explicit dest, else `router.back()`; always below header in action row
 - Fire School — QR scanning, bottle tracking, fill log, realtime fill log, fill verification, timezone settings, on/off marketing toggle
 - Training — unified member training page, direct cert entry, dept-wide enrollment, cert signatures, auto-cert issuance from events
+- Medical supply lot editing — officer+ can edit `lot_number` and `expiration_date` on any active lot after receipt (Edit button per lot in expanded view).
+- Medical batch waste expired — "Waste Expired" button at supply level wastes all expired active lots in one operation (reason + signatures collected once). Server action: `wasteExpiredLots`.
+- Medical bidirectional flow — MedicalBagsSection + MedicalCompartmentsSection both have Restock (pull from storeroom) and Transfer (push to storeroom). Unified terminology across all surfaces.
+- Medical reports location labels — `/reports/medical` expiring/expired section and stock vs PAR both show location type badge (Storeroom gray / Bag purple / Compartment blue) + apparatus unit number context for bags/compartments. Expired rows red-tinted; expired count badge in section header.
+- Inbox Restock tab — now shows expired lots with remaining stock as a red "Expired Stock" section at top, with "Waste →" link to `/medical`. Restock Requests section below. Tab badge turns red when expired lots present. Data fetched in `inbox/page.tsx` alongside reorder requests.
 - Outside training submissions — member-initiated log for external classes/conferences. Photo upload → Claude Haiku AI parse pre-fills fields. Purpose + NREMT category dropdowns (AIRWAY/CARDIOLOGY/TRAUMA/MEDICAL/OPERATIONS). Officer/admin reviews via Submissions tab in Training Admin; approval optionally links to cert type and auto-issues cert record. All submissions visible on member `/training` page with status + reviewer notes.
 - NERIS Special Incident Modifiers section added to `NERIS.md` — FIFA World Cup 2026 modifier documented with when-to-apply guidance
 - Security: enabled RLS on `qr_debug_scans` (was fully open — resolved Supabase critical alert)

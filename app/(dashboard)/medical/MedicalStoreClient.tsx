@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest } from '@/app/actions/medical'
+import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -77,6 +77,28 @@ interface AdjustForm {
   newQty: string
   reason: string
   notes: string
+}
+
+interface EditLotForm {
+  lotId: string
+  supplyName: string
+  tracksExpiration: boolean
+  lotNumber: string
+  expirationDate: string
+}
+
+interface WasteExpiredForm {
+  inventoryId: string
+  supplyName: string
+  unitOfMeasure: string
+  isControlled: boolean
+  requiredSignatures: number
+  expiredLots: { id: string; lot_number: string | null; quantity_remaining: number }[]
+  totalQtyToWaste: number
+  wasteReason: string
+  notes: string
+  signer1Id: string
+  signer2Id: string
 }
 
 interface Apparatus { id: string; unit_number: string; type_name: string | null }
@@ -170,6 +192,8 @@ export default function MedicalStoreClient({
   const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
   const [transferForm, setTransferForm] = useState<TransferForm | null>(null)
   const [adjustForm, setAdjustForm] = useState<AdjustForm | null>(null)
+  const [editLotForm, setEditLotForm] = useState<EditLotForm | null>(null)
+  const [wasteExpiredForm, setWasteExpiredForm] = useState<WasteExpiredForm | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -444,6 +468,77 @@ export default function MedicalStoreClient({
     setLoading(false)
   }
 
+  function openEditLot(lot: Lot, supply: SupplyType) {
+    setError(null)
+    setEditLotForm({
+      lotId: lot.id,
+      supplyName: supply.name,
+      tracksExpiration: supply.tracks_expiration,
+      lotNumber: lot.lot_number ?? '',
+      expirationDate: lot.expiration_date ?? '',
+    })
+  }
+
+  async function handleEditLotSubmit() {
+    if (!editLotForm) return
+    setError(null); setLoading(true)
+    const result = await updateStockLot({
+      lot_id: editLotForm.lotId,
+      lot_number: editLotForm.lotNumber || null,
+      expiration_date: editLotForm.expirationDate || null,
+    })
+    if (result?.error) { setError(result.error) }
+    else { setSuccess('Lot updated.'); setEditLotForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  function openWasteExpired(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]
+    if (!supply) return
+    const cutoff = new Date()
+    const expiredActiveLots = lotsForInv(inv.id).filter(
+      l => l.quantity_remaining > 0 && l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < cutoff
+    )
+    if (expiredActiveLots.length === 0) return
+    const totalQtyToWaste = expiredActiveLots.reduce((s, l) => s + l.quantity_remaining, 0)
+    setError(null)
+    setWasteExpiredForm({
+      inventoryId: inv.id,
+      supplyName: supply.name,
+      unitOfMeasure: supply.unit_of_measure,
+      isControlled: supply.is_controlled,
+      requiredSignatures: supply.required_signatures,
+      expiredLots: expiredActiveLots.map(l => ({ id: l.id, lot_number: l.lot_number, quantity_remaining: l.quantity_remaining })),
+      totalQtyToWaste,
+      wasteReason: 'expired',
+      notes: '',
+      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
+      signer2Id: '',
+    })
+  }
+
+  async function handleWasteExpiredSubmit() {
+    if (!wasteExpiredForm) return
+    if (wasteExpiredForm.requiredSignatures >= 1 && !wasteExpiredForm.signer1Id) { setError('Signer 1 is required.'); return }
+    if (wasteExpiredForm.requiredSignatures >= 2 && !wasteExpiredForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
+    setError(null); setLoading(true)
+    const result = await wasteExpiredLots({
+      storeroom_inventory_id: wasteExpiredForm.inventoryId,
+      waste_reason: wasteExpiredForm.wasteReason,
+      notes: wasteExpiredForm.notes || null,
+      signer_1_id: wasteExpiredForm.signer1Id || null,
+      signer_2_id: wasteExpiredForm.signer2Id || null,
+    })
+    if (result?.error) { setError(result.error) }
+    else {
+      const cnt = (result as { count?: number }).count ?? 0
+      setSuccess(`Wasted ${cnt} expired lot${cnt !== 1 ? 's' : ''} of ${wasteExpiredForm.supplyName}.`)
+      setWasteExpiredForm(null)
+      router.refresh()
+    }
+    setLoading(false)
+  }
+
   if (storerooms.length === 0) {
     return (
       <div className="max-w-2xl">
@@ -694,11 +789,17 @@ export default function MedicalStoreClient({
                       {total} {supply.unit_of_measure} on hand · PAR {inv.par_level}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     <button onClick={() => setExpandedInvId(isExpanded ? null : inv.id)}
                       className="text-xs font-semibold text-blue-600 hover:text-blue-800">
                       {isExpanded ? 'Hide' : 'Lots'}
                     </button>
+                    {isOfficerOrAbove && invLots.some(l => l.quantity_remaining > 0 && l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < now) && (
+                      <button onClick={() => openWasteExpired(inv)}
+                        className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100">
+                        Waste Expired
+                      </button>
+                    )}
                     {(status === 'low' || status === 'empty') && (
                       pendingReorderIds.has(inv.id)
                         ? <span className="text-xs text-amber-600 font-semibold">Restock requested</span>
@@ -756,6 +857,12 @@ export default function MedicalStoreClient({
                                   <p className="text-lg font-bold text-zinc-900">{lot.quantity_remaining}</p>
                                   <p className="text-xs text-zinc-400">{supply.unit_of_measure}</p>
                                 </div>
+                                {isOfficerOrAbove && (
+                                  <button onClick={() => openEditLot(lot, supply)}
+                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600">
+                                    Edit
+                                  </button>
+                                )}
                                 {isOfficerOrAbove && (
                                   <button onClick={() => openWaste(inv, lot)}
                                     className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600">
@@ -1144,6 +1251,130 @@ export default function MedicalStoreClient({
                 {loading ? 'Saving...' : 'Confirm Waste'}
               </button>
               <button onClick={() => { setWasteForm(null); setError(null) }}
+                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lot Modal */}
+      {editLotForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Edit Lot</h2>
+            <p className="text-sm text-zinc-500 mb-5">{editLotForm.supplyName}</p>
+
+            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Lot Number</label>
+                <input type="text" value={editLotForm.lotNumber} placeholder="Optional"
+                  onChange={e => setEditLotForm(f => f ? { ...f, lotNumber: e.target.value } : f)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" autoFocus />
+              </div>
+              {editLotForm.tracksExpiration && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Expiration Date</label>
+                  <input type="date" value={editLotForm.expirationDate}
+                    onChange={e => setEditLotForm(f => f ? { ...f, expirationDate: e.target.value } : f)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleEditLotSubmit} disabled={loading}
+                className="flex-1 rounded-lg bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50">
+                {loading ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button onClick={() => { setEditLotForm(null); setError(null) }}
+                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waste All Expired Modal */}
+      {wasteExpiredForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Waste Expired Lots</h2>
+            <p className="text-sm text-zinc-500 mb-1">{wasteExpiredForm.supplyName}</p>
+            {wasteExpiredForm.isControlled && (
+              <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>
+            )}
+
+            {error && <div className="mt-3 mb-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+
+            <div className="mt-4 mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+              <p className="text-xs font-semibold text-red-700 mb-1.5">Lots to be wasted:</p>
+              {wasteExpiredForm.expiredLots.map(l => (
+                <p key={l.id} className="text-xs text-red-600">
+                  {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} — {l.quantity_remaining} {wasteExpiredForm.unitOfMeasure}
+                </p>
+              ))}
+              <p className="text-sm font-bold text-red-700 mt-2">
+                Total: {wasteExpiredForm.totalQtyToWaste} {wasteExpiredForm.unitOfMeasure}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Reason <span className="text-red-500">*</span></label>
+                <select value={wasteExpiredForm.wasteReason}
+                  onChange={e => setWasteExpiredForm(f => f ? { ...f, wasteReason: e.target.value } : f)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                  <option value="expired">Expired</option>
+                  <option value="recalled">Recalled</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                <input type="text" value={wasteExpiredForm.notes} placeholder="Optional"
+                  onChange={e => setWasteExpiredForm(f => f ? { ...f, notes: e.target.value } : f)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              {wasteExpiredForm.requiredSignatures >= 1 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Wasted By <span className="text-red-500">*</span></label>
+                  <select value={wasteExpiredForm.signer1Id}
+                    onChange={e => setWasteExpiredForm(f => f ? { ...f, signer1Id: e.target.value } : f)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                    <option value="">Select person...</option>
+                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {wasteExpiredForm.requiredSignatures >= 2 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Witness <span className="text-red-500">*</span>
+                    <span className="ml-1 text-amber-600 font-normal">(controlled substance)</span>
+                  </label>
+                  <select value={wasteExpiredForm.signer2Id}
+                    onChange={e => setWasteExpiredForm(f => f ? { ...f, signer2Id: e.target.value } : f)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                    <option value="">Select witness...</option>
+                    {personnel
+                      .filter(p => p.id !== wasteExpiredForm.signer1Id)
+                      .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleWasteExpiredSubmit} disabled={loading}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {loading ? 'Saving...' : `Waste All ${wasteExpiredForm.expiredLots.length} Lot${wasteExpiredForm.expiredLots.length !== 1 ? 's' : ''}`}
+              </button>
+              <button onClick={() => { setWasteExpiredForm(null); setError(null) }}
                 className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
                 Cancel
               </button>

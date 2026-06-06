@@ -4,8 +4,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getVehicleCheckItems, getVehicleCheckHistory } from '@/app/actions/inspections'
 import VehicleCheckClient from './VehicleCheckClient'
 
-export default async function VehicleCheckPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VehicleCheckPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ next?: string }>
+}) {
   const { id: apparatus_id } = await params
+  const { next } = await searchParams
+  const nextPath = next === 'inventory' ? `/inspections/apparatus/${apparatus_id}` : undefined
   const supabase = await createClient()
   const adminClient = createAdminClient()
 
@@ -55,6 +63,7 @@ export default async function VehicleCheckPage({ params }: { params: Promise<{ i
         personnelId={me.id}
         departmentId={myDept.department_id}
         inspectorName={`${me.first_name} ${me.last_name}`}
+        nextPath={nextPath}
       />
     </div>
   )

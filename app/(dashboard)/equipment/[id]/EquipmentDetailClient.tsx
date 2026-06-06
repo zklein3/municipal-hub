@@ -229,6 +229,12 @@ export default function EquipmentDetailClient({
           ← Back
         </button>
         <Link
+          href={`/inspections/apparatus/${apparatus.id}`}
+          className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors shadow-sm"
+        >
+          Inspect Inventory →
+        </Link>
+        <Link
           href={`/equipment/${apparatus.id}/fuel`}
           className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors shadow-sm"
         >
@@ -474,35 +480,31 @@ export default function EquipmentDetailClient({
               <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{moveError}</div>
             )}
 
-            {isOfficerOrAbove && (
+            {moveTarget.canMoveToStorage && (
               <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
-                <p className="text-xs font-semibold text-blue-800 mb-2">Storage</p>
-                {moveTarget.canMoveToStorage ? (
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-blue-700 mb-1">
-                        Quantity (max {moveTarget.expectedQuantity})
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max={moveTarget.expectedQuantity}
-                        value={moveStorageQty}
-                        onChange={e => setMoveStorageQty(e.target.value)}
-                        className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    <button
-                      onClick={handleMoveToStorage}
-                      disabled={moveLoading || !moveStorageQty || parseInt(moveStorageQty) < 1 || parseInt(moveStorageQty) > moveTarget.expectedQuantity}
-                      className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
-                    >
-                      Move to Storage
-                    </button>
+                <p className="text-xs font-semibold text-blue-800 mb-2">Move to Storage</p>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-blue-700 mb-1">
+                      Quantity (max {moveTarget.expectedQuantity})
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={moveTarget.expectedQuantity}
+                      value={moveStorageQty}
+                      onChange={e => setMoveStorageQty(e.target.value)}
+                      className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
                   </div>
-                ) : (
-                  <p className="text-xs text-blue-700">Storage moves are currently available for quantity-tracked items only.</p>
-                )}
+                  <button
+                    onClick={handleMoveToStorage}
+                    disabled={moveLoading || !moveStorageQty || parseInt(moveStorageQty) < 1 || parseInt(moveStorageQty) > moveTarget.expectedQuantity}
+                    className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                  >
+                    Move to Storage
+                  </button>
+                </div>
               </div>
             )}
 

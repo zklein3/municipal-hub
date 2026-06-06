@@ -69,15 +69,21 @@ export default function MedicalCompartmentsSection({
     maxQty: number; quantity: string; wasteReason: string; notes: string
     signer1Id: string; signer2Id: string
   }
-  type TransferInForm = {
+  type RestockForm = {
     destInvId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string
     isControlled: boolean; destStoreroomId: string; srcInvId: string; srcLotId: string
     quantity: string; notes: string
   }
+  type TransferOutForm = {
+    srcInvId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; srcLotId: string; destStoreroomId: string
+    maxQty: number; quantity: string; notes: string
+  }
 
   const [useForm, setUseForm] = useState<UseForm | null>(null)
   const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
-  const [transferInForm, setTransferInForm] = useState<TransferInForm | null>(null)
+  const [restockForm, setRestockForm] = useState<RestockForm | null>(null)
+  const [transferOutForm, setTransferOutForm] = useState<TransferOutForm | null>(null)
 
   const supplyMap = Object.fromEntries(compSupplyTypes.map(s => [s.id, s]))
   const lotsFor = (invId: string) => compLots.filter(l => l.storeroom_inventory_id === invId)
@@ -111,7 +117,7 @@ export default function MedicalCompartmentsSection({
     })
   }
 
-  function openTransferIn(inv: InventoryRow) {
+  function openRestock(inv: InventoryRow) {
     const supply = supplyMap[inv.supply_type_id]; if (!supply) return
     const srcInvRows = srcInventory.filter(i => i.supply_type_id === inv.supply_type_id)
     const availableLots = srcLots.filter(l => srcInvRows.some(i => i.id === l.storeroom_inventory_id) && l.quantity_remaining > 0)
@@ -119,13 +125,29 @@ export default function MedicalCompartmentsSection({
     const firstLot = availableLots[0]
     const firstSrcInv = srcInvRows.find(i => i.id === firstLot.storeroom_inventory_id)
     setError(null)
-    setTransferInForm({
+    setRestockForm({
       destInvId: inv.id, supplyTypeId: inv.supply_type_id, supplyName: supply.name,
       unitOfMeasure: supply.unit_of_measure, isControlled: supply.is_controlled,
       destStoreroomId: inv.storeroom_id,
       srcInvId: firstSrcInv?.id ?? '',
       srcLotId: firstLot.id,
       quantity: '1', notes: '',
+    })
+  }
+
+  function openTransferOut(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    const activeLots = lotsFor(inv.id).filter(l => l.quantity_remaining > 0)
+    if (activeLots.length === 0) { setError('No stock available to transfer.'); return }
+    const oldest = [...activeLots].sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
+    const validDests = deptStorerooms.filter(s => srcInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === inv.supply_type_id))
+    if (validDests.length === 0) { setError('No storeroom has this supply type assigned — transfer cannot be completed.'); return }
+    setError(null)
+    setTransferOutForm({
+      srcInvId: inv.id, supplyTypeId: inv.supply_type_id, supplyName: supply.name,
+      unitOfMeasure: supply.unit_of_measure, isControlled: supply.is_controlled,
+      srcLotId: oldest.id, destStoreroomId: validDests[0].id,
+      maxQty: oldest.quantity_remaining, quantity: '1', notes: '',
     })
   }
 
@@ -160,28 +182,52 @@ export default function MedicalCompartmentsSection({
     setLoading(false)
   }
 
-  async function handleTransferInSubmit() {
-    if (!transferInForm) return
-    const qty = parseInt(transferInForm.quantity)
+  async function handleRestockSubmit() {
+    if (!restockForm) return
+    const qty = parseInt(restockForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     setError(null); setLoading(true)
     const r = await transferStock({
-      source_inventory_id: transferInForm.srcInvId,
-      lot_id: transferInForm.srcLotId,
-      destination_storeroom_id: transferInForm.destStoreroomId,
+      source_inventory_id: restockForm.srcInvId,
+      lot_id: restockForm.srcLotId,
+      destination_storeroom_id: restockForm.destStoreroomId,
       quantity: qty,
-      notes: transferInForm.notes || null,
+      notes: restockForm.notes || null,
     })
     if (r?.error) setError(r.error)
-    else { setSuccess(`Transferred ${qty} ${transferInForm.unitOfMeasure} of ${transferInForm.supplyName} to compartment.`); setTransferInForm(null); router.refresh() }
+    else { setSuccess(`Restocked ${qty} ${restockForm.unitOfMeasure} of ${restockForm.supplyName} from storeroom.`); setRestockForm(null); router.refresh() }
     setLoading(false)
   }
 
-  // When source inventory row changes in transfer form, auto-pick first available lot
-  function handleSrcInvChange(srcInvId: string) {
-    if (!transferInForm) return
+  async function handleTransferOutSubmit() {
+    if (!transferOutForm) return
+    const qty = parseInt(transferOutForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (qty > transferOutForm.maxQty) { setError(`Only ${transferOutForm.maxQty} available in this lot.`); return }
+    if (!transferOutForm.destStoreroomId) { setError('Select a destination storeroom.'); return }
+    setError(null); setLoading(true)
+    const r = await transferStock({
+      source_inventory_id: transferOutForm.srcInvId,
+      lot_id: transferOutForm.srcLotId,
+      destination_storeroom_id: transferOutForm.destStoreroomId,
+      quantity: qty,
+      notes: transferOutForm.notes || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Transferred ${qty} ${transferOutForm.unitOfMeasure} of ${transferOutForm.supplyName} to storeroom.`); setTransferOutForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  function handleRestockSrcChange(srcInvId: string) {
+    if (!restockForm) return
     const lot = srcLots.find(l => l.storeroom_inventory_id === srcInvId && l.quantity_remaining > 0)
-    setTransferInForm(f => f ? { ...f, srcInvId, srcLotId: lot?.id ?? '' } : f)
+    setRestockForm(f => f ? { ...f, srcInvId, srcLotId: lot?.id ?? '' } : f)
+  }
+
+  function handleTransferOutLotChange(lotId: string) {
+    if (!transferOutForm) return
+    const lot = compLots.find(l => l.id === lotId)
+    setTransferOutForm(f => f ? { ...f, srcLotId: lotId, maxQty: lot?.quantity_remaining ?? 0 } : f)
   }
 
   const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -245,10 +291,11 @@ export default function MedicalCompartmentsSection({
                   const total = totalQty(item.id)
                   const status = getStatus(total, item.par_level, lots)
                   const isExpanded = expandedInvId === item.id
-                  const canTransfer = isOfficerOrAbove || !supply.is_controlled
+                  const canAct = isOfficerOrAbove || !supply.is_controlled
                   const srcAvailable = srcLots.some(l =>
                     srcInventory.find(i => i.id === l.storeroom_inventory_id && i.supply_type_id === item.supply_type_id) && l.quantity_remaining > 0
                   )
+                  const destAvailable = deptStorerooms.some(s => srcInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === item.supply_type_id))
 
                   return (
                     <div key={item.id} className="rounded-xl border border-zinc-200 overflow-hidden">
@@ -267,14 +314,16 @@ export default function MedicalCompartmentsSection({
                               {isExpanded ? 'Hide' : 'Lots'}
                             </button>
                           )}
-                          {(status === 'low' || status === 'empty') && canTransfer && srcAvailable && (
-                            <button onClick={() => openTransferIn(item)} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100">
-                              Transfer In
+                          {canAct && srcAvailable && (
+                            <button onClick={() => openRestock(item)}
+                              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${(status === 'low' || status === 'empty') ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50'}`}>
+                              Restock
                             </button>
                           )}
-                          {canTransfer && srcAvailable && status !== 'low' && status !== 'empty' && (
-                            <button onClick={() => openTransferIn(item)} className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
-                              Transfer In
+                          {canAct && total > 0 && destAvailable && (
+                            <button onClick={() => openTransferOut(item)}
+                              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                              Transfer
                             </button>
                           )}
                           <button onClick={() => openUse(item)} disabled={total === 0}
@@ -413,22 +462,22 @@ export default function MedicalCompartmentsSection({
         </div>
       )}
 
-      {/* Transfer In Modal */}
-      {transferInForm && (() => {
-        const srcInvForType = srcInventory.filter(i => i.supply_type_id === transferInForm.supplyTypeId)
+      {/* Restock Modal */}
+      {restockForm && (() => {
+        const srcInvForType = srcInventory.filter(i => i.supply_type_id === restockForm.supplyTypeId)
         const srcInvWithLots = srcInvForType.filter(i => srcLots.some(l => l.storeroom_inventory_id === i.id && l.quantity_remaining > 0))
-        const lotsForSrcInv = srcLots.filter(l => l.storeroom_inventory_id === transferInForm.srcInvId && l.quantity_remaining > 0)
-        const selectedLot = srcLots.find(l => l.id === transferInForm.srcLotId)
+        const lotsForSrcInv = srcLots.filter(l => l.storeroom_inventory_id === restockForm.srcInvId && l.quantity_remaining > 0)
+        const selectedLot = srcLots.find(l => l.id === restockForm.srcLotId)
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
-              <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer In from Storeroom</h2>
-              <p className="text-sm text-zinc-500 mb-5">{transferInForm.supplyName}</p>
+              <h2 className="text-base font-bold text-zinc-900 mb-1">Restock from Storeroom</h2>
+              <p className="text-sm text-zinc-500 mb-5">{restockForm.supplyName}</p>
               {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
               <div className="flex flex-col gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Source Storeroom <span className="text-red-500">*</span></label>
-                  <select value={transferInForm.srcInvId} onChange={e => handleSrcInvChange(e.target.value)} className={inputCls}>
+                  <select value={restockForm.srcInvId} onChange={e => handleRestockSrcChange(e.target.value)} className={inputCls}>
                     {srcInvWithLots.map(i => {
                       const room = deptStorerooms.find(s => s.id === i.storeroom_id)
                       return <option key={i.id} value={i.id}>{room?.name ?? 'Storeroom'}</option>
@@ -438,7 +487,7 @@ export default function MedicalCompartmentsSection({
                 {lotsForSrcInv.length > 1 && (
                   <div>
                     <label className="mb-1 block text-xs font-medium text-zinc-700">Lot</label>
-                    <select value={transferInForm.srcLotId} onChange={e => setTransferInForm(f => f ? { ...f, srcLotId: e.target.value } : f)} className={inputCls}>
+                    <select value={restockForm.srcLotId} onChange={e => setRestockForm(f => f ? { ...f, srcLotId: e.target.value } : f)} className={inputCls}>
                       {lotsForSrcInv.map(l => (
                         <option key={l.id} value={l.id}>
                           {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} · {l.quantity_remaining} available
@@ -453,21 +502,86 @@ export default function MedicalCompartmentsSection({
                     Quantity <span className="text-red-500">*</span>
                     {selectedLot && <span className="ml-1 text-zinc-400 font-normal">({selectedLot.quantity_remaining} available)</span>}
                   </label>
-                  <input type="number" min="1" max={selectedLot?.quantity_remaining ?? undefined} value={transferInForm.quantity}
-                    onChange={e => setTransferInForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+                  <input type="number" min="1" max={selectedLot?.quantity_remaining ?? undefined} value={restockForm.quantity}
+                    onChange={e => setRestockForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
-                  <input type="text" value={transferInForm.notes} placeholder="Optional"
-                    onChange={e => setTransferInForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+                  <input type="text" value={restockForm.notes} placeholder="Optional"
+                    onChange={e => setRestockForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={handleTransferInSubmit} disabled={loading || !transferInForm.srcLotId}
-                  className="flex-1 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
-                  {loading ? 'Saving…' : 'Transfer In'}
+                <button onClick={handleRestockSubmit} disabled={loading || !restockForm.srcLotId}
+                  className="flex-1 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                  {loading ? 'Saving…' : 'Confirm Restock'}
                 </button>
-                <button onClick={() => { setTransferInForm(null); setError(null) }}
+                <button onClick={() => { setRestockForm(null); setError(null) }}
+                  className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Transfer Out Modal */}
+      {transferOutForm && (() => {
+        const activeLots = compLots.filter(l => l.storeroom_inventory_id === transferOutForm.srcInvId && l.quantity_remaining > 0)
+          .sort((a, b) => a.received_date.localeCompare(b.received_date))
+        const selectedLot = compLots.find(l => l.id === transferOutForm.srcLotId)
+        const validDests = deptStorerooms.filter(s => srcInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === transferOutForm.supplyTypeId))
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+              <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer to Storeroom</h2>
+              <p className="text-sm text-zinc-500 mb-5">
+                {transferOutForm.supplyName}
+                {transferOutForm.isControlled && <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">Controlled</span>}
+              </p>
+              {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+              <div className="flex flex-col gap-3">
+                {activeLots.length > 1 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Source Lot</label>
+                    <select value={transferOutForm.srcLotId} onChange={e => handleTransferOutLotChange(e.target.value)} className={inputCls}>
+                      {activeLots.map(l => (
+                        <option key={l.id} value={l.id}>
+                          {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} · {l.quantity_remaining} available
+                          {l.expiration_date ? ` · Exp ${fmtDate(l.expiration_date)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Destination Storeroom <span className="text-red-500">*</span></label>
+                  <select value={transferOutForm.destStoreroomId} onChange={e => setTransferOutForm(f => f ? { ...f, destStoreroomId: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select storeroom…</option>
+                    {validDests.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Quantity <span className="text-red-500">*</span>
+                    {selectedLot && <span className="ml-1 text-zinc-400 font-normal">({selectedLot.quantity_remaining} available)</span>}
+                  </label>
+                  <input type="number" min="1" max={transferOutForm.maxQty} value={transferOutForm.quantity}
+                    onChange={e => setTransferOutForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                  <input type="text" value={transferOutForm.notes} placeholder="Optional"
+                    onChange={e => setTransferOutForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={handleTransferOutSubmit} disabled={loading || !transferOutForm.destStoreroomId}
+                  className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
+                  {loading ? 'Saving…' : 'Confirm Transfer'}
+                </button>
+                <button onClick={() => { setTransferOutForm(null); setError(null) }}
                   className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
                   Cancel
                 </button>
