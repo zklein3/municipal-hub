@@ -175,7 +175,7 @@ export default async function InboxPage({
         expiredLots = expiredLotsRaw.map((l: any) => {
           const inv = invMap[l.storeroom_inventory_id]
           const sr = inv ? srFullMap[inv.storeroom_id] : null
-          const go_to_href = sr?.apparatus_id ? `/apparatus/${sr.apparatus_id}` : '/medical'
+          const go_to_href = sr?.apparatus_id ? `/equipment/${sr.apparatus_id}` : '/medical'
           return {
             supply_name: inv ? (supMap[inv.supply_type_id] ?? '—') : '—',
             storeroom_name: inv ? (sr?.name ?? '—') : '—',
