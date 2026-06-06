@@ -1090,7 +1090,10 @@ export default function MedicalStoreClient({
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
                       {validDests.length === 0
                         ? <option value="">No storerooms have this supply assigned</option>
-                        : validDests.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                        : validDests.map(s => {
+                          const unit = s.apparatus_id ? apparatusMap[s.apparatus_id]?.unit_number : null
+                          return <option key={s.id} value={s.id}>{unit ? `${unit} — ${s.name}` : s.name}</option>
+                        })
                       }
                     </select>
                     {validDests.length === 0 && (
