@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { receiveStock, dispenseStock, wasteStock, transferStock, adjustStock, submitReorderRequest } from '@/app/actions/medical'
 
-interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null }
+interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface SupplyType { id: string; name: string; category: string; unit_of_measure: string; is_controlled: boolean; tracks_expiration: boolean; required_signatures: number }
 interface Lot { id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null; quantity_received: number; quantity_remaining: number; received_date: string }
@@ -128,11 +128,13 @@ function fmtDate(d: string | null) {
 }
 
 export default function MedicalStoreClient({
-  storerooms, inventory, supplyTypes, lots, personnel, stations, apparatusMap, isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
+  storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, personnel, stations, apparatusMap, isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap,
 }: {
   storerooms: Storeroom[]
   inventory: InventoryRow[]
+  allTransferStorerooms: Storeroom[]
+  allTransferInventory: InventoryRow[]
   supplyTypes: SupplyType[]
   lots: Lot[]
   personnel: Personnel[]
@@ -912,12 +914,13 @@ export default function MedicalStoreClient({
 
       {/* Transfer Modal */}
       {transferForm && (() => {
+        const srcStoreroomId = inventory.find(x => x.id === transferForm.inventoryId)?.storeroom_id
         const validDestIds = new Set(
-          inventory
-            .filter(i => i.supply_type_id === transferForm.supplyTypeId && i.storeroom_id !== inventory.find(x => x.id === transferForm.inventoryId)?.storeroom_id)
+          allTransferInventory
+            .filter(i => i.supply_type_id === transferForm.supplyTypeId && i.storeroom_id !== srcStoreroomId)
             .map(i => i.storeroom_id)
         )
-        const validDests = storerooms.filter(s => validDestIds.has(s.id))
+        const validDests = allTransferStorerooms.filter(s => validDestIds.has(s.id))
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">

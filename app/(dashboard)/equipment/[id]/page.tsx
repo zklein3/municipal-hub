@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import EquipmentDetailClient from './EquipmentDetailClient'
 import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
+import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
 
 export default async function EquipmentDetailPage({
   params,
@@ -200,14 +201,15 @@ export default async function EquipmentDetailPage({
     station: (stationData ?? [])[0] ?? null,
   }
 
-  // Medical bags
+  // Medical bags + compartment storerooms
   const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
   const moduleMedical = deptRow?.module_medical ?? false
 
   let medicalBagData: any = null
+  let medicalCompartmentData: any = null
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
-      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).order('name'),
+      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).is('compartment_id', null).order('name'),
       adminClient.from('medical_bag_templates').select('id, name').eq('department_id', myDept.department_id).eq('active', true).order('name'),
       adminClient.from('medical_storerooms').select('id, name').eq('department_id', myDept.department_id).eq('active', true).is('apparatus_id', null).order('name'),
       adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', myDept.department_id).eq('active', true),
@@ -248,6 +250,63 @@ export default async function EquipmentDetailPage({
       storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
       personnel, bagTemplates: bagTemplates ?? [], apparatusId: id,
     }
+
+    // Compartment storerooms for this apparatus
+    const { data: compStorerooms } = await adminClient
+      .from('medical_storerooms')
+      .select('id, name, compartment_id')
+      .eq('apparatus_id', id)
+      .eq('active', true)
+      .not('compartment_id', 'is', null)
+      .order('name')
+
+    const compStoreroomIds = (compStorerooms ?? []).map((s: any) => s.id)
+    const { data: compInv } = compStoreroomIds.length > 0
+      ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', compStoreroomIds)
+      : { data: [] }
+    const compInvIds = (compInv ?? []).map((i: any) => i.id)
+    const compSupplyTypeIds = [...new Set((compInv ?? []).map((i: any) => i.supply_type_id))] as string[]
+
+    const [{ data: compLots }, { data: compSupplyTypes }] = await Promise.all([
+      compInvIds.length > 0
+        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date').in('storeroom_inventory_id', compInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
+        : Promise.resolve({ data: [] }),
+      compSupplyTypeIds.length > 0
+        ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', compSupplyTypeIds)
+        : Promise.resolve({ data: [] }),
+    ])
+
+    // Source storerooms for Transfer In (station storerooms that have matching supply types)
+    const srcStoreroomIds = (deptStorerooms ?? []).map((s: any) => s.id)
+    const { data: srcInv } = srcStoreroomIds.length > 0 && compSupplyTypeIds.length > 0
+      ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id').in('storeroom_id', srcStoreroomIds).in('supply_type_id', compSupplyTypeIds)
+      : { data: [] }
+    const compSrcInvIds = (srcInv ?? []).map((i: any) => i.id)
+    const { data: srcLots } = compSrcInvIds.length > 0
+      ? await adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, quantity_remaining, expiration_date').in('storeroom_inventory_id', compSrcInvIds).eq('active', true).gt('quantity_remaining', 0)
+      : { data: [] }
+
+    // Enrich compStorerooms with compartment display info
+    const compStoreroomsWithInfo = await Promise.all(
+      (compStorerooms ?? []).map(async (s: any) => {
+        const { data: acRow } = await adminClient.from('apparatus_compartments').select('compartment_name_id').eq('id', s.compartment_id).single()
+        if (!acRow) return { ...s, compartment_code: '—', compartment_name: null }
+        const { data: cnRow } = await adminClient.from('compartment_names').select('compartment_code, compartment_name').eq('id', acRow.compartment_name_id).single()
+        return { ...s, compartment_code: cnRow?.compartment_code ?? '—', compartment_name: cnRow?.compartment_name ?? null }
+      })
+    )
+
+    medicalCompartmentData = {
+      compartmentStorerooms: compStoreroomsWithInfo,
+      compInventory: compInv ?? [],
+      compLots: compLots ?? [],
+      compSupplyTypes: compSupplyTypes ?? [],
+      deptStorerooms: deptStorerooms ?? [],
+      srcInventory: srcInv ?? [],
+      srcLots: srcLots ?? [],
+      personnel,
+      apparatusId: id,
+    }
   }
 
   return (
@@ -262,6 +321,24 @@ export default async function EquipmentDetailPage({
         isOfficerOrAbove={isOfficerOrAbove}
         backHref={from}
       />
+      {medicalCompartmentData && medicalCompartmentData.compartmentStorerooms.length > 0 && (
+        <div className="max-w-2xl mt-2">
+          <MedicalCompartmentsSection
+            compartmentStorerooms={medicalCompartmentData.compartmentStorerooms}
+            compInventory={medicalCompartmentData.compInventory}
+            compLots={medicalCompartmentData.compLots}
+            compSupplyTypes={medicalCompartmentData.compSupplyTypes}
+            deptStorerooms={medicalCompartmentData.deptStorerooms}
+            srcInventory={medicalCompartmentData.srcInventory}
+            srcLots={medicalCompartmentData.srcLots}
+            personnel={medicalCompartmentData.personnel}
+            apparatusId={medicalCompartmentData.apparatusId}
+            isAdmin={isAdmin}
+            isOfficerOrAbove={isOfficerOrAbove}
+            myPersonnelId={me.id}
+          />
+        </div>
+      )}
       {medicalBagData && (
         <div className="max-w-2xl mt-2">
           <MedicalBagsSection

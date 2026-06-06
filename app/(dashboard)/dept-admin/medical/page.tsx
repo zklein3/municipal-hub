@@ -35,7 +35,7 @@ export default async function MedicalAdminPage() {
       .order('category')
       .order('name'),
     adminClient.from('medical_storerooms')
-      .select('id, name, station_id, apparatus_id, notes, active')
+      .select('id, name, station_id, apparatus_id, compartment_id, notes, active')
       .eq('department_id', department_id)
       .order('name'),
     adminClient.from('stations')
@@ -45,8 +45,30 @@ export default async function MedicalAdminPage() {
     adminClient.from('apparatus')
       .select('id, unit_number, apparatus_types(name)')
       .eq('department_id', department_id)
+      .eq('active', true)
       .order('unit_number'),
   ])
+
+  // Apparatus compartments for compartment-linked storeroom creation
+  const apparatusIds = (apparatusList ?? []).map(a => a.id)
+  const { data: apparatusCompartmentLinks } = apparatusIds.length > 0
+    ? await adminClient.from('apparatus_compartments')
+        .select('id, apparatus_id, compartment_name_id')
+        .in('apparatus_id', apparatusIds)
+        .eq('active', true)
+    : { data: [] }
+  const compartmentNameIds = [...new Set((apparatusCompartmentLinks ?? []).map(c => c.compartment_name_id))]
+  const { data: compartmentNameRows } = compartmentNameIds.length > 0
+    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compartmentNameIds)
+    : { data: [] }
+  const compartmentNameMap = Object.fromEntries((compartmentNameRows ?? []).map(c => [c.id, c]))
+  const apparatusCompartments = (apparatusCompartmentLinks ?? []).map(c => ({
+    id: c.id,
+    apparatus_id: c.apparatus_id,
+    compartment_code: compartmentNameMap[c.compartment_name_id]?.compartment_code ?? '—',
+    compartment_name: compartmentNameMap[c.compartment_name_id]?.compartment_name ?? null,
+    sort_order: compartmentNameMap[c.compartment_name_id]?.sort_order ?? 999,
+  })).sort((a, b) => a.sort_order - b.sort_order)
 
   // Storeroom inventory (supply types assigned to each storeroom)
   const storeroomIds = (storerooms ?? []).map(s => s.id)
@@ -78,7 +100,8 @@ export default async function MedicalAdminPage() {
       .select('id, name, apparatus_id, template_id, inventory_mode')
       .eq('department_id', department_id)
       .eq('active', true)
-      .not('apparatus_id', 'is', null),
+      .not('apparatus_id', 'is', null)
+      .is('compartment_id', null),
   ])
 
   return (
@@ -87,6 +110,7 @@ export default async function MedicalAdminPage() {
       storerooms={storerooms ?? []}
       stations={stations ?? []}
       apparatus={apparatus}
+      apparatusCompartments={apparatusCompartments}
       storeroomInventory={storeroomInventory ?? []}
       bagTemplates={bagTemplates ?? []}
       templateItems={templateItems ?? []}

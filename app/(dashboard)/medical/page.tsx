@@ -30,23 +30,40 @@ export default async function MedicalPage() {
   const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
   const department_id = myDept.department_id
 
-  // Storerooms
+  // Station storerooms (displayed on this page)
   const { data: storerooms } = await adminClient
     .from('medical_storerooms')
-    .select('id, name, station_id, apparatus_id')
+    .select('id, name, station_id, apparatus_id, compartment_id')
     .eq('department_id', department_id)
     .eq('active', true)
     .is('apparatus_id', null)
     .order('name')
 
-  const storeroomIds = (storerooms ?? []).map(s => s.id)
+  // All storerooms (station + apparatus bags + compartments) — used for transfer destinations
+  const { data: allDeptStorerooms } = await adminClient
+    .from('medical_storerooms')
+    .select('id, name, station_id, apparatus_id, compartment_id')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .order('name')
 
-  // Inventory (supply types per storeroom)
+  const storeroomIds = (storerooms ?? []).map(s => s.id)
+  const allStoreroomIds = (allDeptStorerooms ?? []).map(s => s.id)
+
+  // Inventory (supply types per station storeroom — for display)
   const { data: inventory } = storeroomIds.length > 0
     ? await adminClient
         .from('medical_storeroom_inventory')
         .select('id, storeroom_id, supply_type_id, par_level')
         .in('storeroom_id', storeroomIds)
+    : { data: [] }
+
+  // All-storeroom inventory — needed to validate transfer destinations (bags + compartments)
+  const { data: allInventory } = allStoreroomIds.length > 0
+    ? await adminClient
+        .from('medical_storeroom_inventory')
+        .select('id, storeroom_id, supply_type_id, par_level')
+        .in('storeroom_id', allStoreroomIds)
     : { data: [] }
 
   // Supply types
@@ -140,6 +157,8 @@ export default async function MedicalPage() {
     <MedicalStoreClient
       storerooms={storerooms ?? []}
       inventory={inventory ?? []}
+      allTransferStorerooms={allDeptStorerooms ?? []}
+      allTransferInventory={allInventory ?? []}
       supplyTypes={supplyTypes ?? []}
       lots={lots ?? []}
       personnel={personnel}

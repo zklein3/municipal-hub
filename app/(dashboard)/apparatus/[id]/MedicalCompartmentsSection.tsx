@@ -1,0 +1,481 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { dispenseStock, wasteStock, transferStock } from '@/app/actions/medical'
+
+interface CompStoreroom { id: string; name: string; compartment_id: string; compartment_code: string; compartment_name: string | null }
+interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
+interface Lot { id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null; quantity_received: number; quantity_remaining: number; received_date: string }
+interface SupplyType { id: string; name: string; category: string; unit_of_measure: string; is_controlled: boolean; tracks_expiration: boolean; required_signatures: number }
+interface Storeroom { id: string; name: string }
+interface SrcLot { id: string; storeroom_inventory_id: string; lot_number: string | null; quantity_remaining: number; expiration_date: string | null }
+interface Personnel { id: string; name: string }
+
+const STATUS_COLORS = {
+  expired: 'bg-red-100 text-red-700', expiring: 'bg-amber-100 text-amber-700',
+  low: 'bg-orange-100 text-orange-700', good: 'bg-green-100 text-green-700', empty: 'bg-zinc-100 text-zinc-500',
+}
+const STATUS_LABELS = { expired: 'Expired', expiring: 'Exp Soon', low: 'Below PAR', good: 'Good', empty: 'No Stock' }
+const WASTE_REASONS = ['Expired', 'Damaged', 'Contaminated', 'Administered / Used on Scene', 'Other']
+
+function fmtDate(d: string | null) {
+  if (!d) return '—'
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function getStatus(total: number, par: number, lots: Lot[]): 'expired' | 'expiring' | 'low' | 'good' | 'empty' {
+  if (total === 0) return 'empty'
+  const now = new Date(); const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  if (lots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') < now)) return 'expired'
+  if (par > 0 && total < par) return 'low'
+  if (lots.some(l => l.expiration_date && new Date(l.expiration_date + 'T00:00:00') <= soon)) return 'expiring'
+  return 'good'
+}
+
+export default function MedicalCompartmentsSection({
+  compartmentStorerooms, compInventory, compLots, compSupplyTypes,
+  deptStorerooms, srcInventory, srcLots, personnel,
+  apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
+}: {
+  compartmentStorerooms: CompStoreroom[]
+  compInventory: InventoryRow[]
+  compLots: Lot[]
+  compSupplyTypes: SupplyType[]
+  deptStorerooms: Storeroom[]
+  srcInventory: { id: string; storeroom_id: string; supply_type_id: string }[]
+  srcLots: SrcLot[]
+  personnel: Personnel[]
+  apparatusId: string
+  isAdmin: boolean
+  isOfficerOrAbove: boolean
+  myPersonnelId: string
+}) {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(compartmentStorerooms[0]?.id ?? null)
+  const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
+
+  type UseForm = {
+    invId: string; lotId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; requiredSigs: number; quantity: string; notes: string
+    signer1Id: string; signer2Id: string
+  }
+  type WasteForm = {
+    invId: string; lotId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; requiredSigs: number; lotNumber: string | null
+    maxQty: number; quantity: string; wasteReason: string; notes: string
+    signer1Id: string; signer2Id: string
+  }
+  type TransferInForm = {
+    destInvId: string; supplyTypeId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; destStoreroomId: string; srcInvId: string; srcLotId: string
+    quantity: string; notes: string
+  }
+
+  const [useForm, setUseForm] = useState<UseForm | null>(null)
+  const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
+  const [transferInForm, setTransferInForm] = useState<TransferInForm | null>(null)
+
+  const supplyMap = Object.fromEntries(compSupplyTypes.map(s => [s.id, s]))
+  const lotsFor = (invId: string) => compLots.filter(l => l.storeroom_inventory_id === invId)
+  const totalQty = (invId: string) => lotsFor(invId).reduce((s, l) => s + l.quantity_remaining, 0)
+
+  function openUse(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    const activeLots = lotsFor(inv.id)
+    if (activeLots.length === 0) { setError('No stock available.'); return }
+    const oldest = [...activeLots].sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
+    setError(null)
+    setUseForm({
+      invId: inv.id, lotId: oldest.id, supplyName: supply.name, unitOfMeasure: supply.unit_of_measure,
+      isControlled: supply.is_controlled, requiredSigs: supply.required_signatures,
+      quantity: '1', notes: '',
+      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
+      signer2Id: '',
+    })
+  }
+
+  function openWaste(inv: InventoryRow, lot: Lot) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    setError(null)
+    setWasteForm({
+      invId: inv.id, lotId: lot.id, supplyName: supply.name, unitOfMeasure: supply.unit_of_measure,
+      isControlled: supply.is_controlled, requiredSigs: supply.required_signatures,
+      lotNumber: lot.lot_number, maxQty: lot.quantity_remaining, quantity: String(lot.quantity_remaining),
+      wasteReason: WASTE_REASONS[0], notes: '',
+      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
+      signer2Id: '',
+    })
+  }
+
+  function openTransferIn(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    const srcInvRows = srcInventory.filter(i => i.supply_type_id === inv.supply_type_id)
+    const availableLots = srcLots.filter(l => srcInvRows.some(i => i.id === l.storeroom_inventory_id) && l.quantity_remaining > 0)
+    if (availableLots.length === 0) { setError('No stock available in any storeroom for this supply.'); return }
+    const firstLot = availableLots[0]
+    const firstSrcInv = srcInvRows.find(i => i.id === firstLot.storeroom_inventory_id)
+    setError(null)
+    setTransferInForm({
+      destInvId: inv.id, supplyTypeId: inv.supply_type_id, supplyName: supply.name,
+      unitOfMeasure: supply.unit_of_measure, isControlled: supply.is_controlled,
+      destStoreroomId: inv.storeroom_id,
+      srcInvId: firstSrcInv?.id ?? '',
+      srcLotId: firstLot.id,
+      quantity: '1', notes: '',
+    })
+  }
+
+  async function handleUseSubmit() {
+    if (!useForm) return
+    const qty = parseInt(useForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    setError(null); setLoading(true)
+    const r = await dispenseStock({
+      storeroom_inventory_id: useForm.invId, lot_id: useForm.lotId, quantity: qty,
+      notes: useForm.notes || null, signer_1_id: useForm.signer1Id || null, signer_2_id: useForm.signer2Id || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Used ${qty} ${useForm.unitOfMeasure} of ${useForm.supplyName}.`); setUseForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  async function handleWasteSubmit() {
+    if (!wasteForm) return
+    const qty = parseInt(wasteForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} available in this lot.`); return }
+    if (!wasteForm.wasteReason) { setError('Waste reason is required.'); return }
+    setError(null); setLoading(true)
+    const r = await wasteStock({
+      storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty,
+      waste_reason: wasteForm.wasteReason, notes: wasteForm.notes || null,
+      signer_1_id: wasteForm.signer1Id || null, signer_2_id: wasteForm.signer2Id || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Wasted ${qty} ${wasteForm.unitOfMeasure} of ${wasteForm.supplyName}.`); setWasteForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  async function handleTransferInSubmit() {
+    if (!transferInForm) return
+    const qty = parseInt(transferInForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    setError(null); setLoading(true)
+    const r = await transferStock({
+      source_inventory_id: transferInForm.srcInvId,
+      lot_id: transferInForm.srcLotId,
+      destination_storeroom_id: transferInForm.destStoreroomId,
+      quantity: qty,
+      notes: transferInForm.notes || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Transferred ${qty} ${transferInForm.unitOfMeasure} of ${transferInForm.supplyName} to compartment.`); setTransferInForm(null); router.refresh() }
+    setLoading(false)
+  }
+
+  // When source inventory row changes in transfer form, auto-pick first available lot
+  function handleSrcInvChange(srcInvId: string) {
+    if (!transferInForm) return
+    const lot = srcLots.find(l => l.storeroom_inventory_id === srcInvId && l.quantity_remaining > 0)
+    setTransferInForm(f => f ? { ...f, srcInvId, srcLotId: lot?.id ?? '' } : f)
+  }
+
+  const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+  const signerSelect = (val: string, onChange: (v: string) => void, label: string) => (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-zinc-700">{label}</label>
+      <select value={val} onChange={e => onChange(e.target.value)} className={inputCls}>
+        <option value="">Select person…</option>
+        {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </div>
+  )
+
+  return (
+    <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold text-zinc-900">Compartment Medical Supplies</h2>
+        {isAdmin && (
+          <a href="/dept-admin/medical" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage →</a>
+        )}
+      </div>
+
+      {success && <div className="mb-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
+      {error && <div className="mb-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+
+      {/* Compartment tabs */}
+      {compartmentStorerooms.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {compartmentStorerooms.map(cs => (
+            <button key={cs.id} onClick={() => setExpandedStoreroomId(cs.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${expandedStoreroomId === cs.id ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'}`}>
+              {cs.compartment_code}{cs.compartment_name ? ` — ${cs.compartment_name}` : ''}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {compartmentStorerooms.map(cs => {
+        if (compartmentStorerooms.length > 1 && expandedStoreroomId !== cs.id) return null
+        const inv = compInventory.filter(i => i.storeroom_id === cs.id)
+        return (
+          <div key={cs.id}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-semibold text-zinc-700">
+                {cs.compartment_code}{cs.compartment_name ? ` — ${cs.compartment_name}` : ''}
+              </span>
+              <span className="text-xs text-zinc-400">{cs.name}</span>
+            </div>
+
+            {inv.length === 0 ? (
+              <p className="text-sm text-zinc-400 py-4 text-center">
+                No supplies assigned to this compartment.
+                {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 hover:underline">Configure →</a></span>}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {inv.map(item => {
+                  const supply = supplyMap[item.supply_type_id]
+                  if (!supply) return null
+                  const lots = lotsFor(item.id)
+                  const total = totalQty(item.id)
+                  const status = getStatus(total, item.par_level, lots)
+                  const isExpanded = expandedInvId === item.id
+                  const canTransfer = isOfficerOrAbove || !supply.is_controlled
+                  const srcAvailable = srcLots.some(l =>
+                    srcInventory.find(i => i.id === l.storeroom_inventory_id && i.supply_type_id === item.supply_type_id) && l.quantity_remaining > 0
+                  )
+
+                  return (
+                    <div key={item.id} className="rounded-xl border border-zinc-200 overflow-hidden">
+                      <div className="flex items-center px-4 py-3 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-sm font-semibold text-zinc-900">{supply.name}</p>
+                            {supply.is_controlled && <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
+                            <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[status]}`}>{STATUS_LABELS[status]}</span>
+                          </div>
+                          <p className="text-xs text-zinc-400">{total} {supply.unit_of_measure} · PAR {item.par_level}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {lots.length > 0 && (
+                            <button onClick={() => setExpandedInvId(isExpanded ? null : item.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                              {isExpanded ? 'Hide' : 'Lots'}
+                            </button>
+                          )}
+                          {(status === 'low' || status === 'empty') && canTransfer && srcAvailable && (
+                            <button onClick={() => openTransferIn(item)} className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100">
+                              Transfer In
+                            </button>
+                          )}
+                          {canTransfer && srcAvailable && status !== 'low' && status !== 'empty' && (
+                            <button onClick={() => openTransferIn(item)} className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                              Transfer In
+                            </button>
+                          )}
+                          <button onClick={() => openUse(item)} disabled={total === 0}
+                            className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            Use
+                          </button>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            {lots.map(lot => {
+                              const now = new Date()
+                              const expDate = lot.expiration_date ? new Date(lot.expiration_date + 'T00:00:00') : null
+                              const expired = expDate && expDate < now
+                              const expiring = expDate && !expired && expDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+                              return (
+                                <div key={lot.id} className="flex items-center justify-between bg-white rounded-lg border border-zinc-200 px-4 py-2.5 gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-zinc-900">{lot.lot_number ? `Lot ${lot.lot_number}` : 'No lot #'}</p>
+                                    <p className="text-xs text-zinc-400">Received {fmtDate(lot.received_date)}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 shrink-0 text-right">
+                                    {supply.tracks_expiration && (
+                                      <p className={`text-xs font-semibold ${expired ? 'text-red-600' : expiring ? 'text-amber-600' : 'text-zinc-500'}`}>
+                                        {expired ? '⚠ Exp' : expiring ? '⚠ Exp soon' : 'Exp'} {fmtDate(lot.expiration_date)}
+                                      </p>
+                                    )}
+                                    <div className="text-right">
+                                      <p className="text-lg font-bold text-zinc-900">{lot.quantity_remaining}</p>
+                                      <p className="text-xs text-zinc-400">{supply.unit_of_measure}</p>
+                                    </div>
+                                    {isOfficerOrAbove && (
+                                      <button onClick={() => openWaste(item, lot)}
+                                        className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+                                        Waste
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Use Modal */}
+      {useForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Use Supply</h2>
+            <p className="text-sm text-zinc-500 mb-5">{useForm.supplyName}</p>
+            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Quantity <span className="text-red-500">*</span></label>
+                <input type="number" min="1" value={useForm.quantity}
+                  onChange={e => setUseForm(f => f ? { ...f, quantity: e.target.value } : f)}
+                  className={inputCls} />
+              </div>
+              {useForm.requiredSigs >= 1 && signerSelect(useForm.signer1Id, v => setUseForm(f => f ? { ...f, signer1Id: v } : f), 'Signer 1 *')}
+              {useForm.requiredSigs >= 2 && signerSelect(useForm.signer2Id, v => setUseForm(f => f ? { ...f, signer2Id: v } : f), 'Signer 2 *')}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                <input type="text" value={useForm.notes} placeholder="Optional"
+                  onChange={e => setUseForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleUseSubmit} disabled={loading}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {loading ? 'Saving…' : 'Confirm Use'}
+              </button>
+              <button onClick={() => { setUseForm(null); setError(null) }}
+                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waste Modal */}
+      {wasteForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Waste / Dispose</h2>
+            <p className="text-sm text-zinc-500 mb-5">
+              {wasteForm.supplyName}
+              {wasteForm.lotNumber && <span className="ml-1 text-zinc-400">· Lot {wasteForm.lotNumber}</span>}
+            </p>
+            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Reason <span className="text-red-500">*</span></label>
+                <select value={wasteForm.wasteReason} onChange={e => setWasteForm(f => f ? { ...f, wasteReason: e.target.value } : f)} className={inputCls}>
+                  {WASTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">
+                  Quantity <span className="text-red-500">*</span>
+                  <span className="ml-1 text-zinc-400 font-normal">({wasteForm.maxQty} available)</span>
+                </label>
+                <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
+                  onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+              </div>
+              {wasteForm.requiredSigs >= 1 && signerSelect(wasteForm.signer1Id, v => setWasteForm(f => f ? { ...f, signer1Id: v } : f), 'Witness 1 *')}
+              {wasteForm.requiredSigs >= 2 && signerSelect(wasteForm.signer2Id, v => setWasteForm(f => f ? { ...f, signer2Id: v } : f), 'Witness 2 *')}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                <input type="text" value={wasteForm.notes} placeholder="Optional"
+                  onChange={e => setWasteForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleWasteSubmit} disabled={loading}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {loading ? 'Saving…' : 'Confirm Waste'}
+              </button>
+              <button onClick={() => { setWasteForm(null); setError(null) }}
+                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer In Modal */}
+      {transferInForm && (() => {
+        const srcInvForType = srcInventory.filter(i => i.supply_type_id === transferInForm.supplyTypeId)
+        const srcInvWithLots = srcInvForType.filter(i => srcLots.some(l => l.storeroom_inventory_id === i.id && l.quantity_remaining > 0))
+        const lotsForSrcInv = srcLots.filter(l => l.storeroom_inventory_id === transferInForm.srcInvId && l.quantity_remaining > 0)
+        const selectedLot = srcLots.find(l => l.id === transferInForm.srcLotId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+              <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer In from Storeroom</h2>
+              <p className="text-sm text-zinc-500 mb-5">{transferInForm.supplyName}</p>
+              {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Source Storeroom <span className="text-red-500">*</span></label>
+                  <select value={transferInForm.srcInvId} onChange={e => handleSrcInvChange(e.target.value)} className={inputCls}>
+                    {srcInvWithLots.map(i => {
+                      const room = deptStorerooms.find(s => s.id === i.storeroom_id)
+                      return <option key={i.id} value={i.id}>{room?.name ?? 'Storeroom'}</option>
+                    })}
+                  </select>
+                </div>
+                {lotsForSrcInv.length > 1 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Lot</label>
+                    <select value={transferInForm.srcLotId} onChange={e => setTransferInForm(f => f ? { ...f, srcLotId: e.target.value } : f)} className={inputCls}>
+                      {lotsForSrcInv.map(l => (
+                        <option key={l.id} value={l.id}>
+                          {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} · {l.quantity_remaining} available
+                          {l.expiration_date ? ` · Exp ${fmtDate(l.expiration_date)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Quantity <span className="text-red-500">*</span>
+                    {selectedLot && <span className="ml-1 text-zinc-400 font-normal">({selectedLot.quantity_remaining} available)</span>}
+                  </label>
+                  <input type="number" min="1" max={selectedLot?.quantity_remaining ?? undefined} value={transferInForm.quantity}
+                    onChange={e => setTransferInForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                  <input type="text" value={transferInForm.notes} placeholder="Optional"
+                    onChange={e => setTransferInForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={handleTransferInSubmit} disabled={loading || !transferInForm.srcLotId}
+                  className="flex-1 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
+                  {loading ? 'Saving…' : 'Transfer In'}
+                </button>
+                <button onClick={() => { setTransferInForm(null); setError(null) }}
+                  className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}

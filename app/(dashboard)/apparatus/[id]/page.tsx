@@ -154,7 +154,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
       adminClient.from('medical_storerooms')
         .select('id, name, template_id, inventory_mode')
-        .eq('apparatus_id', id).eq('active', true).order('name'),
+        .eq('apparatus_id', id).eq('active', true).is('compartment_id', null).order('name'),
       adminClient.from('medical_bag_templates')
         .select('id, name').eq('department_id', myDept.department_id).eq('active', true).order('name'),
       adminClient.from('medical_storerooms')

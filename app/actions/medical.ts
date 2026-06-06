@@ -247,6 +247,7 @@ export async function createMedicalStoreroom(formData: FormData) {
     department_id: ctx.department_id,
     station_id: (formData.get('station_id') as string) || null,
     apparatus_id: (formData.get('apparatus_id') as string) || null,
+    compartment_id: (formData.get('compartment_id') as string) || null,
     name: formData.get('name') as string,
     notes: (formData.get('notes') as string) || null,
     active: true,
@@ -265,6 +266,7 @@ export async function updateMedicalStoreroom(formData: FormData) {
   const { error: dbErr } = await adminClient.from('medical_storerooms').update({
     station_id: (formData.get('station_id') as string) || null,
     apparatus_id: (formData.get('apparatus_id') as string) || null,
+    compartment_id: (formData.get('compartment_id') as string) || null,
     name: formData.get('name') as string,
     notes: (formData.get('notes') as string) || null,
     active: formData.get('active') === 'true',

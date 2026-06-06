@@ -25,9 +25,10 @@ interface SupplyType {
   is_controlled: boolean; tracks_expiration: boolean; required_signatures: number
   notes: string | null; active: boolean
 }
-interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; notes: string | null; active: boolean }
+interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id: string | null; notes: string | null; active: boolean }
 interface Station { id: string; station_name: string; station_number: string | null }
 interface Apparatus { id: string; unit_number: string; type_name: string | null }
+interface ApparatusCompartment { id: string; apparatus_id: string; compartment_code: string; compartment_name: string | null; sort_order: number }
 interface StoreroomInventory { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface BagTemplate { id: string; name: string; description: string | null; active: boolean }
 interface TemplateItem { id: string; template_id: string; supply_type_id: string; par_level: number }
@@ -36,13 +37,14 @@ interface BagDeployment { id: string; name: string; apparatus_id: string; templa
 type Tab = 'supplies' | 'storerooms' | 'templates'
 
 export default function MedicalAdminClient({
-  supplyTypes, storerooms, stations, apparatus, storeroomInventory,
+  supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory,
   bagTemplates, templateItems, bagDeployments, departmentId,
 }: {
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
   stations: Station[]
   apparatus: Apparatus[]
+  apparatusCompartments: ApparatusCompartment[]
   storeroomInventory: StoreroomInventory[]
   bagTemplates: BagTemplate[]
   templateItems: TemplateItem[]
@@ -70,6 +72,9 @@ export default function MedicalAdminClient({
   const [showStoreroomForm, setShowStoreroomForm] = useState(false)
   const [editingStoreroomId, setEditingStoreroomId] = useState<string | null>(null)
   const [storeroomActive, setStoreroomActive] = useState(true)
+  const [storeroomType, setStoreroomType] = useState<'station' | 'compartment'>('station')
+  const [storeroomApparatusId, setStoreroomApparatusId] = useState('')
+  const [storeroomCompartmentId, setStoreroomCompartmentId] = useState('')
 
   // Template state
   const [showTemplateForm, setShowTemplateForm] = useState(false)
@@ -153,6 +158,14 @@ export default function MedicalAdminClient({
 
   async function handleStoreroomSubmit(formData: FormData) {
     formData.set('active', storeroomActive ? 'true' : 'false')
+    if (storeroomType === 'compartment') {
+      formData.set('apparatus_id', storeroomApparatusId)
+      formData.set('compartment_id', storeroomCompartmentId)
+      formData.delete('station_id')
+    } else {
+      formData.delete('apparatus_id')
+      formData.delete('compartment_id')
+    }
     const r = await wrap(() => editingStoreroomId
       ? updateMedicalStoreroom(formData)
       : createMedicalStoreroom(formData)
@@ -181,6 +194,17 @@ export default function MedicalAdminClient({
     const a = apparatus.find(ap => ap.id === apparatusId)
     return a ? `${a.unit_number}${a.type_name ? ' — ' + a.type_name : ''}` : null
   }
+
+  const compartmentLabel = (compartmentId: string | null) => {
+    if (!compartmentId) return null
+    const c = apparatusCompartments.find(ac => ac.id === compartmentId)
+    if (!c) return null
+    const a = apparatus.find(ap => ap.id === c.apparatus_id)
+    return `${a?.unit_number ?? '?'} — ${c.compartment_code}${c.compartment_name ? ' (' + c.compartment_name + ')' : ''}`
+  }
+
+  const compartmentsForApparatus = (apparatusId: string) =>
+    apparatusCompartments.filter(c => c.apparatus_id === apparatusId)
 
   const inventoryForStoreroom = (storeroomId: string) =>
     storeroomInventory.filter(i => i.storeroom_id === storeroomId)
@@ -426,23 +450,77 @@ export default function MedicalAdminClient({
               </h2>
               <form action={handleStoreroomSubmit} className="flex flex-col gap-3">
                 {editingStoreroomId && <input type="hidden" name="id" value={editingStoreroomId} />}
+
+                {/* Type toggle — only show on create */}
+                {!editingStoreroomId && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Type</label>
+                    <div className="flex gap-2">
+                      {(['station', 'compartment'] as const).map(t => (
+                        <button key={t} type="button"
+                          onClick={() => { setStoreroomType(t); setStoreroomApparatusId(''); setStoreroomCompartmentId('') }}
+                          className={`rounded-lg px-3 py-1.5 text-sm font-semibold border transition-colors ${storeroomType === t ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+                          {t === 'station' ? 'Station Storeroom' : 'Apparatus Compartment'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Name <span className="text-red-500">*</span></label>
-                  <input name="name" required placeholder="e.g. Station 1 Drug Safe" className={inputCls}
+                  <input name="name" required placeholder={storeroomType === 'compartment' ? 'e.g. Engine 32 — Comp A Meds' : 'e.g. Station 1 Drug Safe'} className={inputCls}
                     defaultValue={editingStoreroomId ? storerooms.find(s => s.id === editingStoreroomId)?.name : ''} />
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
-                  <select name="station_id" className={inputCls}
-                    defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
-                    <option value="">No station assigned</option>
-                    {stations.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.station_number ? `Station ${s.station_number} — ` : ''}{s.station_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+
+                {storeroomType === 'station' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
+                    <select name="station_id" className={inputCls}
+                      defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
+                      <option value="">No station assigned</option>
+                      {stations.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.station_number ? `Station ${s.station_number} — ` : ''}{s.station_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {storeroomType === 'compartment' && !editingStoreroomId && (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-700">Apparatus <span className="text-red-500">*</span></label>
+                      <select value={storeroomApparatusId}
+                        onChange={e => { setStoreroomApparatusId(e.target.value); setStoreroomCompartmentId('') }}
+                        className={inputCls} required>
+                        <option value="">Select apparatus…</option>
+                        {apparatus.map(a => (
+                          <option key={a.id} value={a.id}>{a.unit_number}{a.type_name ? ` — ${a.type_name}` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {storeroomApparatusId && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-700">Compartment <span className="text-red-500">*</span></label>
+                        <select value={storeroomCompartmentId} onChange={e => setStoreroomCompartmentId(e.target.value)}
+                          className={inputCls} required>
+                          <option value="">Select compartment…</option>
+                          {compartmentsForApparatus(storeroomApparatusId).map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {compartmentsForApparatus(storeroomApparatusId).length === 0 && (
+                          <p className="mt-1 text-xs text-zinc-400">No compartments configured for this apparatus.</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
                   <input name="notes" placeholder="Optional" className={inputCls}
@@ -456,7 +534,7 @@ export default function MedicalAdminClient({
                   </label>
                 )}
                 <div className="flex gap-2 pt-1">
-                  <button type="submit" disabled={loading}
+                  <button type="submit" disabled={loading || (storeroomType === 'compartment' && !editingStoreroomId && (!storeroomApparatusId || !storeroomCompartmentId))}
                     className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
                     {loading ? 'Saving...' : editingStoreroomId ? 'Save Changes' : 'Create'}
                   </button>
@@ -485,9 +563,11 @@ export default function MedicalAdminClient({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-zinc-900">{room.name}</p>
                         <p className="text-xs text-zinc-400 mt-0.5">
-                          {apparatusLabel(room.apparatus_id)
-                            ? `Apparatus ${apparatusLabel(room.apparatus_id)}`
-                            : stationLabel(room.station_id)
+                          {room.compartment_id
+                            ? `Compartment — ${compartmentLabel(room.compartment_id) ?? '—'}`
+                            : apparatusLabel(room.apparatus_id)
+                              ? `Apparatus ${apparatusLabel(room.apparatus_id)}`
+                              : stationLabel(room.station_id)
                           } · {inv.length} supply type{inv.length !== 1 ? 's' : ''} assigned
                         </p>
                       </div>
