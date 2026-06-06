@@ -1,12 +1,10 @@
-const CACHE_NAME = 'fireops7-v1'
-
-// App shell — routes that load the Next.js layout
-const SHELL_ROUTES = ['/', '/dashboard', '/login']
+const CACHE_NAME = 'fireops7-v2'
 
 self.addEventListener('install', event => {
   self.skipWaiting()
+  // Only cache the login page (always accessible without auth)
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_ROUTES))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(['/login']))
   )
 })
 
