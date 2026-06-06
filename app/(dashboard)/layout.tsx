@@ -6,6 +6,7 @@ import MobileSidebar from '@/components/MobileSidebar'
 import NavGroups from '@/components/NavGroups'
 import type { NavGroup } from '@/components/NavGroups'
 import PageNavBar from '@/components/PageNavBar'
+import PWAInstallButton from '@/components/PWAInstallButton'
 
 async function getUserContext() {
   const supabase = await createClient()
@@ -164,6 +165,7 @@ function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo }: {
             </div>
           )}
         </div>
+        <PWAInstallButton />
         <FeedbackButton />
         <form action={signOut}>
           <button type="submit" className="w-full rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition-colors text-left">

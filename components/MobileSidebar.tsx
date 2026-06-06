@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signOut } from '@/app/actions/auth'
 import FeedbackButton from './FeedbackButton'
 import NavGroups from './NavGroups'
+import PWAInstallButton from './PWAInstallButton'
 import type { NavGroup } from './NavGroups'
 
 export default function MobileSidebar({
@@ -86,6 +87,7 @@ export default function MobileSidebar({
             <p className="text-sm font-medium truncate">{userInfo.name}</p>
             <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
           </div>
+          <PWAInstallButton />
           <FeedbackButton />
           <form action={signOut}>
             <button type="submit"
