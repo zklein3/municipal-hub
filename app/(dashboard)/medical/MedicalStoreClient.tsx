@@ -838,50 +838,54 @@ export default function MedicalStoreClient({
                         {invLots.map(lot => {
                           const expStatus = getExpirationStatus(lot.expiration_date)
                           return (
-                            <div key={lot.id} className="flex items-center justify-between bg-white rounded-lg border border-zinc-200 px-4 py-2.5 gap-3">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-zinc-900">
-                                  {lot.lot_number ? `Lot ${lot.lot_number}` : 'No lot number'}
-                                </p>
-                                <p className="text-xs text-zinc-400">
-                                  Received {fmtDate(lot.received_date)}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                {supply.tracks_expiration && (
-                                  <p className={`text-xs font-semibold ${expStatus === 'expired' ? 'text-red-600' : expStatus === 'expiring' ? 'text-amber-600' : 'text-zinc-500'}`}>
-                                    {expStatus === 'expired' ? '⚠ Expired' : expStatus === 'expiring' ? '⚠ Exp soon' : 'Exp'} {fmtDate(lot.expiration_date)}
+                            <div key={lot.id} className="flex flex-col bg-white rounded-lg border border-zinc-200 px-4 py-2.5 gap-2">
+                              {/* Lot info + quantity */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-zinc-900">
+                                    {lot.lot_number ? `Lot ${lot.lot_number}` : 'No lot number'}
                                   </p>
-                                )}
-                                <div className="text-right min-w-[36px]">
+                                  <p className="text-xs text-zinc-400">Received {fmtDate(lot.received_date)}</p>
+                                  {supply.tracks_expiration && (
+                                    <p className={`text-xs font-semibold mt-0.5 ${expStatus === 'expired' ? 'text-red-600' : expStatus === 'expiring' ? 'text-amber-600' : 'text-zinc-500'}`}>
+                                      {expStatus === 'expired' ? '⚠ Expired' : expStatus === 'expiring' ? '⚠ Exp soon' : 'Exp'} {fmtDate(lot.expiration_date)}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right shrink-0">
                                   <p className="text-lg font-bold text-zinc-900">{lot.quantity_remaining}</p>
                                   <p className="text-xs text-zinc-400">{supply.unit_of_measure}</p>
                                 </div>
-                                {isOfficerOrAbove && (
-                                  <button onClick={() => openEditLot(lot, supply)}
-                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600">
-                                    Edit
-                                  </button>
-                                )}
-                                {isOfficerOrAbove && (
-                                  <button onClick={() => openWaste(inv, lot)}
-                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600">
-                                    Waste
-                                  </button>
-                                )}
-                                {(storerooms.length > 1 || allCompartments.length > 0) && (isOfficerOrAbove || !supply.is_controlled) && (
-                                  <button onClick={() => openTransfer(inv, lot)}
-                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600">
-                                    Transfer
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button onClick={() => openAdjust(inv, lot)}
-                                    className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600">
-                                    Adjust
-                                  </button>
-                                )}
                               </div>
+                              {/* Buttons */}
+                              {(isOfficerOrAbove || isAdmin || (storerooms.length > 1 || allCompartments.length > 0)) && (
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 pt-1.5 border-t border-zinc-100">
+                                  {isOfficerOrAbove && (
+                                    <button onClick={() => openEditLot(lot, supply)}
+                                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 text-center sm:text-left">
+                                      Edit
+                                    </button>
+                                  )}
+                                  {isOfficerOrAbove && (
+                                    <button onClick={() => openWaste(inv, lot)}
+                                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-center sm:text-left">
+                                      Waste
+                                    </button>
+                                  )}
+                                  {(storerooms.length > 1 || allCompartments.length > 0) && (isOfficerOrAbove || !supply.is_controlled) && (
+                                    <button onClick={() => openTransfer(inv, lot)}
+                                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 text-center sm:text-left">
+                                      Transfer
+                                    </button>
+                                  )}
+                                  {isAdmin && (
+                                    <button onClick={() => openAdjust(inv, lot)}
+                                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 text-center sm:text-left">
+                                      Adjust
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
