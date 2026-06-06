@@ -646,6 +646,116 @@ export async function transferStock(data: {
   return { success: true }
 }
 
+export async function transferToCompartment(data: {
+  source_inventory_id: string
+  lot_id: string
+  compartment_id: string   // apparatus_compartments.id
+  quantity: number
+  notes: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  const adminClient = createAdminClient()
+
+  if (!data.lot_id || data.quantity < 1)
+    return { error: 'Lot and quantity are required.' }
+
+  const { data: lot } = await adminClient
+    .from('medical_stock_lots')
+    .select('quantity_remaining, lot_number, expiration_date, received_date')
+    .eq('id', data.lot_id)
+    .single()
+  if (!lot) return { error: 'Lot not found.' }
+  if (lot.quantity_remaining < data.quantity)
+    return { error: `Only ${lot.quantity_remaining} units available in this lot.` }
+
+  const { data: srcInv } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('storeroom_id, supply_type_id, department_id')
+    .eq('id', data.source_inventory_id)
+    .single()
+  if (!srcInv) return { error: 'Source inventory record not found.' }
+
+  const { data: supplyTypeRow } = await adminClient
+    .from('medical_supply_types')
+    .select('is_controlled')
+    .eq('id', srcInv.supply_type_id)
+    .single()
+  if (supplyTypeRow?.is_controlled && !ctx.isOfficerOrAbove)
+    return { error: 'Controlled substances can only be transferred by officers or admins.' }
+
+  // Resolve compartment → apparatus_id + display name
+  const { data: acRow } = await adminClient
+    .from('apparatus_compartments')
+    .select('apparatus_id, compartment_name_id')
+    .eq('id', data.compartment_id)
+    .single()
+  if (!acRow) return { error: 'Compartment not found.' }
+
+  const [{ data: apRow }, { data: cnRow }] = await Promise.all([
+    adminClient.from('apparatus').select('unit_number').eq('id', acRow.apparatus_id).single(),
+    acRow.compartment_name_id
+      ? adminClient.from('compartment_names').select('compartment_code').eq('id', acRow.compartment_name_id).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  // Get or auto-create compartment storeroom
+  const { data: existingRooms } = await adminClient
+    .from('medical_storerooms')
+    .select('id')
+    .eq('department_id', ctx.department_id)
+    .eq('compartment_id', data.compartment_id)
+    .eq('active', true)
+
+  let destStoreroomId: string
+  if (existingRooms && existingRooms.length > 0) {
+    destStoreroomId = existingRooms[0].id
+  } else {
+    const name = `${apRow?.unit_number ?? 'Unit'} — ${(cnRow as any)?.compartment_code ?? 'Compartment'}`
+    const { data: newRoom, error: roomErr } = await adminClient
+      .from('medical_storerooms')
+      .insert({
+        department_id: ctx.department_id,
+        apparatus_id: acRow.apparatus_id,
+        compartment_id: data.compartment_id,
+        name,
+        active: true,
+      })
+      .select('id')
+      .single()
+    if (roomErr) { await logError(roomErr.message, '/medical'); return { error: roomErr.message } }
+    destStoreroomId = newRoom.id
+  }
+
+  // Get or auto-create inventory assignment for this supply type
+  const { data: existingInv } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('id')
+    .eq('storeroom_id', destStoreroomId)
+    .eq('supply_type_id', srcInv.supply_type_id)
+
+  if (!existingInv || existingInv.length === 0) {
+    const { error: invErr } = await adminClient
+      .from('medical_storeroom_inventory')
+      .insert({
+        storeroom_id: destStoreroomId,
+        supply_type_id: srcInv.supply_type_id,
+        department_id: ctx.department_id,
+        par_level: 0,
+      })
+    if (invErr) { await logError(invErr.message, '/medical'); return { error: invErr.message } }
+  }
+
+  // Now delegate to transferStock with the resolved destination storeroom
+  return transferStock({
+    source_inventory_id: data.source_inventory_id,
+    lot_id: data.lot_id,
+    destination_storeroom_id: destStoreroomId,
+    quantity: data.quantity,
+    notes: data.notes,
+  })
+}
+
 export async function adjustStock(data: {
   lot_id: string
   storeroom_inventory_id: string

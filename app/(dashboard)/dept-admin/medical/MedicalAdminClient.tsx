@@ -72,9 +72,6 @@ export default function MedicalAdminClient({
   const [showStoreroomForm, setShowStoreroomForm] = useState(false)
   const [editingStoreroomId, setEditingStoreroomId] = useState<string | null>(null)
   const [storeroomActive, setStoreroomActive] = useState(true)
-  const [storeroomType, setStoreroomType] = useState<'station' | 'compartment'>('station')
-  const [storeroomApparatusId, setStoreroomApparatusId] = useState('')
-  const [storeroomCompartmentId, setStoreroomCompartmentId] = useState('')
 
   // Template state
   const [showTemplateForm, setShowTemplateForm] = useState(false)
@@ -158,14 +155,6 @@ export default function MedicalAdminClient({
 
   async function handleStoreroomSubmit(formData: FormData) {
     formData.set('active', storeroomActive ? 'true' : 'false')
-    if (storeroomType === 'compartment') {
-      formData.set('apparatus_id', storeroomApparatusId)
-      formData.set('compartment_id', storeroomCompartmentId)
-      formData.delete('station_id')
-    } else {
-      formData.delete('apparatus_id')
-      formData.delete('compartment_id')
-    }
     const r = await wrap(() => editingStoreroomId
       ? updateMedicalStoreroom(formData)
       : createMedicalStoreroom(formData)
@@ -451,75 +440,24 @@ export default function MedicalAdminClient({
               <form action={handleStoreroomSubmit} className="flex flex-col gap-3">
                 {editingStoreroomId && <input type="hidden" name="id" value={editingStoreroomId} />}
 
-                {/* Type toggle — only show on create */}
-                {!editingStoreroomId && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Type</label>
-                    <div className="flex gap-2">
-                      {(['station', 'compartment'] as const).map(t => (
-                        <button key={t} type="button"
-                          onClick={() => { setStoreroomType(t); setStoreroomApparatusId(''); setStoreroomCompartmentId('') }}
-                          className={`rounded-lg px-3 py-1.5 text-sm font-semibold border transition-colors ${storeroomType === t ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
-                          {t === 'station' ? 'Station Storeroom' : 'Apparatus Compartment'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Name <span className="text-red-500">*</span></label>
-                  <input name="name" required placeholder={storeroomType === 'compartment' ? 'e.g. Engine 32 — Comp A Meds' : 'e.g. Station 1 Drug Safe'} className={inputCls}
+                  <input name="name" required placeholder="e.g. Station 1 Drug Safe" className={inputCls}
                     defaultValue={editingStoreroomId ? storerooms.find(s => s.id === editingStoreroomId)?.name : ''} />
                 </div>
 
-                {storeroomType === 'station' && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
-                    <select name="station_id" className={inputCls}
-                      defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
-                      <option value="">No station assigned</option>
-                      {stations.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.station_number ? `Station ${s.station_number} — ` : ''}{s.station_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {storeroomType === 'compartment' && !editingStoreroomId && (
-                  <>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-700">Apparatus <span className="text-red-500">*</span></label>
-                      <select value={storeroomApparatusId}
-                        onChange={e => { setStoreroomApparatusId(e.target.value); setStoreroomCompartmentId('') }}
-                        className={inputCls} required>
-                        <option value="">Select apparatus…</option>
-                        {apparatus.map(a => (
-                          <option key={a.id} value={a.id}>{a.unit_number}{a.type_name ? ` — ${a.type_name}` : ''}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {storeroomApparatusId && (
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-700">Compartment <span className="text-red-500">*</span></label>
-                        <select value={storeroomCompartmentId} onChange={e => setStoreroomCompartmentId(e.target.value)}
-                          className={inputCls} required>
-                          <option value="">Select compartment…</option>
-                          {compartmentsForApparatus(storeroomApparatusId).map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                        {compartmentsForApparatus(storeroomApparatusId).length === 0 && (
-                          <p className="mt-1 text-xs text-zinc-400">No compartments configured for this apparatus.</p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Station</label>
+                  <select name="station_id" className={inputCls}
+                    defaultValue={editingStoreroomId ? (storerooms.find(s => s.id === editingStoreroomId)?.station_id ?? '') : ''}>
+                    <option value="">No station assigned</option>
+                    {stations.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.station_number ? `Station ${s.station_number} — ` : ''}{s.station_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
@@ -534,7 +472,7 @@ export default function MedicalAdminClient({
                   </label>
                 )}
                 <div className="flex gap-2 pt-1">
-                  <button type="submit" disabled={loading || (storeroomType === 'compartment' && !editingStoreroomId && (!storeroomApparatusId || !storeroomCompartmentId))}
+                  <button type="submit" disabled={loading}
                     className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
                     {loading ? 'Saving...' : editingStoreroomId ? 'Save Changes' : 'Create'}
                   </button>

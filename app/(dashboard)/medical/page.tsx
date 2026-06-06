@@ -119,6 +119,35 @@ export default async function MedicalPage() {
     }])
   )
 
+  // All dept apparatus + compartments for the compartment transfer destination picker
+  const { data: allApparatusList } = await adminClient
+    .from('apparatus')
+    .select('id, unit_number, apparatus_types(name)')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .order('unit_number')
+  const allApparatus = (allApparatusList ?? []).map(a => ({
+    id: a.id,
+    unit_number: a.unit_number,
+    type_name: (a.apparatus_types as any)?.name ?? null,
+  }))
+  const allApparatusIds = allApparatus.map(a => a.id)
+  const { data: compLinks } = allApparatusIds.length > 0
+    ? await adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', allApparatusIds).eq('active', true)
+    : { data: [] }
+  const compNameIds = [...new Set((compLinks ?? []).map(c => c.compartment_name_id).filter(Boolean))]
+  const { data: compNameRows } = compNameIds.length > 0
+    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compNameIds)
+    : { data: [] }
+  const compNameMap = Object.fromEntries((compNameRows ?? []).map(c => [c.id, c]))
+  const allCompartments = (compLinks ?? []).map(c => ({
+    id: c.id,
+    apparatus_id: c.apparatus_id,
+    compartment_code: compNameMap[c.compartment_name_id]?.compartment_code ?? '—',
+    compartment_name: compNameMap[c.compartment_name_id]?.compartment_name ?? null,
+    sort_order: compNameMap[c.compartment_name_id]?.sort_order ?? 999,
+  })).sort((a, b) => a.sort_order - b.sort_order)
+
   // Pending reorder requests for this dept's storerooms
   const { data: reorderRequests } = storeroomIds.length > 0
     ? await adminClient
@@ -164,6 +193,8 @@ export default async function MedicalPage() {
       personnel={personnel}
       stations={stations ?? []}
       apparatusMap={apparatusMap}
+      allApparatus={allApparatus}
+      allCompartments={allCompartments}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
       myPersonnelId={me.id}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { receiveStock, dispenseStock, wasteStock, transferStock, adjustStock, submitReorderRequest } from '@/app/actions/medical'
+import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest } from '@/app/actions/medical'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -79,6 +79,9 @@ interface AdjustForm {
   notes: string
 }
 
+interface Apparatus { id: string; unit_number: string; type_name: string | null }
+interface Compartment { id: string; apparatus_id: string; compartment_code: string; compartment_name: string | null; sort_order: number }
+
 interface TransferForm {
   inventoryId: string
   lotId: string
@@ -88,7 +91,10 @@ interface TransferForm {
   lotNumber: string | null
   maxQty: number
   quantity: string
+  destinationType: 'storeroom' | 'compartment'
   destinationStoreroomId: string
+  destinationApparatusId: string
+  destinationCompartmentId: string
   notes: string
 }
 
@@ -128,7 +134,9 @@ function fmtDate(d: string | null) {
 }
 
 export default function MedicalStoreClient({
-  storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, personnel, stations, apparatusMap, isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
+  storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, personnel, stations, apparatusMap,
+  allApparatus, allCompartments,
+  isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap,
 }: {
   storerooms: Storeroom[]
@@ -140,6 +148,8 @@ export default function MedicalStoreClient({
   personnel: Personnel[]
   stations: Station[]
   apparatusMap: Record<string, { unit_number: string; type_name: string | null }>
+  allApparatus: Apparatus[]
+  allCompartments: Compartment[]
   isAdmin: boolean
   isOfficerOrAbove: boolean
   myPersonnelId: string
@@ -330,14 +340,14 @@ export default function MedicalStoreClient({
   function openTransfer(inv: InventoryRow, lot: Lot) {
     const supply = supplyMap[inv.supply_type_id]
     if (!supply) return
-    // Find valid destination storerooms: have this supply type assigned, not the current storeroom
+    const srcStoreroomId = inv.storeroom_id
     const validDestIds = new Set(
-      inventory
-        .filter(i => i.supply_type_id === inv.supply_type_id && i.storeroom_id !== inv.storeroom_id)
+      allTransferInventory
+        .filter(i => i.supply_type_id === inv.supply_type_id && i.storeroom_id !== srcStoreroomId)
         .map(i => i.storeroom_id)
     )
-    const validDests = storerooms.filter(s => validDestIds.has(s.id))
-    if (validDests.length === 0) { setError('No other storerooms have this supply type assigned.'); return }
+    const validDests = allTransferStorerooms.filter(s => validDestIds.has(s.id))
+    const firstApparatus = allApparatus[0]
     setError(null)
     setTransferForm({
       inventoryId: inv.id,
@@ -348,7 +358,10 @@ export default function MedicalStoreClient({
       lotNumber: lot.lot_number,
       maxQty: lot.quantity_remaining,
       quantity: String(lot.quantity_remaining),
-      destinationStoreroomId: validDests[0].id,
+      destinationType: validDests.length > 0 ? 'storeroom' : 'compartment',
+      destinationStoreroomId: validDests[0]?.id ?? '',
+      destinationApparatusId: firstApparatus?.id ?? '',
+      destinationCompartmentId: allCompartments.find(c => c.apparatus_id === firstApparatus?.id)?.id ?? '',
       notes: '',
     })
   }
@@ -358,16 +371,30 @@ export default function MedicalStoreClient({
     const qty = parseInt(transferForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (qty > transferForm.maxQty) { setError(`Only ${transferForm.maxQty} units available.`); return }
-    if (!transferForm.destinationStoreroomId) { setError('Select a destination storeroom.'); return }
 
     setError(null); setLoading(true)
-    const result = await transferStock({
-      source_inventory_id: transferForm.inventoryId,
-      lot_id: transferForm.lotId,
-      destination_storeroom_id: transferForm.destinationStoreroomId,
-      quantity: qty,
-      notes: transferForm.notes || null,
-    })
+    let result: { error?: string } | undefined
+
+    if (transferForm.destinationType === 'compartment') {
+      if (!transferForm.destinationCompartmentId) { setError('Select a compartment.'); setLoading(false); return }
+      result = await transferToCompartment({
+        source_inventory_id: transferForm.inventoryId,
+        lot_id: transferForm.lotId,
+        compartment_id: transferForm.destinationCompartmentId,
+        quantity: qty,
+        notes: transferForm.notes || null,
+      })
+    } else {
+      if (!transferForm.destinationStoreroomId) { setError('Select a destination storeroom.'); setLoading(false); return }
+      result = await transferStock({
+        source_inventory_id: transferForm.inventoryId,
+        lot_id: transferForm.lotId,
+        destination_storeroom_id: transferForm.destinationStoreroomId,
+        quantity: qty,
+        notes: transferForm.notes || null,
+      })
+    }
+
     if (result?.error) { setError(result.error) }
     else {
       setSuccess(`Transferred ${qty} ${transferForm.unitOfMeasure} of ${transferForm.supplyName}.`)
@@ -921,11 +948,12 @@ export default function MedicalStoreClient({
             .map(i => i.storeroom_id)
         )
         const validDests = allTransferStorerooms.filter(s => validDestIds.has(s.id))
+        const compartmentsForApparatus = allCompartments.filter(c => c.apparatus_id === transferForm.destinationApparatusId)
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
               <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer Stock</h2>
-              <p className="text-sm text-zinc-500 mb-5">
+              <p className="text-sm text-zinc-500 mb-4">
                 {transferForm.supplyName}
                 {transferForm.lotNumber && <span className="ml-1 text-zinc-400">· Lot {transferForm.lotNumber}</span>}
               </p>
@@ -933,14 +961,75 @@ export default function MedicalStoreClient({
               {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
               <div className="flex flex-col gap-3">
+                {/* Destination type toggle */}
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Destination Storeroom <span className="text-red-500">*</span></label>
-                  <select value={transferForm.destinationStoreroomId}
-                    onChange={e => setTransferForm(f => f ? { ...f, destinationStoreroomId: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    {validDests.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Destination</label>
+                  <div className="flex gap-2">
+                    {(['storeroom', 'compartment'] as const).map(t => (
+                      <button key={t} type="button"
+                        onClick={() => setTransferForm(f => f ? { ...f, destinationType: t } : f)}
+                        className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${transferForm.destinationType === t ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+                        {t === 'storeroom' ? 'Storeroom / Bag' : 'Compartment'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {transferForm.destinationType === 'storeroom' && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Destination <span className="text-red-500">*</span></label>
+                    <select value={transferForm.destinationStoreroomId}
+                      onChange={e => setTransferForm(f => f ? { ...f, destinationStoreroomId: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                      {validDests.length === 0
+                        ? <option value="">No storerooms have this supply assigned</option>
+                        : validDests.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                      }
+                    </select>
+                    {validDests.length === 0 && (
+                      <p className="mt-1 text-xs text-zinc-400">Assign this supply type to another storeroom in Medical Admin first.</p>
+                    )}
+                  </div>
+                )}
+
+                {transferForm.destinationType === 'compartment' && (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-700">Apparatus <span className="text-red-500">*</span></label>
+                      <select value={transferForm.destinationApparatusId}
+                        onChange={e => {
+                          const appId = e.target.value
+                          const firstComp = allCompartments.find(c => c.apparatus_id === appId)
+                          setTransferForm(f => f ? { ...f, destinationApparatusId: appId, destinationCompartmentId: firstComp?.id ?? '' } : f)
+                        }}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                        <option value="">Select apparatus…</option>
+                        {allApparatus.map(a => (
+                          <option key={a.id} value={a.id}>{a.unit_number}{a.type_name ? ` — ${a.type_name}` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {transferForm.destinationApparatusId && (
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-700">Compartment <span className="text-red-500">*</span></label>
+                        <select value={transferForm.destinationCompartmentId}
+                          onChange={e => setTransferForm(f => f ? { ...f, destinationCompartmentId: e.target.value } : f)}
+                          className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                          <option value="">Select compartment…</option>
+                          {compartmentsForApparatus.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.compartment_code}{c.compartment_name ? ` — ${c.compartment_name}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {compartmentsForApparatus.length === 0 && (
+                          <p className="mt-1 text-xs text-zinc-400">No compartments configured for this apparatus.</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">
