@@ -94,7 +94,7 @@ export default async function InboxPage({
   let requestsRaw: any[] = []
   let deptConfig: any = null
   let restockRequests: any[] = []
-  let expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null }[] = []
+  let expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[] = []
 
   if (isOfficerOrAbove && department_id) {
     const [deptRes, permitsRes, recordsRes] = await Promise.all([
@@ -166,20 +166,23 @@ export default async function InboxPage({
         const srIds = [...new Set((invRows ?? []).map((i: any) => i.storeroom_id))]
         const supIds = [...new Set((invRows ?? []).map((i: any) => i.supply_type_id))]
         const [{ data: srRows }, { data: supRows }] = await Promise.all([
-          adminClient.from('medical_storerooms').select('id, name').in('id', srIds),
+          adminClient.from('medical_storerooms').select('id, name, apparatus_id').in('id', srIds),
           adminClient.from('medical_supply_types').select('id, name').in('id', supIds),
         ])
         const invMap = Object.fromEntries((invRows ?? []).map((i: any) => [i.id, i]))
-        const srMap = Object.fromEntries((srRows ?? []).map((s: any) => [s.id, s.name]))
+        const srFullMap = Object.fromEntries((srRows ?? []).map((s: any) => [s.id, s]))
         const supMap = Object.fromEntries((supRows ?? []).map((s: any) => [s.id, s.name]))
         expiredLots = expiredLotsRaw.map((l: any) => {
           const inv = invMap[l.storeroom_inventory_id]
+          const sr = inv ? srFullMap[inv.storeroom_id] : null
+          const go_to_href = sr?.apparatus_id ? `/apparatus/${sr.apparatus_id}` : '/medical'
           return {
             supply_name: inv ? (supMap[inv.supply_type_id] ?? '—') : '—',
-            storeroom_name: inv ? (srMap[inv.storeroom_id] ?? '—') : '—',
+            storeroom_name: inv ? (sr?.name ?? '—') : '—',
             quantity_remaining: l.quantity_remaining,
             expiration_date: l.expiration_date,
             lot_number: l.lot_number,
+            go_to_href,
           }
         })
       }

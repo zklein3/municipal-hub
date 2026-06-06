@@ -19,6 +19,7 @@ export interface ExpiredLot {
   quantity_remaining: number
   expiration_date: string
   lot_number: string | null
+  go_to_href: string
 }
 
 function fmtDate(d: string) {
@@ -83,9 +84,9 @@ export default function RestockTab({
                     Expired {fmtDate(lot.expiration_date)} · {lot.quantity_remaining} remaining
                   </p>
                 </div>
-                <a href="/medical"
-                  className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
-                  Waste →
+                <a href={lot.go_to_href}
+                  className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">
+                  Go to →
                 </a>
               </div>
             ))}
