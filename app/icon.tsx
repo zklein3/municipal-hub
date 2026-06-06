@@ -16,7 +16,18 @@ export default function Icon() {
           justifyContent: 'center',
         }}
       >
-        <div style={{ fontSize: 120, lineHeight: 1 }}>🔥</div>
+        <span
+          style={{
+            color: 'white',
+            fontSize: 88,
+            fontWeight: 800,
+            fontFamily: 'sans-serif',
+            letterSpacing: '-4px',
+            lineHeight: 1,
+          }}
+        >
+          F7
+        </span>
       </div>
     ),
     { ...size }
