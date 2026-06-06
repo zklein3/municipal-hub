@@ -295,11 +295,11 @@ export default function StorageClient({
 
               {/* Actions */}
               {(item.storage_qty > 0 || isAdmin) && (
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-zinc-100">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 pt-2 border-t border-zinc-100">
                   {item.storage_qty > 0 && (
                     <button
                       onClick={() => openModal('add', item)}
-                      className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+                      className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors text-center sm:text-left"
                     >
                       Add to Compartment
                     </button>
@@ -307,7 +307,7 @@ export default function StorageClient({
                   {isAdmin && item.storage_qty > 0 && (
                     <button
                       onClick={() => openModal('remove', item)}
-                      className="rounded px-2.5 py-1 text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                      className="rounded px-2.5 py-1 text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors text-center sm:text-left"
                     >
                       Remove from Inventory
                     </button>
@@ -315,7 +315,7 @@ export default function StorageClient({
                   {isAdmin && (
                     <button
                       onClick={() => openModal('storage-par', item)}
-                      className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-500 hover:bg-zinc-50 transition-colors"
+                      className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-500 hover:bg-zinc-50 transition-colors text-center sm:text-left"
                     >
                       {item.storage_par > 0 ? 'Edit PAR' : 'Set PAR'}
                     </button>
@@ -323,7 +323,7 @@ export default function StorageClient({
                   {isAdmin && (
                     <button
                       onClick={() => openModal('dept-qty', item)}
-                      className={`rounded px-2.5 py-1 text-xs font-semibold border transition-colors ${
+                      className={`rounded px-2.5 py-1 text-xs font-semibold border transition-colors text-center sm:text-left ${
                         item.department_quantity === null
                           ? 'border-blue-200 text-blue-600 hover:bg-blue-50'
                           : standardsMismatch
