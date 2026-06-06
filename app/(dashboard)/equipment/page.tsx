@@ -134,7 +134,7 @@ export default async function EquipmentPage() {
 
               <div className="flex flex-col gap-3">
                 {group.items.map(a => (
-                  <div key={a.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 flex items-center justify-between gap-4">
+                  <div key={a.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-lg font-bold text-zinc-900">{a.unit_number}</span>
@@ -150,28 +150,28 @@ export default async function EquipmentPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap justify-end gap-2 shrink-0">
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-end gap-2 sm:shrink-0">
                       <Link
                         href={`/inspections/vehicle-check/${a.id}`}
-                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors text-center sm:text-left"
                       >
                         Vehicle Check
                       </Link>
                       <Link
                         href={`/inspections/vehicle-check/${a.id}?next=inventory`}
-                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+                        className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors text-center sm:text-left"
                       >
                         Inspect
                       </Link>
                       <Link
                         href={`/equipment/${a.id}`}
-                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors text-center sm:text-left"
                       >
                         View Inventory
                       </Link>
                       <Link
                         href={`/equipment/${a.id}/fuel`}
-                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors text-center sm:text-left"
                       >
                         Fuel Log
                       </Link>
