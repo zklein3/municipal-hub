@@ -294,11 +294,6 @@ export default function MedicalBagsSection({
                             className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed text-center sm:text-left">
                             Use
                           </button>
-                          {isOfficerOrAbove && (
-                            <button onClick={() => openReceive(item)} className="rounded-lg bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 text-center sm:text-left">
-                              Receive
-                            </button>
-                          )}
                         </div>
                       </div>
 
