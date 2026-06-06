@@ -31,7 +31,7 @@ export default async function DeptAdminPage() {
     { count: pendingSetupCount },
   ] = await Promise.all([
     adminClient.from('departments')
-      .select('module_iso, module_neris, public_site_enabled')
+      .select('module_iso, module_neris, module_medical, public_site_enabled')
       .eq('id', departmentId)
       .single(),
     adminClient.from('department_personnel')
@@ -46,6 +46,7 @@ export default async function DeptAdminPage() {
 
   const moduleIso = (deptFlags as any)?.module_iso ?? false
   const moduleNeris = (deptFlags as any)?.module_neris ?? false
+  const moduleMedical = (deptFlags as any)?.module_medical ?? false
   const publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
   const hasPendingSetup = (pendingSetupCount ?? 0) > 0
 
@@ -70,11 +71,13 @@ export default async function DeptAdminPage() {
           description="Manage attendance, approvals, and event settings"
           href="/dept-admin/events"
         />
-        <HubCard
-          title="Medical"
-          description="Supply types, storerooms, and medical inventory setup"
-          href="/dept-admin/medical"
-        />
+        {moduleMedical && (
+          <HubCard
+            title="Medical"
+            description="Supply types, storerooms, and medical inventory setup"
+            href="/dept-admin/medical"
+          />
+        )}
         <HubCard
           title="Training & Certs"
           description="Certification types, courses, and training setup"

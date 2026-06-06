@@ -57,20 +57,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
       isOfficerOrAbove
         ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
         : Promise.resolve({ data: [] }),
-      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris').eq('id', user.department_id).single(),
+      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris, module_medical').eq('id', user.department_id).single(),
       adminClient.from('incident_signatures').select('id', { count: 'exact', head: true }).eq('personnel_id', user.id).is('signed_at', null),
-      isOfficerOrAbove
-        ? adminClient.from('medical_stock_lots').select('id', { count: 'exact', head: true }).eq('department_id', user.department_id).eq('active', true).gt('quantity_remaining', 0).lte('expiration_date', thirtyDaysOut)
-        : Promise.resolve({ count: 0, data: null, error: null }),
+      Promise.resolve({ count: 0, data: null, error: null }), // medical alert resolved after deptFlags
     ])
     const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
     announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
-    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0) + (medicalAlertCount ?? 0)
     pendingSignatureCount = sigCount ?? 0
     publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
     moduleOperations = (deptFlags as any)?.module_operations ?? false
     moduleIso = (deptFlags as any)?.module_iso ?? false
     moduleNeris = (deptFlags as any)?.module_neris ?? false
+    const moduleMedical = (deptFlags as any)?.module_medical ?? false
+
+    // Medical alert badge — only when module is enabled
+    let medicalAlertBadge = 0
+    if (moduleMedical && isOfficerOrAbove) {
+      const thirtyDaysOutDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      const { count } = await adminClient.from('medical_stock_lots').select('id', { count: 'exact', head: true }).eq('department_id', user.department_id).eq('active', true).gt('quantity_remaining', 0).lte('expiration_date', thirtyDaysOutDate)
+      medicalAlertBadge = count ?? 0
+    }
+    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0) + medicalAlertBadge
   }
 
   const opsBadge = announcementUnreadCount > 0 ? announcementUnreadCount : undefined
