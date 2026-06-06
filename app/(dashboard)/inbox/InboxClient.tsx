@@ -64,7 +64,7 @@ export default function InboxClient({
   requests: any[]
   signatureRows: SignatureRow[]
   restockRequests: RestockRequest[]
-  expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null }[]
+  expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[]
   memberName: string
   initialTab: Tab
   isOfficerOrAbove: boolean
