@@ -14,10 +14,20 @@ export default function AppleIcon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: '40px',
         }}
       >
-        <div style={{ fontSize: 110, lineHeight: 1 }}>🔥</div>
+        <span
+          style={{
+            color: 'white',
+            fontSize: 82,
+            fontWeight: 800,
+            fontFamily: 'sans-serif',
+            letterSpacing: '-4px',
+            lineHeight: 1,
+          }}
+        >
+          F7
+        </span>
       </div>
     ),
     { ...size }
