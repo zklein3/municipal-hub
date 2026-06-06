@@ -774,7 +774,7 @@ export default function MedicalStoreClient({
 
             return (
               <div key={inv.id} className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
-                <div className="flex items-center px-5 py-4 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center px-5 py-4 gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <p className="text-sm font-semibold text-zinc-900">{supply.name}</p>
@@ -789,7 +789,7 @@ export default function MedicalStoreClient({
                       {total} {supply.unit_of_measure} on hand · PAR {inv.par_level}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  <div className="flex items-center gap-2 flex-wrap sm:justify-end">
                     <button onClick={() => setExpandedInvId(isExpanded ? null : inv.id)}
                       className="text-xs font-semibold text-blue-600 hover:text-blue-800">
                       {isExpanded ? 'Hide' : 'Lots'}
