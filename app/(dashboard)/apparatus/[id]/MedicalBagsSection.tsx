@@ -263,7 +263,7 @@ export default function MedicalBagsSection({
 
                   return (
                     <div key={item.id} className="rounded-xl border border-zinc-200 overflow-hidden">
-                      <div className="flex items-center px-4 py-3 gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center px-4 py-3 gap-2 sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-0.5">
                             <p className="text-sm font-semibold text-zinc-900">{supply.name}</p>
@@ -272,30 +272,30 @@ export default function MedicalBagsSection({
                           </div>
                           <p className="text-xs text-zinc-400">{total} {supply.unit_of_measure} · PAR {item.par_level}</p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:shrink-0">
                           {lots.length > 0 && (
-                            <button onClick={() => setExpandedInvId(isExpanded ? null : item.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                            <button onClick={() => setExpandedInvId(isExpanded ? null : item.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-800 text-center sm:text-left">
                               {isExpanded ? 'Hide' : 'Lots'}
                             </button>
                           )}
                           {canAct && srcAvailable && (
                             <button onClick={() => openRestock(item)}
-                              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${(status === 'low' || status === 'empty') ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50'}`}>
+                              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors text-center sm:text-left ${(status === 'low' || status === 'empty') ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' : 'border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-50'}`}>
                               Restock
                             </button>
                           )}
                           {canAct && total > 0 && destAvailable && (
                             <button onClick={() => openTransferOut(item)}
-                              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 text-center sm:text-left">
                               Transfer
                             </button>
                           )}
                           <button onClick={() => openUse(item)} disabled={total === 0}
-                            className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed text-center sm:text-left">
                             Use
                           </button>
                           {isOfficerOrAbove && (
-                            <button onClick={() => openReceive(item)} className="rounded-lg bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800">
+                            <button onClick={() => openReceive(item)} className="rounded-lg bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 text-center sm:text-left">
                               Receive
                             </button>
                           )}
