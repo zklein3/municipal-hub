@@ -107,8 +107,8 @@ export default async function MedicalPage() {
     ? await adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
     : { data: [] }
 
-  // Apparatus for display (apparatus-linked storerooms)
-  const apparatusIds = [...new Set((storerooms ?? []).map(s => s.apparatus_id).filter(Boolean))] as string[]
+  // Apparatus for display (apparatus-linked storerooms — use allDeptStorerooms so bags show unit numbers)
+  const apparatusIds = [...new Set((allDeptStorerooms ?? []).map(s => s.apparatus_id).filter(Boolean))] as string[]
   const { data: apparatusList } = apparatusIds.length > 0
     ? await adminClient.from('apparatus').select('id, unit_number, apparatus_types(name)').in('id', apparatusIds)
     : { data: [] }
