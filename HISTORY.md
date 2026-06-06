@@ -62,7 +62,7 @@
 - Medical batch waste expired — "Waste Expired" button at supply level wastes all expired active lots in one operation (reason + signatures collected once). Server action: `wasteExpiredLots`.
 - Medical bidirectional flow — MedicalBagsSection + MedicalCompartmentsSection both have Restock (pull from storeroom) and Transfer (push to storeroom). Unified terminology across all surfaces.
 - Medical reports location labels — `/reports/medical` expiring/expired section and stock vs PAR both show location type badge (Storeroom gray / Bag purple / Compartment blue) + apparatus unit number context for bags/compartments. Expired rows red-tinted; expired count badge in section header.
-- Inbox Restock tab — now shows expired lots with remaining stock as a red "Expired Stock" section at top, with "Waste →" link to `/medical`. Restock Requests section below. Tab badge turns red when expired lots present. Data fetched in `inbox/page.tsx` alongside reorder requests.
+- Inbox Restock tab — now shows expired lots with remaining stock as a red "Expired Stock" section at top, with "Go to →" link that routes to `/equipment/[id]` for bag lots or `/medical` for storeroom lots. Restock Requests section below. Tab badge turns red when expired lots present. Data fetched in `inbox/page.tsx` alongside reorder requests.
 - Outside training submissions — member-initiated log for external classes/conferences. Photo upload → Claude Haiku AI parse pre-fills fields. Purpose + NREMT category dropdowns (AIRWAY/CARDIOLOGY/TRAUMA/MEDICAL/OPERATIONS). Officer/admin reviews via Submissions tab in Training Admin; approval optionally links to cert type and auto-issues cert record. All submissions visible on member `/training` page with status + reviewer notes.
 - NERIS Special Incident Modifiers section added to `NERIS.md` — FIFA World Cup 2026 modifier documented with when-to-apply guidance
 - Security: enabled RLS on `qr_debug_scans` (was fully open — resolved Supabase critical alert)
@@ -164,6 +164,30 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-06-06 — Mobile UX Pass + Medical Transfer Fixes
+
+**Mobile button layouts (all pages now use 2-col grid on mobile):**
+- Inventory page (`/equipment`) apparatus cards: stack vertically, 4 buttons → 2×2 grid
+- Storage page item cards (`/equipment/storage`): action buttons → 2-col grid
+- Medical storeroom supply cards: stack vertically, buttons wrap below supply info
+- Medical storeroom lot rows: restructured — lot info + qty on top, buttons in 2-col grid below
+- Medical bags section in apparatus inventory: stack vertically, 2-col button grid
+
+**Medical transfer fixes:**
+- Transfer button was gated on `storerooms.length > 1` — now also shows when apparatus compartments exist
+- `apparatusMap` was built from station-only storerooms (always empty for bags) — fixed to use `allDeptStorerooms` so transfer destination dropdown shows unit number + bag name (e.g. "Engine 11 — Trauma Box")
+- DB constraint on `medical_stock_transactions.transaction_type` updated: old constraint allowed `transferred` + `expired_removed`; app was writing `transferred_out` / `transferred_in`. Constraint now matches app values: `received | dispensed | wasted | transferred_out | transferred_in | adjusted`
+
+**Inbox expired lots:**
+- "Waste →" replaced with "Go to →" — routes to `/equipment/[id]` for apparatus bag lots, `/medical` for storeroom lots. Member works the expired stock from the correct location context.
+
+**Medical bags — Receive button removed:**
+- Receiving stock is a storeroom-only action. Removed Receive button from MedicalBagsSection. Bag inventory correctly shows: Lots | Restock | Transfer | Use only.
+
+**PWA install:**
+- `PWAInstallButton` component added to sidebar (desktop + mobile). Catches `beforeinstallprompt` event and shows "Install App" button when Chrome signals the site is installable. Invisible until Chrome is ready. Fixes the gray-monogram home screen icon problem.
+- Manifest `start_url` changed from `/dashboard` → `/` (dashboard redirects unauthenticated users, which can block Chrome installability checks)
 
 ### 2026-06-04 — Medical Bag System + UX Fixes
 
