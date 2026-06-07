@@ -232,6 +232,11 @@ export async function createDeptAdmin(formData: FormData) {
     return { error: deptError.message }
   }
 
+  const { error: emailErr } = await adminClient.functions.invoke('send-welcome-email', {
+    body: { personnel_id: personnel.id },
+  })
+  if (emailErr) await logError(emailErr, '/admin/users', { metadata: { email, report_type: 'welcome_email' } })
+
   revalidatePath('/admin/users')
   return { success: true }
 }
@@ -325,6 +330,11 @@ export async function createDeptMember(formData: FormData) {
     await logError(deptError, '/dept-admin/personnel', { metadata: { email } })
     return { error: deptError.message }
   }
+
+  const { error: emailErr } = await adminClient.functions.invoke('send-welcome-email', {
+    body: { personnel_id: personnel.id },
+  })
+  if (emailErr) await logError(emailErr, '/dept-admin/personnel', { metadata: { email, report_type: 'welcome_email' } })
 
   revalidatePath('/dept-admin/personnel')
   revalidatePath('/dept-admin/setup')
