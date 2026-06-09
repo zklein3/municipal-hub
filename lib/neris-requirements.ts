@@ -7,7 +7,7 @@ export type NerisRequirementSection =
   | 'fire'
   | 'medical'
   | 'hazmat'
-  | 'rescue'
+  | 'casualty'
   | 'mutual_aid'
   | 'api'
 
@@ -45,6 +45,7 @@ export type NerisRecordInput = {
   aid_type?: string | null
   aid_direction?: string | null
   incident_persons?: {
+    record_type?: string;
     person_type: string; rescue_performed_by: string; rescue_mode: string;
     rescue_actions: string[]; rescue_impediments: string[]; presence_known: string;
     entrapped: boolean; vehicle_type: string; safety_device: string;
@@ -111,7 +112,7 @@ export type NerisRequirementSummary = {
     fire: boolean
     medical: boolean
     hazmat: boolean
-    rescue: boolean
+    casualty: boolean
     mutualAid: boolean
   }
 }
@@ -139,7 +140,7 @@ export const NERIS_SECTION_LABELS: Record<NerisRequirementSection, string> = {
   fire: 'Fire',
   medical: 'Medical',
   hazmat: 'Hazmat',
-  rescue: 'Rescue',
+  casualty: 'Casualty',
   mutual_aid: 'Mutual Aid',
   api: 'API',
 }
@@ -153,7 +154,7 @@ const NERIS_SECTION_ORDER: NerisRequirementSection[] = [
   'fire',
   'medical',
   'hazmat',
-  'rescue',
+  'casualty',
   'mutual_aid',
   'api',
 ]
@@ -298,17 +299,14 @@ export function getNerisActiveModules(context: NerisRequirementContext): NerisRe
   const mutualAidRows = context.mutualAidRows ?? []
 
   const coverType = incident.incident_type ?? null
-  const fireSubtype = incident.fire_subtype ?? null
   const isFireCover = coverType === 'fire'
-  const isMedicalCover = coverType === 'rescue'
   const isHazmatCover = coverType === 'special'
-  const isRescueCover = coverType === 'rescue'
 
   return {
     fire: isFireCover || STRUCTURE_FIRE_CODES.has(nerisCode ?? '') || OUTSIDE_FIRE_CODES.has(nerisCode ?? ''),
-    medical: isMedicalCover || hasAnyMarker(nerisCode, MEDICAL_CODE_MARKERS),
+    medical: hasAnyMarker(nerisCode, MEDICAL_CODE_MARKERS),
     hazmat: isHazmatCover || hasAnyMarker(nerisCode, HAZMAT_CODE_MARKERS),
-    rescue: isRescueCover || hasAnyMarker(nerisCode, RESCUE_CODE_MARKERS),
+    casualty: isFireCover || hasAnyMarker(nerisCode, RESCUE_CODE_MARKERS),
     mutualAid: mutualAidRows.length > 0 || hasText(incident.mutual_aid_direction) || hasText(incident.mutual_aid_department),
   }
 }
@@ -558,7 +556,7 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
   }
 
   if (modules.medical) {
-    const patientCount = neris.incident_persons?.length ?? 0
+    const patientCount = (neris.incident_persons ?? []).filter(p => p.record_type === 'patient' || (!p.record_type && p.evaluation_care)).length
     add({
       id: 'medical.patients',
       section: 'medical',
@@ -590,12 +588,12 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
     })
   }
 
-  if (modules.rescue) {
-    const victimCount = neris.incident_persons?.length ?? 0
+  if (modules.casualty) {
+    const victimCount = (neris.incident_persons ?? []).filter(p => p.record_type === 'casualty' || (!p.record_type && p.rescue_performed_by)).length
     add({
-      id: 'rescue.victims',
-      section: 'rescue',
-      label: 'At least one victim record',
+      id: 'casualty.victims',
+      section: 'casualty',
+      label: 'At least one casualty/victim record',
       severity: 'required',
       status: completeIf(victimCount > 0),
       source: 'neris_report',

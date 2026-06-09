@@ -77,7 +77,7 @@ const SECTION_ANCHORS: Record<string, string | null> = {
   fire: 'neris-section-fire',
   medical: 'neris-section-medical',
   hazmat: 'neris-section-hazmat',
-  rescue: 'neris-section-medical',
+  casualty: 'neris-section-casualty',
   mutual_aid: 'neris-section-mutual-aid',
   api: null,
 }
@@ -167,9 +167,9 @@ export default function NerisReportClient({
   const codeMatchesAny = (markers: string[]) => markers.some(m => nerisType.includes(m))
   const isFireType          = testingMode || coverType === 'fire'    || nerisType.startsWith('FIRE||')
   const isTransportationFire = nerisType.includes('TRANSPORTATION_FIRE') || (coverType === 'fire' && incident.fire_subtype === 'vehicle')
-  const isMedicalType = testingMode || coverType === 'rescue'  || codeMatchesAny(MEDICAL_MARKERS)
-  const isHazmatType  = testingMode || coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
-  const isRescueType  = testingMode || coverType === 'rescue'  || codeMatchesAny(RESCUE_MARKERS)
+  const isMedicalType  = testingMode || codeMatchesAny(MEDICAL_MARKERS)
+  const isHazmatType   = testingMode || coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
+  const isCasualtyType = testingMode || nerisType.startsWith('FIRE||') || codeMatchesAny(RESCUE_MARKERS)
   const isMotorVehicle = testingMode || nerisType.includes('MOTOR_VEHICLE') || nerisType.includes('EXTRICATION')
 
   // Which rescue types show vehicle fields vs entrapment-only vs neither
@@ -215,32 +215,48 @@ export default function NerisReportClient({
     nerisRecord?.outside_fire_acres != null ? String(nerisRecord.outside_fire_acres) : ''
   )
 
-  // Unified persons — rescue + medical per person
-  type IncidentPerson = {
+  // Medical patients — only evaluation/care fields
+  type IncidentPatient = {
     _id: string
-    // Who is this person
-    person_type: string        // FF | NONFF
-    // Rescue — how/by whom rescued
-    rescue_performed_by: string  // RESCUED_BY_FIREFIGHTER | RESCUED_BY_FF_RIT | EVAC_ASSISTED_BY_FIREFIGHTER | RESCUED_BY_NONFIREFIGHTER | SELF_EVACUATION | NO_RESCUE_NEEDED
-    rescue_mode: string          // EXTRICATION | DISENTANGLEMENT | RECOVERY | REMOVAL_FROM_STRUCTURE | OTHER (required when FF rescue)
-    rescue_actions: string[]     // TypeRescueActionValue[] (multi-select, FF rescue only)
-    rescue_impediments: string[] // TypeRescueImpedimentValue[] (multi-select, FF rescue only)
-    presence_known: string       // KNOWN_DISPATCH | KNOWN_ARRIVAL | KNOWN_DURING (NONFF only)
-    entrapped: boolean
-    vehicle_type: string
-    safety_device: string
-    // Casualty
-    casualty_type: string    // UNINJURED | INJURED_NONFATAL | INJURED_FATAL
-    casualty_cause: string
-    // Medical
     evaluation_care: string
     improved_status: string
     disposition: string
   }
-  const initPersons = (): IncidentPerson[] => {
+  const initPatients = (): IncidentPatient[] => {
     const saved = nerisRecord?.incident_persons
-    if (Array.isArray(saved) && saved.length > 0) {
-      return saved.map((p: any, i: number) => ({
+    if (!Array.isArray(saved) || saved.length === 0) return []
+    return saved
+      .filter((p: any) => p.record_type === 'patient' || (!p.record_type && p.evaluation_care))
+      .map((p: any, i: number) => ({
+        _id: String(i),
+        evaluation_care: p.evaluation_care ?? '',
+        improved_status: p.improved_status ?? '',
+        disposition: p.disposition ?? '',
+      }))
+  }
+  const [incidentPatients, setIncidentPatients] = useState<IncidentPatient[]>(initPatients)
+
+  // Casualty victims — rescue + casualty fields (fire, extrication, tech rescue)
+  type IncidentCasualty = {
+    _id: string
+    person_type: string
+    rescue_performed_by: string
+    rescue_mode: string
+    rescue_actions: string[]
+    rescue_impediments: string[]
+    presence_known: string
+    entrapped: boolean
+    vehicle_type: string
+    safety_device: string
+    casualty_type: string
+    casualty_cause: string
+  }
+  const initCasualties = (): IncidentCasualty[] => {
+    const saved = nerisRecord?.incident_persons
+    if (!Array.isArray(saved) || saved.length === 0) return []
+    return saved
+      .filter((p: any) => p.record_type === 'casualty' || (!p.record_type && (p.rescue_performed_by || p.casualty_type) && !p.evaluation_care))
+      .map((p: any, i: number) => ({
         _id: String(i),
         person_type: p.person_type ?? '',
         rescue_performed_by: p.rescue_performed_by ?? '',
@@ -253,14 +269,9 @@ export default function NerisReportClient({
         safety_device: p.safety_device ?? '',
         casualty_type: p.casualty_type ?? '',
         casualty_cause: p.casualty_cause ?? '',
-        evaluation_care: p.evaluation_care ?? '',
-        improved_status: p.improved_status ?? '',
-        disposition: p.disposition ?? '',
       }))
-    }
-    return []
   }
-  const [incidentPersons, setIncidentPersons] = useState<IncidentPerson[]>(initPersons)
+  const [incidentCasualties, setIncidentCasualties] = useState<IncidentCasualty[]>(initCasualties)
 
   // Hazmat module
   const [hazsitDisposition, setHazsitDisposition] = useState<string>(nerisRecord?.hazsit_disposition ?? '')
@@ -323,7 +334,10 @@ export default function NerisReportClient({
       aid_in_service_at: aidInServiceAt ? new Date(aidInServiceAt).toISOString() : null,
       aid_type: aidType || null,
       aid_direction: aidDirection || null,
-      incident_persons: incidentPersons.map(p => ({ person_type: p.person_type, rescue_performed_by: p.rescue_performed_by, rescue_mode: p.rescue_mode, rescue_actions: p.rescue_actions, rescue_impediments: p.rescue_impediments, presence_known: p.presence_known, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+      incident_persons: [
+        ...incidentPatients.map(p => ({ record_type: 'patient', person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [] as string[], rescue_impediments: [] as string[], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '', evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+        ...incidentCasualties.map(c => ({ record_type: 'casualty', person_type: c.person_type, rescue_performed_by: c.rescue_performed_by, rescue_mode: c.rescue_mode, rescue_actions: c.rescue_actions, rescue_impediments: c.rescue_impediments, presence_known: c.presence_known, entrapped: c.entrapped, vehicle_type: c.vehicle_type, safety_device: c.safety_device, casualty_type: c.casualty_type, casualty_cause: c.casualty_cause, evaluation_care: '', improved_status: '', disposition: '' })),
+      ],
       hazsit_disposition: hazsitDisposition || null,
       hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
       chemical_name: chemicalName || null,
@@ -1175,248 +1189,270 @@ export default function NerisReportClient({
           </section>
         )}
 
-        {/* Unified Persons on Scene — rescue + medical per person */}
-        {(isMedicalType || isRescueType) && (
-          <section id="neris-section-medical" className={`${getSectionCls('medical', 'rescue')} scroll-mt-6`}>
+        {/* Medical Module — Patients */}
+        {isMedicalType && (
+          <section id="neris-section-medical" className={`${getSectionCls('medical')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-900">Medical / Rescue — Patients & Victims</h2>
-              {testingMode && coverType !== 'rescue' && (
-                <span className="text-xs text-amber-600 font-medium">Testing — not a rescue/medical incident</span>
+              <h2 className="text-sm font-semibold text-zinc-900">Medical — Patients</h2>
+              {testingMode && !codeMatchesAny(MEDICAL_MARKERS) && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a medical incident</span>
               )}
             </div>
-            <p className="text-xs text-zinc-400 -mt-1">One card per person. Rescue and medical info are linked — Person 1 is both Victim 1 and Patient 1 in the NERIS submission.</p>
+            <p className="text-xs text-zinc-400 -mt-1">One card per patient.</p>
 
-            {isRescueType && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelCls}>Vehicles Involved</label>
-                  <input
-                    type="number" min={0} value={vehiclesInvolved}
-                    onChange={e => setVehiclesInvolved(e.target.value)}
-                    disabled={isSubmitted} placeholder="0" className={inputCls}
-                  />
-                </div>
-              </div>
-            )}
-
-            {incidentPersons.length === 0 && (
-              <p className="text-sm text-zinc-400 italic">No persons added yet.</p>
+            {incidentPatients.length === 0 && (
+              <p className="text-sm text-zinc-400 italic">No patients added yet.</p>
             )}
 
             <div className="space-y-4">
-              {incidentPersons.map((p, i) => (
+              {incidentPatients.map((p, i) => (
                 <div key={p._id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-zinc-800">Person {i + 1}</p>
+                    <p className="text-sm font-semibold text-zinc-800">Patient {i + 1}</p>
                     {!isSubmitted && (
                       <button
                         type="button"
-                        onClick={() => setIncidentPersons(prev => prev.filter((_, idx) => idx !== i))}
+                        onClick={() => setIncidentPatients(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Evaluation / Care</label>
+                    <NerisCombobox
+                      groups={toGroups(NERIS_PATIENT_EVALUATION_CARE, 'Evaluation / Care')}
+                      value={p.evaluation_care}
+                      onChange={val => setIncidentPatients(prev => prev.map((x, idx) => idx === i ? { ...x, evaluation_care: val as string } : x))}
+                      placeholder="Select evaluation / care…"
+                      disabled={isSubmitted}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Status After Intervention</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_PATIENT_IMPROVED_STATUS, 'Patient Status')}
+                        value={p.improved_status}
+                        onChange={val => setIncidentPatients(prev => prev.map((x, idx) => idx === i ? { ...x, improved_status: val as string } : x))}
+                        placeholder="Select status…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Disposition</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_MEDICAL_DISPOSITION, 'Medical Disposition')}
+                        value={p.disposition}
+                        onChange={val => setIncidentPatients(prev => prev.map((x, idx) => idx === i ? { ...x, disposition: val as string } : x))}
+                        placeholder="Select disposition…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!isSubmitted && (
+              <button
+                type="button"
+                onClick={() => setIncidentPatients(prev => [...prev, { _id: String(Date.now()), evaluation_care: '', improved_status: '', disposition: '' }])}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors">
+                + Add Patient
+              </button>
+            )}
+          </section>
+        )}
+
+        {/* Casualty Module — Victims (fire, extrication, tech rescue) */}
+        {isCasualtyType && (
+          <section id="neris-section-casualty" className={`${getSectionCls('casualty')} scroll-mt-6`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900">Casualty — Victims</h2>
+              {testingMode && !nerisType.startsWith('FIRE||') && !codeMatchesAny(RESCUE_MARKERS) && (
+                <span className="text-xs text-amber-600 font-medium">Testing — not a fire/rescue incident</span>
+              )}
+            </div>
+            <p className="text-xs text-zinc-400 -mt-1">One card per victim. Applies to fires, extrications, and technical rescue incidents.</p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Vehicles Involved</label>
+                <input
+                  type="number" min={0} value={vehiclesInvolved}
+                  onChange={e => setVehiclesInvolved(e.target.value)}
+                  disabled={isSubmitted} placeholder="0" className={inputCls}
+                />
+              </div>
+            </div>
+
+            {incidentCasualties.length === 0 && (
+              <p className="text-sm text-zinc-400 italic">No victims added yet.</p>
+            )}
+
+            <div className="space-y-4">
+              {incidentCasualties.map((p, i) => (
+                <div key={p._id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-zinc-800">Victim {i + 1}</p>
+                    {!isSubmitted && (
+                      <button
+                        type="button"
+                        onClick={() => setIncidentCasualties(prev => prev.filter((_, idx) => idx !== i))}
                         className="text-xs text-red-500 hover:text-red-700 font-medium">
                         Remove
                       </button>
                     )}
                   </div>
 
-                  {/* Rescue fields */}
-                  {isRescueType && (
+                  {/* Person type + casualty type */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Person Type</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_PERSON_TYPE, 'Person Type')}
+                        value={p.person_type}
+                        onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, person_type: val as string } : x))}
+                        placeholder="Firefighter or civilian…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Casualty Type</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_CASUALTY_TYPE, 'Casualty Type')}
+                        value={p.casualty_type}
+                        onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, casualty_type: val as string } : x))}
+                        placeholder="Select casualty type…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  </div>
+
+                  {p.casualty_type && p.casualty_type !== 'UNINJURED' && (
+                    <div>
+                      <label className={labelCls}>Casualty Cause</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_CASUALTY_CAUSE, 'Casualty Cause')}
+                        value={p.casualty_cause}
+                        onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, casualty_cause: val as string } : x))}
+                        placeholder="Select cause of injury…"
+                        disabled={isSubmitted}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelCls}>How Rescued</label>
+                    <NerisCombobox
+                      groups={toGroups(NERIS_RESCUE_PERFORMED_BY, 'How Rescued')}
+                      value={p.rescue_performed_by}
+                      onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_performed_by: val as string, rescue_mode: '', rescue_actions: [], rescue_impediments: [] } : x))}
+                      placeholder="Select how person was rescued…"
+                      disabled={isSubmitted}
+                    />
+                  </div>
+
+                  {isFfRescue(p.rescue_performed_by) && (
                     <>
-                      {/* Row 1: Person type + casualty type */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelCls}>Person Type</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_PERSON_TYPE, 'Person Type')}
-                            value={p.person_type}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, person_type: val as string } : x))}
-                            placeholder="Firefighter or civilian…"
-                            disabled={isSubmitted}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Casualty Type</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_CASUALTY_TYPE, 'Casualty Type')}
-                            value={p.casualty_type}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, casualty_type: val as string } : x))}
-                            placeholder="Select casualty type…"
-                            disabled={isSubmitted}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Casualty cause — only when injured */}
-                      {p.casualty_type && p.casualty_type !== 'UNINJURED' && (
-                        <div>
-                          <label className={labelCls}>Casualty Cause</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_CASUALTY_CAUSE, 'Casualty Cause')}
-                            value={p.casualty_cause}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, casualty_cause: val as string } : x))}
-                            placeholder="Select cause of injury…"
-                            disabled={isSubmitted}
-                          />
-                        </div>
-                      )}
-
-                      {/* Row 2: How rescued */}
                       <div>
-                        <label className={labelCls}>How Rescued</label>
+                        <label className={labelCls}>Rescue Method</label>
                         <NerisCombobox
-                          groups={toGroups(NERIS_RESCUE_PERFORMED_BY, 'How Rescued')}
-                          value={p.rescue_performed_by}
-                          onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_performed_by: val as string, rescue_mode: '', rescue_actions: [], rescue_impediments: [] } : x))}
-                          placeholder="Select how person was rescued…"
+                          groups={toGroups(NERIS_RESCUE_MODE, 'Rescue Method')}
+                          value={p.rescue_mode}
+                          onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_mode: val as string } : x))}
+                          placeholder="Extrication, removal from structure…"
                           disabled={isSubmitted}
                         />
                       </div>
 
-                      {/* FF rescue fields — only when rescue was performed by a firefighter */}
-                      {isFfRescue(p.rescue_performed_by) && (
-                        <>
+                      {showEntrapmentField(p.rescue_mode) && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={p.entrapped}
+                            onChange={e => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, entrapped: e.target.checked } : x))}
+                            disabled={isSubmitted}
+                            className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                          />
+                          <span className="text-sm font-medium text-zinc-700">Person was entrapped</span>
+                        </label>
+                      )}
+
+                      {showVehicleFields(p.rescue_mode) && (
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className={labelCls}>Rescue Method</label>
+                            <label className={labelCls}>Vehicle Type</label>
                             <NerisCombobox
-                              groups={toGroups(NERIS_RESCUE_MODE, 'Rescue Method')}
-                              value={p.rescue_mode}
-                              onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_mode: val as string } : x))}
-                              placeholder="Extrication, removal from structure…"
+                              groups={toGroups(NERIS_VEHICLE_TYPE, 'Vehicle Type')}
+                              value={p.vehicle_type}
+                              onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, vehicle_type: val as string } : x))}
+                              placeholder="Select vehicle type…"
                               disabled={isSubmitted}
                             />
                           </div>
+                          <div>
+                            <label className={labelCls}>Safety Device</label>
+                            <NerisCombobox
+                              groups={toGroups(NERIS_SAFETY_DEVICE, 'Safety Device')}
+                              value={p.safety_device}
+                              onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, safety_device: val as string } : x))}
+                              placeholder="Select safety device…"
+                              disabled={isSubmitted}
+                            />
+                          </div>
+                        </div>
+                      )}
 
-                          {/* Entrapment checkbox */}
-                          {showEntrapmentField(p.rescue_mode) && (
-                            <label className="flex items-center gap-2 cursor-pointer">
+                      <div>
+                        <label className={labelCls}>Rescue Actions</label>
+                        <div className="flex flex-wrap gap-2">
+                          {NERIS_RESCUE_ACTIONS.map(a => (
+                            <label key={a.code} className="flex items-center gap-1.5 cursor-pointer">
                               <input
                                 type="checkbox"
-                                checked={p.entrapped}
-                                onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, entrapped: e.target.checked } : x))}
+                                checked={p.rescue_actions.includes(a.code)}
+                                onChange={e => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_actions: e.target.checked ? [...x.rescue_actions, a.code] : x.rescue_actions.filter(c => c !== a.code) } : x))}
                                 disabled={isSubmitted}
                                 className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
                               />
-                              <span className="text-sm font-medium text-zinc-700">Person was entrapped</span>
+                              <span className="text-xs text-zinc-700">{a.label}</span>
                             </label>
-                          )}
-
-                          {/* Vehicle fields — extrication only */}
-                          {showVehicleFields(p.rescue_mode) && (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className={labelCls}>Vehicle Type</label>
-                                <NerisCombobox
-                                  groups={toGroups(NERIS_VEHICLE_TYPE, 'Vehicle Type')}
-                                  value={p.vehicle_type}
-                                  onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, vehicle_type: val as string } : x))}
-                                  placeholder="Select vehicle type…"
-                                  disabled={isSubmitted}
-                                />
-                              </div>
-                              <div>
-                                <label className={labelCls}>Safety Device</label>
-                                <NerisCombobox
-                                  groups={toGroups(NERIS_SAFETY_DEVICE, 'Safety Device')}
-                                  value={p.safety_device}
-                                  onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, safety_device: val as string } : x))}
-                                  placeholder="Select safety device…"
-                                  disabled={isSubmitted}
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Rescue actions multi-select */}
-                          <div>
-                            <label className={labelCls}>Rescue Actions</label>
-                            <div className="flex flex-wrap gap-2">
-                              {NERIS_RESCUE_ACTIONS.map(a => (
-                                <label key={a.code} className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={p.rescue_actions.includes(a.code)}
-                                    onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_actions: e.target.checked ? [...x.rescue_actions, a.code] : x.rescue_actions.filter(c => c !== a.code) } : x))}
-                                    disabled={isSubmitted}
-                                    className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                                  />
-                                  <span className="text-xs text-zinc-700">{a.label}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Rescue impediments multi-select */}
-                          <div>
-                            <label className={labelCls}>Impediments</label>
-                            <div className="flex flex-wrap gap-2">
-                              {NERIS_RESCUE_IMPEDIMENTS.map(imp => (
-                                <label key={imp.code} className="flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={p.rescue_impediments.includes(imp.code)}
-                                    onChange={e => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_impediments: e.target.checked ? [...x.rescue_impediments, imp.code] : x.rescue_impediments.filter(c => c !== imp.code) } : x))}
-                                    disabled={isSubmitted}
-                                    className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                                  />
-                                  <span className="text-xs text-zinc-700">{imp.label}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Presence known — NONFF only */}
-                      {p.person_type === 'NONFF' && p.rescue_performed_by && (
-                        <div>
-                          <label className={labelCls}>When Was Presence Known</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_PRESENCE_KNOWN, 'Presence Known')}
-                            value={p.presence_known}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, presence_known: val as string } : x))}
-                            placeholder="When was person's presence known…"
-                            disabled={isSubmitted}
-                          />
+                          ))}
                         </div>
-                      )}
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Impediments</label>
+                        <div className="flex flex-wrap gap-2">
+                          {NERIS_RESCUE_IMPEDIMENTS.map(imp => (
+                            <label key={imp.code} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={p.rescue_impediments.includes(imp.code)}
+                                onChange={e => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, rescue_impediments: e.target.checked ? [...x.rescue_impediments, imp.code] : x.rescue_impediments.filter(c => c !== imp.code) } : x))}
+                                disabled={isSubmitted}
+                                className="rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                              />
+                              <span className="text-xs text-zinc-700">{imp.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     </>
                   )}
 
-                  {/* Medical fields */}
-                  {isMedicalType && (
-                    <div className={`space-y-3 ${isRescueType ? 'border-t border-zinc-200 pt-3' : ''}`}>
-                      {isRescueType && <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Medical</p>}
-                      <div>
-                        <label className={labelCls}>Evaluation / Care</label>
-                        <NerisCombobox
-                          groups={toGroups(NERIS_PATIENT_EVALUATION_CARE, 'Evaluation / Care')}
-                          value={p.evaluation_care}
-                          onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, evaluation_care: val as string } : x))}
-                          placeholder="Select evaluation / care…"
-                          disabled={isSubmitted}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelCls}>Status After Intervention</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_PATIENT_IMPROVED_STATUS, 'Patient Status')}
-                            value={p.improved_status}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, improved_status: val as string } : x))}
-                            placeholder="Select status…"
-                            disabled={isSubmitted}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Disposition</label>
-                          <NerisCombobox
-                            groups={toGroups(NERIS_MEDICAL_DISPOSITION, 'Medical Disposition')}
-                            value={p.disposition}
-                            onChange={val => setIncidentPersons(prev => prev.map((x, idx) => idx === i ? { ...x, disposition: val as string } : x))}
-                            placeholder="Select disposition…"
-                            disabled={isSubmitted}
-                          />
-                        </div>
-                      </div>
+                  {p.person_type === 'NONFF' && p.rescue_performed_by && (
+                    <div>
+                      <label className={labelCls}>When Was Presence Known</label>
+                      <NerisCombobox
+                        groups={toGroups(NERIS_PRESENCE_KNOWN, 'Presence Known')}
+                        value={p.presence_known}
+                        onChange={val => setIncidentCasualties(prev => prev.map((x, idx) => idx === i ? { ...x, presence_known: val as string } : x))}
+                        placeholder="When was person's presence known…"
+                        disabled={isSubmitted}
+                      />
                     </div>
                   )}
                 </div>
@@ -1426,9 +1462,9 @@ export default function NerisReportClient({
             {!isSubmitted && (
               <button
                 type="button"
-                onClick={() => setIncidentPersons(prev => [...prev, { _id: String(Date.now()), person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [], rescue_impediments: [], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '', evaluation_care: '', improved_status: '', disposition: '' }])}
+                onClick={() => setIncidentCasualties(prev => [...prev, { _id: String(Date.now()), person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [], rescue_impediments: [], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '' }])}
                 className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors">
-                + Add Person
+                + Add Victim
               </button>
             )}
           </section>
@@ -1536,7 +1572,10 @@ export default function NerisReportClient({
                     fire_cause_code: fireCauseCode || null,
                     aid_type: aidType || null,
                     aid_direction: aidDirection || null,
-                    incident_persons: incidentPersons.map(p => ({ person_type: p.person_type, rescue_performed_by: p.rescue_performed_by, rescue_mode: p.rescue_mode, rescue_actions: p.rescue_actions, rescue_impediments: p.rescue_impediments, presence_known: p.presence_known, entrapped: p.entrapped, vehicle_type: p.vehicle_type, safety_device: p.safety_device, casualty_type: p.casualty_type, casualty_cause: p.casualty_cause, evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+                    incident_persons: [
+        ...incidentPatients.map(p => ({ record_type: 'patient', person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [] as string[], rescue_impediments: [] as string[], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '', evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
+        ...incidentCasualties.map(c => ({ record_type: 'casualty', person_type: c.person_type, rescue_performed_by: c.rescue_performed_by, rescue_mode: c.rescue_mode, rescue_actions: c.rescue_actions, rescue_impediments: c.rescue_impediments, presence_known: c.presence_known, entrapped: c.entrapped, vehicle_type: c.vehicle_type, safety_device: c.safety_device, casualty_type: c.casualty_type, casualty_cause: c.casualty_cause, evaluation_care: '', improved_status: '', disposition: '' })),
+      ],
                     hazsit_disposition: hazsitDisposition || null,
                     hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
                     chemical_name: chemicalName || null,

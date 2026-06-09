@@ -325,7 +325,8 @@ function buildNerisPayload(
   const FF_RESCUE_TYPES = new Set(['RESCUED_BY_FIREFIGHTER', 'RESCUED_BY_FF_RIT', 'EVAC_ASSISTED_BY_FIREFIGHTER'])
   const persons = neris?.incident_persons ?? []
 
-  const rescuePersons = persons.filter((p: any) =>
+  const casualties = persons.filter((p: any) => p.record_type === 'casualty' || (!p.record_type && (p.rescue_performed_by || p.casualty_type) && !p.evaluation_care))
+  const rescuePersons = casualties.filter((p: any) =>
     p.rescue_performed_by && p.rescue_performed_by !== 'NO_RESCUE_NEEDED'
   )
   if (rescuePersons.length > 0) {
@@ -376,7 +377,7 @@ function buildNerisPayload(
   }
 
   // ── Medical module (MedicalPayload per person) ───────────────────────────────
-  const medicalPersons = persons.filter((p: any) => p.evaluation_care)
+  const medicalPersons = persons.filter((p: any) => p.record_type === 'patient' || (!p.record_type && p.evaluation_care))
   if (medicalPersons.length > 0) {
     payload.medical_details = medicalPersons.map((p: any) => {
       const patient: Record<string, unknown> = {
