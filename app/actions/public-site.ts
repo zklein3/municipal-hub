@@ -419,6 +419,96 @@ export async function updateRecordRequestStatus(formData: FormData) {
   return { success: true }
 }
 
+export async function submitPublicFeedback(formData: FormData) {
+  const adminClient = createAdminClient()
+
+  const department_id = formData.get('department_id') as string
+  const feedback_type = formData.get('feedback_type') as string
+  const contact_name  = (formData.get('contact_name') as string)?.trim() || null
+  const contact_email = (formData.get('contact_email') as string)?.trim() || null
+  const message       = (formData.get('message') as string)?.trim()
+  const page_url      = (formData.get('page_url') as string)?.trim() || null
+
+  if (!department_id || !message) {
+    return { error: 'Please enter a message.' }
+  }
+
+  if (!['feedback', 'bug_report'].includes(feedback_type)) {
+    return { error: 'Invalid feedback type.' }
+  }
+
+  if (contact_email) {
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRx.test(contact_email)) return { error: 'Please enter a valid email address.' }
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('public_feedback')
+    .insert({ department_id, feedback_type, contact_name, contact_email, message, page_url })
+
+  if (dbErr) {
+    await logError(dbErr, 'public/feedback')
+    return { error: 'Something went wrong. Please try again.' }
+  }
+
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name')
+    .eq('id', department_id)
+    .single()
+
+  await logEvent({
+    log_type: 'user_report',
+    page: '/dept/feedback',
+    department_id,
+    message: [
+      `New ${feedback_type === 'bug_report' ? 'bug report' : 'feedback'} submitted.`,
+      contact_name ? `Name: ${contact_name}` : null,
+      contact_email ? `Email: ${contact_email}` : null,
+      `Department: ${dept?.name ?? department_id}`,
+      `Message: ${message}`,
+      `Review at: https://www.fireops7.com/inbox`,
+    ].filter(Boolean).join('\n'),
+    metadata: { department_id, feedback_type },
+  })
+
+  return { success: true }
+}
+
+// ─── Inbox: Update public feedback status ────────────────────────────────────
+export async function updatePublicFeedbackStatus(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const { data: myDeptList } = await adminClient
+    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
+  const myDept = myDeptList?.[0]
+  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+
+  const feedback_id   = formData.get('feedback_id') as string
+  const status        = formData.get('status') as string
+  const reviewer_notes = (formData.get('reviewer_notes') as string)?.trim() || null
+
+  if (!['new', 'reviewed', 'resolved'].includes(status)) return { error: 'Invalid status.' }
+
+  const { error: dbErr } = await adminClient
+    .from('public_feedback')
+    .update({ status, reviewer_notes, updated_at: new Date().toISOString() })
+    .eq('id', feedback_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true }
+}
+
 export async function submitRecordRequest(formData: FormData) {
   const adminClient = createAdminClient()
 

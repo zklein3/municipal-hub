@@ -4,10 +4,11 @@ import { useState } from 'react'
 import BurnPermitsTab from './BurnPermitsTab'
 import RecordRequestsTab from './RecordRequestsTab'
 import RestockTab, { type RestockRequest } from './RestockTab'
+import FeedbackTab from './FeedbackTab'
 import IncidentSignaturePadModal from '../signatures/IncidentSignaturePadModal'
 import EventAttendanceSignaturePadModal from '../signatures/EventAttendanceSignaturePadModal'
 
-type Tab = 'permits' | 'records' | 'signatures' | 'restock'
+type Tab = 'permits' | 'records' | 'signatures' | 'restock' | 'feedback'
 
 type IncidentSignatureRow = {
   type: 'incident'
@@ -52,6 +53,7 @@ export default function InboxClient({
   signatureRows,
   restockRequests,
   expiredLots,
+  feedbackItems,
   memberName,
   initialTab,
   isOfficerOrAbove,
@@ -65,6 +67,7 @@ export default function InboxClient({
   signatureRows: SignatureRow[]
   restockRequests: RestockRequest[]
   expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[]
+  feedbackItems: any[]
   memberName: string
   initialTab: Tab
   isOfficerOrAbove: boolean
@@ -83,6 +86,7 @@ export default function InboxClient({
 
   const pendingPermits  = permits.filter(p => p.status === 'pending').length
   const pendingRequests = requests.filter(r => r.status === 'pending').length
+  const newFeedback     = feedbackItems.filter(f => f.status === 'new').length
 
   function handleSigned(sig_id: string) {
     setPendingSigs(prev => prev.filter(r => r.sig_id !== sig_id))
@@ -147,6 +151,21 @@ export default function InboxClient({
                   tab === 'records' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
                 }`}>
                   {pendingRequests}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setTab('feedback')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                tab === 'feedback' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+              }`}
+            >
+              Feedback
+              {newFeedback > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                  tab === 'feedback' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                }`}>
+                  {newFeedback}
                 </span>
               )}
             </button>
@@ -280,6 +299,10 @@ export default function InboxClient({
 
       {tab === 'restock' && isOfficerOrAbove && moduleMedical && (
         <RestockTab requests={restockRequests} expiredLots={expiredLots} />
+      )}
+
+      {tab === 'feedback' && isOfficerOrAbove && (
+        <FeedbackTab items={feedbackItems} />
       )}
 
       {activeSig && activeSig.type === 'incident' && (

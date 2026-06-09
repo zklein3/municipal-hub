@@ -1,0 +1,208 @@
+'use client'
+
+import { useState } from 'react'
+import { updatePublicFeedbackStatus } from '@/app/actions/public-site'
+
+type Status = 'new' | 'reviewed' | 'resolved'
+
+interface Feedback {
+  id: string
+  feedback_type: 'feedback' | 'bug_report'
+  contact_name: string | null
+  contact_email: string | null
+  message: string
+  page_url: string | null
+  status: Status
+  reviewer_notes: string | null
+  created_at: string
+}
+
+const STATUS_STYLES: Record<Status, string> = {
+  new:      'bg-yellow-100 text-yellow-700',
+  reviewed: 'bg-blue-100 text-blue-700',
+  resolved: 'bg-green-100 text-green-700',
+}
+
+const STATUS_LABELS: Record<Status, string> = {
+  new:      'New',
+  reviewed: 'Reviewed',
+  resolved: 'Resolved',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  feedback:   'Feedback',
+  bug_report: 'Problem Report',
+}
+
+function formatDateTime(d: string) {
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+export default function FeedbackTab({ items: initialItems }: { items: Feedback[] }) {
+  const [items, setItems] = useState(initialItems)
+  const [filter, setFilter] = useState<'all' | Status>('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reviewerNotes, setReviewerNotes] = useState('')
+
+  const filtered = filter === 'all' ? items : items.filter(i => i.status === filter)
+
+  const counts = {
+    all:      items.length,
+    new:      items.filter(i => i.status === 'new').length,
+    reviewed: items.filter(i => i.status === 'reviewed').length,
+    resolved: items.filter(i => i.status === 'resolved').length,
+  }
+
+  function openExpand(item: Feedback) {
+    if (expandedId === item.id) {
+      setExpandedId(null)
+    } else {
+      setExpandedId(item.id)
+      setReviewerNotes(item.reviewer_notes ?? '')
+    }
+    setError(null)
+  }
+
+  async function handleAction(id: string, status: Status) {
+    setLoading(true); setError(null)
+    const fd = new FormData()
+    fd.set('feedback_id', id)
+    fd.set('status', status)
+    fd.set('reviewer_notes', reviewerNotes)
+    const result = await updatePublicFeedbackStatus(fd)
+    if (result.error) {
+      setError(result.error)
+    } else {
+      setItems(prev => prev.map(i => i.id === id
+        ? { ...i, status, reviewer_notes: reviewerNotes || null }
+        : i
+      ))
+      setExpandedId(null)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div>
+      {/* Filter bar */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {(['all', 'new', 'reviewed', 'resolved'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+              filter === f ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300'
+            }`}>
+            {f === 'all' ? 'All' : STATUS_LABELS[f as Status]}
+            {' '}({counts[f]})
+          </button>
+        ))}
+      </div>
+
+      {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {filtered.length === 0 ? (
+        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center">
+          <p className="text-sm text-zinc-400">No {filter === 'all' ? '' : STATUS_LABELS[filter as Status].toLowerCase() + ' '}feedback.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtered.map(item => {
+            const isExpanded = expandedId === item.id
+
+            return (
+              <div key={item.id} className="rounded-xl bg-white border border-zinc-200 overflow-hidden">
+                <div className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-sm font-bold text-zinc-900">{item.contact_name || 'Anonymous'}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[item.status]}`}>
+                          {STATUS_LABELS[item.status]}
+                        </span>
+                        <span className="rounded-full bg-zinc-100 text-zinc-500 px-2 py-0.5 text-xs font-medium">
+                          {TYPE_LABELS[item.feedback_type] ?? item.feedback_type}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-500 line-clamp-1">{item.message}</p>
+                    </div>
+                    <button onClick={() => openExpand(item)}
+                      className="text-xs font-semibold text-zinc-500 hover:text-zinc-700 shrink-0">
+                      {isExpanded ? 'Close' : 'Review'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(item.created_at)}</p>
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-zinc-100 px-5 py-4 flex flex-col gap-4 bg-zinc-50">
+                    {(item.contact_name || item.contact_email) && (
+                      <div className="text-xs">
+                        <p className="text-zinc-400 font-semibold uppercase tracking-wide mb-1">Contact</p>
+                        {item.contact_name && <p className="text-zinc-700">{item.contact_name}</p>}
+                        {item.contact_email && <p className="text-zinc-700">{item.contact_email}</p>}
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wide mb-1">Message</p>
+                      <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-line">{item.message}</p>
+                    </div>
+
+                    {item.page_url && (
+                      <div className="text-xs">
+                        <p className="text-zinc-400 font-semibold uppercase tracking-wide mb-1">Page</p>
+                        <p className="text-zinc-500 break-all">{item.page_url}</p>
+                      </div>
+                    )}
+
+                    <div>
+                      <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wide mb-1">Reviewer Notes</p>
+                      <textarea
+                        value={reviewerNotes}
+                        onChange={e => setReviewerNotes(e.target.value)}
+                        rows={2}
+                        placeholder="Internal notes (optional)"
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap">
+                      {item.status !== 'reviewed' && (
+                        <button
+                          onClick={() => handleAction(item.id, 'reviewed')}
+                          disabled={loading}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                        >
+                          Mark Reviewed
+                        </button>
+                      )}
+                      {item.status !== 'resolved' && (
+                        <button
+                          onClick={() => handleAction(item.id, 'resolved')}
+                          disabled={loading}
+                          className="rounded-lg border border-green-200 bg-white px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 transition-colors"
+                        >
+                          Mark Resolved
+                        </button>
+                      )}
+                      {item.status !== 'new' && (
+                        <button
+                          onClick={() => handleAction(item.id, 'new')}
+                          disabled={loading}
+                          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                        >
+                          Reopen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

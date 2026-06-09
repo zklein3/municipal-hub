@@ -95,9 +95,10 @@ export default async function InboxPage({
   let deptConfig: any = null
   let restockRequests: any[] = []
   let expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[] = []
+  let feedbackItems: any[] = []
 
   if (isOfficerOrAbove && department_id) {
-    const [deptRes, permitsRes, recordsRes] = await Promise.all([
+    const [deptRes, permitsRes, recordsRes, feedbackRes] = await Promise.all([
       adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions, module_medical').eq('id', department_id).single(),
       adminClient.from('burn_permits')
         .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, approved_by_personnel_id, officer_signed_at, created_at')
@@ -105,8 +106,12 @@ export default async function InboxPage({
       adminClient.from('public_record_requests')
         .select('id, confirmation_code, contact_name, contact_email, contact_phone, request_type, description, incident_date, incident_address, status, reviewer_notes, created_at')
         .eq('department_id', department_id).order('created_at', { ascending: false }),
+      adminClient.from('public_feedback')
+        .select('id, feedback_type, contact_name, contact_email, message, page_url, status, reviewer_notes, created_at')
+        .eq('department_id', department_id).order('created_at', { ascending: false }),
     ])
     deptConfig = deptRes.data
+    feedbackItems = feedbackRes.data ?? []
 
     // Reorder requests + expired lots (medical module)
     if (deptConfig?.module_medical) {
@@ -204,7 +209,7 @@ export default async function InboxPage({
   }
 
   const moduleMedical = deptConfig?.module_medical ?? false
-  const validTabs = ['permits', 'records', 'signatures', ...(moduleMedical && isOfficerOrAbove ? ['restock'] : [])]
+  const validTabs = ['permits', 'records', 'signatures', 'feedback', ...(moduleMedical && isOfficerOrAbove ? ['restock'] : [])]
   const initialTab = validTabs.includes(tab ?? '') ? tab! : (isOfficerOrAbove ? 'permits' : 'signatures')
 
   return (
@@ -214,6 +219,7 @@ export default async function InboxPage({
       signatureRows={signatureRows}
       restockRequests={restockRequests}
       expiredLots={expiredLots}
+      feedbackItems={feedbackItems}
       memberName={`${me.first_name} ${me.last_name}`.trim()}
       initialTab={initialTab as any}
       isOfficerOrAbove={isOfficerOrAbove}

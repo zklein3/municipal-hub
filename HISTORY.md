@@ -165,6 +165,16 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-09 — Public Site Feedback / Bug Reports
+
+**New `/dept/[slug]/feedback` page** — public form (General Feedback or Report a Problem), optional name/email, message + page URL captured automatically. Linked from dept site header nav (desktop + mobile) and a new "Feedback & Issues" card in the "How Can We Help?" grid.
+
+**Department-scoped, dual-logged:**
+- `public_feedback` table (new) — `department_id`, `feedback_type`, `contact_name/email`, `message`, `page_url`, `status` (new/reviewed/resolved), `reviewer_notes`. RLS: anon insert only.
+- `submitPublicFeedback` (`app/actions/public-site.ts`) — inserts the row AND calls `logEvent({ log_type: 'user_report', department_id, ... })` for `system_logs` (sys admin visibility via `/admin/logs` → User Reports tab)
+- New "Feedback" tab in `/inbox` (officer+) — `FeedbackTab.tsx`, filter by status, mark Reviewed/Resolved/Reopen with reviewer notes. Scoped via `.eq('department_id', department_id)` — one department's submissions are never visible to another.
+- `updatePublicFeedbackStatus` action added alongside existing burn permit / record request status actions
+
 ### 2026-06-09 — Social Share Metadata, F7 App Icon, Inventory Transfers
 
 **Social share / Open Graph:**

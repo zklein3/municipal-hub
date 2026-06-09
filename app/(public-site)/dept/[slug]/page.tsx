@@ -162,7 +162,7 @@ export default async function DeptLandingPage({
 
       {/* Quick actions */}
       <h2 className="text-base font-semibold text-zinc-700 mb-3">How Can We Help?</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <Link
           href={`${base}/burn-permit`}
           className="rounded-xl bg-white border border-zinc-200 p-6 hover:border-red-300 hover:shadow-md transition-all group"
@@ -179,6 +179,15 @@ export default async function DeptLandingPage({
           <div className="text-2xl mb-2">📄</div>
           <h3 className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors mb-1">Records Request</h3>
           <p className="text-xs text-zinc-400">Request incident reports or inspection records.</p>
+        </Link>
+
+        <Link
+          href={`${base}/feedback`}
+          className="rounded-xl bg-white border border-zinc-200 p-6 hover:border-red-300 hover:shadow-md transition-all group"
+        >
+          <div className="text-2xl mb-2">💬</div>
+          <h3 className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors mb-1">Feedback &amp; Issues</h3>
+          <p className="text-xs text-zinc-400">Share feedback or report a problem with this site.</p>
         </Link>
       </div>
 
