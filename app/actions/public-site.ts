@@ -524,7 +524,7 @@ export async function replyToPublicFeedback(formData: FormData) {
   if (!user) return { error: 'Session expired.' }
 
   const { data: meList } = await adminClient
-    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+    .from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
@@ -555,9 +555,14 @@ export async function replyToPublicFeedback(formData: FormData) {
   const { data: dept } = await adminClient
     .from('departments').select('name, public_email').eq('id', feedback.department_id).single()
 
-  const signOff = dept?.name ?? 'The FireOps7 Team'
+  const replierName = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim()
+  const deptName = dept?.name ?? 'FireOps7'
   const greeting = feedback.contact_name ? `Hi ${escapeHtml(feedback.contact_name)},` : 'Hi,'
   const subjectLabel = feedback.feedback_type === 'bug_report' ? 'problem report' : 'feedback'
+
+  const signOffLines = replierName
+    ? `${escapeHtml(replierName)}<br/>${escapeHtml(deptName)}`
+    : escapeHtml(deptName)
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
@@ -566,7 +571,7 @@ export async function replyToPublicFeedback(formData: FormData) {
       <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />
       <p style="color:#71717a;font-size:13px;margin-bottom:4px"><strong>Your original message:</strong></p>
       <p style="color:#71717a;font-size:13px;white-space:pre-line">${escapeHtml(feedback.message)}</p>
-      <p style="margin-top:24px">— ${escapeHtml(signOff)}</p>
+      <p style="margin-top:24px">— ${signOffLines}</p>
     </div>
   `
 
@@ -577,7 +582,7 @@ export async function replyToPublicFeedback(formData: FormData) {
       from: 'FireOps7 <noreply@fireops7.com>',
       to: feedback.contact_email,
       ...(dept?.public_email ? { reply_to: dept.public_email } : {}),
-      subject: `Re: Your ${subjectLabel} to ${dept?.name ?? 'FireOps7'}`,
+      subject: `Re: Your ${subjectLabel} to ${deptName}`,
       html,
     }),
   })
