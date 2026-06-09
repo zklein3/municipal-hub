@@ -565,11 +565,13 @@ export async function moveQuantityToStorage(location_standard_id: string, quanti
     .eq('id', location_standard_id)
   if (compartmentErr) { await logError(compartmentErr.message, '/equipment'); return { error: compartmentErr.message } }
 
+  // Always route to general (null station) storage pool
   const { data: storageList } = await adminClient
     .from('department_item_storage')
     .select('id, quantity')
     .eq('department_id', department_id)
     .eq('item_id', standard.item_id)
+    .is('station_id', null)
   const storageRow = storageList?.[0]
   if (storageRow) {
     const { error: storageErr } = await adminClient
@@ -580,7 +582,7 @@ export async function moveQuantityToStorage(location_standard_id: string, quanti
   } else {
     const { error: storageErr } = await adminClient
       .from('department_item_storage')
-      .insert({ department_id, item_id: standard.item_id, quantity, par_quantity: 0 })
+      .insert({ department_id, item_id: standard.item_id, quantity, par_quantity: 0, station_id: null })
     if (storageErr) { await logError(storageErr.message, '/equipment'); return { error: storageErr.message } }
   }
 
@@ -613,11 +615,13 @@ export async function moveQuantityFromStorage(
   const department_id = ctx.department_id
   const adminClient = createAdminClient()
 
+  // Pull from general (null station) storage pool
   const { data: storageList } = await adminClient
     .from('department_item_storage')
     .select('id, quantity')
     .eq('department_id', department_id)
     .eq('item_id', item_id)
+    .is('station_id', null)
   const storage = storageList?.[0]
   if (!storage || storage.quantity < quantity) return { error: 'Not enough quantity in storage.' }
 
@@ -734,11 +738,13 @@ export async function setStoragePar(item_id: string, par_quantity: number) {
   const department_id = ctx.department_id
   if (!department_id) return { error: 'Department not found.' }
   const adminClient = createAdminClient()
+  // PAR is set on the general (null station) storage row
   const { data: existing } = await adminClient
     .from('department_item_storage')
     .select('id')
     .eq('department_id', department_id)
     .eq('item_id', item_id)
+    .is('station_id', null)
   if (existing?.[0]) {
     const { error } = await adminClient
       .from('department_item_storage')
@@ -748,9 +754,162 @@ export async function setStoragePar(item_id: string, par_quantity: number) {
   } else {
     const { error } = await adminClient
       .from('department_item_storage')
-      .insert({ department_id, item_id, quantity: 0, par_quantity })
+      .insert({ department_id, item_id, quantity: 0, par_quantity, station_id: null })
     if (error) { await logError(error.message, '/equipment/storage'); return { error: error.message } }
   }
+  revalidatePath('/equipment/storage')
+  return { success: true }
+}
+
+// ─── Transfer Quantity Between Compartments (all members) ────────────────────
+export async function transferQuantityBetweenCompartments(
+  from_location_standard_id: string,
+  to_apparatus_compartment_id: string,
+  quantity: number,
+) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  if (quantity < 1) return { error: 'Quantity must be at least 1.' }
+  const department_id = ctx.department_id
+  const adminClient = createAdminClient()
+
+  const { data: sourceList } = await adminClient
+    .from('item_location_standards')
+    .select('id, item_id, expected_quantity, minimum_quantity, apparatus_compartment_id')
+    .eq('id', from_location_standard_id)
+    .eq('active', true)
+  const source = sourceList?.[0]
+  if (!source) return { error: 'Source item assignment not found.' }
+  if (quantity > source.expected_quantity) return { error: 'Cannot transfer more than the current compartment quantity.' }
+  if (source.apparatus_compartment_id === to_apparatus_compartment_id) return { error: 'Source and destination compartment must be different.' }
+
+  // Find or create destination assignment
+  const { data: destList } = await adminClient
+    .from('item_location_standards')
+    .select('id, active, expected_quantity')
+    .eq('apparatus_compartment_id', to_apparatus_compartment_id)
+    .eq('item_id', source.item_id)
+  const dest = destList?.[0]
+
+  if (dest?.active) {
+    const { error: destErr } = await adminClient
+      .from('item_location_standards')
+      .update({ expected_quantity: dest.expected_quantity + quantity })
+      .eq('id', dest.id)
+    if (destErr) { await logError(destErr.message, '/equipment'); return { error: destErr.message } }
+  } else if (dest) {
+    const { error: destErr } = await adminClient
+      .from('item_location_standards')
+      .update({ active: true, expected_quantity: quantity })
+      .eq('id', dest.id)
+    if (destErr) { await logError(destErr.message, '/equipment'); return { error: destErr.message } }
+  } else {
+    const { error: insertErr } = await adminClient
+      .from('item_location_standards')
+      .insert({ apparatus_compartment_id: to_apparatus_compartment_id, item_id: source.item_id, expected_quantity: quantity, active: true })
+    if (insertErr) { await logError(insertErr.message, '/equipment'); return { error: insertErr.message } }
+  }
+
+  // Update or deactivate source
+  const newSourceQty = source.expected_quantity - quantity
+  const srcUpdate: Record<string, unknown> = { expected_quantity: newSourceQty }
+  if (newSourceQty === 0) {
+    srcUpdate.active = false
+  } else if (source.minimum_quantity != null && newSourceQty < source.minimum_quantity) {
+    srcUpdate.minimum_quantity = null
+  }
+  const { error: srcErr } = await adminClient
+    .from('item_location_standards')
+    .update(srcUpdate)
+    .eq('id', from_location_standard_id)
+  if (srcErr) { await logError(srcErr.message, '/equipment'); return { error: srcErr.message } }
+
+  await adminClient.from('item_movement_log').insert({
+    department_id,
+    item_id: source.item_id,
+    quantity,
+    from_type: 'compartment',
+    from_id: source.apparatus_compartment_id,
+    to_type: 'compartment',
+    to_id: to_apparatus_compartment_id,
+    moved_by: ctx.user_id,
+    reason: null,
+  })
+
+  revalidatePath('/equipment')
+  revalidatePath('/apparatus')
+  revalidatePath('/inspections')
+  return { success: true }
+}
+
+// ─── Transfer Quantity Between Storage Locations (all members) ────────────────
+export async function transferQuantityBetweenStorage(
+  item_id: string,
+  from_station_id: string | null,
+  to_station_id: string | null,
+  quantity: number,
+) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  if (quantity < 1) return { error: 'Quantity must be at least 1.' }
+  if (from_station_id === to_station_id) return { error: 'Source and destination must be different.' }
+  const department_id = ctx.department_id
+  const adminClient = createAdminClient()
+
+  // Find source row
+  const srcQuery = adminClient
+    .from('department_item_storage')
+    .select('id, quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  const { data: srcList } = from_station_id
+    ? await srcQuery.eq('station_id', from_station_id)
+    : await srcQuery.is('station_id', null)
+  const src = srcList?.[0]
+  if (!src || src.quantity < quantity) return { error: 'Not enough quantity in source storage.' }
+
+  const { error: srcErr } = await adminClient
+    .from('department_item_storage')
+    .update({ quantity: src.quantity - quantity, updated_at: new Date().toISOString() })
+    .eq('id', src.id)
+  if (srcErr) { await logError(srcErr.message, '/equipment/storage'); return { error: srcErr.message } }
+
+  // Find or create destination row
+  const destQuery = adminClient
+    .from('department_item_storage')
+    .select('id, quantity')
+    .eq('department_id', department_id)
+    .eq('item_id', item_id)
+  const { data: destList } = to_station_id
+    ? await destQuery.eq('station_id', to_station_id)
+    : await destQuery.is('station_id', null)
+  const dest = destList?.[0]
+
+  if (dest) {
+    const { error: destErr } = await adminClient
+      .from('department_item_storage')
+      .update({ quantity: dest.quantity + quantity, updated_at: new Date().toISOString() })
+      .eq('id', dest.id)
+    if (destErr) { await logError(destErr.message, '/equipment/storage'); return { error: destErr.message } }
+  } else {
+    const { error: insertErr } = await adminClient
+      .from('department_item_storage')
+      .insert({ department_id, item_id, quantity, par_quantity: 0, station_id: to_station_id })
+    if (insertErr) { await logError(insertErr.message, '/equipment/storage'); return { error: insertErr.message } }
+  }
+
+  await adminClient.from('item_movement_log').insert({
+    department_id,
+    item_id,
+    quantity,
+    from_type: 'storage',
+    from_id: from_station_id ?? null,
+    to_type: 'storage',
+    to_id: to_station_id ?? null,
+    moved_by: ctx.user_id,
+    reason: null,
+  })
+
   revalidatePath('/equipment/storage')
   return { success: true }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { moveItemToCompartment, removeItemFromCompartment, moveQuantityToStorage } from '@/app/actions/equipment'
+import { moveItemToCompartment, removeItemFromCompartment, moveQuantityToStorage, transferQuantityBetweenCompartments } from '@/app/actions/equipment'
 
 interface CompartmentItem {
   id: string
@@ -48,6 +48,7 @@ export default function CompartmentItemsClient({
   const [moveItem, setMoveItem] = useState<CompartmentItem | null>(null)
   const [moveApparatusId, setMoveApparatusId] = useState('')
   const [moveCompartmentId, setMoveCompartmentId] = useState('')
+  const [moveQty, setMoveQty] = useState('1')
   const [moveLoading, setMoveLoading] = useState(false)
   const [moveError, setMoveError] = useState<string | null>(null)
 
@@ -71,14 +72,33 @@ export default function CompartmentItemsClient({
     if (!moveItem || !moveCompartmentId) return
     setMoveLoading(true)
     setMoveError(null)
-    const result = await moveItemToCompartment(moveItem.id, moveCompartmentId)
+    let result
+    if (moveItem.tracks_assets) {
+      // Asset items: move the whole location standard assignment
+      result = await moveItemToCompartment(moveItem.id, moveCompartmentId)
+    } else {
+      // Quantity items: transfer the specified qty, leave remainder in place
+      const qty = parseInt(moveQty)
+      if (!qty || qty < 1) { setMoveError('Quantity must be at least 1.'); setMoveLoading(false); return }
+      result = await transferQuantityBetweenCompartments(moveItem.id, moveCompartmentId, qty)
+    }
     if (result?.error) {
       setMoveError(result.error)
     } else {
-      setItems(prev => prev.filter(i => i.id !== moveItem.id))
+      if (moveItem.tracks_assets) {
+        setItems(prev => prev.filter(i => i.id !== moveItem.id))
+      } else {
+        const qty = parseInt(moveQty)
+        setItems(prev => prev.map(i =>
+          i.id === moveItem.id
+            ? { ...i, expected_quantity: i.expected_quantity - qty }
+            : i
+        ).filter(i => i.expected_quantity > 0))
+      }
       setMoveItem(null)
       setMoveApparatusId('')
       setMoveCompartmentId('')
+      setMoveQty('1')
     }
     setMoveLoading(false)
   }
@@ -187,7 +207,7 @@ export default function CompartmentItemsClient({
                 ) : (
                   <div className="flex gap-1.5">
                     <button
-                      onClick={() => { setMoveItem(item); setMoveApparatusId(''); setMoveCompartmentId('') }}
+                      onClick={() => { setMoveItem(item); setMoveApparatusId(''); setMoveCompartmentId(''); setMoveQty(String(item.expected_quantity)); setMoveError(null) }}
                       className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
                     >
                       Move
@@ -284,15 +304,31 @@ export default function CompartmentItemsClient({
                   ))}
                 </select>
               </div>
+
+              {moveItem && !moveItem.tracks_assets && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">
+                    Quantity to transfer (max {moveItem.expected_quantity})
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={moveItem.expected_quantity}
+                    value={moveQty}
+                    onChange={e => setMoveQty(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={handleMove}
-                disabled={moveLoading || !moveCompartmentId}
+                disabled={moveLoading || !moveCompartmentId || (!moveItem?.tracks_assets && (parseInt(moveQty) < 1 || parseInt(moveQty) > (moveItem?.expected_quantity ?? 0)))}
                 className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
               >
-                {moveLoading ? 'Moving...' : 'Move Item'}
+                {moveLoading ? 'Moving...' : 'Move'}
               </button>
               <button
                 onClick={() => setMoveItem(null)}

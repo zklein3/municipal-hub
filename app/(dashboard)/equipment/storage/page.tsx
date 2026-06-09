@@ -80,12 +80,41 @@ export default async function StoragePage() {
     }))
     .filter(g => g.assets.length > 0)
 
-  // Storage records
+  // Stations for dept
+  const { data: stationsRaw } = await adminClient
+    .from('stations')
+    .select('id, station_number, station_name')
+    .eq('department_id', department_id)
+    .eq('active', true)
+    .order('station_number')
+  const stations = (stationsRaw ?? []).map(s => ({
+    id: s.id,
+    station_number: s.station_number as string | null,
+    station_name: s.station_name as string,
+  }))
+  const stationNameMap = Object.fromEntries((stationsRaw ?? []).map(s => [s.id, s.station_name as string]))
+
+  // Storage records (may have multiple rows per item when station_id is set)
   const { data: storageRaw } = await adminClient
     .from('department_item_storage')
-    .select('id, item_id, quantity, par_quantity')
+    .select('id, item_id, quantity, par_quantity, station_id')
     .eq('department_id', department_id)
-  const storageMap = Object.fromEntries((storageRaw ?? []).map(s => [s.item_id, s]))
+
+  // Group by item_id, aggregating totals and per-station breakdown
+  const storageByItemId: Record<string, { total_qty: number; total_par: number; breakdown: { station_id: string | null; station_name: string | null; quantity: number; par_quantity: number }[] }> = {}
+  for (const row of storageRaw ?? []) {
+    if (!storageByItemId[row.item_id]) {
+      storageByItemId[row.item_id] = { total_qty: 0, total_par: 0, breakdown: [] }
+    }
+    storageByItemId[row.item_id].total_qty += row.quantity
+    storageByItemId[row.item_id].total_par += row.par_quantity
+    storageByItemId[row.item_id].breakdown.push({
+      station_id: row.station_id ?? null,
+      station_name: row.station_id ? (stationNameMap[row.station_id] ?? 'Unknown Station') : null,
+      quantity: row.quantity,
+      par_quantity: row.par_quantity,
+    })
+  }
 
   // Apparatus for dept
   const { data: apparatusRaw } = await adminClient
@@ -149,10 +178,10 @@ export default async function StoragePage() {
 
   // Merge into storage items
   const storageItems = (itemsRaw ?? []).map(item => {
-    const storageRow = storageMap[item.id] ?? null
+    const storageGroup = storageByItemId[item.id] ?? { total_qty: 0, total_par: 0, breakdown: [] }
     const compartment_total = compartmentTotalMap[item.id] ?? 0
-    const storage_qty = storageRow?.quantity ?? 0
-    const storage_par = storageRow?.par_quantity ?? 0
+    const storage_qty = storageGroup.total_qty
+    const storage_par = storageGroup.total_par
     const department_quantity = item.department_quantity ?? null
     const accounted_for = compartment_total + storage_qty
     const variance = department_quantity !== null ? accounted_for - department_quantity : null
@@ -167,6 +196,7 @@ export default async function StoragePage() {
       department_quantity,
       accounted_for,
       variance,
+      stationBreakdown: storageGroup.breakdown,
     }
   })
 
@@ -202,6 +232,7 @@ export default async function StoragePage() {
         items={storageItems}
         storageAssetGroups={storageAssetGroups}
         allApparatus={allApparatus}
+        stations={stations}
         isAdmin={isAdmin}
         isOfficerOrAbove={isOfficerOrAbove}
       />

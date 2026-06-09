@@ -7,6 +7,7 @@ import {
   setDepartmentQuantity,
   setStoragePar,
   assignStorageAssetToApparatus,
+  transferQuantityBetweenStorage,
 } from '@/app/actions/equipment'
 
 interface StorageItem {
@@ -19,6 +20,13 @@ interface StorageItem {
   department_quantity: number | null
   accounted_for: number
   variance: number | null
+  stationBreakdown: { station_id: string | null; station_name: string | null; quantity: number; par_quantity: number }[]
+}
+
+interface StationOption {
+  id: string
+  station_number: string | null
+  station_name: string
 }
 
 interface ApparatusOption {
@@ -42,18 +50,20 @@ interface StorageAssetGroup {
   assets: StorageAsset[]
 }
 
-type ModalType = 'add' | 'remove' | 'dept-qty' | 'storage-par' | null
+type ModalType = 'add' | 'remove' | 'dept-qty' | 'storage-par' | 'transfer-storage' | null
 
 export default function StorageClient({
   items: initialItems,
   storageAssetGroups: initialAssetGroups,
   allApparatus,
+  stations,
   isAdmin,
   isOfficerOrAbove,
 }: {
   items: StorageItem[]
   storageAssetGroups: StorageAssetGroup[]
   allApparatus: ApparatusOption[]
+  stations: StationOption[]
   isAdmin: boolean
   isOfficerOrAbove: boolean
 }) {
@@ -85,6 +95,11 @@ export default function StorageClient({
   // Storage PAR state
   const [parInput, setParInput] = useState('')
 
+  // Transfer between stations state
+  const [xferFromStationId, setXferFromStationId] = useState<string>('general')
+  const [xferToStationId, setXferToStationId] = useState<string>('general')
+  const [xferQty, setXferQty] = useState('1')
+
   function openModal(type: ModalType, item: StorageItem) {
     setActiveModal(type)
     setActiveItem(item)
@@ -104,6 +119,16 @@ export default function StorageClient({
     }
     if (type === 'storage-par') {
       setParInput(String(item.storage_par))
+    }
+    if (type === 'transfer-storage') {
+      // Default from = first station that has qty, to = another station or general
+      const withQty = item.stationBreakdown.filter(b => b.quantity > 0)
+      const firstFrom = withQty[0]
+      setXferFromStationId(firstFrom?.station_id ?? 'general')
+      const firstTo = [...stations.map(s => s.id), 'general'].find(id => id !== (firstFrom?.station_id ?? 'general'))
+      setXferToStationId(firstTo ?? 'general')
+      setXferQty(String(firstFrom?.quantity ?? 1))
+      setError(null)
     }
   }
 
@@ -166,6 +191,34 @@ export default function StorageClient({
       department_quantity: qty,
       variance: activeItem.accounted_for - qty,
     })
+    closeModal()
+    setLoading(false)
+  }
+
+  async function handleTransferStorage() {
+    if (!activeItem) return
+    const qty = parseInt(xferQty)
+    if (!qty || qty < 1) return
+    setLoading(true)
+    const fromId = xferFromStationId === 'general' ? null : xferFromStationId
+    const toId = xferToStationId === 'general' ? null : xferToStationId
+    const result = await transferQuantityBetweenStorage(activeItem.item_id, fromId, toId, qty)
+    if (result?.error) { setError(result.error); setLoading(false); return }
+    // Update local breakdown
+    setItems(prev => prev.map(i => {
+      if (i.item_id !== activeItem.item_id) return i
+      const breakdown = i.stationBreakdown.map(b => {
+        if (b.station_id === fromId) return { ...b, quantity: b.quantity - qty }
+        if (b.station_id === toId) return { ...b, quantity: b.quantity + qty }
+        return b
+      })
+      // Add dest row if it didn't exist
+      if (!i.stationBreakdown.find(b => b.station_id === toId)) {
+        const station = stations.find(s => s.id === toId)
+        breakdown.push({ station_id: toId, station_name: station?.station_name ?? null, quantity: qty, par_quantity: 0 })
+      }
+      return { ...i, stationBreakdown: breakdown.filter(b => b.quantity > 0) }
+    }))
     closeModal()
     setLoading(false)
   }
@@ -293,6 +346,17 @@ export default function StorageClient({
                 </div>
               </div>
 
+              {/* Station breakdown (multi-station depts) */}
+              {stations.length > 0 && item.stationBreakdown.length > 0 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2 text-xs text-zinc-500">
+                  {item.stationBreakdown.map((b, idx) => (
+                    <span key={idx}>
+                      <span className="font-medium text-zinc-700">{b.station_name ?? 'General'}</span>: {b.quantity}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Actions */}
               {(item.storage_qty > 0 || isAdmin) && (
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 pt-2 border-t border-zinc-100">
@@ -302,6 +366,14 @@ export default function StorageClient({
                       className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors text-center sm:text-left"
                     >
                       Add to Compartment
+                    </button>
+                  )}
+                  {stations.length > 0 && item.storage_qty > 0 && (
+                    <button
+                      onClick={() => openModal('transfer-storage', item)}
+                      className="rounded px-2.5 py-1 text-xs font-semibold border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors text-center sm:text-left"
+                    >
+                      Transfer to Station
                     </button>
                   )}
                   {isAdmin && item.storage_qty > 0 && (
@@ -572,6 +644,71 @@ export default function StorageClient({
             </div>
           </div>
         </div>
+        )
+      })()}
+
+      {/* Transfer between stations modal */}
+      {activeModal === 'transfer-storage' && activeItem && (() => {
+        const fromQty = activeItem.stationBreakdown.find(b =>
+          b.station_id === (xferFromStationId === 'general' ? null : xferFromStationId)
+        )?.quantity ?? 0
+        const stationOptions = [
+          { value: 'general', label: 'General (Unassigned)' },
+          ...stations.map(s => ({ value: s.id, label: s.station_number ? `Station ${s.station_number} — ${s.station_name}` : s.station_name })),
+        ]
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-6">
+              <h2 className="text-base font-semibold text-zinc-900 mb-1">Transfer Between Stations</h2>
+              <p className="text-sm text-zinc-500 mb-4">{activeItem.item_name}</p>
+              {error && <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+              <div className="flex flex-col gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">From</label>
+                  <select
+                    value={xferFromStationId}
+                    onChange={e => { setXferFromStationId(e.target.value); setXferQty('1') }}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  >
+                    {stationOptions.map(o => (
+                      <option key={o.value} value={o.value} disabled={o.value === xferToStationId}>{o.label}</option>
+                    ))}
+                  </select>
+                  {fromQty > 0 && <p className="text-xs text-zinc-400 mt-0.5">{fromQty} available</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">To</label>
+                  <select
+                    value={xferToStationId}
+                    onChange={e => setXferToStationId(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  >
+                    {stationOptions.map(o => (
+                      <option key={o.value} value={o.value} disabled={o.value === xferFromStationId}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 mb-1">Quantity (max {fromQty})</label>
+                  <input
+                    type="number" min={1} max={fromQty} value={xferQty}
+                    onChange={e => setXferQty(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleTransferStorage}
+                  disabled={loading || xferFromStationId === xferToStationId || parseInt(xferQty) < 1 || parseInt(xferQty) > fromQty}
+                  className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? 'Transferring...' : 'Transfer'}
+                </button>
+                <button onClick={closeModal} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Cancel</button>
+              </div>
+            </div>
+          </div>
         )
       })()}
 
