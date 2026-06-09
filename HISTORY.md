@@ -165,6 +165,22 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-09 — Social Share Metadata, F7 App Icon, Inventory Transfers
+
+**Social share / Open Graph:**
+- `scripts/generate-og-image.js` — generates `public/og-image.png` (1200×630, F7 logo + "FireOps7" wordmark + tagline + feature strip)
+- `app/layout.tsx` — added `openGraph`/`twitter` metadata + `metadataBase` (`https://www.fireops7.com`); applies as the default card for any FireOps7 link shared on Facebook/LinkedIn/etc.
+- `app/(public-site)/dept/[slug]/page.tsx` — added `generateMetadata` so each department's public site link shows that department's name (`[Dept Name] | FireOps7`) and `public_tagline`/`public_about` as the share description (same shared og-image for now)
+
+**F7 app icon:**
+- Replaced default Capacitor placeholder icon with F7 red square (`#991b1b` bg, white "F7") at all PWA + Android densities (mdpi→xxxhdpi)
+- `scripts/generate-icons.js` added for future regeneration; `ic_launcher_background.xml` updated to `#991b1b`
+
+**Inventory — bidirectional transfers:**
+- Compartment → any compartment, all users, partial quantity supported (`transferQuantityBetweenCompartments`); deactivates source location standard when qty reaches 0
+- Station storage → station storage, multi-station depts (`transferQuantityBetweenStorage`); `department_item_storage` gains nullable `station_id` (partial unique indexes for the existing null/general pool vs. per-station rows); Storage page shows per-station breakdown + "Transfer to Station" button
+- Existing `moveQuantityToStorage` / `moveQuantityFromStorage` / `setStoragePar` scoped to the null-station (general) pool for backward compatibility
+
 ### 2026-06-06 — Mobile UX Pass + Medical Transfer Fixes
 
 **Mobile button layouts (all pages now use 2-col grid on mobile):**

@@ -21,6 +21,22 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "FireOps7",
   },
+  metadataBase: new URL("https://www.fireops7.com"),
+  openGraph: {
+    title: "FireOps7 — Fire Department Operations, Simplified",
+    description: "Incident reporting, NERIS-compatible data exchange, training, equipment, and ISO compliance — all in one platform built for fire departments.",
+    url: "https://www.fireops7.com",
+    siteName: "FireOps7",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FireOps7 — Fire Department Operations, Simplified",
+    description: "Incident reporting, NERIS-compatible data exchange, training, equipment, and ISO compliance — all in one platform built for fire departments.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({

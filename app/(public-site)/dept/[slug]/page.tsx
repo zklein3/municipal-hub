@@ -2,6 +2,48 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import type { Metadata } from 'next'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const adminClient = createAdminClient()
+
+  const { data: deptList } = await adminClient
+    .from('departments')
+    .select('name, public_site_enabled, public_tagline, public_about')
+    .eq('public_slug', slug)
+    .limit(1)
+
+  const dept = deptList?.[0]
+  if (!dept || !dept.public_site_enabled) return {}
+
+  const title = `${dept.name} | FireOps7`
+  const description = (dept.public_tagline || dept.public_about || 'Department information, burn permits, records requests, and upcoming events.').slice(0, 160)
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://www.fireops7.com/dept/${slug}`,
+      siteName: 'FireOps7',
+      images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+      locale: 'en_US',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ['/og-image.png'],
+    },
+  }
+}
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
