@@ -165,6 +165,16 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-09 — Reply to Public Feedback (Department + Sys Admin)
+
+**`public_feedback`** gains `reply_message`, `replied_at`, `replied_by_personnel_id` (→ `personnel`).
+
+**`replyToPublicFeedback`** (`app/actions/public-site.ts`) — officer+ in the feedback's department, or sys admin. Requires `contact_email` on the submission (no email = no reply path, surfaced in UI). Sends a reply via Resend (`noreply@fireops7.com`, `reply_to` = department's `public_email` if set) quoting the original message, signed with the department name (or "The FireOps7 Team" for sys admin). Records the reply + auto-marks the submission `resolved`.
+
+**Reply UI:**
+- `/inbox` Feedback tab (`FeedbackTab.tsx`) — Reply textarea + send button inside each expanded item; shows sent reply with timestamp/author.
+- `/admin/logs` (`LogsClient.tsx`) — `user_report` log entries from feedback submissions now carry `metadata.feedback_id`; expanding the log shows the same reply UI, letting sys admin respond directly without needing department access.
+
 ### 2026-06-09 — Public Site Feedback / Bug Reports
 
 **New `/dept/[slug]/feedback` page** — public form (General Feedback or Report a Problem), optional name/email, message + page URL captured automatically. Linked from dept site header nav (desktop + mobile) and a new "Feedback & Issues" card in the "How Can We Help?" grid.

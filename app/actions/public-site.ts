@@ -442,9 +442,11 @@ export async function submitPublicFeedback(formData: FormData) {
     if (!emailRx.test(contact_email)) return { error: 'Please enter a valid email address.' }
   }
 
-  const { error: dbErr } = await adminClient
+  const { data: inserted, error: dbErr } = await adminClient
     .from('public_feedback')
     .insert({ department_id, feedback_type, contact_name, contact_email, message, page_url })
+    .select('id')
+    .single()
 
   if (dbErr) {
     await logError(dbErr, 'public/feedback')
@@ -469,7 +471,7 @@ export async function submitPublicFeedback(formData: FormData) {
       `Message: ${message}`,
       `Review at: https://www.fireops7.com/inbox`,
     ].filter(Boolean).join('\n'),
-    metadata: { department_id, feedback_type },
+    metadata: { department_id, feedback_type, feedback_id: inserted?.id ?? null },
   })
 
   return { success: true }
@@ -506,6 +508,99 @@ export async function updatePublicFeedbackStatus(formData: FormData) {
   if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
 
   revalidatePath('/inbox')
+  return { success: true }
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// ─── Inbox / Admin: Reply to a public feedback submitter via email ────────────
+export async function replyToPublicFeedback(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const feedback_id = formData.get('feedback_id') as string
+  const reply_message = (formData.get('reply_message') as string)?.trim()
+  if (!feedback_id || !reply_message) return { error: 'Please enter a reply message.' }
+
+  const { data: feedback } = await adminClient
+    .from('public_feedback')
+    .select('id, department_id, feedback_type, contact_name, contact_email, message')
+    .eq('id', feedback_id)
+    .single()
+  if (!feedback) return { error: 'Feedback not found.' }
+  if (!feedback.contact_email) return { error: 'This submission has no email address on file — a reply cannot be sent.' }
+
+  // Authorize: sys admin, or officer+ in the feedback's department
+  if (!me.is_sys_admin) {
+    const { data: myDeptList } = await adminClient
+      .from('department_personnel').select('system_role')
+      .eq('personnel_id', me.id).eq('department_id', feedback.department_id).eq('active', true)
+    const myDept = myDeptList?.[0]
+    if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  }
+
+  const resendKey = process.env.RESEND_API_KEY
+  if (!resendKey) return { error: 'Email sending is not configured.' }
+
+  const { data: dept } = await adminClient
+    .from('departments').select('name, public_email').eq('id', feedback.department_id).single()
+
+  const signOff = dept?.name ?? 'The FireOps7 Team'
+  const greeting = feedback.contact_name ? `Hi ${escapeHtml(feedback.contact_name)},` : 'Hi,'
+  const subjectLabel = feedback.feedback_type === 'bug_report' ? 'problem report' : 'feedback'
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+      <p>${greeting}</p>
+      <p style="white-space:pre-line">${escapeHtml(reply_message)}</p>
+      <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />
+      <p style="color:#71717a;font-size:13px;margin-bottom:4px"><strong>Your original message:</strong></p>
+      <p style="color:#71717a;font-size:13px;white-space:pre-line">${escapeHtml(feedback.message)}</p>
+      <p style="margin-top:24px">— ${escapeHtml(signOff)}</p>
+    </div>
+  `
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'FireOps7 <noreply@fireops7.com>',
+      to: feedback.contact_email,
+      ...(dept?.public_email ? { reply_to: dept.public_email } : {}),
+      subject: `Re: Your ${subjectLabel} to ${dept?.name ?? 'FireOps7'}`,
+      html,
+    }),
+  })
+
+  if (!emailRes.ok) {
+    await logError(await emailRes.text(), '/inbox/feedback-reply')
+    return { error: 'Failed to send reply email. Please try again.' }
+  }
+
+  const { error: dbErr } = await adminClient
+    .from('public_feedback')
+    .update({
+      reply_message,
+      replied_at: new Date().toISOString(),
+      replied_by_personnel_id: me.id,
+      status: 'resolved',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', feedback_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  revalidatePath('/admin/logs')
   return { success: true }
 }
 

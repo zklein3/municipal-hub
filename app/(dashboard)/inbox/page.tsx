@@ -107,11 +107,24 @@ export default async function InboxPage({
         .select('id, confirmation_code, contact_name, contact_email, contact_phone, request_type, description, incident_date, incident_address, status, reviewer_notes, created_at')
         .eq('department_id', department_id).order('created_at', { ascending: false }),
       adminClient.from('public_feedback')
-        .select('id, feedback_type, contact_name, contact_email, message, page_url, status, reviewer_notes, created_at')
+        .select('id, feedback_type, contact_name, contact_email, message, page_url, status, reviewer_notes, reply_message, replied_at, replied_by_personnel_id, created_at')
         .eq('department_id', department_id).order('created_at', { ascending: false }),
     ])
     deptConfig = deptRes.data
     feedbackItems = feedbackRes.data ?? []
+
+    const replierIds = [...new Set(feedbackItems.map((f: any) => f.replied_by_personnel_id).filter(Boolean))]
+    if (replierIds.length > 0) {
+      const { data: replierData } = await adminClient
+        .from('personnel').select('id, first_name, last_name').in('id', replierIds)
+      const replierMap = Object.fromEntries(
+        (replierData ?? []).map((p: any) => [p.id, `${p.first_name} ${p.last_name}`.trim()])
+      )
+      feedbackItems = feedbackItems.map((f: any) => ({
+        ...f,
+        replied_by_name: f.replied_by_personnel_id ? (replierMap[f.replied_by_personnel_id] ?? null) : null,
+      }))
+    }
 
     // Reorder requests + expired lots (medical module)
     if (deptConfig?.module_medical) {

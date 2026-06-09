@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { resolveLog, resolveAllLogs } from '@/app/actions/admin'
+import { replyToPublicFeedback } from '@/app/actions/public-site'
 
 interface LogEntry {
   id: string
@@ -15,9 +16,24 @@ interface LogEntry {
   resolved: boolean
 }
 
+interface FeedbackInfo {
+  contact_email: string | null
+  contact_name: string | null
+  message: string
+  feedback_type: string
+  reply_message: string | null
+  replied_at: string | null
+  replied_by_name: string | null
+}
+
 interface Props {
   logs: LogEntry[]
   personnelMap: Record<string, string>
+  feedbackMap: Record<string, FeedbackInfo>
+}
+
+function formatDateTime(d: string) {
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
 const TAB_TYPES = ['all', 'error', 'user_report'] as const
@@ -35,12 +51,42 @@ const TYPE_BADGE: Record<string, string> = {
   info: 'bg-zinc-100 text-zinc-600',
 }
 
-export default function LogsClient({ logs, personnelMap }: Props) {
+export default function LogsClient({ logs, personnelMap, feedbackMap: initialFeedbackMap }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>('all')
   const [showResolved, setShowResolved] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [resolving, setResolving] = useState<string | null>(null)
   const [resolvingAll, setResolvingAll] = useState(false)
+  const [feedbackMap, setFeedbackMap] = useState(initialFeedbackMap)
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
+  const [replying, setReplying] = useState<string | null>(null)
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({})
+
+  async function handleReply(feedbackId: string) {
+    const message = (replyDrafts[feedbackId] ?? '').trim()
+    if (!message) return
+    setReplying(feedbackId)
+    setReplyErrors(prev => ({ ...prev, [feedbackId]: '' }))
+    const fd = new FormData()
+    fd.set('feedback_id', feedbackId)
+    fd.set('reply_message', message)
+    const result = await replyToPublicFeedback(fd)
+    if (result.error) {
+      setReplyErrors(prev => ({ ...prev, [feedbackId]: result.error as string }))
+    } else {
+      setFeedbackMap(prev => ({
+        ...prev,
+        [feedbackId]: {
+          ...prev[feedbackId],
+          reply_message: message,
+          replied_at: new Date().toISOString(),
+          replied_by_name: 'You',
+        },
+      }))
+      setReplyDrafts(prev => ({ ...prev, [feedbackId]: '' }))
+    }
+    setReplying(null)
+  }
 
   const filtered = logs.filter((l) => {
     if (!showResolved && l.resolved) return false
@@ -123,7 +169,10 @@ export default function LogsClient({ logs, personnelMap }: Props) {
         <p className="text-zinc-400 text-sm py-8 text-center">No logs to show.</p>
       ) : (
         <div className="space-y-2">
-          {filtered.map((log) => (
+          {filtered.map((log) => {
+          const feedbackId = (log.metadata as Record<string, unknown> | null)?.feedback_id
+          const feedback = typeof feedbackId === 'string' ? feedbackMap[feedbackId] : undefined
+          return (
             <div
               key={log.id}
               className={`rounded-lg border p-4 transition-opacity ${
@@ -178,8 +227,48 @@ export default function LogsClient({ logs, personnelMap }: Props) {
                   {JSON.stringify(log.metadata, null, 2)}
                 </pre>
               )}
+              {expanded === log.id && feedback && (
+                <div className="mt-3 p-3 bg-zinc-50 rounded border border-zinc-200">
+                  <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wide mb-1">Reply to submitter</p>
+                  {feedback.reply_message && (
+                    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 mb-2">
+                      <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-line">{feedback.reply_message}</p>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Sent {feedback.replied_at ? formatDateTime(feedback.replied_at) : ''}
+                        {feedback.replied_by_name ? ` by ${feedback.replied_by_name}` : ''}
+                      </p>
+                    </div>
+                  )}
+                  {!feedback.contact_email ? (
+                    <p className="text-xs text-zinc-400 italic">No email address on file — a reply cannot be sent.</p>
+                  ) : (
+                    <>
+                      {replyErrors[feedbackId as string] && (
+                        <div className="mb-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                          {replyErrors[feedbackId as string]}
+                        </div>
+                      )}
+                      <textarea
+                        value={replyDrafts[feedbackId as string] ?? ''}
+                        onChange={(e) => setReplyDrafts(prev => ({ ...prev, [feedbackId as string]: e.target.value }))}
+                        rows={3}
+                        placeholder={`Write a reply to ${feedback.contact_email}…`}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none bg-white"
+                      />
+                      <button
+                        onClick={() => handleReply(feedbackId as string)}
+                        disabled={replying === feedbackId || !(replyDrafts[feedbackId as string] ?? '').trim()}
+                        className="mt-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                      >
+                        {replying === feedbackId ? 'Sending…' : `Send reply to ${feedback.contact_email}`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+          )
+          })}
         </div>
       )}
     </div>
