@@ -80,6 +80,30 @@ Build iOS IPA via GitHub Actions macOS runners without needing a local Mac.
 
 ---
 
+## PWA (Progressive Web App)
+
+Built 2026-06-06 as a fast win before the Capacitor native app. Members get a home screen icon and full-screen launch without an app store.
+
+**Files:**
+- `public/manifest.json` — app manifest (name, icons, start URL, display mode)
+- `public/sw.js` — service worker (basic caching)
+- `components/PWAInstallButton.tsx` — "Install App" button in sidebar; listens for Chrome's `beforeinstallprompt` event, invisible until Chrome signals the site is installable
+- Root layout registers the service worker via inline script
+
+**Key fix:** `manifest.json` uses `start_url: "/"` not `"/dashboard"` — dashboard redirects unauthenticated users which blocks Chrome's installability check.
+
+**Icons:** `public/icon-192.png`, `public/icon-512.png`, `public/apple-icon.png`
+
+PWA and Capacitor coexist — PWA handles web/desktop installs, Capacitor handles app store distribution.
+
+---
+
+## App Store Costs
+- **Google Play Store** — $25 one-time registration fee
+- **Apple App Store** — $99/year Apple Developer account
+
+---
+
 ## www/ Folder
 A minimal `www/index.html` is required for `npx cap sync` to run (Capacitor needs it even when using a remote server URL). It is **not** committed to git (listed in `.gitignore`) and not served to users — the live URL takes precedence at runtime.
 
