@@ -46,7 +46,7 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
 
   const { data: deptRecordList } = await adminClient
     .from('department_personnel')
-    .select('id, system_role, role_id, employee_number, hire_date, active, signup_status, notify_feedback')
+    .select('id, system_role, role_id, employee_number, hire_date, active, signup_status, notify_feedback, burn_permit_reviewer')
     .eq('personnel_id', id)
     .eq('department_id', myDept.department_id)
 

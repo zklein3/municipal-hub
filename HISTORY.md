@@ -165,6 +165,14 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-09 — Department Email Notification for New Burn Permit Applications
+
+**`department_personnel.burn_permit_reviewer`** (existing column, previously unused) is now wired up — per-person opt-in toggle, settable by department admins.
+
+**Personnel profile** (`/personnel/[id]`, admin-editable Department Information section) — new checkbox: "Email this person when a new burn permit is submitted for review" (only meaningful for Officers/Admins). `updateDeptPersonnel` (`app/actions/personnel.ts`) persists it.
+
+**`submitBurnPermit`** (`app/actions/public-site.ts`) — after logging the submission, queries `department_personnel` for active officers/admins with `burn_permit_reviewer = true` in that department, looks up their `personnel.email`, and sends a notification email via Resend (`FireOps7 <noreply@fireops7.com>`) with applicant info, burn address/date/description, and a link to `/inbox`. Same pattern as the new public feedback notification below.
+
 ### 2026-06-09 — Department Email Notification for New Public Feedback
 
 **`department_personnel`** gains `notify_feedback boolean default false`. Per-person opt-in toggle, settable by department admins (mirrors the unused `burn_permit_reviewer` pattern, but actually wired up).

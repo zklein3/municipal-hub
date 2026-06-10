@@ -180,6 +180,62 @@ export async function submitBurnPermit(formData: FormData) {
     },
   })
 
+  // Notify opted-in officers/admins for this department via email
+  const resendKey = process.env.RESEND_API_KEY
+  if (resendKey) {
+    const { data: notifyRecipients } = await adminClient
+      .from('department_personnel')
+      .select('personnel_id')
+      .eq('department_id', department_id)
+      .eq('active', true)
+      .eq('burn_permit_reviewer', true)
+      .in('system_role', ['admin', 'officer'])
+
+    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id)
+
+    if (recipientIds.length > 0) {
+      const { data: recipientPersonnel } = await adminClient
+        .from('personnel')
+        .select('email')
+        .in('id', recipientIds)
+
+      const recipientEmails = (recipientPersonnel ?? [])
+        .map((p) => p.email)
+        .filter((e): e is string => !!e)
+
+      if (recipientEmails.length > 0) {
+        const deptName = dept?.name ?? 'FireOps7'
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <p>New burn permit application submitted for ${escapeHtml(deptName)}.</p>
+            <p><strong>Applicant:</strong> ${escapeHtml(contact_name)}</p>
+            <p><strong>Email:</strong> ${escapeHtml(contact_email)}</p>
+            ${contact_phone ? `<p><strong>Phone:</strong> ${escapeHtml(contact_phone)}</p>` : ''}
+            <p><strong>Burn address:</strong> ${escapeHtml(burn_address)}</p>
+            <p><strong>Burn date:</strong> ${escapeHtml(burn_date)}</p>
+            <p style="white-space:pre-line">${escapeHtml(burn_description)}</p>
+            <p style="margin-top:24px"><a href="https://www.fireops7.com/inbox">Review in FireOps7 →</a></p>
+          </div>
+        `
+
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'FireOps7 <noreply@fireops7.com>',
+            to: recipientEmails,
+            subject: `New burn permit application — ${deptName}`,
+            html,
+          }),
+        })
+
+        if (!emailRes.ok) {
+          await logError(await emailRes.text(), 'public/burn-permit-notify')
+        }
+      }
+    }
+  }
+
   return { confirmationCode: data.confirmation_code }
 }
 

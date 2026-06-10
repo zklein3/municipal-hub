@@ -38,6 +38,7 @@ interface DeptRecord {
   active: boolean
   signup_status: string
   notify_feedback: boolean
+  burn_permit_reviewer: boolean
 }
 
 interface Role {
@@ -334,6 +335,14 @@ export default function PersonnelProfileClient({
                 className="mt-0.5 rounded" />
               <span className="text-sm text-zinc-700">
                 Email this person when new public feedback or problem reports are submitted
+                <span className="block text-xs text-zinc-400">Only applies to Officers and Admins.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" name="burn_permit_reviewer" value="true" defaultChecked={deptRecord.burn_permit_reviewer}
+                className="mt-0.5 rounded" />
+              <span className="text-sm text-zinc-700">
+                Email this person when a new burn permit is submitted for review
                 <span className="block text-xs text-zinc-400">Only applies to Officers and Admins.</span>
               </span>
             </label>
