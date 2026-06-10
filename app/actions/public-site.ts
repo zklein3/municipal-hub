@@ -474,6 +474,60 @@ export async function submitPublicFeedback(formData: FormData) {
     metadata: { department_id, feedback_type, feedback_id: inserted?.id ?? null },
   })
 
+  // Notify opted-in officers/admins for this department via email
+  const resendKey = process.env.RESEND_API_KEY
+  if (resendKey) {
+    const { data: notifyRecipients } = await adminClient
+      .from('department_personnel')
+      .select('personnel_id')
+      .eq('department_id', department_id)
+      .eq('active', true)
+      .eq('notify_feedback', true)
+      .in('system_role', ['admin', 'officer'])
+
+    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id)
+
+    if (recipientIds.length > 0) {
+      const { data: recipientPersonnel } = await adminClient
+        .from('personnel')
+        .select('email')
+        .in('id', recipientIds)
+
+      const recipientEmails = (recipientPersonnel ?? [])
+        .map((p) => p.email)
+        .filter((e): e is string => !!e)
+
+      if (recipientEmails.length > 0) {
+        const typeLabel = feedback_type === 'bug_report' ? 'problem report' : 'feedback'
+        const deptName = dept?.name ?? 'FireOps7'
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <p>New ${typeLabel} submitted for ${escapeHtml(deptName)}.</p>
+            ${contact_name ? `<p><strong>From:</strong> ${escapeHtml(contact_name)}</p>` : ''}
+            ${contact_email ? `<p><strong>Email:</strong> ${escapeHtml(contact_email)}</p>` : ''}
+            <p style="white-space:pre-line">${escapeHtml(message)}</p>
+            <p style="margin-top:24px"><a href="https://www.fireops7.com/inbox">View and reply in FireOps7 →</a></p>
+          </div>
+        `
+
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'FireOps7 <noreply@fireops7.com>',
+            to: recipientEmails,
+            subject: `New ${typeLabel} — ${deptName}`,
+            html,
+          }),
+        })
+
+        if (!emailRes.ok) {
+          await logError(await emailRes.text(), 'public/feedback-notify')
+        }
+      }
+    }
+  }
+
   return { success: true }
 }
 

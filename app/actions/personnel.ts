@@ -107,10 +107,11 @@ export async function updateDeptPersonnel(formData: FormData) {
   const employee_number = formData.get('employee_number') as string
   const hire_date = formData.get('hire_date') as string
   const active = formData.get('active') === 'true'
+  const notify_feedback = formData.get('notify_feedback') === 'true'
 
   const { error } = await adminClient
     .from('department_personnel')
-    .update({ system_role, role_id: role_id || null, employee_number: employee_number || null, hire_date: hire_date || null, active })
+    .update({ system_role, role_id: role_id || null, employee_number: employee_number || null, hire_date: hire_date || null, active, notify_feedback })
     .eq('id', dept_personnel_id)
 
   if (error) {
