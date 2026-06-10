@@ -579,7 +579,7 @@ export async function replyToPublicFeedback(formData: FormData) {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'FireOps7 <noreply@fireops7.com>',
+      from: `${deptName} (via FireOps7) <noreply@fireops7.com>`,
       to: feedback.contact_email,
       ...(dept?.public_email ? { reply_to: dept.public_email } : {}),
       subject: `Re: Your ${subjectLabel} to ${deptName}`,

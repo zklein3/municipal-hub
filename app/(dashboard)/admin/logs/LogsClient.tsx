@@ -24,6 +24,7 @@ interface FeedbackInfo {
   reply_message: string | null
   replied_at: string | null
   replied_by_name: string | null
+  department_name: string | null
 }
 
 interface Props {
@@ -236,6 +237,7 @@ export default function LogsClient({ logs, personnelMap, feedbackMap: initialFee
                       <p className="text-xs text-zinc-400 mt-1">
                         Sent {feedback.replied_at ? formatDateTime(feedback.replied_at) : ''}
                         {feedback.replied_by_name ? ` by ${feedback.replied_by_name}` : ''}
+                        {feedback.department_name ? ` (${feedback.department_name})` : ''}
                       </p>
                     </div>
                   )}

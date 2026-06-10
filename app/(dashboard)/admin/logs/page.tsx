@@ -32,13 +32,20 @@ export default async function LogsPage() {
     reply_message: string | null
     replied_at: string | null
     replied_by_name: string | null
+    department_name: string | null
   }> = {}
 
   if (feedbackIds.length > 0) {
     const { data: feedbackRows } = await admin
       .from('public_feedback')
-      .select('id, contact_email, contact_name, message, feedback_type, reply_message, replied_at, replied_by_personnel_id')
+      .select('id, department_id, contact_email, contact_name, message, feedback_type, reply_message, replied_at, replied_by_personnel_id')
       .in('id', feedbackIds)
+
+    const deptIds = [...new Set((feedbackRows ?? []).map((f) => f.department_id).filter(Boolean))]
+    const { data: deptRows } = deptIds.length > 0
+      ? await admin.from('departments').select('id, name').in('id', deptIds)
+      : { data: [] as { id: string; name: string }[] }
+    const deptMap = Object.fromEntries((deptRows ?? []).map((d) => [d.id, d.name]))
 
     feedbackMap = Object.fromEntries((feedbackRows ?? []).map((f) => [f.id, {
       contact_email: f.contact_email,
@@ -48,6 +55,7 @@ export default async function LogsPage() {
       reply_message: f.reply_message,
       replied_at: f.replied_at,
       replied_by_name: f.replied_by_personnel_id ? (personnelMap[f.replied_by_personnel_id] ?? null) : null,
+      department_name: f.department_id ? (deptMap[f.department_id] ?? null) : null,
     }]))
   }
 
