@@ -568,9 +568,6 @@ export async function replyToPublicFeedback(formData: FormData) {
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
       <p>${greeting}</p>
       <p style="white-space:pre-line">${escapeHtml(reply_message)}</p>
-      <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />
-      <p style="color:#71717a;font-size:13px;margin-bottom:4px"><strong>Your original message:</strong></p>
-      <p style="color:#71717a;font-size:13px;white-space:pre-line">${escapeHtml(feedback.message)}</p>
       <p style="margin-top:24px">— ${signOffLines}</p>
     </div>
   `
