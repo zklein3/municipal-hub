@@ -379,6 +379,11 @@ Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, a
 3. **New Member Welcome Email** — not yet built. Send when a dept admin creates a new personnel record / invite.
 4. **Resend setup steps:** Verify `fireops7.com` in Resend dashboard → add DNS records → set `from` addresses → install `resend` npm package or keep using raw `fetch` to `https://api.resend.com/emails`.
 
+### 9a. Public Records Requests — Reconsider Removing from Public Site ⬅ PINNED FOR LATER
+Most small departments aren't actually set up to handle public records requests this way (no formal process). Don't remove yet — wait and see whether any department gets real submissions through `/dept/[slug]/records` (`public_record_requests` table) before deciding whether to pull the "Request Records" card from the public site.
+
+**Note:** Facebook page now links to the public site (set up 2026-06-09) — public site is getting real outside traffic now, so any future removal should be a deliberate UI change, not a silent drop (residents may have bookmarked/shared links).
+
 ### 10. QR Self Check-In — Event / Training / Incident ⬅ PINNED FOR LATER
 Officer creates an event, training session, or incident → system generates a unique QR code for that session. Members scan with phone camera → opens a lightweight page → attendance/participation logged automatically. No app install required.
 
