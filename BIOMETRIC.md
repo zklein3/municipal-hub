@@ -14,6 +14,8 @@
 
 **Security note:** This is a UX convenience layer only. It does not replace the password or add a server-side auth factor — anyone with access to a valid Supabase session cookie bypasses it the same as before. True passwordless auth is Option 2 below.
 
+**Android APK (Capacitor) note (2026-06-12):** Worked on the website immediately but the "Biometric Unlock" section was invisible in the installed APK — `window.PublicKeyCredential` is unusable in Android's System WebView unless the host app declares it can talk to Google Play Services' Credential Manager/FIDO2 API. Fix: added a `<queries><package android:name="com.google.android.gms" /></queries>` block to `android/app/src/main/AndroidManifest.xml` (sibling of `<application>`, not inside it). **Requires an APK rebuild in Android Studio** to take effect — this is a native manifest change, not a web change, so the usual "no rebuild needed for web/UI changes" rule doesn't apply here.
+
 ---
 
 ## Option 2 — True Passkey Login (future, not built)

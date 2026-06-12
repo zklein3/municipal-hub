@@ -38,4 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Required for WebView to access Google Play Services' FIDO2/Credential Manager
+         APIs so WebAuthn (navigator.credentials) works for biometric unlock -->
+    <queries>
+        <package android:name="com.google.android.gms" />
+    </queries>
 </manifest>
