@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { signOut } from '@/app/actions/auth'
+import { hasBiometricCredentials, isBiometricUnlocked } from '@/app/actions/biometric'
+import BiometricLockScreen from '@/components/BiometricLockScreen'
 import FeedbackButton from '@/components/FeedbackButton'
 import MobileSidebar from '@/components/MobileSidebar'
 import NavGroups from '@/components/NavGroups'
@@ -34,6 +36,13 @@ async function getUserContext() {
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getUserContext()
   const isSysAdmin = user?.is_sys_admin ?? false
+
+  if (user) {
+    const [bioEnabled, bioUnlocked] = await Promise.all([hasBiometricCredentials(), isBiometricUnlocked()])
+    if (bioEnabled && !bioUnlocked) {
+      return <BiometricLockScreen name={user.first_name} />
+    }
+  }
   const systemRole = user?.system_role ?? null
   const isDeptAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'

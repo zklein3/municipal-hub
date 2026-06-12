@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { listBiometricCredentials } from '@/app/actions/biometric'
 import PersonnelProfileClient from './PersonnelProfileClient'
 
 export default async function PersonnelProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -65,12 +66,15 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
     .eq('personnel_id', id)
     .order('linked_at')
 
+  const biometricCredentials = isMe ? await listBiometricCredentials() : []
+
   return (
     <PersonnelProfileClient
       person={person}
       deptRecord={deptRecord}
       roles={roles ?? []}
       linkedTokens={linkedTokens ?? []}
+      biometricCredentials={biometricCredentials}
       isMe={isMe}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}

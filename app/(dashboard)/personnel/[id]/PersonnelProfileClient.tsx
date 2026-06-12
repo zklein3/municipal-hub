@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, linkQrToken, deleteQrToken } from '@/app/actions/personnel'
+import BiometricSettings from '@/components/BiometricSettings'
 import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card } from '@/lib/salamander'
 import type { SalamanderCard } from '@/lib/salamander'
@@ -55,11 +56,19 @@ interface LinkedToken {
   linked_at: string
 }
 
+interface BiometricCredential {
+  id: string
+  device_label: string | null
+  created_at: string
+  last_used_at: string | null
+}
+
 export default function PersonnelProfileClient({
   person,
   deptRecord,
   roles,
   linkedTokens: initialLinkedTokens,
+  biometricCredentials,
   isMe,
   isAdmin,
   isOfficerOrAbove,
@@ -68,6 +77,7 @@ export default function PersonnelProfileClient({
   deptRecord: DeptRecord
   roles: Role[]
   linkedTokens: LinkedToken[]
+  biometricCredentials: BiometricCredential[]
   isMe: boolean
   isAdmin: boolean
   isOfficerOrAbove: boolean
@@ -463,6 +473,9 @@ export default function PersonnelProfileClient({
           )}
         </div>
       )}
+
+      {/* ── Biometric Unlock — own profile only ─────────────────────────── */}
+      {isMe && <BiometricSettings initialCredentials={biometricCredentials} />}
 
       {/* ── Change Password — own profile only ───────────────────────────── */}
       {isMe && (
