@@ -10,6 +10,7 @@
 			"git commit": true,
 			"git push": true
 		},
-		"claudeCode.useTerminal": true
+		"claudeCode.useTerminal": true,
+		"java.configuration.updateBuildConfiguration": "automatic"
 	}
 }

@@ -165,6 +165,27 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-13 — Android/Capacitor: VS Code JDK/Gradle Setup ⬅ UNRESOLVED, RESUME HERE
+
+VS Code opened the `android/` Capacitor folder and showed a JDK-required warning (Java/Gradle extensions activated for the first time). Goal: get the Gradle sync to succeed in VS Code on the personal machine (`C:\Users\zklein3`).
+
+**Done so far:**
+- Installed Red Hat OpenJDK 8 zip → extracted to `C:\Java\jdk-1.8.0_492`, set as `JAVA_HOME` (user env var) — later found insufficient (Gradle 9.x needs JDK 17+)
+- Found Android Studio's bundled JetBrains Runtime is JDK 21 at `C:\Program Files\Android\Android Studio\jbr` — re-pointed `JAVA_HOME` (user env var) to this path
+- Added `org.gradle.java.home=C:/Program Files/Android/Android Studio/jbr` to `android/gradle.properties` (committed — same default path on shared machine too)
+
+**Still failing after both fixes + VS Code restart**, same error:
+```
+Could not run phased build action using connection to Gradle distribution 'https://services.gradle.org/distributions/gradle-9.4.1-all.zip'.
+Gradle requires JVM 17 or later to run. Your build is currently configured to use JVM 8.
+```
+
+**Next things to try:**
+- VS Code's "Gradle for Java" extension may have its own setting `java.import.gradle.java.home` (in `.vscode/settings.json` or user settings) that overrides `JAVA_HOME`/`gradle.properties` for the initial Tooling API connection — check if it's set to a JDK 8 path somewhere and fix/remove it
+- Check `java.jdt.ls.java.home` and `java.configuration.runtimes` in user settings (`%APPDATA%\Code\User\settings.json`) for a stale JDK 8 reference
+- Confirm `JAVA_HOME` actually changed in a fresh terminal (`echo $env:JAVA_HOME` / `java -version`) — env var changes sometimes need a full logout/reboot, not just VS Code restart, to propagate to all processes
+- Worth checking whether the Gradle wrapper in `android/gradle/wrapper/gradle-wrapper.properties` is pinned to `gradle-9.4.1-all` and whether an older Gradle version (still 17+-capable but maybe less strict) is an option — though downgrading isn't the preferred fix
+
 ### 2026-06-13 — Cleared Test Burn Permits from Production
 
 Deleted 13 archived burn permit records from `burn_permits` (Winslow Fire Department) directly via SQL — all leftover test submissions from development (expired test permits for "Zachary Adam Klein", "Mike Rotch", "Anita Hanjaab", "Dale Jr.", "John Test", and one denied "Test" entry). Burn Permits → Archived tab is now empty.
