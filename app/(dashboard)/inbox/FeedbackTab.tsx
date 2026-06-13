@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updatePublicFeedbackStatus, replyToPublicFeedback } from '@/app/actions/public-site'
+import { updatePublicFeedbackStatus, replyToPublicFeedback, deletePublicFeedback } from '@/app/actions/public-site'
 
 type Status = 'new' | 'reviewed' | 'resolved'
 
@@ -65,6 +65,9 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
   const [replying, setReplying] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
   const [replySent, setReplySent] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const filtered = items.filter(i => {
     switch (filter) {
@@ -93,6 +96,24 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
       setReplySent(false)
     }
     setError(null)
+    setDeletingId(null)
+    setDeleteError(null)
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true); setDeleteError(null)
+    const fd = new FormData()
+    fd.set('feedback_id', id)
+    const result = await deletePublicFeedback(fd)
+    if (result.error) {
+      setDeleteError(result.error)
+      setDeleting(false)
+    } else {
+      setItems(prev => prev.filter(i => i.id !== id))
+      setExpandedId(null)
+      setDeletingId(null)
+      setDeleting(false)
+    }
   }
 
   async function handleReply(item: Feedback) {
@@ -282,6 +303,32 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
                           className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
                         >
                           Reopen
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Delete */}
+                    <div className="pt-2 border-t border-zinc-200">
+                      {deletingId === item.id ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex flex-col gap-3 mt-3">
+                          <p className="text-xs font-semibold text-red-800">Permanently delete this feedback?</p>
+                          <p className="text-xs text-red-700">This cannot be undone.</p>
+                          {deleteError && <p className="text-xs text-red-700 font-medium">{deleteError}</p>}
+                          <div className="flex gap-2">
+                            <button onClick={() => handleDelete(item.id)} disabled={deleting}
+                              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                              {deleting ? 'Deleting...' : 'Confirm Delete'}
+                            </button>
+                            <button onClick={() => { setDeletingId(null); setDeleteError(null) }}
+                              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setDeletingId(item.id); setDeleteError(null) }}
+                          className="mt-3 text-xs font-semibold text-red-500 hover:text-red-700">
+                          Delete feedback
                         </button>
                       )}
                     </div>

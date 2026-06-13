@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updateBurnPermitStatus } from '@/app/actions/public-site'
+import { updateBurnPermitStatus, deleteBurnPermit } from '@/app/actions/public-site'
 import PermitSignatureModal from './PermitSignatureModal'
 
 type Status = 'pending' | 'approved' | 'denied' | 'cancelled'
@@ -71,6 +71,10 @@ export default function BurnPermitsTab({
   const [denyingId, setDenyingId] = useState<string | null>(null)
   const [signingPermit, setSigningPermit] = useState<Permit | null>(null)
   const [pendingApprovalPermit, setPendingApprovalPermit] = useState<Permit | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [officerSignedAt, setOfficerSignedAt] = useState<Record<string, string>>(
     Object.fromEntries(permits.filter(p => p.officer_signed_at).map(p => [p.id, p.officer_signed_at!]))
   )
@@ -97,6 +101,28 @@ export default function BurnPermitsTab({
     setExpiryDate('')
     setReviewerNotes('')
     setDenyingId(null)
+    setDeletingId(null)
+    setDeletePassword('')
+    setDeleteError(null)
+  }
+
+  async function handleDelete(permitId: string) {
+    if (!deletePassword) { setDeleteError('Enter your password to confirm.'); return }
+    setDeleting(true); setDeleteError(null)
+    const fd = new FormData()
+    fd.set('permit_id', permitId)
+    fd.set('password', deletePassword)
+    const result = await deleteBurnPermit(fd)
+    if (result.error) {
+      setDeleteError(result.error)
+      setDeleting(false)
+    } else {
+      setPermits(prev => prev.filter(p => p.id !== permitId))
+      setExpandedId(null)
+      setDeletingId(null)
+      setDeletePassword('')
+      setDeleting(false)
+    }
   }
 
   async function handleAction(permitId: string, status: 'approved' | 'denied') {
@@ -318,6 +344,35 @@ export default function BurnPermitsTab({
                         )}
                       </div>
                     )}
+
+                    {/* Delete (password-confirmed) */}
+                    <div className="pt-2 border-t border-zinc-200">
+                      {deletingId === permit.id ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex flex-col gap-3 mt-3">
+                          <p className="text-xs font-semibold text-red-800">Permanently delete this permit record?</p>
+                          <p className="text-xs text-red-700">This cannot be undone. Enter your password to confirm.</p>
+                          {deleteError && <p className="text-xs text-red-700 font-medium">{deleteError}</p>}
+                          <input type="password" value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
+                            placeholder="Your password"
+                            className="w-full rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleDelete(permit.id)} disabled={deleting}
+                              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                              {deleting ? 'Deleting...' : 'Confirm Delete'}
+                            </button>
+                            <button onClick={() => { setDeletingId(null); setDeletePassword(''); setDeleteError(null) }}
+                              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setDeletingId(permit.id); setDeletePassword(''); setDeleteError(null) }}
+                          className="mt-3 text-xs font-semibold text-red-500 hover:text-red-700">
+                          Delete permit record
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

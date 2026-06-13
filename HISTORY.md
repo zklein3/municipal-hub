@@ -165,6 +165,18 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-13 — Inbox Delete Buttons (Burn Permits + Feedback) + Record Requests Archive Filter
+
+**`app/actions/public-site.ts`** — two new delete actions, both gated to officer/admin (`system_role !== 'member'`):
+- `deleteBurnPermit(formData)` — requires `permit_id` + the acting user's current login `password`, re-verified via `supabase.auth.signInWithPassword` (same pattern as `changeOwnPassword`) before the row is deleted from `burn_permits`. Burn permits are official records meant to persist, so deletion needs this extra confirmation.
+- `deletePublicFeedback(formData)` — requires `feedback_id`, deletes from `public_feedback`. No password gate — feedback/problem reports are low-stakes cleanup.
+
+**`BurnPermitsTab.tsx`** — expanded card now has a "Delete permit record" link at the bottom (any status). Click → red confirm panel with a password field + "Confirm Delete" / "Cancel". Wrong password surfaces "Incorrect password." from the server action.
+
+**`FeedbackTab.tsx`** — expanded card now has a "Delete feedback" link at the bottom. Click → red confirm panel with "Confirm Delete" / "Cancel", no password required.
+
+**`RecordRequestsTab.tsx`** — same Active/Archived filter pattern as the other two tabs (`active | pending | in_review | archived`, new `isArchivedRequest` = `fulfilled` or `denied`, new `FILTER_LABELS` map). No delete button — record requests just archive, per user preference to keep an audit trail of what was fulfilled/denied.
+
 ### 2026-06-13 — Inbox Active/Archived Filters for Burn Permits + Feedback
 
 **`BurnPermitsTab.tsx`** — filter bar changed from `all | pending | approved | denied` to `active | pending | approved | archived`. New helpers `isExpiredPermit(p)` (approved + past `permit_expiry_date`) and `isArchivedPermit(p)` (denied, cancelled, or expired). Default view is "Active" — denied, cancelled, and expired permits drop out automatically without any DB changes; "Archived" tab shows them on demand.

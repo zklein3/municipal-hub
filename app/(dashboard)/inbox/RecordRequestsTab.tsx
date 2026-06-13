@@ -40,6 +40,19 @@ const TYPE_LABELS: Record<string, string> = {
   other:             'Other',
 }
 
+type Filter = 'active' | 'pending' | 'in_review' | 'archived'
+
+const FILTER_LABELS: Record<Filter, string> = {
+  active:    'Active',
+  pending:   'Pending',
+  in_review: 'In Review',
+  archived:  'Archived',
+}
+
+function isArchivedRequest(r: RecordRequest) {
+  return r.status === 'fulfilled' || r.status === 'denied'
+}
+
 function formatDate(d: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -51,21 +64,27 @@ function formatDateTime(d: string) {
 
 export default function RecordRequestsTab({ requests: initialRequests }: { requests: RecordRequest[] }) {
   const [requests, setRequests] = useState(initialRequests)
-  const [filter, setFilter] = useState<'all' | Status>('all')
+  const [filter, setFilter] = useState<Filter>('active')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reviewerNotes, setReviewerNotes] = useState('')
   const [confirmingAction, setConfirmingAction] = useState<{ id: string; status: 'fulfilled' | 'denied' } | null>(null)
 
-  const filtered = filter === 'all' ? requests : requests.filter(r => r.status === filter)
+  const filtered = requests.filter(r => {
+    switch (filter) {
+      case 'active':    return !isArchivedRequest(r)
+      case 'pending':   return r.status === 'pending'
+      case 'in_review': return r.status === 'in_review'
+      case 'archived':  return isArchivedRequest(r)
+    }
+  })
 
   const counts = {
-    all:       requests.length,
+    active:    requests.filter(r => !isArchivedRequest(r)).length,
     pending:   requests.filter(r => r.status === 'pending').length,
     in_review: requests.filter(r => r.status === 'in_review').length,
-    fulfilled: requests.filter(r => r.status === 'fulfilled').length,
-    denied:    requests.filter(r => r.status === 'denied').length,
+    archived:  requests.filter(isArchivedRequest).length,
   }
 
   function openExpand(id: string) {
@@ -99,13 +118,12 @@ export default function RecordRequestsTab({ requests: initialRequests }: { reque
     <div>
       {/* Filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {(['all', 'pending', 'in_review', 'fulfilled', 'denied'] as const).map(f => (
+        {(['active', 'pending', 'in_review', 'archived'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
               filter === f ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300'
             }`}>
-            {f === 'in_review' ? 'In Review' : f.charAt(0).toUpperCase() + f.slice(1)}
-            {' '}({counts[f]})
+            {FILTER_LABELS[f]} ({counts[f]})
           </button>
         ))}
       </div>
@@ -114,7 +132,7 @@ export default function RecordRequestsTab({ requests: initialRequests }: { reque
 
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center">
-          <p className="text-sm text-zinc-400">No {filter === 'all' ? '' : STATUS_LABELS[filter as Status]?.toLowerCase()} record requests.</p>
+          <p className="text-sm text-zinc-400">No {filter === 'active' ? '' : FILTER_LABELS[filter].toLowerCase() + ' '}record requests.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
