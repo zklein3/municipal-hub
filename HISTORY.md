@@ -171,6 +171,8 @@ Tested the 2026-06-09 department notification toggles (`burn_permit_reviewer`, `
 
 **`notify-on-log` Edge Function** (deployed v6) — now short-circuits for `log_type: 'user_report'` when `page` is `/dept/burn-permit` or `/dept/feedback`, since those are fully handled by the department-level email. Sys admin still gets alerted for `/dept/records` (records requests — no per-department toggle yet) and `/inbox` (record request status changes), plus all `error`, `fire_school_inquiry`, and `contact_request` log types as before.
 
+**v7** — also short-circuits `log_type: 'error'` when `page` is `/login` (failed login attempts — wrong password, no personnel record). These are routine and too frequent to email individually; still recorded in `system_logs` for `/admin/logs` review. No account lockout mechanism exists yet — if one is built later, a dept-admin-facing notification can be added separately. Internal "Report a Problem" submissions (`submitUserReport` in `app/actions/personnel.ts`, any other page) are untouched and still alert sys admin.
+
 ### 2026-06-09 — Department Email Notification for New Burn Permit Applications
 
 **`department_personnel.burn_permit_reviewer`** (existing column, previously unused) is now wired up — per-person opt-in toggle, settable by department admins.
