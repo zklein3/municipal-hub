@@ -165,6 +165,12 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-13 — Stop Sys Admin Alerts for Burn Permit / Feedback Submissions
+
+Tested the 2026-06-09 department notification toggles (`burn_permit_reviewer`, `notify_feedback`) live — each submission was sending **two** emails to `zklein3@gmail.com`: one from the new per-department notification, and a duplicate from the sys-admin-only `notify-on-log` Edge Function (triggered by the `logEvent({ log_type: 'user_report' })` call in `submitBurnPermit`/`submitPublicFeedback`).
+
+**`notify-on-log` Edge Function** (deployed v6) — now short-circuits for `log_type: 'user_report'` when `page` is `/dept/burn-permit` or `/dept/feedback`, since those are fully handled by the department-level email. Sys admin still gets alerted for `/dept/records` (records requests — no per-department toggle yet) and `/inbox` (record request status changes), plus all `error`, `fire_school_inquiry`, and `contact_request` log types as before.
+
 ### 2026-06-09 — Department Email Notification for New Burn Permit Applications
 
 **`department_personnel.burn_permit_reviewer`** (existing column, previously unused) is now wired up — per-person opt-in toggle, settable by department admins.
