@@ -165,6 +165,10 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-13 — Cleared Test Burn Permits from Production
+
+Deleted 13 archived burn permit records from `burn_permits` (Winslow Fire Department) directly via SQL — all leftover test submissions from development (expired test permits for "Zachary Adam Klein", "Mike Rotch", "Anita Hanjaab", "Dale Jr.", "John Test", and one denied "Test" entry). Burn Permits → Archived tab is now empty.
+
 ### 2026-06-13 — Inbox Delete Buttons (Burn Permits + Feedback) + Record Requests Archive Filter
 
 **`app/actions/public-site.ts`** — two new delete actions, both gated to officer/admin (`system_role !== 'member'`):
