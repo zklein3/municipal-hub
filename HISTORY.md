@@ -165,6 +165,14 @@ Items flagged during development — address during next cleanup pass:
 
 ## Session History
 
+### 2026-06-13 — Inbox Active/Archived Filters for Burn Permits + Feedback
+
+**`BurnPermitsTab.tsx`** — filter bar changed from `all | pending | approved | denied` to `active | pending | approved | archived`. New helpers `isExpiredPermit(p)` (approved + past `permit_expiry_date`) and `isArchivedPermit(p)` (denied, cancelled, or expired). Default view is "Active" — denied, cancelled, and expired permits drop out automatically without any DB changes; "Archived" tab shows them on demand.
+
+**`FeedbackTab.tsx`** — same pattern: filter bar changed from `all | new | reviewed | resolved` to `active | new | reviewed | archived` via new `isArchivedFeedback(item)` (resolved items archive immediately). New `FILTER_LABELS` map covers the filter-only `active`/`archived` values (separate from the existing `STATUS_LABELS` used for item badges).
+
+Both lists stay smaller by default; nothing is deleted or hidden permanently — just moved to the Archived tab.
+
 ### 2026-06-13 — Stop Sys Admin Alerts for Burn Permit / Feedback Submissions
 
 Tested the 2026-06-09 department notification toggles (`burn_permit_reviewer`, `notify_feedback`) live — each submission was sending **two** emails to `zklein3@gmail.com`: one from the new per-department notification, and a duplicate from the sys-admin-only `notify-on-log` Edge Function (triggered by the `logEvent({ log_type: 'user_report' })` call in `submitBurnPermit`/`submitPublicFeedback`).

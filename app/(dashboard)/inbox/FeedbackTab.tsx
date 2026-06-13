@@ -37,13 +37,26 @@ const TYPE_LABELS: Record<string, string> = {
   bug_report: 'Problem Report',
 }
 
+type Filter = 'active' | 'new' | 'reviewed' | 'archived'
+
+const FILTER_LABELS: Record<Filter, string> = {
+  active:   'Active',
+  new:      'New',
+  reviewed: 'Reviewed',
+  archived: 'Archived',
+}
+
 function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
+function isArchivedFeedback(item: Feedback) {
+  return item.status === 'resolved'
+}
+
 export default function FeedbackTab({ items: initialItems }: { items: Feedback[] }) {
   const [items, setItems] = useState(initialItems)
-  const [filter, setFilter] = useState<'all' | Status>('all')
+  const [filter, setFilter] = useState<Filter>('active')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,13 +66,20 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
   const [replyError, setReplyError] = useState<string | null>(null)
   const [replySent, setReplySent] = useState(false)
 
-  const filtered = filter === 'all' ? items : items.filter(i => i.status === filter)
+  const filtered = items.filter(i => {
+    switch (filter) {
+      case 'active':   return !isArchivedFeedback(i)
+      case 'new':      return i.status === 'new'
+      case 'reviewed': return i.status === 'reviewed'
+      case 'archived': return isArchivedFeedback(i)
+    }
+  })
 
   const counts = {
-    all:      items.length,
+    active:   items.filter(i => !isArchivedFeedback(i)).length,
     new:      items.filter(i => i.status === 'new').length,
     reviewed: items.filter(i => i.status === 'reviewed').length,
-    resolved: items.filter(i => i.status === 'resolved').length,
+    archived: items.filter(isArchivedFeedback).length,
   }
 
   function openExpand(item: Feedback) {
@@ -118,13 +138,12 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
     <div>
       {/* Filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {(['all', 'new', 'reviewed', 'resolved'] as const).map(f => (
+        {(['active', 'new', 'reviewed', 'archived'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
               filter === f ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300'
             }`}>
-            {f === 'all' ? 'All' : STATUS_LABELS[f as Status]}
-            {' '}({counts[f]})
+            {FILTER_LABELS[f]} ({counts[f]})
           </button>
         ))}
       </div>
@@ -133,7 +152,7 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
 
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center">
-          <p className="text-sm text-zinc-400">No {filter === 'all' ? '' : STATUS_LABELS[filter as Status].toLowerCase() + ' '}feedback.</p>
+          <p className="text-sm text-zinc-400">No {filter === 'active' ? '' : FILTER_LABELS[filter].toLowerCase() + ' '}feedback.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">

@@ -40,6 +40,16 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
+function isExpiredPermit(p: Permit) {
+  return p.status === 'approved' &&
+    !!p.permit_expiry_date &&
+    new Date(p.permit_expiry_date + 'T23:59:59') < new Date()
+}
+
+function isArchivedPermit(p: Permit) {
+  return p.status === 'denied' || p.status === 'cancelled' || isExpiredPermit(p)
+}
+
 export default function BurnPermitsTab({
   permits: initialPermits,
   deptName,
@@ -52,7 +62,7 @@ export default function BurnPermitsTab({
   burnPermitRestrictions: string | null
 }) {
   const [permits, setPermits] = useState(initialPermits)
-  const [filter, setFilter] = useState<'all' | Status>('all')
+  const [filter, setFilter] = useState<'active' | 'pending' | 'approved' | 'archived'>('active')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,13 +75,20 @@ export default function BurnPermitsTab({
     Object.fromEntries(permits.filter(p => p.officer_signed_at).map(p => [p.id, p.officer_signed_at!]))
   )
 
-  const filtered = filter === 'all' ? permits : permits.filter(p => p.status === filter)
+  const filtered = permits.filter(p => {
+    switch (filter) {
+      case 'active':   return !isArchivedPermit(p)
+      case 'pending':  return p.status === 'pending'
+      case 'approved': return p.status === 'approved' && !isExpiredPermit(p)
+      case 'archived': return isArchivedPermit(p)
+    }
+  })
 
   const counts = {
-    all: permits.length,
-    pending: permits.filter(p => p.status === 'pending').length,
-    approved: permits.filter(p => p.status === 'approved').length,
-    denied: permits.filter(p => p.status === 'denied').length,
+    active:   permits.filter(p => !isArchivedPermit(p)).length,
+    pending:  permits.filter(p => p.status === 'pending').length,
+    approved: permits.filter(p => p.status === 'approved' && !isExpiredPermit(p)).length,
+    archived: permits.filter(isArchivedPermit).length,
   }
 
   function openExpand(id: string) {
@@ -140,13 +157,12 @@ export default function BurnPermitsTab({
 
       {/* Filter bar */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {(['all', 'pending', 'approved', 'denied'] as const).map(f => (
+        {(['active', 'pending', 'approved', 'archived'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
               filter === f ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300'
             }`}>
-            {f} {f !== 'all' && counts[f] > 0 && `(${counts[f]})`}
-            {f === 'all' && `(${counts.all})`}
+            {f} ({counts[f]})
           </button>
         ))}
       </div>
@@ -155,16 +171,14 @@ export default function BurnPermitsTab({
 
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center">
-          <p className="text-sm text-zinc-400">No {filter === 'all' ? '' : filter} burn permit requests.</p>
+          <p className="text-sm text-zinc-400">No {filter === 'active' ? '' : filter + ' '}burn permit requests.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map(permit => {
             const isExpanded = expandedId === permit.id
             const isPending = permit.status === 'pending'
-            const isExpired = permit.status === 'approved' &&
-              !!permit.permit_expiry_date &&
-              new Date(permit.permit_expiry_date + 'T23:59:59') < new Date()
+            const isExpired = isExpiredPermit(permit)
 
             return (
               <div key={permit.id} className={`rounded-xl bg-white overflow-hidden border ${isExpired ? 'border-red-400' : 'border-zinc-200'}`}>
