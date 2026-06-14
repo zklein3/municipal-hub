@@ -22,12 +22,13 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
+          set -euo pipefail
           TIMESTAMP=$(date +%Y-%m-%d)
           FILENAME="fireops7-backup-${TIMESTAMP}.sql.gz"
           pg_dump \
-            --host=db.kolrhnxozeroaselapzn.supabase.co \
+            --host=aws-0-us-east-1.pooler.supabase.com \
             --port=5432 \
-            --username=postgres \
+            --username=postgres.kolrhnxozeroaselapzn \
             --dbname=postgres \
             --no-owner \
             --no-acl \
