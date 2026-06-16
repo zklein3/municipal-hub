@@ -324,6 +324,15 @@ Tested the 2026-06-09 department notification toggles (`burn_permit_reviewer`, `
 - Weekly backup: `.github/workflows/weekly-backup.yml` — Sunday 2 AM UTC, pg_dump → gzip → Backblaze B2, 12-week retention
 - Capacitor: `capacitor.config.ts` + `@capacitor/core` installed (skeleton only — awaiting Winslow funding for store submission)
 
+### 2026-06-16 — Weekly Backup Debugging Session
+Fixed 4 issues in `.github/workflows/weekly-backup.yml` to get backup mostly working:
+1. **Supabase direct host IPv6-only** — switched from `db.kolrhnxozeroaselapzn.supabase.co` to session pooler (IPv4-compatible). Confirmed correct shard via probing: `aws-1-us-east-1.pooler.supabase.com:5432`, username `postgres.kolrhnxozeroaselapzn`
+2. **pg_dump version mismatch** — server is Postgres 17.6; default `postgresql-client` on ubuntu-latest installs v16. Added PGDG apt repo + install `postgresql-client-17` specifically
+3. **Missing secrets** — set all 4 in GitHub repo secrets: `SUPABASE_DB_PASSWORD`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME` (`fireops7-backups`)
+4. **Added `set -euo pipefail`** to pg_dump step so future connection failures surface immediately instead of silently producing empty backups
+- **pg_dump now works** — 412 KiB dump confirmed on run #6
+- **⚠️ Still failing:** `B2_KEY_ID` secret likely has Bucket ID instead of Application Key ID → `InvalidAccessKeyId` on upload. Fix: Backblaze → App Keys → copy keyID column → update GitHub secret → re-run manually to confirm
+
 ### 2026-06-04 — Infrastructure & Business Strategy Discussion
 
 **Decisions locked:**

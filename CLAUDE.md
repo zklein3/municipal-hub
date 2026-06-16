@@ -103,9 +103,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 2. **5–10 depts:** Evaluate Neon (managed Postgres, more control than Supabase)
 3. **Enterprise:** AWS RDS PostgreSQL — SOC 2, encryption, multi-region. Migration = connection string change.
 
-### Backup Strategy ✅ (2026-06-04)
+### Backup Strategy ⚠️ Almost Working (2026-06-16)
 - `.github/workflows/weekly-backup.yml` — runs every Sunday 2 AM UTC, `pg_dump` → gzip → Backblaze B2, keeps 12 weeks
-- **Secrets needed in GitHub repo settings:** `SUPABASE_DB_PASSWORD`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`
+- **All 4 secrets set in GitHub repo:** `SUPABASE_DB_PASSWORD`, `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`
+- **Bucket name:** `fireops7-backups` on Backblaze B2
+- **Connection confirmed working:** pooler shard `aws-1-us-east-1.pooler.supabase.com:5432`, username `postgres.kolrhnxozeroaselapzn`, `postgresql-client-17` required (PGDG repo added to workflow). pg_dump produces 412 KiB dump successfully.
+- **⚠️ One thing left:** `B2_KEY_ID` secret may have Bucket ID instead of Application Key ID — go to Backblaze → App Keys → copy the **keyID** column value → update `B2_KEY_ID` GitHub secret → manual test run to confirm.
 
 ### PWA ✅ (2026-06-04)
 - `public/manifest.json` + `public/sw.js` + root layout meta tags deployed
