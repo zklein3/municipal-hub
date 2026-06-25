@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import PrintButton from '@/app/print/training-signin/PrintButton'
+import PrintBackButton from '@/app/print/training-signin/PrintBackButton'
 import { parseCountyContacts } from '@/lib/county-contacts'
 
 function formatDate(d: string | null) {
@@ -90,6 +91,7 @@ export default async function PublicPermitPrintPage({
           .county-row { flex-wrap: wrap !important; }
         }
       `}</style>
+      <PrintBackButton fallbackHref={`/dept/${slug}/permit-status?code=${permit.confirmation_code}`} />
       <PrintButton />
       <div className="permit-page" style={S.page}>
         <p style={S.h1}>{dept.name}</p>

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import PrintButton from '../training-signin/PrintButton'
+import PrintBackButton from '../training-signin/PrintBackButton'
 import { parseCountyContacts } from '@/lib/county-contacts'
 
 function formatDate(d: string | null) {
@@ -93,6 +94,7 @@ export default async function BurnPermitPrintPage({
         }
       `}</style>
 
+      <PrintBackButton fallbackHref="/inbox?tab=permits" />
       <PrintButton />
 
       <div className="permit-page" style={S.page}>

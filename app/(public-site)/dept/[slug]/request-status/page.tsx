@@ -308,8 +308,6 @@ export default async function RequestStatusPage({
             return (
               <a
                 href={`/dept/${slug}/permit-print?code=${permit.confirmation_code}`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="w-full rounded-xl bg-red-700 px-4 py-3.5 text-sm font-semibold text-white hover:bg-red-800 transition-colors text-center block"
               >
                 Print My Permit ↗

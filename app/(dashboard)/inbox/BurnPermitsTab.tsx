@@ -252,8 +252,6 @@ export default function BurnPermitsTab({
                       {permit.status === 'approved' && (
                         <a
                           href={`/print/burn-permit?id=${permit.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
                           className="text-xs font-semibold text-red-600 hover:text-red-800"
                         >
                           Print ↗

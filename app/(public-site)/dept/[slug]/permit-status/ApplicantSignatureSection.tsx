@@ -88,8 +88,6 @@ export default function ApplicantSignatureSection({
         </p>
         <a
           href={`/dept/${slug}/permit-print?code=${confirmationCode}`}
-          target="_blank"
-          rel="noopener noreferrer"
           className="inline-block rounded-xl bg-red-700 px-6 py-3 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
         >
           Print My Permit ↗
