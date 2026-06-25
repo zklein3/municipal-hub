@@ -17,7 +17,7 @@ export default function PermitContactModal({
   onClose: () => void
 }) {
   const [subject, setSubject] = useState(`Regarding your burn permit (${confirmationCode})`)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState('Your burn permit is cancelled until further notice. We will notify you when burning may resume.')
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -67,7 +67,6 @@ export default function PermitContactModal({
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 rows={5}
-                placeholder="e.g. Due to current weather conditions, the burn ban has been reinstated. Please do not burn under this permit until further notice."
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none"
               />
             </div>
