@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import PrintButton from '@/app/print/training-signin/PrintButton'
+import { parseCountyContacts } from '@/lib/county-contacts'
 
 function formatDate(d: string | null) {
   if (!d) return '___________________________'
@@ -55,7 +56,7 @@ export default async function PublicPermitPrintPage({
   ])
 
   const restrictions = dept.burn_permit_restrictions ?? 'Brush'
-  const countyInfo   = dept.burn_permit_county_info ?? ''
+  const countyContacts = parseCountyContacts(dept.burn_permit_county_info ?? null)
 
   const S: Record<string, React.CSSProperties> = {
     page:     { fontFamily: 'Arial, sans-serif', fontSize: '11pt', color: '#000', background: '#fff', padding: '1in', maxWidth: '8.5in', margin: '0 auto' },
@@ -67,9 +68,13 @@ export default async function PublicPermitPrintPage({
     divider:  { borderTop: '1px solid #000', margin: '16px 0' },
     legal:    { fontSize: '9pt', lineHeight: '1.5', marginBottom: '10px' },
     bold12:   { fontSize: '12pt', fontWeight: 700 },
-    sigRow:   { marginTop: '12px', fontWeight: 700 },
+    sigCaption: { fontSize: '8pt', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#555', marginTop: '14px' },
+    sigName:  { fontSize: '12pt', fontWeight: 700, marginTop: '2px' },
     voidBanner:{ fontSize: '15pt', fontWeight: 700, textAlign: 'center', margin: '20px 0 0', borderTop: '2px solid #000', paddingTop: '10px' },
     code:     { fontSize: '8pt', color: '#999', textAlign: 'right', marginTop: '4px' },
+    countyRow:   { display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '3px 0' },
+    countyName:  { fontWeight: 700 },
+    countyPhone: { fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' },
   }
 
   return (
@@ -80,9 +85,13 @@ export default async function PublicPermitPrintPage({
           @page { margin: 0; }
           body { margin: 0; }
         }
+        @media screen and (max-width: 640px) {
+          .permit-page { padding: 0.4in !important; }
+          .county-row { flex-wrap: wrap !important; }
+        }
       `}</style>
       <PrintButton />
-      <div style={S.page}>
+      <div className="permit-page" style={S.page}>
         <p style={S.h1}>{dept.name}</p>
         <p style={S.h2}>Burning Permit</p>
 
@@ -119,28 +128,36 @@ export default async function PublicPermitPrintPage({
           BEFORE BURNING. LET THEM KNOW YOU HAVE A PERMIT.
         </p>
 
-        {countyInfo && (
-          <div style={{ margin: '0 0 12px', fontWeight: 700 }}>
-            {countyInfo.split('\n').map((line: string, i: number) => (
-              <p key={i} style={{ margin: '4px 0' }}>{line}</p>
+        {countyContacts.length > 0 && (
+          <div style={{ margin: '0 0 12px' }}>
+            {countyContacts.map((c, i) => (
+              <div key={i} className="county-row" style={S.countyRow}>
+                <span style={S.countyName}>{c.name}</span>
+                {c.phone && <span style={S.countyPhone}>{c.phone}</span>}
+              </div>
             ))}
           </div>
         )}
 
         <div style={S.divider} />
 
-        <div style={S.sigRow}>(Signature of Applicant)</div>
+        <p style={S.sigCaption}>Signature of Applicant</p>
         {applicantSigUrl
-          ? <img src={applicantSigUrl} alt="Applicant signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '6px 0 12px' }} />
-          : <div style={{ borderBottom: '1px solid #000', marginTop: '28px', marginBottom: '12px' }} />
+          ? <img src={applicantSigUrl} alt="Applicant signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '4px 0 8px' }} />
+          : <div style={{ borderBottom: '1px solid #000', marginTop: '26px', marginBottom: '8px' }} />
         }
-        <div style={S.sigRow}>(Phone # of Applicant) <span style={{ fontWeight: 400 }}>{permit.contact_phone ?? ''}</span></div>
-        <div style={{ borderBottom: '1px solid #000', marginTop: '28px', marginBottom: '12px' }} />
-        <div style={S.sigRow}>(Fire Department Officer) <span style={{ fontStyle: 'italic' }}>{officerName}</span></div>
+        <p style={S.sigName}>{permit.contact_name}</p>
+
+        <p style={S.sigCaption}>Phone # of Applicant</p>
+        <p style={S.sigName}>{permit.contact_phone ?? '—'}</p>
+        <div style={{ borderBottom: '1px solid #000', marginTop: '26px', marginBottom: '8px' }} />
+
+        <p style={S.sigCaption}>Fire Department Officer</p>
         {officerSigUrl
-          ? <img src={officerSigUrl} alt="Officer signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '6px 0 4px' }} />
-          : <div style={{ borderBottom: '1px solid #000', marginTop: '10px', marginBottom: '4px' }} />
+          ? <img src={officerSigUrl} alt="Officer signature" style={{ maxHeight: '50px', maxWidth: '220px', display: 'block', margin: '4px 0 4px' }} />
+          : <div style={{ borderBottom: '1px solid #000', marginTop: '26px', marginBottom: '4px' }} />
         }
+        <p style={S.sigName}>{officerName}</p>
 
         <p style={S.voidBanner}>VOID IF WIND EXCEEDS 10 MPH.</p>
         <p style={S.code}>Confirmation: {permit.confirmation_code}</p>

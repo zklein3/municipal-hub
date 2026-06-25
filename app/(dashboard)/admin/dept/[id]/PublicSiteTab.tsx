@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { savePublicSiteSettings, toggleEventSeriesPublic } from '@/app/actions/public-site'
+import CountyContactsEditor from '@/components/CountyContactsEditor'
 
 interface EventSeries {
   id: string
@@ -204,13 +205,7 @@ export default function PublicSiteTab({
 
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">County / Sheriff Info</label>
-            <textarea
-              name="burn_permit_county_info"
-              rows={3}
-              defaultValue={publicSite.burn_permit_county_info ?? ''}
-              placeholder={"Dodge County    (402) 727-2677\nWashington County    (402) 426-6866"}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-y font-mono"
-            />
+            <CountyContactsEditor name="burn_permit_county_info" defaultValue={publicSite.burn_permit_county_info} />
             <p className="mt-1 text-xs text-zinc-400">Printed on the permit under the Sheriff notification section.</p>
           </div>
 

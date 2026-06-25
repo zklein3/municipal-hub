@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { saveDeptInboxSettings } from '@/app/actions/public-site'
+import CountyContactsEditor from '@/components/CountyContactsEditor'
 
 export default function PublicInboxSettingsClient({
   departmentId,
@@ -44,13 +45,7 @@ export default function PublicInboxSettingsClient({
             <label className="block text-sm font-medium text-zinc-700 mb-1">
               County / Sheriff Info <span className="text-red-500">*</span>
             </label>
-            <input
-              name="burn_permit_county_info"
-              type="text"
-              defaultValue={burn_permit_county_info ?? ''}
-              placeholder="e.g. Dodge County Sheriff — (402) 727-2700"
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            />
+            <CountyContactsEditor name="burn_permit_county_info" defaultValue={burn_permit_county_info} />
             <p className="mt-1 text-xs text-zinc-400">Printed on approved permits. Required before approving any permit.</p>
           </div>
 
