@@ -95,7 +95,7 @@ export default async function BurnPermitPrintPage({
       `}</style>
 
       <PrintBackButton fallbackHref="/inbox?tab=permits" />
-      <PrintButton />
+      <PrintButton jobName="Burn Permit" />
 
       <div className="permit-page" style={S.page}>
         {/* Header */}

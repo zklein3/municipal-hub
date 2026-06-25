@@ -1,27 +1,27 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { Browser } from '@capacitor/browser'
+import NativePrint from '@/lib/native-print'
 
-// Android's WebView (which the Capacitor app wraps) doesn't implement
-// window.print() — it's a silent no-op. Hand off to the system browser
-// (Chrome), which has real print-to-PDF support, instead.
-function triggerPrint() {
+// On Android the WebView supports printing via the system PrintManager, which
+// also includes "Save as PDF". We call our custom NativePrint plugin so the
+// user never has to leave the app.
+function triggerPrint(jobName = 'FireOps7 Document') {
   if (Capacitor.isNativePlatform()) {
-    Browser.open({ url: window.location.href })
+    NativePrint.print({ jobName }).catch(console.error)
     return
   }
   window.print()
 }
 
-export default function PrintButton({ auto }: { auto?: boolean }) {
-  const [isNative, setIsNative] = useState(false)
-
-  useEffect(() => {
-    setIsNative(Capacitor.isNativePlatform())
-  }, [])
-
+export default function PrintButton({
+  auto,
+  jobName,
+}: {
+  auto?: boolean
+  jobName?: string
+}) {
   useEffect(() => {
     if (auto && !Capacitor.isNativePlatform()) {
       const t = setTimeout(() => window.print(), 800)
@@ -32,7 +32,7 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
   return (
     <button
       type="button"
-      onClick={triggerPrint}
+      onClick={() => triggerPrint(jobName)}
       style={{
         position: 'fixed', top: '1rem', right: '1rem',
         background: '#b91c1c', color: '#fff',
@@ -44,7 +44,7 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
       }}
       className="no-print"
     >
-      {isNative ? 'Open in Browser to Print' : 'Print / Save PDF'}
+      Print / Save PDF
     </button>
   )
 }
