@@ -22,6 +22,8 @@ interface Permit {
   approved_by_name: string | null
   created_at: string
   officer_signed_at: string | null
+  applicant_signed_at: string | null
+  applicant_acknowledged_at: string | null
 }
 
 const STATUS_STYLES: Record<Status, string> = {
@@ -222,6 +224,12 @@ export default function BurnPermitsTab({
                       </div>
                       <p className="text-xs text-zinc-500 mb-0.5">📍 {permit.burn_address}</p>
                       <p className="text-xs text-zinc-500">🔥 Burn date: <span className="font-medium text-zinc-700">{formatDate(permit.burn_date)}</span></p>
+                      {permit.applicant_signed_at && (
+                        <p className="text-xs text-blue-600 mt-0.5 font-medium">✍️ Signed online</p>
+                      )}
+                      {permit.applicant_acknowledged_at && (
+                        <p className="text-xs text-zinc-500 mt-0.5 font-medium">🖨️ Printed &amp; signed by hand</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
                       {permit.status === 'approved' && !isExpired && (
@@ -274,6 +282,12 @@ export default function BurnPermitsTab({
                           <p className="text-zinc-700">Issued: {formatDate(permit.issued_date)}</p>
                           <p className="text-zinc-700">Expires: {formatDate(permit.permit_expiry_date)}</p>
                           {permit.approved_by_name && <p className="text-zinc-700">Officer: {permit.approved_by_name}</p>}
+                          {permit.applicant_signed_at && (
+                            <p className="text-zinc-700">Applicant: Signed online {formatDateTime(permit.applicant_signed_at)}</p>
+                          )}
+                          {permit.applicant_acknowledged_at && (
+                            <p className="text-zinc-700">Applicant: Printed &amp; signed by hand {formatDateTime(permit.applicant_acknowledged_at)}</p>
+                          )}
                         </div>
                       )}
                     </div>
