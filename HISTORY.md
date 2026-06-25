@@ -81,6 +81,7 @@
 - Public site Option B — API keys (on demand only)
 - CAD email parsing for incidents
 - Mutual aid partners manual entry table
+- Native print bridge for Android app wrapper — Print button currently hands off to the system browser (Chrome) via `@capacitor/browser` since Android's WebView doesn't implement `window.print()`. Works fine but adds an extra hop (leaves the app, prints from Chrome). Before the official Play Store / App Store release, build a real native print bridge (WebView `createPrintDocumentAdapter()` + Android `PrintManager`, exposed to JS via a custom plugin/JS interface) so printing happens without leaving the app. Today's fix is durable, not a throwaway hack — just not the most seamless version.
 
 ## UI/UX Cleanup Backlog
 Items flagged during development — address during next cleanup pass:
@@ -164,6 +165,18 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-06-25 — Burn Permit Print Cleanup + Capacitor App Wrapper Fixes
+
+**Print/county info cleanup:** County/sheriff contact info was a single freeform field (dept-admin side was even a single-line input), so multi-county entries had no reliable line break and ran together on print (Winslow's Dodge/Washington county numbers). Replaced with a structured `CountyContactsEditor` (name + phone rows, `lib/county-contacts.ts` parse/serialize) used in both the sys admin and dept-admin settings panels; print pages render each contact as its own row. Fixed live data for Winslow + Valley FD. Also rebalanced signature block emphasis on both print pages — names/phone numbers bold, field labels demoted to small uppercase captions (previously backwards).
+
+**Inbox additions:** Permit cards now show expiration date directly (not just in expanded detail). Added a "Contact Holder" button (`PermitContactModal` + `contactPermitHolder` action) to email the permit holder directly — needed for the obligation to notify residents if burn conditions change after issuance. Reuses the existing Resend send path, logs to `system_logs` for an audit trail. Default message: "Your burn permit is cancelled until further notice."
+
+**Capacitor app wrapper fixes (Android):**
+- All "Print"/"Print My Permit" links used `target="_blank"`, which Capacitor's WebView can't open (no multi-window support) — silently did nothing on Android. Removed it from all four permit print links.
+- Added an explicit "← Back" button (`PrintBackButton`) to both print pages since they have no header/nav of their own.
+- Hardware Android back button exited the app entirely instead of navigating — `MainActivity.java` didn't override `onBackPressed()`. Fixed to call `webview.goBack()` when there's history. **Requires APK rebuild to take effect** (confirmed working after rebuild).
+- `window.print()` is a no-op in Android's native WebView — no print dialog wired up regardless of code. Added `@capacitor/browser`; `PrintButton` now hands off to the system browser (Chrome) when running natively, where print-to-PDF actually works. Durable fix, not a placeholder — same pattern will carry into the eventual Play Store / App Store builds. See "What's Not Yet Built" for the native print bridge as a future polish item (skip the browser hop entirely).
 
 ### 2026-06-13 — Android/Capacitor: VS Code JDK/Gradle Setup ✅ RESOLVED
 
