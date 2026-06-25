@@ -83,6 +83,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - `REFERENCE.md` — routes, action files, edge functions, permissions, nav structure
 - `MODULES.md` — equipment/inspection, attendance, training, incident, ISO module design + **Future Integrations** (ImageTrend EMS push)
 - `HISTORY.md` — what's built, what's not, DB tables, session history
+- `NATIVE.md` — Capacitor/Android/iOS app architecture and build workflow
+- `ANDROID_HANDOFF.md` — handoff protocol between Claude Code and the Android Studio agent; point the Android Studio agent at this file
 
 ---
 
