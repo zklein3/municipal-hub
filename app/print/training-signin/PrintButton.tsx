@@ -1,10 +1,29 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
+
+// Android's WebView (which the Capacitor app wraps) doesn't implement
+// window.print() — it's a silent no-op. Hand off to the system browser
+// (Chrome), which has real print-to-PDF support, instead.
+function triggerPrint() {
+  if (Capacitor.isNativePlatform()) {
+    Browser.open({ url: window.location.href })
+    return
+  }
+  window.print()
+}
 
 export default function PrintButton({ auto }: { auto?: boolean }) {
+  const [isNative, setIsNative] = useState(false)
+
   useEffect(() => {
-    if (auto) {
+    setIsNative(Capacitor.isNativePlatform())
+  }, [])
+
+  useEffect(() => {
+    if (auto && !Capacitor.isNativePlatform()) {
       const t = setTimeout(() => window.print(), 800)
       return () => clearTimeout(t)
     }
@@ -13,7 +32,7 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
   return (
     <button
       type="button"
-      onClick={() => window.print()}
+      onClick={triggerPrint}
       style={{
         position: 'fixed', top: '1rem', right: '1rem',
         background: '#b91c1c', color: '#fff',
@@ -25,7 +44,7 @@ export default function PrintButton({ auto }: { auto?: boolean }) {
       }}
       className="no-print"
     >
-      Print / Save PDF
+      {isNative ? 'Open in Browser to Print' : 'Print / Save PDF'}
     </button>
   )
 }
