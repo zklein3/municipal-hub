@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { updateBurnPermitStatus, deleteBurnPermit } from '@/app/actions/public-site'
 import PermitSignatureModal from './PermitSignatureModal'
+import PermitContactModal from './PermitContactModal'
 
 type Status = 'pending' | 'approved' | 'denied' | 'cancelled'
 
@@ -72,6 +73,7 @@ export default function BurnPermitsTab({
   const [reviewerNotes, setReviewerNotes] = useState('')
   const [denyingId, setDenyingId] = useState<string | null>(null)
   const [signingPermit, setSigningPermit] = useState<Permit | null>(null)
+  const [contactingPermit, setContactingPermit] = useState<Permit | null>(null)
   const [pendingApprovalPermit, setPendingApprovalPermit] = useState<Permit | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletePassword, setDeletePassword] = useState('')
@@ -224,6 +226,9 @@ export default function BurnPermitsTab({
                       </div>
                       <p className="text-xs text-zinc-500 mb-0.5">📍 {permit.burn_address}</p>
                       <p className="text-xs text-zinc-500">🔥 Burn date: <span className="font-medium text-zinc-700">{formatDate(permit.burn_date)}</span></p>
+                      {permit.status === 'approved' && !isExpired && permit.permit_expiry_date && (
+                        <p className="text-xs text-zinc-500">⏳ Expires: <span className="font-medium text-zinc-700">{formatDate(permit.permit_expiry_date)}</span></p>
+                      )}
                       {permit.applicant_signed_at && (
                         <p className="text-xs text-blue-600 mt-0.5 font-medium">✍️ Signed online</p>
                       )}
@@ -253,6 +258,14 @@ export default function BurnPermitsTab({
                         >
                           Print ↗
                         </a>
+                      )}
+                      {permit.status === 'approved' && permit.contact_email && (
+                        <button
+                          onClick={() => setContactingPermit(permit)}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                        >
+                          Contact ✉️
+                        </button>
                       )}
                       {isExpired && (
                         <span className="text-xs text-red-500 font-medium">Expired {formatDate(permit.permit_expiry_date)}</span>
@@ -411,6 +424,16 @@ export default function BurnPermitsTab({
           }
           setSigningPermit(null)
         }}
+      />
+    )}
+
+    {contactingPermit && (
+      <PermitContactModal
+        permitId={contactingPermit.id}
+        contactName={contactingPermit.contact_name}
+        contactEmail={contactingPermit.contact_email}
+        confirmationCode={contactingPermit.confirmation_code}
+        onClose={() => setContactingPermit(null)}
       />
     )}
     </>

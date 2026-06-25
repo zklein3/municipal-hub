@@ -313,6 +313,91 @@ export async function updateBurnPermitStatus(formData: FormData) {
   return { success: true }
 }
 
+// ─── Permit: Email the holder directly (e.g. conditions changed, can't burn) ──
+export async function contactPermitHolder(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const permit_id = formData.get('permit_id') as string
+  const subject   = (formData.get('subject') as string)?.trim()
+  const message   = (formData.get('message') as string)?.trim()
+  if (!permit_id || !message) return { error: 'Please enter a message.' }
+
+  const { data: permit } = await adminClient
+    .from('burn_permits')
+    .select('id, department_id, contact_name, contact_email, confirmation_code')
+    .eq('id', permit_id)
+    .single()
+  if (!permit) return { error: 'Permit not found.' }
+  if (!permit.contact_email) return { error: 'This permit has no email address on file — a message cannot be sent.' }
+
+  if (!me.is_sys_admin) {
+    const { data: myDeptList } = await adminClient
+      .from('department_personnel').select('system_role')
+      .eq('personnel_id', me.id).eq('department_id', permit.department_id).eq('active', true)
+    const myDept = myDeptList?.[0]
+    if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  }
+
+  const resendKey = process.env.RESEND_API_KEY
+  if (!resendKey) return { error: 'Email sending is not configured.' }
+
+  const { data: dept } = await adminClient
+    .from('departments').select('name, public_email').eq('id', permit.department_id).single()
+
+  const senderName = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim()
+  const deptName = dept?.name ?? 'FireOps7'
+  const greeting = permit.contact_name ? `Hi ${escapeHtml(permit.contact_name)},` : 'Hi,'
+  const signOffLines = senderName
+    ? `${escapeHtml(senderName)}<br/>${escapeHtml(deptName)}`
+    : escapeHtml(deptName)
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+      <p>${greeting}</p>
+      <p style="white-space:pre-line">${escapeHtml(message)}</p>
+      <p style="margin-top:24px">— ${signOffLines}</p>
+      <p style="margin-top:24px;color:#888;font-size:12px">Regarding burn permit ${escapeHtml(permit.confirmation_code)}</p>
+    </div>
+  `
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `${deptName} (via FireOps7) <noreply@fireops7.com>`,
+      to: permit.contact_email,
+      ...(dept?.public_email ? { reply_to: dept.public_email } : {}),
+      subject: subject || `Regarding your burn permit (${permit.confirmation_code})`,
+      html,
+    }),
+  })
+
+  if (!emailRes.ok) {
+    await logError(await emailRes.text(), '/inbox/permit-contact')
+    return { error: 'Failed to send email. Please try again.' }
+  }
+
+  await logEvent({
+    log_type: 'info',
+    page: '/inbox',
+    message: `Permit holder contacted: ${permit.contact_name} (${permit.confirmation_code})`,
+    personnel_id: me.id,
+    department_id: permit.department_id,
+    metadata: { permit_id, subject: subject || null },
+  })
+
+  return { success: true }
+}
+
 // ─── Permit: Delete (password-confirmed — permits should normally persist) ────
 export async function deleteBurnPermit(formData: FormData) {
   const supabase = await createClient()
