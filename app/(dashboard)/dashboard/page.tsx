@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import SysAdminDashboard from './SysAdminDashboard'
 import DashboardAnnouncementBanner from './DashboardAnnouncementBanner'
 
@@ -145,50 +145,35 @@ function formatTime(t: string | null) {
 
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
 
-  // Fetch me with contact info
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, first_name, last_name, email, phone, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
+  if (ctx.isSysAdmin) return <SysAdminDashboard />
 
-  if (me.is_sys_admin) return <SysAdminDashboard />
-
-  // Fetch my dept record with profile fields — flat, no nested joins
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role, employee_number, hire_date, role_id')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/login')
 
   // Fetch dept info separately
   const { data: deptData } = await adminClient
     .from('departments')
     .select('name, public_slug, public_site_enabled')
-    .eq('id', myDept.department_id)
+    .eq('id', ctx.departmentId)
     .single()
 
-  const departmentId = myDept.department_id
+  const departmentId = ctx.departmentId
   const departmentName = deptData?.name ?? 'Your Department'
   const publicSiteUrl = deptData?.public_site_enabled && deptData?.public_slug
     ? `/dept/${deptData.public_slug}`
     : null
-  const systemRole = myDept.system_role
+  const systemRole = ctx.systemRole
   const isAdmin = systemRole === 'admin'
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
 
   const [data, unreadAnnouncements, pendingInbox] = await Promise.all([
-    getDashboardData(departmentId, me.id),
-    getUnreadAnnouncements(departmentId, me.id),
+    getDashboardData(departmentId, ctx.personnelId),
+    getUnreadAnnouncements(departmentId, ctx.personnelId),
     isOfficerOrAbove ? getPendingInboxCounts(departmentId) : Promise.resolve({ permits: 0, records: 0 }),
   ])
 
@@ -229,7 +214,7 @@ export default async function DashboardPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-zinc-900">
-          {greeting()}, {me.first_name || 'there'}
+          {greeting()}, {ctx.firstName || 'there'}
         </h1>
         <p className="text-sm text-zinc-500 mt-1">{departmentName}</p>
       </div>
@@ -371,7 +356,7 @@ export default async function DashboardPage() {
       {unreadAnnouncements.length > 0 && (
         <DashboardAnnouncementBanner
           announcements={unreadAnnouncements}
-          personnelId={me.id}
+          personnelId={ctx.personnelId}
         />
       )}
 

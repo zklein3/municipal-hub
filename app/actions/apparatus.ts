@@ -1,25 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 // ─── Create Apparatus (admin only) ───────────────────────────────────────────
 export async function createApparatus(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (!ctx.departmentId) return { error: 'No department selected.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) {
     return { error: 'Only admins can add apparatus.' }
   }
 
@@ -37,7 +30,7 @@ export async function createApparatus(formData: FormData) {
   if (!unit_number) return { error: 'Unit number is required.' }
 
   const { error } = await adminClient.from('apparatus').insert({
-    department_id: myDept.department_id,
+    department_id: ctx.departmentId,
     unit_number,
     apparatus_name: apparatus_name || null,
     apparatus_type_id: apparatus_type_id || null,
@@ -63,19 +56,11 @@ export async function createApparatus(formData: FormData) {
 
 // ─── Update Apparatus (officer + admin) ──────────────────────────────────────
 export async function updateApparatus(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role === 'member' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (ctx.systemRole === 'member' && !ctx.isSysAdmin) {
     return { error: 'Members cannot edit apparatus.' }
   }
 
@@ -93,7 +78,7 @@ export async function updateApparatus(formData: FormData) {
   const station_id = formData.get('station_id') as string
 
   // Active status + ISO exclusion + air brakes — admin only
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
   const active = isAdmin ? formData.get('active') === 'true' : undefined
   const exclude_from_iso = isAdmin ? formData.get('exclude_from_iso') === 'on' : undefined
   const has_air_brakes = isAdmin ? formData.get('has_air_brakes') === 'on' : undefined

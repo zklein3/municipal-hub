@@ -1,27 +1,21 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect, notFound } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import IncidentDetailClient from './IncidentDetailClient'
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const department_id = myDept.department_id
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
+  const department_id = ctx.departmentId
+  const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer'
 
   // Incident
   const { data: incident } = await adminClient

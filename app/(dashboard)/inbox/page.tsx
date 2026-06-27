@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import InboxClient from './InboxClient'
 
 export default async function InboxPage({
@@ -9,26 +9,18 @@ export default async function InboxPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { tab } = await searchParams
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: meList } = await adminClient
-    .from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
 
   // Sys admin has no dept record — allow through with signatures-only view
-  if (!myDept && !me.is_sys_admin) redirect('/dashboard')
+  if (!ctx.departmentId && !ctx.isSysAdmin) redirect('/dashboard')
 
-  const department_id = myDept?.department_id ?? null
-  const isOfficerOrAbove = me.is_sys_admin || myDept?.system_role === 'admin' || myDept?.system_role === 'officer'
+  const me = { id: ctx.personnelId, first_name: ctx.firstName, last_name: ctx.lastName }
+  const department_id = ctx.departmentId
+  const isOfficerOrAbove = ctx.isSysAdmin || ctx.systemRole === 'admin' || ctx.systemRole === 'officer'
 
   // Pending signatures — all members (incident + event)
   const [{ data: pendingIncidentSigs }, { data: pendingEventSigs }] = await Promise.all([

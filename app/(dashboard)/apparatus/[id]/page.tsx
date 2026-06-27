@@ -1,26 +1,20 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import ApparatusDetailClient from './ApparatusDetailClient'
 
 export default async function ApparatusDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const systemRole = myDept.system_role
-  const isAdmin = systemRole === 'admin' || me.is_sys_admin
+  const systemRole = ctx.systemRole
+  const isAdmin = systemRole === 'admin' || ctx.isSysAdmin
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
 
   // Fetch apparatus — no nested joins to avoid type issues
@@ -46,7 +40,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   const { data: stations } = await adminClient
     .from('stations')
     .select('id, station_number, station_name')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('station_number')
 
@@ -115,7 +109,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   const { data: compartmentNames } = await adminClient
     .from('compartment_names')
     .select('id, compartment_code, compartment_name, sort_order')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('sort_order')
 
@@ -134,7 +128,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .order('test_date', { ascending: false })
 
   // Medical bags — only if module enabled
-  const { data: modRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const { data: modRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
   const moduleMedical = modRow?.module_medical ?? false
 
   let medicalBagData: {
@@ -156,12 +150,12 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
         .select('id, name, template_id, inventory_mode')
         .eq('apparatus_id', id).eq('active', true).is('compartment_id', null).order('name'),
       adminClient.from('medical_bag_templates')
-        .select('id, name').eq('department_id', myDept.department_id).eq('active', true).order('name'),
+        .select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
       adminClient.from('medical_storerooms')
-        .select('id, name').eq('department_id', myDept.department_id).eq('active', true).is('apparatus_id', null).order('name'),
+        .select('id, name').eq('department_id', ctx.departmentId).eq('active', true).is('apparatus_id', null).order('name'),
       adminClient.from('department_personnel')
         .select('personnel_id, personnel(id, first_name, last_name)')
-        .eq('department_id', myDept.department_id).eq('active', true),
+        .eq('department_id', ctx.departmentId).eq('active', true),
     ])
 
     const bagIds = (bags ?? []).map(b => b.id)
@@ -223,7 +217,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       compartmentNames={compartmentNames ?? []}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
-      departmentId={myDept.department_id}
+      departmentId={ctx.departmentId}
       isoSpecs={isoSpecs}
       pumpTests={pumpTests ?? []}
       medicalBagData={medicalBagData}

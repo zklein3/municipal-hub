@@ -1,25 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
-  const supabase = await createClient()
-  const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
   return {
-    me,
-    department_id: myDept?.department_id ?? null,
-    system_role: myDept?.system_role ?? null,
-    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
+    me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin },
+    department_id: ctx.departmentId,
+    system_role: ctx.systemRole,
+    isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
   }
 }
 
@@ -66,7 +59,7 @@ export async function createIncident(formData: FormData) {
     .single()
 
   if (dbErr) {
-    await logError('createIncident', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'createIncident', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -84,7 +77,7 @@ export async function createIncident(formData: FormData) {
       insurance_info: (formData.get('insurance_info') as string)?.trim() || null,
     }
     const { error: fireErr } = await adminClient.from('incident_fire_details').insert(fireData)
-    if (fireErr) await logError('createIncident:fireDetails', fireErr.message, ctx.me.id)
+    if (fireErr) await logError(fireErr.message, 'createIncident:fireDetails', { personnel_id: ctx.me.id })
   }
 
   revalidatePath('/incidents')
@@ -140,7 +133,7 @@ export async function updateIncident(incident_id: string, formData: FormData) {
     .eq('id', incident_id)
 
   if (dbErr) {
-    await logError('updateIncident', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateIncident', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -187,7 +180,7 @@ export async function setIncidentStatus(incident_id: string, status: 'pending' |
     .eq('department_id', ctx.department_id)
 
   if (dbErr) {
-    await logError('setIncidentStatus', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'setIncidentStatus', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -226,7 +219,7 @@ export async function addIncidentApparatus(incident_id: string, formData: FormDa
   })
 
   if (dbErr) {
-    await logError('addIncidentApparatus', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'addIncidentApparatus', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -250,7 +243,7 @@ export async function updateIncidentApparatus(apparatus_log_id: string, incident
   }).eq('id', apparatus_log_id)
 
   if (dbErr) {
-    await logError('updateIncidentApparatus', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateIncidentApparatus', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -267,7 +260,7 @@ export async function removeIncidentApparatus(apparatus_log_id: string, incident
   const { error: dbErr } = await adminClient.from('incident_apparatus').delete().eq('id', apparatus_log_id)
 
   if (dbErr) {
-    await logError('removeIncidentApparatus', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'removeIncidentApparatus', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -296,7 +289,7 @@ export async function addIncidentPersonnel(incident_id: string, formData: FormDa
   })
 
   if (dbErr) {
-    await logError('addIncidentPersonnel', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'addIncidentPersonnel', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -347,7 +340,7 @@ export async function updateIncidentPersonnel(personnel_log_id: string, incident
   }).eq('id', personnel_log_id)
 
   if (dbErr) {
-    await logError('updateIncidentPersonnel', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateIncidentPersonnel', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -395,7 +388,7 @@ export async function logIncidentAttendance(incident_id: string, role: string) {
   })
 
   if (dbErr) {
-    await logError('logIncidentAttendance', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'logIncidentAttendance', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -423,7 +416,7 @@ export async function verifyIncidentPersonnel(
   }).eq('id', personnel_log_id)
 
   if (dbErr) {
-    await logError('verifyIncidentPersonnel', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'verifyIncidentPersonnel', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -440,7 +433,7 @@ export async function removeIncidentPersonnel(personnel_log_id: string, incident
   const { error: dbErr } = await adminClient.from('incident_personnel').delete().eq('id', personnel_log_id)
 
   if (dbErr) {
-    await logError('removeIncidentPersonnel', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'removeIncidentPersonnel', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 

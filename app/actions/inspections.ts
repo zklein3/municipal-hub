@@ -2,24 +2,20 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { VEHICLE_CHECK_DEFAULTS } from '@/lib/vehicle-check-defaults'
 
 async function getContext() {
-  const supabase = await createClient()
-  const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
   return {
-    me,
-    department_id: myDept?.department_id ?? null,
-    isAdmin: myDept?.system_role === 'admin' || me.is_sys_admin,
+    me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin },
+    department_id: ctx.departmentId,
+    systemRole: ctx.systemRole,
+    isAdmin: ctx.systemRole === 'admin' || ctx.isSysAdmin,
+    isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
   }
 }
 
@@ -431,16 +427,11 @@ export async function claimCompartment(session_compartment_id: string) {
 
 // ─── Reopen Completed Compartment (officer/admin) ─────────────────────────────
 export async function reopenCompartment(session_compartment_id: string) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not authenticated.' }
-
   const ctx = await getContext()
-  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
-  const role = meList?.[0]?.system_role
-  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (!ctx.isOfficerOrAbove) {
     return { error: 'Only officers and admins can reopen compartments.' }
   }
 
@@ -509,9 +500,8 @@ export async function releaseCompartment(session_compartment_id: string) {
   if (!user) return { error: 'Not authenticated.' }
 
   const ctx = await getContext()
-  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
-  const role = meList?.[0]?.system_role
-  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (!ctx.isOfficerOrAbove) {
     return { error: 'Only officers and admins can release compartments.' }
   }
 
@@ -800,9 +790,7 @@ export async function closeInspectionSession(session_id: string) {
   const ctx = await getContext()
   const adminClient = createAdminClient()
 
-  const { data: meList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', ctx?.me.id ?? '').eq('active', true)
-  const role = meList?.[0]?.system_role
-  if (role !== 'admin' && role !== 'officer' && !ctx?.me.is_sys_admin) {
+  if (!ctx?.isOfficerOrAbove) {
     return { error: 'Only officers and admins can close sessions.' }
   }
 

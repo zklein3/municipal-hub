@@ -1,39 +1,23 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { listBiometricCredentials } from '@/app/actions/biometric'
 import PersonnelProfileClient from './PersonnelProfileClient'
 
 export default async function PersonnelProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const systemRole = myDept.system_role
-  const isAdmin = systemRole === 'admin' || me.is_sys_admin
+  const systemRole = ctx.systemRole
+  const isAdmin = systemRole === 'admin' || ctx.isSysAdmin
   const isOfficerOrAbove = isAdmin || systemRole === 'officer'
-  const isMe = me.id === id
+  const isMe = ctx.personnelId === id
 
   if (!isOfficerOrAbove && !isMe) redirect('/personnel')
 
@@ -49,7 +33,7 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
     .from('department_personnel')
     .select('id, system_role, role_id, employee_number, hire_date, active, signup_status, notify_feedback, burn_permit_reviewer')
     .eq('personnel_id', id)
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
 
   const deptRecord = deptRecordList?.[0]
   if (!deptRecord) redirect('/personnel')

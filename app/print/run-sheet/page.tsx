@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import PrintButton from '../training-signin/PrintButton'
 
 export default async function RunSheetPrintPage({
@@ -11,23 +11,17 @@ export default async function RunSheetPrintPage({
   const { id } = await searchParams
   if (!id) return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Missing incident id.</p>
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
   const adminClient = createAdminClient()
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept && !me.is_sys_admin) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (!ctx.departmentId && !ctx.isSysAdmin) redirect('/login')
 
   const { data: incident } = await adminClient.from('incidents').select('*').eq('id', id).single()
   if (!incident) return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Incident not found.</p>
+  if (ctx.departmentId && ctx.departmentId !== incident.department_id) {
+    return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Incident not found.</p>
+  }
 
   const { data: dept } = await adminClient.from('departments').select('name').eq('id', incident.department_id).single()
 

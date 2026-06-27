@@ -1,34 +1,25 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 // Sys admin passes department_id explicitly since they have no dept record
 async function verifyAdmin(override_department_id?: string) {
-  const supabase = await createClient()
-  const adminClient = createAdminClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
 
   // Sys admin — use the override department_id passed from the form
-  if (me.is_sys_admin) {
+  if (ctx.isSysAdmin) {
     if (!override_department_id) return null
-    return { me, department_id: override_department_id }
+    return { me: { id: ctx.personnelId, is_sys_admin: true }, department_id: override_department_id }
   }
 
-  // Regular dept admin
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role !== 'admin') return null
+  // Regular dept admin — respect the currently selected department
+  if (ctx.systemRole !== 'admin' || !ctx.departmentId) return null
 
-  return { me, department_id: myDept.department_id }
+  return { me: { id: ctx.personnelId, is_sys_admin: false }, department_id: ctx.departmentId }
 }
 
 // ─── Create Compartment Name ──────────────────────────────────────────────────

@@ -1,26 +1,19 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
-  const supabase = await createClient()
-  const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
   return {
-    me,
-    department_id: myDept?.department_id ?? null,
-    system_role: myDept?.system_role ?? null,
-    isAdmin: myDept?.system_role === 'admin' || me.is_sys_admin,
-    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
+    me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin },
+    department_id: ctx.departmentId,
+    system_role: ctx.systemRole,
+    isAdmin: ctx.systemRole === 'admin' || ctx.isSysAdmin,
+    isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
   }
 }
 

@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import Link from 'next/link'
 
 export default async function ScanPage({
@@ -11,31 +11,17 @@ export default async function ScanPage({
   const { type, code, from } = await searchParams
   const fromParam = from ? `?from=${encodeURIComponent(from)}` : ''
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) {
     const scanPath = `/scan?${new URLSearchParams({ ...(type ? { type } : {}), ...(code ? { code } : {}) }).toString()}`
     redirect(`/login?next=${encodeURIComponent(scanPath)}`)
   }
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const department_id = myDept.department_id
+  const department_id = ctx.departmentId
 
   if (!code) {
     return (

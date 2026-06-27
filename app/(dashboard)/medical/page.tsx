@@ -1,34 +1,24 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import MedicalStoreClient from './MedicalStoreClient'
 
 export default async function MedicalPage() {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }
 
   // Module gate — all dept members can access if module is enabled
-  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
-  if (!deptRow?.module_medical && !me.is_sys_admin) redirect('/dashboard')
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
+  if (!deptRow?.module_medical && !ctx.isSysAdmin) redirect('/dashboard')
 
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
-  const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
-  const department_id = myDept.department_id
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
+  const isOfficerOrAbove = isAdmin || ctx.systemRole === 'officer'
+  const department_id = ctx.departmentId
 
   // Station storerooms (displayed on this page)
   const { data: storerooms } = await adminClient

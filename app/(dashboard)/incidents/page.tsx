@@ -1,29 +1,23 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import IncidentsClient from './IncidentsClient'
 
 export default async function IncidentsPage() {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: meList } = await adminClient.from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId }
 
   // Module gate — Bundle A required
-  const { data: deptFlags } = await adminClient.from('departments').select('module_operations').eq('id', myDept.department_id).single()
+  const { data: deptFlags } = await adminClient.from('departments').select('module_operations').eq('id', ctx.departmentId).single()
   if (!deptFlags?.module_operations) redirect('/dashboard')
 
-  const department_id = myDept.department_id
-  const isOfficerOrAbove = myDept.system_role === 'admin' || myDept.system_role === 'officer'
+  const department_id = ctx.departmentId
+  const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer'
 
   // Last 6 months of incidents
   const since = new Date()

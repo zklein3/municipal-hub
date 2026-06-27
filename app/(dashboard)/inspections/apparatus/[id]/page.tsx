@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getOrCreateInspectionSession } from '@/app/actions/inspections'
 import InspectionSessionClient from './InspectionSessionClient'
 
@@ -10,25 +10,15 @@ export default async function InspectionSessionPage({
   params: Promise<{ id: string }>
 }) {
   const { id: apparatus_id } = await params
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const isOfficerOrAdmin = myDept.system_role === 'admin' || myDept.system_role === 'officer' || me.is_sys_admin
+  const isOfficerOrAdmin = ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin
 
   const { data: appList } = await adminClient
     .from('apparatus')
@@ -41,7 +31,7 @@ export default async function InspectionSessionPage({
     .from('department_personnel')
     .select('personnel_id')
     .eq('personnel_id', me.id)
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .limit(1)
   const personnelId = personnelList?.[0]?.personnel_id ?? me.id
 

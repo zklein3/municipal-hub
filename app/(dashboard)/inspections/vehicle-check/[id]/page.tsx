@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getVehicleCheckItems, getVehicleCheckHistory } from '@/app/actions/inspections'
 import VehicleCheckClient from './VehicleCheckClient'
 
@@ -14,29 +14,19 @@ export default async function VehicleCheckPage({
   const { id: apparatus_id } = await params
   const { next } = await searchParams
   const nextPath = next === 'inventory' ? `/inspections/apparatus/${apparatus_id}` : undefined
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: meList } = await adminClient.from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId, first_name: ctx.firstName, last_name: ctx.lastName }
 
   const { data: appList } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name, has_air_brakes, has_engine_hours, apparatus_type_id, station_id')
     .eq('id', apparatus_id)
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
   const apparatus = appList?.[0]
   if (!apparatus) redirect('/inspections')
 
@@ -44,7 +34,7 @@ export default async function VehicleCheckPage({
     ? await adminClient.from('apparatus_types').select('name').eq('id', apparatus.apparatus_type_id)
     : { data: [] }
 
-  const { items } = await getVehicleCheckItems(myDept.department_id)
+  const { items } = await getVehicleCheckItems(ctx.departmentId)
   const { history } = await getVehicleCheckHistory(apparatus_id, 5)
 
   return (
@@ -61,7 +51,7 @@ export default async function VehicleCheckPage({
         items={items}
         history={history}
         personnelId={me.id}
-        departmentId={myDept.department_id}
+        departmentId={ctx.departmentId}
         inspectorName={`${me.first_name} ${me.last_name}`}
         nextPath={nextPath}
       />

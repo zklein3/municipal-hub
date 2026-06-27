@@ -1,6 +1,7 @@
 # FireOps7 — Build History & DB Reference
 
 ## What's Built & Working ✅
+- Multi-department support — users with multiple active `department_personnel` rows select context at login (`/select-department`) and can switch via sidebar. `department_type` (fire/law_enforcement/public_works/municipal) drives nav gating + navy theme for non-fire depts. All pages/actions resolve the *selected* department via `lib/current-department.ts`, not just the first row — see `CLAUDE.md` "IMMEDIATE NEXT" for the 2026-06-26 session that fixed ~90 files relying on the old unscoped pattern.
 - Full auth flow + middleware routing
 - Hub-and-spoke navigation — sidebar 6 items only (Dashboard, Operations, Personnel, Training, Inventory, Reports). Each leads to a card-grid hub page. Dept Admin is a single link → hub with tiles.
 - `HubCard` component — reusable card with title, description, stat badge, alert state

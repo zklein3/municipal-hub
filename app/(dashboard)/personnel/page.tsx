@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import PersonnelAddForm from './PersonnelAddForm'
 
 function formatDate(d: string | null) {
@@ -10,35 +10,21 @@ function formatDate(d: string | null) {
 }
 
 export default async function PersonnelPage() {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const systemRole = myDept.system_role
-  const isOfficerOrAbove = systemRole === 'admin' || systemRole === 'officer' || me.is_sys_admin
+  const systemRole = ctx.systemRole
+  const isOfficerOrAbove = systemRole === 'admin' || systemRole === 'officer' || ctx.isSysAdmin
 
   // Fetch roster — flat, no nested joins, include hire_date for my card
   const { data: rosterRaw } = await adminClient
     .from('department_personnel')
     .select('id, system_role, active, employee_number, hire_date, personnel_id, role_id')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('system_role')
 
@@ -69,7 +55,7 @@ export default async function PersonnelPage() {
     .sort((a, b) => (roleOrder[a.system_role] ?? 9) - (roleOrder[b.system_role] ?? 9))
     .map(record => {
       const p = personnelMap[record.personnel_id]
-      const isMe = record.personnel_id === me.id
+      const isMe = record.personnel_id === ctx.personnelId
       const personnelId = p?.id ?? record.personnel_id
       const name = p ? [p.first_name, p.last_name].filter(Boolean).join(' ') : '—'
       const initials = p

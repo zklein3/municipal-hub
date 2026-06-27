@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import EquipmentDetailClient from './EquipmentDetailClient'
 import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
 import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
@@ -14,22 +14,16 @@ export default async function EquipmentDetailPage({
 }) {
   const { id } = await params
   const { from } = await searchParams
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
-  const isOfficerOrAbove = isAdmin || myDept.system_role === 'officer'
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
+  const isOfficerOrAbove = isAdmin || ctx.systemRole === 'officer'
 
   // Fetch apparatus
   const { data: apparatusList } = await adminClient
@@ -108,14 +102,14 @@ export default async function EquipmentDetailPage({
   const { data: allItems } = await adminClient
     .from('items')
     .select('id, item_name, category_id')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('item_name')
 
   const { data: allCategories } = await adminClient
     .from('item_categories')
     .select('id, category_name, sort_order')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('sort_order')
 
@@ -123,7 +117,7 @@ export default async function EquipmentDetailPage({
   const { data: allApparatusList } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('unit_number')
 
@@ -202,7 +196,7 @@ export default async function EquipmentDetailPage({
   }
 
   // Medical bags + compartment storerooms
-  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
   const moduleMedical = deptRow?.module_medical ?? false
 
   let medicalBagData: any = null
@@ -210,9 +204,9 @@ export default async function EquipmentDetailPage({
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
       adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).is('compartment_id', null).order('name'),
-      adminClient.from('medical_bag_templates').select('id, name').eq('department_id', myDept.department_id).eq('active', true).order('name'),
-      adminClient.from('medical_storerooms').select('id, name').eq('department_id', myDept.department_id).eq('active', true).is('apparatus_id', null).order('name'),
-      adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', myDept.department_id).eq('active', true),
+      adminClient.from('medical_bag_templates').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
+      adminClient.from('medical_storerooms').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).is('apparatus_id', null).order('name'),
+      adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', ctx.departmentId).eq('active', true),
     ])
 
     const bagIds = (bags ?? []).map(b => b.id)

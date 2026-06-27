@@ -1,9 +1,11 @@
 'use server'
 
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logError } from '@/lib/logger'
 import { redirect } from 'next/navigation'
+import { SELECTED_DEPARTMENT_COOKIE } from '@/lib/auth-cookies'
 
 // ─── Sign In ─────────────────────────────────────────────────────────────────
 export async function signIn(formData: FormData) {
@@ -43,11 +45,76 @@ export async function signIn(formData: FormData) {
       redirect('/pending')
     case 'denied':
       redirect('/denied')
-    case 'active':
+    case 'active': {
+      const adminClient = createAdminClient()
+      const { data: deptRows } = await adminClient
+        .from('department_personnel')
+        .select('department_id')
+        .eq('personnel_id', personnel.id)
+        .eq('active', true)
+
+      if ((deptRows?.length ?? 0) > 1) {
+        const nextParam = next !== '/dashboard' ? `?next=${encodeURIComponent(next)}` : ''
+        redirect(`/select-department${nextParam}`)
+      }
+
+      if (deptRows?.length === 1) {
+        const cookieStore = await cookies()
+        cookieStore.set(SELECTED_DEPARTMENT_COOKIE, deptRows[0].department_id, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+        })
+      }
+
       redirect(next)
+    }
     default:
       redirect('/dashboard')
   }
+}
+
+// ─── Select Department ────────────────────────────────────────────────────────
+export async function selectDepartment(formData: FormData) {
+  const departmentId = formData.get('department_id') as string
+  const rawNext = formData.get('next') as string | null
+  const next = rawNext?.startsWith('/') ? rawNext : '/dashboard'
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const adminClient = createAdminClient()
+  const { data: personnel } = await adminClient
+    .from('personnel')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single()
+  if (!personnel) redirect('/login')
+
+  const { data: membership } = await adminClient
+    .from('department_personnel')
+    .select('department_id')
+    .eq('personnel_id', personnel.id)
+    .eq('department_id', departmentId)
+    .eq('active', true)
+    .maybeSingle()
+
+  if (!membership) {
+    await logError('Attempted to select a department not assigned to this user', '/select-department', { personnel_id: personnel.id, metadata: { departmentId } })
+    redirect('/select-department')
+  }
+
+  const cookieStore = await cookies()
+  cookieStore.set(SELECTED_DEPARTMENT_COOKIE, departmentId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  })
+
+  redirect(next)
 }
 
 // ─── Change Password ──────────────────────────────────────────────────────────
@@ -91,5 +158,7 @@ export async function changePassword(formData: FormData) {
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.delete(SELECTED_DEPARTMENT_COOKIE)
   redirect('/login')
 }

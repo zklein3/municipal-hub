@@ -1,24 +1,19 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
-  const supabase = await createClient()
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId) return null
   const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: deptList } = await adminClient
-    .from('department_personnel').select('department_id, system_role')
-    .eq('personnel_id', me.id).eq('active', true)
-  const dept = deptList?.[0]
-  if (!dept) return null
-  return { me, dept, adminClient }
+  return {
+    me: { id: ctx.personnelId },
+    dept: { department_id: ctx.departmentId, system_role: ctx.systemRole },
+    adminClient,
+  }
 }
 
 // ─── Lane template actions ────────────────────────────────────────────────────

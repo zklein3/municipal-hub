@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { getDeptTheme, type DeptTheme } from '@/lib/department-theme'
 
 export type NavItem = { href: string; label: string; badge?: number }
 export type NavGroup = { label?: string; items: NavItem[] }
@@ -14,11 +15,14 @@ function isActive(pathname: string, href: string) {
 export default function NavGroups({
   groups,
   onNavigate,
+  theme,
 }: {
   groups: NavGroup[]
   onNavigate?: () => void
+  theme?: DeptTheme
 }) {
   const pathname = usePathname()
+  const t = theme ?? getDeptTheme('fire')
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const open = new Set<string>()
@@ -49,8 +53,8 @@ export default function NavGroups({
               onClick={onNavigate}
               className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                 isActive(pathname, item.href)
-                  ? 'bg-red-900 text-white font-medium'
-                  : 'text-red-100 hover:bg-red-700 hover:text-white'
+                  ? `${t.navActiveBg} text-white font-medium`
+                  : `${t.navInactiveText} ${t.navHoverBg} hover:text-white`
               }`}
             >
               <span>{item.label}</span>
@@ -73,8 +77,8 @@ export default function NavGroups({
               onClick={() => toggle(group.label!)}
               className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                 hasActive
-                  ? 'text-white font-medium hover:bg-red-700'
-                  : 'text-red-200 hover:bg-red-700 hover:text-white'
+                  ? `text-white font-medium ${t.navHoverBg}`
+                  : `${t.groupInactiveText} ${t.navHoverBg} hover:text-white`
               }`}
             >
               <span>{group.label}</span>
@@ -91,7 +95,7 @@ export default function NavGroups({
             </button>
 
             {open && (
-              <div className="ml-2 mt-0.5 pl-2 border-l border-red-700 flex flex-col gap-0.5 mb-1">
+              <div className={`ml-2 mt-0.5 pl-2 border-l ${t.border} flex flex-col gap-0.5 mb-1`}>
                 {group.items.map(item => (
                   <Link
                     key={item.href}
@@ -99,8 +103,8 @@ export default function NavGroups({
                     onClick={onNavigate}
                     className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                       isActive(pathname, item.href)
-                        ? 'bg-red-900 text-white font-medium'
-                        : 'text-red-100 hover:bg-red-700 hover:text-white'
+                        ? `${t.navActiveBg} text-white font-medium`
+                        : `${t.navInactiveText} ${t.navHoverBg} hover:text-white`
                     }`}
                   >
                     <span>{item.label}</span>

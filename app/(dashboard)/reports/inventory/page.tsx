@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import InventoryReportClient from './InventoryReportClient'
 
 export default async function InventoryReportPage({
@@ -10,31 +10,17 @@ export default async function InventoryReportPage({
 }) {
   const { apparatusId, from, to } = await searchParams
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
+  const system_role = ctx.systemRole
+  if (system_role === 'member' && !ctx.isSysAdmin) redirect('/dashboard')
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const { system_role } = myDept
-  if (system_role === 'member' && !me.is_sys_admin) redirect('/dashboard')
-
-  const departmentId = myDept.department_id
+  const departmentId = ctx.departmentId
 
   // Default date range: last 30 days
   const defaultTo = new Date()

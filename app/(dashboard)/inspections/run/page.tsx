@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import InspectionRunClient from './InspectionRunClient'
 
 export default async function InspectionRunPage({
@@ -12,26 +12,13 @@ export default async function InspectionRunPage({
   if (!apparatus_id || !compartment_id) redirect('/inspections')
   const presenceOnly = mode === 'presence'
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, first_name, last_name, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
+  const me = { id: ctx.personnelId, first_name: ctx.firstName, last_name: ctx.lastName }
 
   // Fetch apparatus info
   const { data: appList } = await adminClient
@@ -77,7 +64,7 @@ export default async function InspectionRunPage({
     ? await adminClient
         .from('item_assets')
         .select('id, item_id, asset_tag, serial_number, status, apparatus_id')
-        .eq('department_id', myDept.department_id)
+        .eq('department_id', ctx.departmentId)
         .in('item_id', assetItemIds)
         .eq('active', true)
         .neq('status', 'RETIRED')
@@ -98,7 +85,7 @@ export default async function InspectionRunPage({
     ? await adminClient
         .from('item_inspection_templates')
         .select('id, item_id, template_name')
-        .eq('department_id', myDept.department_id)
+        .eq('department_id', ctx.departmentId)
         .in('item_id', assetItemIds)
         .eq('active', true)
     : { data: [] }
@@ -160,7 +147,7 @@ export default async function InspectionRunPage({
       checklistItems={checklistItems as any}
       inspectorName={`${me.first_name} ${me.last_name}`}
       personnelId={me.id}
-      departmentId={myDept.department_id}
+      departmentId={ctx.departmentId}
       presenceOnly={presenceOnly}
       inspectionSessionId={session_id}
       sessionCompartmentId={session_compartment_id}

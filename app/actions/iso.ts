@@ -1,25 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
-  const supabase = await createClient()
-  const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
   return {
-    me,
-    department_id: myDept?.department_id ?? null,
-    system_role: myDept?.system_role ?? null,
-    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
+    me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin },
+    department_id: ctx.departmentId,
+    system_role: ctx.systemRole,
+    isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
   }
 }
 
@@ -48,7 +41,7 @@ export async function upsertApparatusIsoSpecs(formData: FormData) {
     }, { onConflict: 'apparatus_id' })
 
   if (dbErr) {
-    await logError('upsertApparatusIsoSpecs', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'upsertApparatusIsoSpecs', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -89,7 +82,7 @@ export async function submitHoseTestSession(
 
   const { error: dbErr } = await adminClient.from('hose_tests').insert(rows)
   if (dbErr) {
-    await logError('submitHoseTestSession', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'submitHoseTestSession', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -332,7 +325,7 @@ export async function createHose(formData: FormData) {
   })
 
   if (dbErr) {
-    await logError('createHose', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'createHose', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -361,7 +354,7 @@ export async function updateHose(formData: FormData) {
   }).eq('id', hose_id).eq('department_id', ctx.department_id)
 
   if (dbErr) {
-    await logError('updateHose', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateHose', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -387,7 +380,7 @@ export async function addHoseTest(formData: FormData) {
   })
 
   if (dbErr) {
-    await logError('addHoseTest', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'addHoseTest', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -417,7 +410,7 @@ export async function createHydrant(formData: FormData) {
   })
 
   if (dbErr) {
-    await logError('createHydrant', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'createHydrant', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -446,7 +439,7 @@ export async function updateHydrant(formData: FormData) {
   }).eq('id', hydrant_id).eq('department_id', ctx.department_id)
 
   if (dbErr) {
-    await logError('updateHydrant', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateHydrant', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -473,7 +466,7 @@ export async function addHydrantFlowTest(formData: FormData) {
   })
 
   if (dbErr) {
-    await logError('addHydrantFlowTest', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'addHydrantFlowTest', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -502,7 +495,7 @@ export async function addMutualAid(formData: FormData) {
   })
 
   if (dbErr) {
-    await logError('addMutualAid', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'addMutualAid', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -531,7 +524,7 @@ export async function updateMutualAid(mutualAidId: string, formData: FormData) {
     .eq('department_id', ctx.department_id)
 
   if (dbErr) {
-    await logError('updateMutualAid', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'updateMutualAid', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 
@@ -551,7 +544,7 @@ export async function removeMutualAid(mutualAidId: string, incidentId: string) {
     .eq('department_id', ctx.department_id)
 
   if (dbErr) {
-    await logError('removeMutualAid', dbErr.message, ctx.me.id)
+    await logError(dbErr.message, 'removeMutualAid', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
 

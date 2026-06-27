@@ -85,6 +85,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - `HISTORY.md` — what's built, what's not, DB tables, session history
 - `NATIVE.md` — Capacitor/Android/iOS app architecture and build workflow
 - `ANDROID_HANDOFF.md` — handoff protocol between Claude Code and the Android Studio agent; point the Android Studio agent at this file
+- `STRATEGY.md` — business strategy & platform expansion notes (MuniOps parent brand, dept type toggle, multi-dept login, ICS module spec, forms-as-product). Forward-looking, not yet built.
 
 ---
 
@@ -129,6 +130,26 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 ---
 
 ## IMMEDIATE NEXT — Resume Here Next Session
+
+### Multi-Department / MuniOps Platform Expansion — IN PROGRESS ✳️ (2026-06-26)
+
+**Shipped this session:**
+- `department_type` column on `departments` (`fire | law_enforcement | public_works | municipal`, default `fire`) — migration applied
+- Multi-department login flow — `signIn` redirects to `/select-department` when a user has >1 active `department_personnel` row; `selectDepartment` action validates membership and sets `selected_department_id` cookie; sign-out clears it
+- Department switcher in sidebar (desktop + mobile) — "Switch Department" link, shown only when `hasMultipleDepartments`
+- Navy theme (`lib/department-theme.ts`) for non-fire departments — sidebar, nav active/hover states. Fire stays red. Two-tone only for now (no per-type palette beyond fire/non-fire)
+- Nav gating by `department_type` — non-fire depts see a stripped sidebar (Dashboard, Personnel, Training, Reports only); Operations/Inbox/Inventory hidden since they're fire-specific (incidents, apparatus, burn permits, medical)
+- **Yutan Police Department** created (`department_type: law_enforcement`) as the pilot for Terry (fire dept member + Yutan police chief). Terry and `zklein3@gmail.com` both added as admin on Yutan PD in addition to their existing fire dept admin roles
+- **Major bug fix — multi-department data scoping**: discovered the dashboard layout's cookie-aware department selection only governed the sidebar, not actual page data. ~90 files across the app independently queried `department_personnel` and grabbed the *first* row regardless of which department was selected, meaning a multi-dept user (like Terry/zklein3@gmail.com) would see one department's data while believing they were in another. Fixed via a new shared helper `lib/current-department.ts` (`getCurrentDepartmentContext()`), rolled out across every page and server action that previously duplicated the "first dept row" pattern. Also caught and fixed several **wrong-department write bugs** (`createApparatus`, `createStation`, `createDeptMember`, `saveDeptInspectionSettings` were inserting/updating against the wrong department for multi-dept admins) and a cross-department read leak in `/print/run-sheet` (any dept could print any other dept's run sheet by guessing the incident ID). Also fixed a pre-existing `logError(page, message, id)` argument-order bug (correct signature is `logError(message, page, context)`) found in `incidents.ts` and `iso.ts` while clearing type errors.
+- Build verified green after every phase of this rollout — see git log for the phase-by-phase commit, or ask Claude for the file list if auditing.
+
+**Not yet built:**
+- Dept Admin hub still shows fire-specific admin cards for non-fire depts (Inspections, ISO, Medical, Events) — no gating there yet
+- No police-specific modules/forms — Terry hasn't delivered his Yutan city forms yet (contact reports, internal memos, inspection checklists). Plan is to build those using the existing inspection-template-builder pattern (see STRATEGY.md "Forms as a Product")
+- Reports/Training pages still query fire-shaped data under the hood — will render empty/awkward for Yutan rather than something police-relevant
+- MuniOps parent brand site not started
+
+See `STRATEGY.md` for the full roadmap this work is drawn from.
 
 ### Medical Supply Module — COMPLETE ✅ (2026-06-06)
 

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { revalidatePath } from 'next/cache'
 import { nerisCheckEntityExists } from '@/lib/neris-api'
 
@@ -36,18 +37,11 @@ export async function toggleDepartment(id: string, active: boolean) {
 }
 
 export async function saveDeptInspectionSettings(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not authenticated.' }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Not authenticated.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) return { error: 'Only admins can change inspection settings.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (!ctx.departmentId || (ctx.systemRole !== 'admin' && !ctx.isSysAdmin)) return { error: 'Only admins can change inspection settings.' }
 
   const hours = parseInt(formData.get('inspection_session_duration_hours') as string)
   if (!hours || hours < 1) return { error: 'Duration must be at least 1 hour.' }
@@ -56,7 +50,7 @@ export async function saveDeptInspectionSettings(formData: FormData) {
   const { error } = await adminClient
     .from('departments')
     .update({ inspection_session_duration_hours: hours })
-    .eq('id', myDept.department_id)
+    .eq('id', ctx.departmentId)
   if (error) return { error: error.message }
 
   revalidatePath('/dept-admin/inspections')
@@ -92,24 +86,12 @@ export async function saveNerisEntityId(departmentId: string, nerisEntityId: str
 }
 
 export async function saveDeptAdminNerisEntityId(departmentId: string, nerisEntityId: string) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not authenticated.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Not authenticated.' }
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) return { error: 'Only admins can update NERIS settings.' }
-  if (myDept.department_id !== departmentId) return { error: 'Department mismatch.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) return { error: 'Only admins can update NERIS settings.' }
+  if (ctx.departmentId !== departmentId && !ctx.isSysAdmin) return { error: 'Department mismatch.' }
 
   const { data: deptList } = await adminClient.from('departments').select('module_neris').eq('id', departmentId)
   if (!deptList?.[0]?.module_neris) return { error: 'NERIS is not enabled for this department.' }

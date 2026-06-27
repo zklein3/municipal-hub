@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
@@ -254,36 +255,19 @@ export async function createDeptMember(formData: FormData) {
   const validRoles = ['admin', 'officer', 'member']
   if (!validRoles.includes(system_role)) return { error: 'Invalid access level.' }
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (!ctx.departmentId) return { error: 'Could not verify your department.' }
 
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-
-  const myDept = myDeptList?.[0]
-  if (!myDept) return { error: 'Could not verify your department.' }
-
-  if (myDept.system_role !== 'admin' && myDept.system_role !== 'officer' && !me.is_sys_admin) {
+  if (ctx.systemRole !== 'admin' && ctx.systemRole !== 'officer' && !ctx.isSysAdmin) {
     return { error: 'You do not have permission to add personnel.' }
   }
 
-  const department_id = myDept.department_id
+  const department_id = ctx.departmentId
 
-  const { data: existing } = await supabase
+  const { data: existing } = await adminClient
     .from('personnel')
     .select('id')
     .eq('email', email)

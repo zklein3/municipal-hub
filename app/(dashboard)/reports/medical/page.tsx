@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 
 const CATEGORY_LABELS: Record<string, string> = { medication: 'Medication', supply: 'Supply', equipment: 'Equipment' }
 const CATEGORY_COLORS: Record<string, string> = {
@@ -42,28 +42,20 @@ export default async function MedicalReportsPage({
   const { days } = await searchParams
   const windowDays = parseInt(days ?? '30') || 30
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
   const adminClient = createAdminClient()
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const isOfficerOrAbove = ['admin', 'officer'].includes(myDept.system_role) || me.is_sys_admin
+  const isOfficerOrAbove = ['admin', 'officer'].includes(ctx.systemRole ?? '') || ctx.isSysAdmin
   if (!isOfficerOrAbove) redirect('/reports')
 
-  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', myDept.department_id).single()
-  if (!deptRow?.module_medical && !me.is_sys_admin) redirect('/reports')
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
+  if (!deptRow?.module_medical && !ctx.isSysAdmin) redirect('/reports')
 
-  const department_id = myDept.department_id
+  const department_id = ctx.departmentId
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
 
   // Storerooms — include compartment_id to distinguish Storeroom / Bag / Compartment

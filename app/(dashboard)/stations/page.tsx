@@ -1,37 +1,30 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import StationsListClient from './StationsListClient'
 
 export default async function StationsPage() {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
 
   // Fetch stations
   const { data: stations } = await adminClient
     .from('stations')
     .select('id, station_number, station_name, address_line_1, city, state, postal_code, active, notes')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .order('station_number')
 
   // Fetch apparatus counts per station
   const { data: apparatus } = await adminClient
     .from('apparatus')
     .select('id, station_id')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
 
   const apparatusCountMap: Record<string, number> = {}
@@ -45,7 +38,7 @@ export default async function StationsPage() {
   const { data: personnel } = await adminClient
     .from('department_personnel')
     .select('id')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .eq('signup_status', 'active')
 
@@ -55,7 +48,7 @@ export default async function StationsPage() {
       apparatusCountMap={apparatusCountMap}
       personnelCount={personnel?.length ?? 0}
       isAdmin={isAdmin}
-      departmentId={myDept.department_id}
+      departmentId={ctx.departmentId}
     />
   )
 }

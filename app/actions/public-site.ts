@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
@@ -83,25 +84,12 @@ export async function toggleEventSeriesPublic(eventSeriesId: string, isPublic: b
 }
 
 export async function saveDeptInboxSettings(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole !== 'admin') return { error: 'Unauthorized.' }
 
-  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role !== 'admin') return { error: 'Unauthorized.' }
-
-  const department_id          = myDept.department_id
+  const department_id          = ctx.departmentId
   const burn_permit_county_info  = (formData.get('burn_permit_county_info') as string)?.trim() || null
   const burn_permit_restrictions = (formData.get('burn_permit_restrictions') as string)?.trim() || null
 
@@ -252,10 +240,8 @@ export async function updateBurnPermitStatus(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const permit_id          = formData.get('permit_id') as string
   const status             = formData.get('status') as string
@@ -411,10 +397,8 @@ export async function deleteBurnPermit(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const permit_id = formData.get('permit_id') as string
   const password  = formData.get('password') as string
@@ -447,10 +431,8 @@ export async function savePermitOfficerSignature(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const permit_id = formData.get('permit_id') as string
   const blob = formData.get('signature') as Blob
@@ -551,10 +533,8 @@ export async function updateRecordRequestStatus(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const request_id     = formData.get('request_id') as string
   const status         = formData.get('status') as string
@@ -721,10 +701,8 @@ export async function updatePublicFeedbackStatus(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const feedback_id   = formData.get('feedback_id') as string
   const status        = formData.get('status') as string
@@ -755,10 +733,8 @@ export async function deletePublicFeedback(formData: FormData) {
   const me = meList?.[0]
   if (!me) return { error: 'Could not verify your account.' }
 
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || myDept.system_role === 'member') return { error: 'Unauthorized.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId || ctx.systemRole === 'member') return { error: 'Unauthorized.' }
 
   const feedback_id = formData.get('feedback_id') as string
 

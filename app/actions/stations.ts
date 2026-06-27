@@ -1,25 +1,17 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 // ─── Create Station (admin only) ─────────────────────────────────────────────
 export async function createStation(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (!ctx.departmentId || (ctx.systemRole !== 'admin' && !ctx.isSysAdmin)) {
     return { error: 'Only admins can add stations.' }
   }
 
@@ -35,7 +27,7 @@ export async function createStation(formData: FormData) {
   if (!station_name) return { error: 'Station name is required.' }
 
   const { error } = await adminClient.from('stations').insert({
-    department_id: myDept.department_id,
+    department_id: ctx.departmentId,
     station_number: station_number || null,
     station_name,
     address_line_1: address_line_1 || null,
@@ -59,19 +51,11 @@ export async function createStation(formData: FormData) {
 
 // ─── Update Station (admin only) ─────────────────────────────────────────────
 export async function updateStation(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) {
     return { error: 'Only admins can edit stations.' }
   }
 

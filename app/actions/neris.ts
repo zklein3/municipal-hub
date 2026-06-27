@@ -2,27 +2,23 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { nerisValidateIncident, nerisSubmitIncident } from '@/lib/neris-api'
 
 async function getContext() {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
   const supabase = await createClient()
-  const adminClient = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
   return {
-    me,
-    user_id: user.id,
-    department_id: myDept?.department_id ?? null,
-    system_role: myDept?.system_role ?? null,
-    isOfficerOrAbove: myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin,
-    isAdmin: myDept?.system_role === 'admin' || me.is_sys_admin,
+    me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin },
+    user_id: user?.id ?? null,
+    department_id: ctx.departmentId,
+    system_role: ctx.systemRole,
+    isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
+    isAdmin: ctx.systemRole === 'admin' || ctx.isSysAdmin,
   }
 }
 

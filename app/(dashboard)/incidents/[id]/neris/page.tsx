@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import NerisReportClient from './NerisReportClient'
 import { evaluateNerisRequirements } from '@/lib/neris-requirements'
 
@@ -11,21 +11,14 @@ export default async function NerisReportPage({
 }) {
   const { id } = await params
 
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (!ctx.departmentId && !ctx.isSysAdmin) redirect('/dashboard')
+  const me = { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('department_id, system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept && !me.is_sys_admin) redirect('/dashboard')
-
-  const isOfficerOrAbove = myDept?.system_role === 'admin' || myDept?.system_role === 'officer' || me.is_sys_admin
+  const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin
   if (!isOfficerOrAbove) redirect(`/incidents/${id}`)
 
   // Fetch incident (cover sheet) — sys admin can access any incident
@@ -35,7 +28,7 @@ export default async function NerisReportPage({
     .eq('id', id)
     .single()
   if (!incident) redirect('/incidents')
-  if (myDept && myDept.department_id !== incident.department_id) redirect('/incidents')
+  if (ctx.departmentId && ctx.departmentId !== incident.department_id) redirect('/incidents')
 
   // Fetch fire details if fire type
   const { data: fireDetailsList } = incident.incident_type === 'fire'
@@ -148,7 +141,7 @@ export default async function NerisReportPage({
         nerisRecord={nerisRecord ?? null}
         mutualAidRows={mutualAidRows ?? []}
         requirementSummary={requirementSummary}
-        isAdmin={myDept?.system_role === 'admin' || me.is_sys_admin}
+        isAdmin={ctx.systemRole === 'admin' || ctx.isSysAdmin}
         isOfficerOrAbove={isOfficerOrAbove}
       />
     </div>

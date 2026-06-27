@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { setCompartmentQrCode } from '@/app/actions/compartments'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import CompartmentItemsClient from './CompartmentItemsClient'
@@ -22,26 +22,15 @@ export default async function CompartmentPage({
   const { id: apparatus_id, compartment_id } = await params
   const { from } = await searchParams
   const backHref = from ?? `/equipment/${apparatus_id}`
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) redirect('/login')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) redirect('/login')
-
-  const { data: myDeptList } = await adminClient
-    .from('department_personnel')
-    .select('department_id, system_role')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept) redirect('/dashboard')
-
-  const department_id = myDept.department_id
-  const isAdmin = myDept.system_role === 'admin' || me.is_sys_admin
+  const department_id = ctx.departmentId
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
 
   // Fetch apparatus
   const { data: appList } = await adminClient
@@ -142,7 +131,7 @@ export default async function CompartmentPage({
   const { data: allApparatusRaw } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name')
-    .eq('department_id', myDept.department_id)
+    .eq('department_id', ctx.departmentId)
     .eq('active', true)
     .order('unit_number')
 

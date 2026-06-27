@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { signOut } from '@/app/actions/auth'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasBiometricCredentials, isBiometricUnlocked } from '@/app/actions/biometric'
 import BiometricLockScreen from '@/components/BiometricLockScreen'
 import FeedbackButton from '@/components/FeedbackButton'
@@ -9,27 +10,27 @@ import NavGroups from '@/components/NavGroups'
 import type { NavGroup } from '@/components/NavGroups'
 import PageNavBar from '@/components/PageNavBar'
 import PWAInstallButton from '@/components/PWAInstallButton'
+import { getDeptTheme } from '@/lib/department-theme'
 
 async function getUserContext() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const adminClient = createAdminClient()
-  const { data: meList } = await adminClient.from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return null
-  const { data: deptList } = await adminClient
-    .from('department_personnel')
-    .select('system_role, department_id, departments(name)')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
-  const dept = deptList?.[0]
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return null
+
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) {
+    redirect('/select-department')
+  }
+
   return {
-    ...me,
-    personnelId: me.id,
-    system_role: dept?.system_role ?? null,
-    department_name: (dept?.departments as any)?.name ?? null,
-    department_id: dept?.department_id ?? null,
+    id: ctx.personnelId,
+    personnelId: ctx.personnelId,
+    first_name: ctx.firstName,
+    last_name: ctx.lastName,
+    is_sys_admin: ctx.isSysAdmin,
+    system_role: ctx.systemRole,
+    department_name: ctx.departmentName,
+    department_type: ctx.departmentType,
+    department_id: ctx.departmentId,
+    hasMultipleDepartments: ctx.hasMultipleDepartments,
   }
 }
 
@@ -95,15 +96,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? inboxPendingCount + pendingSignatureCount
     : undefined
 
+  const departmentType = user?.department_type ?? 'fire'
+  const isFireDept = departmentType === 'fire'
+
   const navGroups: NavGroup[] = isSysAdmin ? [
     { items: [{ href: '/dashboard', label: 'Overview' }] },
-  ] : [
+  ] : isFireDept ? [
     { items: [{ href: '/dashboard', label: 'Dashboard' }] },
     { items: [{ href: '/operations', label: 'Operations', badge: opsBadge }] },
     { items: [{ href: '/inbox', label: 'Inbox', badge: inboxBadge }] },
     { items: [{ href: '/personnel', label: 'Personnel' }] },
     { items: [{ href: '/training', label: 'Training' }] },
     { items: [{ href: '/equipment', label: 'Inventory' }] },
+    { items: [{ href: '/reports', label: 'Reports' }] },
+  ] : [
+    { items: [{ href: '/dashboard', label: 'Dashboard' }] },
+    { items: [{ href: '/personnel', label: 'Personnel' }] },
+    { items: [{ href: '/training', label: 'Training' }] },
     { items: [{ href: '/reports', label: 'Reports' }] },
   ]
 
@@ -117,20 +126,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ] : []
 
   const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'
+  const theme = getDeptTheme(departmentType)
 
   const userInfo = {
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
     role: isSysAdmin ? 'System Admin' : systemRole ?? '',
     departmentName: user?.department_name ?? (isSysAdmin ? 'System Administrator' : null),
     profileHref: user?.personnelId ? `/personnel/${user.personnelId}` : null,
+    canSwitchDepartment: user?.hasMultipleDepartments ?? false,
   }
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
-      <aside className="hidden md:flex w-64 bg-red-800 text-white flex-col shrink-0">
-        <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} />
+      <aside className={`hidden md:flex w-64 ${theme.sidebarBg} text-white flex-col shrink-0`}>
+        <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} />
       </aside>
-      <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} />
+      <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} />
       <main className="flex-1 pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 overflow-y-auto">
         <PageNavBar />
         {children}
@@ -139,45 +150,51 @@ export default async function DashboardLayout({ children }: { children: React.Re
   )
 }
 
-function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo }: {
+function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo, theme }: {
   navGroups: NavGroup[]
   adminNavItems: { href: string; label: string }[]
   adminLabel: string
-  userInfo: { name: string; role: string; departmentName: string | null; profileHref: string | null }
+  userInfo: { name: string; role: string; departmentName: string | null; profileHref: string | null; canSwitchDepartment: boolean }
+  theme: ReturnType<typeof getDeptTheme>
 }) {
   return (
     <>
-      <div className="px-6 py-5 border-b border-red-700">
+      <div className={`px-6 py-5 border-b ${theme.border}`}>
         <h1 className="text-xl font-bold tracking-tight">FireOps7</h1>
-        {userInfo.departmentName && <p className="text-xs text-red-300 mt-0.5 truncate">{userInfo.departmentName}</p>}
+        {userInfo.departmentName && <p className={`text-xs ${theme.textMuted} mt-0.5 truncate`}>{userInfo.departmentName}</p>}
+        {userInfo.canSwitchDepartment && (
+          <a href="/select-department" className={`text-xs ${theme.switchLink} underline mt-0.5 inline-block hover:text-white`}>
+            Switch Department
+          </a>
+        )}
       </div>
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <NavGroups groups={navGroups} />
+        <NavGroups groups={navGroups} theme={theme} />
         {adminNavItems.length > 0 && (
           <div className="mt-4">
-            <div className="mb-1 px-3 text-xs font-semibold text-red-300 uppercase tracking-wider">{adminLabel}</div>
-            <NavGroups groups={[{ items: adminNavItems }]} />
+            <div className={`mb-1 px-3 text-xs font-semibold ${theme.textMuted} uppercase tracking-wider`}>{adminLabel}</div>
+            <NavGroups groups={[{ items: adminNavItems }]} theme={theme} />
           </div>
         )}
       </nav>
-      <div className="px-4 py-4 border-t border-red-700 flex flex-col gap-2">
+      <div className={`px-4 py-4 border-t ${theme.border} flex flex-col gap-2`}>
         <div className="mb-1">
           {userInfo.profileHref ? (
             <a href={userInfo.profileHref} className="group block">
               <p className="text-sm font-medium truncate group-hover:underline">{userInfo.name}</p>
-              <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
+              <p className={`text-xs ${theme.textMuted} capitalize`}>{userInfo.role}</p>
             </a>
           ) : (
             <div>
               <p className="text-sm font-medium truncate">{userInfo.name}</p>
-              <p className="text-xs text-red-300 capitalize">{userInfo.role}</p>
+              <p className={`text-xs ${theme.textMuted} capitalize`}>{userInfo.role}</p>
             </div>
           )}
         </div>
         <PWAInstallButton />
         <FeedbackButton />
         <form action={signOut}>
-          <button type="submit" className="w-full rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition-colors text-left">
+          <button type="submit" className={`w-full rounded-lg ${theme.buttonBg} px-3 py-1.5 text-xs font-medium text-white ${theme.buttonHoverBg} transition-colors text-left`}>
             Sign Out
           </button>
         </form>

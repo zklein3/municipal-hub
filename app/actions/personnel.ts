@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { parseSalamanderCard } from '@/lib/salamander'
 import { revalidatePath } from 'next/cache'
@@ -40,19 +41,11 @@ export async function updateOwnProfile(formData: FormData) {
 
 // ─── Officer: Update anyone's basic profile ───────────────────────────────────
 export async function updatePersonnelProfile(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role === 'member' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (ctx.systemRole === 'member' && !ctx.isSysAdmin) {
     return { error: 'You do not have permission to edit other profiles.' }
   }
 
@@ -84,19 +77,11 @@ export async function updatePersonnelProfile(formData: FormData) {
 
 // ─── Admin: Update department-level info ─────────────────────────────────────
 export async function updateDeptPersonnel(formData: FormData) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Could not verify your account.' }
-
-  const { data: myDeptList } = await adminClient.from('department_personnel').select('system_role').eq('personnel_id', me.id).eq('active', true)
-  const myDept = myDeptList?.[0]
-  if (!myDept || (myDept.system_role !== 'admin' && !me.is_sys_admin)) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) {
     return { error: 'You do not have permission to edit department info.' }
   }
 
@@ -209,25 +194,17 @@ export async function linkQrToken(
   tokenValue: string,
   label: string | null
 ) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Not authenticated.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  const me = { id: ctx.personnelId }
 
   const isMe = me.id === personnelId
   if (!isMe) {
-    const { data: myDeptList } = await adminClient
-      .from('department_personnel').select('department_id, system_role')
-      .eq('personnel_id', me.id).eq('active', true)
-    const myDept = myDeptList?.[0]
-    if (myDept?.system_role !== 'admin' && myDept?.system_role !== 'officer') return { error: 'Not authorized.' }
+    if (ctx.systemRole !== 'admin' && ctx.systemRole !== 'officer') return { error: 'Not authorized.' }
     const { data: targetDept } = await adminClient
       .from('department_personnel').select('id')
-      .eq('personnel_id', personnelId).eq('department_id', myDept.department_id).eq('active', true).limit(1)
+      .eq('personnel_id', personnelId).eq('department_id', ctx.departmentId ?? '').eq('active', true).limit(1)
     if (!targetDept?.length) return { error: 'Member not found in your department.' }
   }
 
@@ -255,14 +232,10 @@ export async function linkQrToken(
 
 // ─── Delete a linked QR token ─────────────────────────────────────────────────
 export async function deleteQrToken(tokenId: string) {
-  const supabase = await createClient()
   const adminClient = createAdminClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Session expired.' }
-
-  const { data: meList } = await adminClient.from('personnel').select('id').eq('auth_user_id', user.id)
-  const me = meList?.[0]
-  if (!me) return { error: 'Not authenticated.' }
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Session expired.' }
+  const me = { id: ctx.personnelId }
 
   const { data: tokenList } = await adminClient
     .from('personnel_qr_tokens').select('id, personnel_id').eq('id', tokenId)
@@ -271,11 +244,7 @@ export async function deleteQrToken(tokenId: string) {
 
   const isMe = me.id === token.personnel_id
   if (!isMe) {
-    const { data: myDeptList } = await adminClient
-      .from('department_personnel').select('department_id, system_role')
-      .eq('personnel_id', me.id).eq('active', true)
-    const myDept = myDeptList?.[0]
-    if (myDept?.system_role !== 'admin' && myDept?.system_role !== 'officer') return { error: 'Not authorized.' }
+    if (ctx.systemRole !== 'admin' && ctx.systemRole !== 'officer') return { error: 'Not authorized.' }
   }
 
   const { error: dbErr } = await adminClient.from('personnel_qr_tokens').delete().eq('id', tokenId)
