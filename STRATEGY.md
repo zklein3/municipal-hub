@@ -30,13 +30,19 @@ Session notes captured 2026-06-26. Forward-looking roadmap — not yet built. Se
 
 - Terry is a friend — fire department member AND police chief of Yutan
 - Already in the system under Valley Fire as admin
-- Plan: create Yutan Police Department as a second department
-- Add Terry as admin of that department too
+- Yutan Police Department created 2026-06-26 — Terry + zklein3@gmail.com both admin (see CLAUDE.md "IMMEDIATE NEXT")
 - He logs in, selects police context, sees only police-relevant tools
-- He's bringing Yutan city forms — contact reports, internal memos, inspection checklists
-- Build his forms into the system behind his Yutan Police Department login
-- He plays with it, gives feedback, shapes the police module
-- Goal: have a working shell ready before he even delivers the forms
+- Goal: have a working shell ready before he even delivers the forms — done; police gets a stripped nav + navy theme, but no police-specific modules yet
+
+**Current tooling & competitive context (2026-06-26):**
+- Terry currently runs Yutan PD's forms through **Connecteam** — a generic frontline workforce/shift app, not a police RMS. He finds the UI difficult and the system limiting.
+- He referenced **Sleuth Systems** (legacy small/mid-agency CAD/RMS vendor, est. 1984) as his frame of reference for "real" police software — confirms police workflows center on **contact/incident reports as primary documents**, not recurring checklists. Inspections are barely used in police work, unlike fire.
+- He wants to bring this to the **City of Yutan** for potential adoption — this is a sales opportunity, not just a personal pilot.
+- **Two concrete gaps to close before the city pitch:**
+  1. **Time clock function** — municipal HR/payroll will care about this. Likely belongs on the shared core platform (not gated behind `department_type`), since fire also wants paid/volunteer hour tracking.
+  2. **Import/export (CSV at minimum)** — so the city doesn't feel like historical Connecteam data is orphaned in a switch. A full Connecteam integration is probably unnecessary; CSV in/out should suffice.
+- Forms are expected from Terry ~late June 2026. Don't guess at police schema until they arrive — his forms will define the actual field-level shape of a contact report vs. an incident report.
+- Likely schema approach once forms arrive: keep shared core tables (personnel, departments, training/certs, announcements, events) as-is; give police its own primary report tables rather than reusing `incidents`/`incident_fire_details` — a traffic stop or contact report isn't an "incident" in the fire 911-response sense. Some pages may need to be rebuilt police-specific rather than themed, per Terry's described UI/feel expectations.
 
 ## Forms as a Product
 
