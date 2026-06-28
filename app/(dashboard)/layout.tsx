@@ -119,7 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { items: [{ href: '/reports', label: 'Reports' }] },
   ]
 
-  const adminNavItems = isSysAdmin ? [
+  const adminNavItems = viewingSysAdminOverview ? [
     { href: '/admin/departments', label: 'Departments' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/logs', label: 'System Logs' },
@@ -128,7 +128,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/dept-admin', label: 'Dept Admin' },
   ] : []
 
-  const adminLabel = isSysAdmin ? 'System Admin' : 'Dept Admin'
+  const adminLabel = viewingSysAdminOverview ? 'System Admin' : 'Dept Admin'
   const theme = getDeptTheme(departmentType)
 
   const userInfo = {
