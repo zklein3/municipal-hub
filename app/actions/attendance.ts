@@ -449,6 +449,45 @@ export async function logAttendance(instance_id: string, personnel_ids: string[]
   return { success: true }
 }
 
+// ─── Log Absent (officer/admin marks members absent — excused or unexcused) ──
+export async function logAbsentAttendance(
+  instance_id: string,
+  personnel_ids: string[],
+  excused: boolean,
+  excuse_type_id?: string,
+  notes?: string
+) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can log absences directly.' }
+  if (personnel_ids.length === 0) return { error: 'Select at least one member.' }
+  if (excused && !excuse_type_id) return { error: 'Select an excuse type.' }
+
+  const adminClient = createAdminClient()
+  const now = new Date().toISOString()
+
+  const records = personnel_ids.map(pid => ({
+    instance_id,
+    personnel_id: pid,
+    status: excused ? 'excused' : 'absent',
+    excuse_type_id: excused ? excuse_type_id : null,
+    submitted_by: ctx.me.id,
+    submitted_at: now,
+    notes: notes || null,
+    verified_by: ctx.me.id,
+    verified_at: now,
+  }))
+
+  const { error } = await adminClient
+    .from('event_attendance')
+    .upsert(records, { onConflict: 'instance_id,personnel_id', ignoreDuplicates: false })
+
+  if (error) { await logError(error.message, '/events'); return { error: error.message } }
+
+  revalidatePath('/events')
+  revalidatePath('/reports/my-activity')
+  return { success: true }
+}
+
 // ─── Verify / Reject Attendance ───────────────────────────────────────────────
 export async function verifyAttendance(attendance_id: string, action: 'present' | 'absent' | 'excused', rejection_reason?: string) {
   const ctx = await getContext()
@@ -554,6 +593,32 @@ async function issueCertFromTrainingLink(
     source: 'training_event',
     active: true,
   })
+}
+
+// ─── Log Excused Absence (officer/admin self-submit, auto-approved) ──────────
+export async function logExcusedAttendance(instance_id: string, excuse_type_id: string, notes?: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can log excused attendance directly.' }
+
+  const adminClient = createAdminClient()
+  const now = new Date().toISOString()
+
+  const { error } = await adminClient.from('event_attendance').upsert({
+    instance_id,
+    personnel_id: ctx.me.id,
+    status: 'excused',
+    excuse_type_id,
+    notes: notes || null,
+    submitted_by: ctx.me.id,
+    submitted_at: now,
+    verified_by: ctx.me.id,
+    verified_at: now,
+  }, { onConflict: 'instance_id,personnel_id' })
+
+  if (error) { await logError(error.message, '/events'); return { error: error.message } }
+  revalidatePath('/events')
+  revalidatePath('/reports/my-activity')
+  return { success: true }
 }
 
 // ─── Request Excuse (member self-submit) ─────────────────────────────────────

@@ -16,7 +16,7 @@ async function getUserContext() {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) return null
 
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) {
+  if (ctx.selectionPending) {
     redirect('/select-department')
   }
 
@@ -37,6 +37,9 @@ async function getUserContext() {
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getUserContext()
   const isSysAdmin = user?.is_sys_admin ?? false
+  // True only when there's no department context — i.e. the user is in the
+  // dedicated sys admin overview, not viewing a department they also admin.
+  const viewingSysAdminOverview = isSysAdmin && !user?.department_id
 
   if (user) {
     const [bioEnabled, bioUnlocked] = await Promise.all([hasBiometricCredentials(), isBiometricUnlocked()])
@@ -56,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let moduleIso = false
   let moduleNeris = false
   let pendingSignatureCount = 0
-  if (!isSysAdmin && user?.department_id && user?.id) {
+  if (!viewingSysAdminOverview && user?.department_id && user?.id) {
     const adminClient = createAdminClient()
     const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }, { count: sigCount }, { count: medicalAlertCount }] = await Promise.all([
@@ -99,7 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const departmentType = user?.department_type ?? 'fire'
   const isFireDept = departmentType === 'fire'
 
-  const navGroups: NavGroup[] = isSysAdmin ? [
+  const navGroups: NavGroup[] = viewingSysAdminOverview ? [
     { items: [{ href: '/dashboard', label: 'Overview' }] },
   ] : isFireDept ? [
     { items: [{ href: '/dashboard', label: 'Dashboard' }] },
@@ -130,7 +133,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const userInfo = {
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-    role: isSysAdmin ? 'System Admin' : systemRole ?? '',
+    role: viewingSysAdminOverview ? 'System Admin' : systemRole ?? '',
     departmentName: user?.department_name ?? (isSysAdmin ? 'System Administrator' : null),
     profileHref: user?.personnelId ? `/personnel/${user.personnelId}` : null,
     canSwitchDepartment: user?.hasMultipleDepartments ?? false,

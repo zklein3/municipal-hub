@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import SysAdminDashboard from './SysAdminDashboard'
 import DashboardAnnouncementBanner from './DashboardAnnouncementBanner'
+import HubCard from '@/components/HubCard'
 
 async function getUnreadAnnouncements(departmentId: string, personnelId: string) {
   const adminClient = createAdminClient()
@@ -150,9 +151,10 @@ export default async function DashboardPage() {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
 
-  if (ctx.isSysAdmin) return <SysAdminDashboard />
+  if (ctx.selectionPending) redirect('/select-department')
 
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (ctx.isSysAdmin && !ctx.departmentId) return <SysAdminDashboard />
+
   if (!ctx.departmentId) redirect('/login')
 
   // Fetch dept info separately
@@ -186,8 +188,10 @@ export default async function DashboardPage() {
 
   const hasUpcoming = data.upcomingEvents.length > 0 || data.upcomingTraining.length > 0
 
-  // Role-adaptive quick links
-  const quickLinks = isAdmin ? [
+  const isFireDept = ctx.departmentType === 'fire'
+
+  // Role-adaptive quick links — fire departments
+  const fireQuickLinks = isAdmin ? [
     { href: '/dept-admin/setup',  label: 'Dept Setup',   desc: 'Configure your department' },
     { href: '/personnel',         label: 'Personnel',    desc: 'Department roster' },
     { href: '/apparatus',         label: 'Apparatus',    desc: 'Vehicles and units' },
@@ -209,6 +213,29 @@ export default async function DashboardPage() {
     { href: '/reports/my-activity', label: 'My Activity', desc: 'Your attendance & records' },
     { href: '/personnel',         label: 'Personnel',    desc: 'Department roster' },
   ]
+
+  // Role-adaptive quick links — non-fire (e.g. police) departments.
+  // Dept Setup, Personnel, and Apparatus management live behind the Dept Admin
+  // menu for these depts, not in member-facing quick links. Inspections isn't
+  // relevant outside the fire/apparatus workflow.
+  const nonFireQuickLinks = isOfficerOrAbove ? [
+    { href: '/events',            label: 'Events',        desc: 'Log attendance' },
+    { href: '/fuel',               label: 'Fuel Log',      desc: 'Log vehicle fuel' },
+    { href: '/forms/business-check', label: 'Business Check', desc: 'Log a business check' },
+    { href: '/forms/contact',      label: 'Contact Form',  desc: 'Document a field contact' },
+    { href: '/forms/traffic-stop', label: 'Traffic Stop',  desc: 'Log a traffic stop' },
+    { href: '/reports',            label: 'Reports',       desc: 'Attendance & activity' },
+  ] : [
+    { href: '/events',            label: 'Events',        desc: 'Log attendance' },
+    { href: '/fuel',               label: 'Fuel Log',      desc: 'Log vehicle fuel' },
+    { href: '/forms/business-check', label: 'Business Check', desc: 'Log a business check' },
+    { href: '/forms/contact',      label: 'Contact Form',  desc: 'Document a field contact' },
+    { href: '/forms/traffic-stop', label: 'Traffic Stop',  desc: 'Log a traffic stop' },
+    { href: '/training',           label: 'Certifications', desc: 'Courses & certifications' },
+    { href: '/reports/my-activity', label: 'My Activity',  desc: 'Your attendance & records' },
+  ]
+
+  const quickLinks = isFireDept ? fireQuickLinks : nonFireQuickLinks
 
   return (
     <div>
@@ -361,18 +388,29 @@ export default async function DashboardPage() {
       )}
 
       {/* Quick Links */}
-      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
-        <h2 className="text-sm font-semibold text-zinc-900 mb-3">Quick Links</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {quickLinks.map(link => (
-            <Link key={link.href} href={link.href}
-              className="rounded-lg border border-zinc-200 px-4 py-3 hover:border-red-300 hover:bg-red-50 transition-all group">
-              <p className="text-sm font-semibold text-zinc-800 group-hover:text-red-700">{link.label}</p>
-              <p className="text-xs text-zinc-400 mt-0.5">{link.desc}</p>
-            </Link>
-          ))}
+      {isFireDept ? (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5">
+          <h2 className="text-sm font-semibold text-zinc-900 mb-3">Quick Links</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {quickLinks.map(link => (
+              <Link key={link.href} href={link.href}
+                className="rounded-lg border border-zinc-200 px-4 py-3 hover:border-red-300 hover:bg-red-50 transition-all group">
+                <p className="text-sm font-semibold text-zinc-800 group-hover:text-red-700">{link.label}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">{link.desc}</p>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900 mb-3">Quick Links</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {quickLinks.map(link => (
+              <HubCard key={link.href} href={link.href} title={link.label} description={link.desc} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

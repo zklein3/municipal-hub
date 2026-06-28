@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { logAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
+import { logAttendance, logAbsentAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
 import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
 
@@ -58,6 +58,7 @@ interface Event {
   pending_count: number
   pending_submissions: PendingSubmission[]
   excuse_submissions: ExcuseSubmission[]
+  logged_personnel_ids: string[]
 }
 
 interface Personnel {
@@ -150,6 +151,8 @@ export default function EventsAdminClient({
   const router = useRouter()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  const [bulkAbsentExcuseType, setBulkAbsentExcuseType] = useState('')
+  const [bulkAbsentNotes, setBulkAbsentNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -266,6 +269,20 @@ export default function EventsAdminClient({
     const result = await logAttendance(event.id, Array.from(bulkSelected))
     if (result?.error) setError(result.error)
     else { setSuccess(`Logged attendance for ${bulkSelected.size} members.`); setBulkSelected(new Set()); router.refresh() }
+    setLoading(false)
+  }
+
+  async function handleBulkAbsent(event: Event, excused: boolean) {
+    if (bulkSelected.size === 0) { setError('Select at least one person.'); return }
+    if (excused && !bulkAbsentExcuseType) { setError('Select an excuse type.'); return }
+    reset(); setLoading(true)
+    const result = await logAbsentAttendance(event.id, Array.from(bulkSelected), excused, excused ? bulkAbsentExcuseType : undefined, bulkAbsentNotes || undefined)
+    if (result?.error) setError(result.error)
+    else {
+      setSuccess(`Marked ${bulkSelected.size} member(s) ${excused ? 'excused' : 'absent'}.`)
+      setBulkSelected(new Set()); setBulkAbsentExcuseType(''); setBulkAbsentNotes('')
+      router.refresh()
+    }
     setLoading(false)
   }
 
@@ -394,7 +411,8 @@ export default function EventsAdminClient({
             const canSelfLog = !past || windowOpen
             const cancelled = event.status === 'cancelled'
             const completed = event.status === 'completed'
-            const allIds = personnelList.map(p => p.id)
+            const loggablePersonnel = personnelList.filter(p => !event.logged_personnel_ids.includes(p.id))
+            const allIds = loggablePersonnel.map(p => p.id)
             const hasPending = event.pending_submissions.length > 0
             const hasExcuseRequests = event.excuse_submissions.length > 0
 
@@ -725,14 +743,17 @@ export default function EventsAdminClient({
                     {/* ── BULK LOG ATTENDANCE ───────────────────────── */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Log Attendance</p>
+                        <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Log Attendance / Absence</p>
                         <button onClick={() => toggleAllBulk(allIds)}
                           className="text-xs text-blue-600 font-semibold hover:text-blue-800">
                           {bulkSelected.size === allIds.length ? 'Deselect All' : 'Select All'}
                         </button>
                       </div>
                       <div className="grid grid-cols-2 gap-1 max-h-48 overflow-y-auto mb-3">
-                        {personnelList.map(p => (
+                        {loggablePersonnel.length === 0 && (
+                          <p className="col-span-2 text-xs text-zinc-400 px-1">All members have an attendance record for this event.</p>
+                        )}
+                        {loggablePersonnel.map(p => (
                           <label key={p.id} className="flex items-center gap-2 rounded-lg bg-white border border-zinc-200 px-3 py-2 cursor-pointer hover:bg-zinc-50">
                             <input type="checkbox" checked={bulkSelected.has(p.id)} onChange={() => toggleBulk(p.id)}
                               className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
@@ -742,8 +763,32 @@ export default function EventsAdminClient({
                       </div>
                       <button onClick={() => handleBulkLog(event)} disabled={loading || bulkSelected.size === 0}
                         className="w-full rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                        {loading ? 'Logging...' : `Log ${bulkSelected.size > 0 ? bulkSelected.size : ''} ${bulkSelected.size === 1 ? 'Member' : 'Members'}`}
+                        {loading ? 'Logging...' : `Log ${bulkSelected.size > 0 ? bulkSelected.size : ''} ${bulkSelected.size === 1 ? 'Member' : 'Members'} Present`}
                       </button>
+
+                      <div className="mt-3 pt-3 border-t border-zinc-200">
+                        <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">Mark Absent</p>
+                        <div className="flex flex-col gap-2 mb-2">
+                          <select value={bulkAbsentExcuseType} onChange={e => setBulkAbsentExcuseType(e.target.value)}
+                            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="">Excuse type (for excused absence)...</option>
+                            {excuseTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                          <textarea value={bulkAbsentNotes} onChange={e => setBulkAbsentNotes(e.target.value)}
+                            placeholder="Notes (optional)" rows={2}
+                            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleBulkAbsent(event, true)} disabled={loading || bulkSelected.size === 0 || !bulkAbsentExcuseType}
+                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                            Excused Absence
+                          </button>
+                          <button onClick={() => handleBulkAbsent(event, false)} disabled={loading || bulkSelected.size === 0}
+                            className="flex-1 rounded-lg bg-zinc-700 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
+                            Unexcused Absence
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* ── CLOSE EVENT ──────────────────────────────── */}

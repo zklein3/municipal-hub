@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { SELECTED_DEPARTMENT_COOKIE } from '@/lib/auth-cookies'
+import { SELECTED_DEPARTMENT_COOKIE, SYS_ADMIN_SENTINEL } from '@/lib/auth-cookies'
 
 export type CurrentDepartmentContext = {
   personnelId: string
@@ -13,6 +13,10 @@ export type CurrentDepartmentContext = {
   departmentType: string
   systemRole: string | null
   hasMultipleDepartments: boolean
+  // True when the user has more than one viewing option (departments and/or
+  // sys admin) but the SELECTED_DEPARTMENT_COOKIE doesn't resolve to a valid
+  // choice yet — caller should send them to /select-department.
+  selectionPending: boolean
 }
 
 /**
@@ -40,24 +44,40 @@ export async function getCurrentDepartmentContext(): Promise<CurrentDepartmentCo
     .eq('personnel_id', me.id)
     .eq('active', true)
 
+  const isSysAdmin = me.is_sys_admin ?? false
+  // Sys admin gets an extra "viewing option" alongside their real department
+  // memberships, picked via /select-department like any other department.
+  const totalOptions = (deptList?.length ?? 0) + (isSysAdmin ? 1 : 0)
+
   let dept = deptList?.[0]
-  if ((deptList?.length ?? 0) > 1) {
+  let selectionPending = false
+  let viewingAsSysAdmin = isSysAdmin && (deptList?.length ?? 0) === 0
+
+  if (totalOptions > 1) {
     const cookieStore = await cookies()
     const selectedId = cookieStore.get(SELECTED_DEPARTMENT_COOKIE)?.value
-    // No fallback here — an unmatched cookie with multiple memberships means
-    // the caller must send the user to /select-department, not guess.
-    dept = deptList?.find((d) => d.department_id === selectedId)
+    if (isSysAdmin && selectedId === SYS_ADMIN_SENTINEL) {
+      dept = undefined
+      viewingAsSysAdmin = true
+    } else {
+      dept = deptList?.find((d) => d.department_id === selectedId)
+      // No fallback here — an unmatched cookie with multiple options means
+      // the caller must send the user to /select-department, not guess.
+      if (!dept) selectionPending = true
+      viewingAsSysAdmin = false
+    }
   }
 
   return {
     personnelId: me.id,
     firstName: me.first_name,
     lastName: me.last_name,
-    isSysAdmin: me.is_sys_admin ?? false,
-    departmentId: dept?.department_id ?? null,
+    isSysAdmin,
+    departmentId: viewingAsSysAdmin ? null : dept?.department_id ?? null,
     departmentName: (dept?.departments as any)?.name ?? null,
     departmentType: (dept?.departments as any)?.department_type ?? 'fire',
     systemRole: dept?.system_role ?? null,
-    hasMultipleDepartments: (deptList?.length ?? 0) > 1,
+    hasMultipleDepartments: totalOptions > 1,
+    selectionPending,
   }
 }

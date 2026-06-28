@@ -9,6 +9,7 @@ export default async function DeptNerisSettingsPage() {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
   if (!ctx.departmentId || (ctx.systemRole !== 'admin' && !ctx.isSysAdmin)) redirect('/dashboard')
+  if (ctx.departmentType !== 'fire') redirect('/dashboard')
 
   const { data: deptList } = await adminClient
     .from('departments')

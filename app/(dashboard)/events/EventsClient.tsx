@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { logAttendance, requestExcuse } from '@/app/actions/attendance'
+import { logAttendance, requestExcuse, logExcusedAttendance } from '@/app/actions/attendance'
 import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
 
 interface AttendanceRecord {
@@ -137,9 +137,14 @@ export default function EventsClient({
   async function handleRequestExcuse(instance_id: string) {
     if (!selectedExcuseType) { setError('Please select an excuse type.'); return }
     reset(); setLoading(true)
-    const result = await requestExcuse(instance_id, selectedExcuseType, excuseNotes || undefined)
+    const result = isOfficerOrAbove
+      ? await logExcusedAttendance(instance_id, selectedExcuseType, excuseNotes || undefined)
+      : await requestExcuse(instance_id, selectedExcuseType, excuseNotes || undefined)
     if (result?.error) setError(result.error)
-    else { setSuccess('Excuse request submitted.'); setExcuseOpenId(null); setSelectedExcuseType(''); setExcuseNotes(''); router.refresh() }
+    else {
+      setSuccess(isOfficerOrAbove ? 'Logged as excused.' : 'Excuse request submitted.')
+      setExcuseOpenId(null); setSelectedExcuseType(''); setExcuseNotes(''); router.refresh()
+    }
     setLoading(false)
   }
 
@@ -325,7 +330,7 @@ export default function EventsClient({
                 {excuseOpen && (
                   <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4">
                     <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-3">
-                      {!past ? 'Notify of Absence' : 'Request an Excuse'}
+                      {isOfficerOrAbove ? 'Log Excused Absence' : !past ? 'Notify of Absence' : 'Request an Excuse'}
                     </p>
                     {excuseTypes.length === 0 ? (
                       <p className="text-xs text-zinc-400">No excuse types configured. Contact your officer.</p>

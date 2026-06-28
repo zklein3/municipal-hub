@@ -94,8 +94,18 @@ export default async function EventsAdminPage() {
 
   let pendingByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string }[]> = {}
   let excuseByInstance: Record<string, { id: string; personnel_id: string; name: string; submitted_at: string; excuse_type: string; notes: string | null }[]> = {}
+  let loggedByInstance: Record<string, string[]> = {}
 
   if (instanceIds.length > 0) {
+    const { data: allAttendanceRaw } = await adminClient
+      .from('event_attendance')
+      .select('instance_id, personnel_id')
+      .in('instance_id', instanceIds)
+
+    for (const a of allAttendanceRaw ?? []) {
+      if (!loggedByInstance[a.instance_id]) loggedByInstance[a.instance_id] = []
+      loggedByInstance[a.instance_id].push(a.personnel_id)
+    }
     const { data: allPendingRaw } = await adminClient
       .from('event_attendance')
       .select('id, instance_id, personnel_id, submitted_at, status, excuse_type_id, notes')
@@ -154,6 +164,7 @@ export default async function EventsAdminPage() {
     pending_count: (pendingByInstance[i.id]?.length ?? 0) + (excuseByInstance[i.id]?.length ?? 0),
     pending_submissions: pendingByInstance[i.id] ?? [],
     excuse_submissions: excuseByInstance[i.id] ?? [],
+    logged_personnel_ids: loggedByInstance[i.id] ?? [],
   }))
 
   const { data: personnel } = await adminClient

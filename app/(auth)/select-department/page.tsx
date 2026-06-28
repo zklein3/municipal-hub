@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { selectDepartment } from '@/app/actions/auth'
+import { SYS_ADMIN_SENTINEL } from '@/lib/auth-cookies'
 
 export default async function SelectDepartmentPage({
   searchParams,
@@ -17,7 +18,7 @@ export default async function SelectDepartmentPage({
   const adminClient = createAdminClient()
   const { data: personnel } = await adminClient
     .from('personnel')
-    .select('id')
+    .select('id, is_sys_admin')
     .eq('auth_user_id', user.id)
     .single()
   if (!personnel) redirect('/login')
@@ -29,9 +30,10 @@ export default async function SelectDepartmentPage({
     .eq('active', true)
 
   const departments = deptRows ?? []
+  const isSysAdmin = personnel.is_sys_admin ?? false
 
-  if (departments.length === 0) redirect('/login')
-  if (departments.length === 1) redirect('/dashboard')
+  if (departments.length === 0 && !isSysAdmin) redirect('/login')
+  if (departments.length + (isSysAdmin ? 1 : 0) <= 1) redirect('/dashboard')
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100">
@@ -45,6 +47,21 @@ export default async function SelectDepartmentPage({
         </div>
 
         <div className="flex flex-col gap-3">
+          {isSysAdmin && (
+            <form action={selectDepartment}>
+              <input type="hidden" name="department_id" value={SYS_ADMIN_SENTINEL} />
+              {next && <input type="hidden" name="next" value={next} />}
+              <button
+                type="submit"
+                className="w-full flex items-center justify-between rounded-lg border border-zinc-900 bg-zinc-950 px-4 py-3 text-left hover:bg-zinc-800 transition-colors"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-white">Sys Admin</span>
+                  <span className="block text-xs text-zinc-400">System Administrator</span>
+                </span>
+              </button>
+            </form>
+          )}
           {departments.map((d) => {
             const dept = d.departments as unknown as { name: string } | null
             return (

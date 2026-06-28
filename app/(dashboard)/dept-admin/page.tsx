@@ -12,6 +12,7 @@ export default async function DeptAdminPage() {
   if (!ctx.departmentId || ctx.systemRole !== 'admin') redirect('/dashboard')
 
   const departmentId = ctx.departmentId
+  const isFireDept = ctx.departmentType === 'fire'
 
   const [
     { data: deptFlags },
@@ -93,7 +94,7 @@ export default async function DeptAdminPage() {
             href="/iso"
           />
         )}
-        {moduleNeris && (
+        {isFireDept && moduleNeris && (
           <HubCard
             title="NERIS Settings"
             description="Incident reporting configuration"
@@ -109,8 +110,8 @@ export default async function DeptAdminPage() {
         )}
       </div>
 
-      {/* NERIS promo — shown only when module is not yet enabled */}
-      {!moduleNeris && (
+      {/* NERIS promo — fire depts only, shown only when module is not yet enabled */}
+      {isFireDept && !moduleNeris && (
         <div className="mt-8 rounded-2xl bg-zinc-950 border border-zinc-800 px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
           <Image
             src="/NERIS_Data_Exchange_Compatible__SealV1.png"

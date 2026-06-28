@@ -10,6 +10,7 @@ export default async function NewIncidentPage() {
   if (!ctx) redirect('/login')
   if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
   if (!ctx.departmentId) redirect('/dashboard')
+  if (ctx.departmentType !== 'fire') redirect('/dashboard')
   const me = { id: ctx.personnelId, first_name: ctx.firstName, last_name: ctx.lastName }
 
   const department_id = ctx.departmentId

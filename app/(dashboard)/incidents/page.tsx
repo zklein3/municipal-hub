@@ -10,6 +10,7 @@ export default async function IncidentsPage() {
   if (!ctx) redirect('/login')
   if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
   if (!ctx.departmentId) redirect('/dashboard')
+  if (ctx.departmentType !== 'fire') redirect('/dashboard')
   const me = { id: ctx.personnelId }
 
   // Module gate — Bundle A required

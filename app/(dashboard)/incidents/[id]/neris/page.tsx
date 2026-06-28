@@ -16,6 +16,7 @@ export default async function NerisReportPage({
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
   if (!ctx.departmentId && !ctx.isSysAdmin) redirect('/dashboard')
+  if (ctx.departmentId && ctx.departmentType !== 'fire') redirect('/dashboard')
   const me = { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }
 
   const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin

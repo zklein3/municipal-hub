@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logError } from '@/lib/logger'
 import { redirect } from 'next/navigation'
-import { SELECTED_DEPARTMENT_COOKIE } from '@/lib/auth-cookies'
+import { SELECTED_DEPARTMENT_COOKIE, SYS_ADMIN_SENTINEL } from '@/lib/auth-cookies'
 
 // ─── Sign In ─────────────────────────────────────────────────────────────────
 export async function signIn(formData: FormData) {
@@ -27,7 +27,7 @@ export async function signIn(formData: FormData) {
 
   const { data: personnel } = await supabase
     .from('personnel')
-    .select('signup_status, id')
+    .select('signup_status, id, is_sys_admin')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -53,7 +53,10 @@ export async function signIn(formData: FormData) {
         .eq('personnel_id', personnel.id)
         .eq('active', true)
 
-      if ((deptRows?.length ?? 0) > 1) {
+      const isSysAdmin = personnel.is_sys_admin ?? false
+      const totalOptions = (deptRows?.length ?? 0) + (isSysAdmin ? 1 : 0)
+
+      if (totalOptions > 1) {
         const nextParam = next !== '/dashboard' ? `?next=${encodeURIComponent(next)}` : ''
         redirect(`/select-department${nextParam}`)
       }
@@ -88,22 +91,29 @@ export async function selectDepartment(formData: FormData) {
   const adminClient = createAdminClient()
   const { data: personnel } = await adminClient
     .from('personnel')
-    .select('id')
+    .select('id, is_sys_admin')
     .eq('auth_user_id', user.id)
     .single()
   if (!personnel) redirect('/login')
 
-  const { data: membership } = await adminClient
-    .from('department_personnel')
-    .select('department_id')
-    .eq('personnel_id', personnel.id)
-    .eq('department_id', departmentId)
-    .eq('active', true)
-    .maybeSingle()
+  if (departmentId === SYS_ADMIN_SENTINEL) {
+    if (!personnel.is_sys_admin) {
+      await logError('Attempted to select sys admin view without sys admin flag', '/select-department', { personnel_id: personnel.id })
+      redirect('/select-department')
+    }
+  } else {
+    const { data: membership } = await adminClient
+      .from('department_personnel')
+      .select('department_id')
+      .eq('personnel_id', personnel.id)
+      .eq('department_id', departmentId)
+      .eq('active', true)
+      .maybeSingle()
 
-  if (!membership) {
-    await logError('Attempted to select a department not assigned to this user', '/select-department', { personnel_id: personnel.id, metadata: { departmentId } })
-    redirect('/select-department')
+    if (!membership) {
+      await logError('Attempted to select a department not assigned to this user', '/select-department', { personnel_id: personnel.id, metadata: { departmentId } })
+      redirect('/select-department')
+    }
   }
 
   const cookieStore = await cookies()
