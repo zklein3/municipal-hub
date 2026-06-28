@@ -125,45 +125,69 @@ export default function AccountabilityBoard({
   }
 
   // Live sync — other officers' scans/moves/check-ins on this board appear without a manual refresh.
+  // Realtime evaluates our RLS policies using the JWT attached to the socket, so the session
+  // token must be loaded and handed to supabase.realtime before subscribing — otherwise the
+  // socket connects unauthenticated and silently receives zero rows (subscribe still "succeeds").
   useEffect(() => {
     const supabase = createClient()
-    const channel = supabase
-      .channel(`accountability_board_${boardId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
-        payload => {
-          const row = payload.new as EntryRow
-          setEntries(prev => prev.some(e => e.id === row.id) ? prev : [...prev, { ...row, ...resolveEntryDisplay(row) }])
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
-        payload => {
-          const row = payload.new as EntryRow
-          setEntries(prev => prev.map(e => e.id === row.id ? { ...row, ...resolveEntryDisplay(row) } : e))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
-        payload => {
-          const row = payload.old as EntryRow
-          setEntries(prev => prev.filter(e => e.id !== row.id))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'accountability_lanes', filter: `board_id=eq.${boardId}` },
-        payload => {
-          const row = payload.new as Lane
-          setLanes(prev => prev.some(l => l.id === row.id) ? prev : [...prev, row].sort((a, b) => a.sort_order - b.sort_order))
-        }
-      )
-      .subscribe()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
 
-    return () => { supabase.removeChannel(channel) }
+    async function start() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (session) supabase.realtime.setAuth(session.access_token)
+
+      channel = supabase
+        .channel(`accountability_board_${boardId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+          payload => {
+            const row = payload.new as EntryRow
+            setEntries(prev => prev.some(e => e.id === row.id) ? prev : [...prev, { ...row, ...resolveEntryDisplay(row) }])
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+          payload => {
+            const row = payload.new as EntryRow
+            setEntries(prev => prev.map(e => e.id === row.id ? { ...row, ...resolveEntryDisplay(row) } : e))
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+          payload => {
+            const row = payload.old as EntryRow
+            setEntries(prev => prev.filter(e => e.id !== row.id))
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'accountability_lanes', filter: `board_id=eq.${boardId}` },
+          payload => {
+            const row = payload.new as Lane
+            setLanes(prev => prev.some(l => l.id === row.id) ? prev : [...prev, row].sort((a, b) => a.sort_order - b.sort_order))
+          }
+        )
+        .subscribe()
+    }
+
+    start()
+
+    // Keep the realtime socket's auth token current across refreshes so the
+    // subscription doesn't silently go dark when the session token rotates.
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) supabase.realtime.setAuth(session.access_token)
+    })
+
+    return () => {
+      cancelled = true
+      authListener.subscription.unsubscribe()
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [boardId])
 
   function resolveCard(raw: string): { personnelId: string | null; rawName: string | null; rawDept: string | null; displayName: string; displayDept: string } {
