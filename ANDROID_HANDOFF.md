@@ -1,59 +1,86 @@
 # Android Studio Agent — Handoff Protocol
 
-Two AI agents work on this app: **Claude Code** (this repo, web + native source) and the **Android Studio agent** (Gradle build + install to device). This doc defines who does what and the handoff sequence between them. Point the Android Studio agent at this file at the start of its session.
+Two AI agents work on this app: **Claude Code** (VS Code) and the **Android Studio agent** (Android Studio). This doc is the mandatory starting point for every Android Studio session.
+
+---
 
 ## Workflow Context
 
-**VS Code (Claude Code) is the primary build environment.** The majority of development — web app features, bug fixes, database work, and even native source edits — happens there.
+**VS Code (Claude Code) is the primary build environment.** The majority of development — web app features, bug fixes, database work, and native source edits — happens there.
 
 **Android Studio is used periodically** — when prompted by Claude Code, or when the developer bounces over to handle a native build, APK install, or device-specific debugging. Don't assume continuity between sessions; always read this file fresh and check `git log` to see what Claude Code has done since the last Android Studio session.
 
-**The end goal** is a production app submitted to the Google Play Store (and eventually Apple App Store). That step is pending equipment and budget — in the meantime, debug APKs are sideloaded directly to the developer's physical Samsung for testing.
+**The end goal** is a production app submitted to the Google Play Store (and eventually Apple App Store). That step is pending equipment and budget — in the meantime, debug APKs are sideloaded directly to the developer's physical Samsung (SM-S948U) for testing.
 
 See [NATIVE.md](NATIVE.md) for overall Capacitor architecture.
 
+---
+
 ## Division of Responsibility
 
-**Claude Code (here) does:**
+**Claude Code does:**
 - All web app changes (`app/`, `components/`, `lib/`)
 - All native source edits (`android/app/src/main/java/...` — e.g. `MainActivity.java`, custom Capacitor plugins)
 - `npm run build` to confirm the web app compiles before anything ships
 - `npx cap sync android` after native source/plugin changes — regenerates `capacitor.settings.gradle` / `capacitor.build.gradle` and copies web assets
-- `git commit` + `git push` to `main` — this is what makes web/JS changes live (Vercel auto-deploys, app pulls them live since `capacitor.config.ts` points at `https://www.fireops7.com`)
+- `git commit` + `git push` to `main` — Vercel auto-deploys; the app pulls web changes live since `capacitor.config.ts` points at `https://www.fireops7.com`
 
 **Android Studio agent does:**
 - Gradle sync / dependency resolution inside the IDE
-- **Build → Build Bundle(s)/APK(s) → Build APK(s)**, or Run
-- Installs to the **physical phone over USB debugging** — confirm the device dropdown shows the real device name, not an emulator/AVD (this has bitten us before — a build silently went to a test emulator instead of the phone)
-- Reports build errors back for Claude Code to fix in source (the Android Studio agent should not hand-edit generated files — see Guardrails below)
+- Build APK (`assembleDebug`) and deploy to the physical phone
+- Confirm device target = physical Samsung, NOT an emulator (this has bitten us before)
+- Report build errors back to Claude Code — do not patch native source directly
+
+---
 
 ## When a Native Rebuild Is Actually Required
 
-Most changes do **not** need Android Studio at all — they're live the moment they're pushed and Vercel deploys. A new APK build/install is only required when:
+Most changes do **not** need Android Studio at all — they're live the moment Vercel deploys. A new APK build/install is only required when:
 - A native Java/Kotlin file changed (`android/app/src/main/java/...`)
 - A new Capacitor plugin was added (must be registered in `MainActivity.onCreate()` AND linked via `npx cap sync`)
 - `capacitor.config.ts`, app icon/splash, app ID/name, or `build.gradle` changed
 - Anything affecting `AndroidManifest.xml` (permissions, etc.)
 
-Pure JS/TSX/CSS changes in `app/`, `components/`, `lib/` (non-native) → git push only, no Android Studio involvement.
+Pure JS/TSX/CSS changes in `app/`, `components/`, `lib/` → git push only, no Android Studio needed.
+
+---
 
 ## Standard Handoff Sequence
 
-1. Claude Code makes the change, runs `npm run build`, confirms it's clean.
+1. Claude Code makes the change, runs `npm run build`, confirms clean.
 2. If native files changed: Claude Code runs `npx cap sync android`.
 3. Claude Code commits + pushes to `main`.
-4. Hand off to Android Studio agent: pull latest, Gradle sync, **Build APK**, confirm device target = physical phone, install/run.
-5. User manually tests the specific feature on the phone.
+4. Hand off to Android Studio: pull latest, Gradle sync, **Build APK**, confirm device = physical phone, install/run.
+5. Developer tests the feature on the phone.
+
+---
 
 ## Guardrails for the Android Studio Agent
 
-- **Never hand-edit** `android/capacitor.settings.gradle` or `android/app/capacitor.build.gradle` — both are auto-generated by `npx cap sync` and say so at the top of the file. If something's missing there, the fix is re-running `npx cap sync android` (Claude Code's job), not editing the file directly.
-- **Never edit web app source** (`app/`, `components/`, `lib/`) — that's Claude Code's side. If a bug traces back to JS/TSX logic, report it back rather than patching it natively.
-- Don't add new Capacitor plugins via native Gradle edits alone — the plugin also needs `registerPlugin(...)` in `MainActivity.java` and a `npx cap sync`, which happens on the Claude Code side first.
-- Always double-check the deploy target device before building — emulators silently "succeed" without ever reaching the real phone.
+- **Never hand-edit** `android/capacitor.settings.gradle` or `android/app/capacitor.build.gradle` — both are auto-generated by `npx cap sync`. If something's missing, re-run `npx cap sync android` (Claude Code's job).
+- **Never edit web app source** (`app/`, `components/`, `lib/`) — that's Claude Code's domain. If a bug traces back to JS/TSX, report it back rather than patching natively.
+- Don't add new Capacitor plugins via native Gradle edits alone — the plugin also needs `registerPlugin(...)` in `MainActivity.java` and a `npx cap sync` on the Claude Code side first.
+- Always confirm the deploy target is the physical phone before building — emulators silently "succeed" without ever reaching the real device.
 
-## Known Pitfalls (hit in practice, 2026-06-25)
+---
 
-- `target="_blank"` links do nothing in Capacitor's Android WebView (no multi-window support) — must navigate in-place instead.
-- `window.print()` is a silent no-op in Android's native WebView — printing requires a custom native plugin using `PrintManager` (see `NativePrintPlugin.java`), not a JS-only fix. **RESOLVED 2026-06-25** — `NativePrintPlugin.java` built and shipped. `PrintButton.tsx` now calls the native plugin on Android; users get the system print/save-to-PDF dialog without leaving the app. Confirmed working in production.
-- Android Studio's run/device dropdown can be pointed at a test emulator without it being obvious — always confirm it shows the real phone before trusting a build "worked."
+## Native Plugins Installed
+
+### NativePrintPlugin ✅ (2026-06-25)
+- **File:** `android/app/src/main/java/com/fireops7/app/NativePrintPlugin.java`
+- **Registered in:** `MainActivity.java` → `registerPlugin(NativePrintPlugin.class)`
+- **JS wrapper:** `lib/native-print.ts`
+- **Used by:** `app/print/training-signin/PrintButton.tsx`
+- **What it does:** Calls Android's `PrintManager` on the current WebView — gives the user the native system print/save-to-PDF dialog without leaving the app.
+- **Status:** Confirmed working in production (web + APK both deployed 2026-06-25).
+
+---
+
+## Known Pitfalls (hit in practice)
+
+- **`target="_blank"` links** do nothing in Capacitor's Android WebView (no multi-window support) — must navigate in-place instead.
+- **`window.print()` is a silent no-op** in Android's native WebView — printing requires a custom native plugin using `PrintManager`. See `NativePrintPlugin.java` above. ✅ Resolved.
+- **Emulator vs. real device** — Android Studio's run/device dropdown can silently target a test emulator. Always confirm it shows the Samsung SM-S948U before trusting a build "worked."
+- **USB debugging must be active on the phone** — the deploy only works when the Samsung is physically connected via USB with USB debugging enabled AND set as the target device in Android Studio's device dropdown. If the deploy seems to succeed but nothing changes on the phone, check these two things first. Confirmed working under these conditions (2026-06-25).
+- **Web changes vs. APK changes** — the app loads `https://www.fireops7.com` live. JS/TSX fixes go live via git push + Vercel. Only native Java changes need a new APK.
+- **Source set matters** — native plugin Java files must go in `src/main/`, NOT `src/androidTest/` or `src/test/`. Only `main` ships in the APK.

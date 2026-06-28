@@ -59,22 +59,39 @@ export default async function AccountabilityBoardPage({
     : { data: [] }
   const nameMap = Object.fromEntries((personnelRaw ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`]))
 
+  // Dept personnel list — includes role title so checked-in members show dept + position
+  const { data: deptPersonnelRaw } = await adminClient
+    .from('department_personnel')
+    .select('personnel_id, role_id, personnel(id, first_name, last_name)')
+    .eq('department_id', department_id)
+    .eq('active', true)
+
+  const roleIds = [...new Set((deptPersonnelRaw ?? []).map(p => p.role_id).filter(Boolean))] as string[]
+  const { data: rolesRaw } = roleIds.length > 0
+    ? await adminClient.from('personnel_roles').select('id, name').in('id', roleIds)
+    : { data: [] }
+  const roleTitleMap = Object.fromEntries((rolesRaw ?? []).map(r => [r.id, r.name]))
+  const titleMap = Object.fromEntries(
+    (deptPersonnelRaw ?? []).map(p => [p.personnel_id, p.role_id ? roleTitleMap[p.role_id] ?? null : null])
+  )
+
+  const departmentName = ctx.departmentName
+  function deptAndTitle(personnelId: string) {
+    const title = titleMap[personnelId]
+    return [departmentName, title].filter(Boolean).join(' · ')
+  }
+
   const entries = (entriesRaw ?? []).map(e => ({
     ...e,
     display_name: e.personnel_id ? (nameMap[e.personnel_id] ?? '—') : (e.raw_name ?? '—'),
-    display_dept: e.personnel_id ? '' : (e.raw_dept ?? ''),
+    display_dept: e.personnel_id ? deptAndTitle(e.personnel_id) : (e.raw_dept ?? ''),
   }))
 
-  // Dept personnel list
-  const { data: deptPersonnelRaw } = await adminClient
-    .from('department_personnel')
-    .select('personnel_id, personnel(id, first_name, last_name)')
-    .eq('department_id', department_id)
-    .eq('active', true)
   const deptPersonnel = (deptPersonnelRaw ?? [])
     .map(p => ({
       id: (p.personnel as any)?.id ?? p.personnel_id,
       name: [(p.personnel as any)?.first_name, (p.personnel as any)?.last_name].filter(Boolean).join(' '),
+      title: p.role_id ? roleTitleMap[p.role_id] ?? null : null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -125,6 +142,7 @@ export default async function AccountabilityBoardPage({
         initialEntries={entries}
         qrTokens={qrTokens}
         deptPersonnel={deptPersonnel}
+        departmentName={departmentName}
         isOfficerOrAbove={isOfficerOrAbove}
       />
     </div>

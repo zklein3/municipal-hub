@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card, salamanderCanonicalKey } from '@/lib/salamander'
 import {
@@ -21,6 +22,16 @@ interface Entry {
   display_dept: string
 }
 interface QrToken { personnel_id: string; token_type: string; token_value: string; display_name: string }
+interface EntryRow {
+  id: string
+  board_id: string
+  lane_id: string | null
+  personnel_id: string | null
+  raw_name: string | null
+  raw_dept: string | null
+  status: string
+  checked_in_at: string
+}
 
 export default function AccountabilityBoard({
   boardId,
@@ -28,13 +39,15 @@ export default function AccountabilityBoard({
   initialEntries,
   qrTokens,
   deptPersonnel,
+  departmentName,
   isOfficerOrAbove,
 }: {
   boardId: string
   initialLanes: Lane[]
   initialEntries: Entry[]
   qrTokens: QrToken[]
-  deptPersonnel: { id: string; name: string }[]
+  deptPersonnel: { id: string; name: string; title: string | null }[]
+  departmentName: string | null
   isOfficerOrAbove: boolean
 }) {
   const [lanes, setLanes] = useState<Lane[]>(initialLanes)
@@ -97,13 +110,69 @@ export default function AccountabilityBoard({
     }).join('')
   }
 
+  function deptAndTitle(personnelId: string): string {
+    const dp = deptPersonnel.find(p => p.id === personnelId)
+    return [departmentName, dp?.title].filter(Boolean).join(' · ')
+  }
+
+  function resolveEntryDisplay(row: { personnel_id: string | null; raw_name: string | null; raw_dept: string | null }): { display_name: string; display_dept: string } {
+    if (row.personnel_id) {
+      const token = qrTokens.find(t => t.personnel_id === row.personnel_id)
+      const dp = deptPersonnel.find(p => p.id === row.personnel_id)
+      return { display_name: token?.display_name ?? dp?.name ?? '—', display_dept: deptAndTitle(row.personnel_id) }
+    }
+    return { display_name: row.raw_name ?? '—', display_dept: row.raw_dept ?? '' }
+  }
+
+  // Live sync — other officers' scans/moves/check-ins on this board appear without a manual refresh.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`accountability_board_${boardId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+        payload => {
+          const row = payload.new as EntryRow
+          setEntries(prev => prev.some(e => e.id === row.id) ? prev : [...prev, { ...row, ...resolveEntryDisplay(row) }])
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+        payload => {
+          const row = payload.new as EntryRow
+          setEntries(prev => prev.map(e => e.id === row.id ? { ...row, ...resolveEntryDisplay(row) } : e))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'accountability_entries', filter: `board_id=eq.${boardId}` },
+        payload => {
+          const row = payload.old as EntryRow
+          setEntries(prev => prev.filter(e => e.id !== row.id))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'accountability_lanes', filter: `board_id=eq.${boardId}` },
+        payload => {
+          const row = payload.new as Lane
+          setLanes(prev => prev.some(l => l.id === row.id) ? prev : [...prev, row].sort((a, b) => a.sort_order - b.sort_order))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [boardId])
+
   function resolveCard(raw: string): { personnelId: string | null; rawName: string | null; rawDept: string | null; displayName: string; displayDept: string } {
     if (isFireOps7Card(raw)) {
       const pid = parseFireOps7Card(raw)
       if (pid) {
         const token = qrTokens.find(t => t.token_type === 'fireops7' && t.personnel_id === pid)
         const dp = deptPersonnel.find(p => p.id === pid)
-        return { personnelId: pid, rawName: null, rawDept: null, displayName: token?.display_name ?? dp?.name ?? 'Unknown', displayDept: '' }
+        return { personnelId: pid, rawName: null, rawDept: null, displayName: token?.display_name ?? dp?.name ?? 'Unknown', displayDept: deptAndTitle(pid) }
       }
     }
     const card = parseSalamanderCard(raw)
@@ -188,11 +257,12 @@ export default function AccountabilityBoard({
     const rawDept = personnelId ? null : (manualDept.trim() || null)
     const dp = deptPersonnel.find(p => p.id === personnelId)
     const displayName = dp?.name ?? manualName.trim()
+    const displayDept = personnelId ? deptAndTitle(personnelId) : manualDept.trim()
     const res = await checkInPerson(boardId, laneId, personnelId, rawName, rawDept)
     setManualSaving(false)
     if (res?.error) { setError(res.error); return }
     if (res.entry) {
-      setEntries(prev => [...prev, { ...res.entry, display_name: displayName, display_dept: manualDept.trim() }])
+      setEntries(prev => [...prev, { ...res.entry, display_name: displayName, display_dept: displayDept }])
     }
     setManualOpen(false)
     setManualPersonnelId('')
