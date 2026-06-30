@@ -14,15 +14,18 @@ export default function MobileSidebar({
   adminLabel,
   userInfo,
   theme,
+  brandName,
 }: {
   navGroups: NavGroup[]
   adminNavItems: { href: string; label: string }[]
   adminLabel: string
   userInfo: { name: string; role: string; departmentName: string | null; canSwitchDepartment?: boolean }
   theme?: DeptTheme
+  brandName?: string
 }) {
   const [open, setOpen] = useState(false)
   const t = theme ?? getDeptTheme('fire')
+  const brand = brandName ?? 'FireOps7'
 
   return (
     <>
@@ -41,7 +44,7 @@ export default function MobileSidebar({
             </div>
           </button>
           <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
-            <h1 className="text-lg font-bold leading-tight">FireOps7</h1>
+            <h1 className="text-lg font-bold leading-tight">{brand}</h1>
             {userInfo.departmentName && (
               <p className={`text-xs ${t.textMuted} leading-tight`}>{userInfo.departmentName}</p>
             )}
@@ -63,7 +66,7 @@ export default function MobileSidebar({
       }`}>
         <div className={`px-6 py-5 border-b ${t.border} flex items-center justify-between`}>
           <div>
-            <h1 className="text-xl font-bold">FireOps7</h1>
+            <h1 className="text-xl font-bold">{brand}</h1>
             {userInfo.departmentName && (
               <p className={`text-xs ${t.textMuted} mt-0.5 truncate`}>{userInfo.departmentName}</p>
             )}

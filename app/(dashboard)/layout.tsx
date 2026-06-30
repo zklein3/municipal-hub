@@ -10,7 +10,7 @@ import NavGroups from '@/components/NavGroups'
 import type { NavGroup } from '@/components/NavGroups'
 import PageNavBar from '@/components/PageNavBar'
 import PWAInstallButton from '@/components/PWAInstallButton'
-import { getDeptTheme } from '@/lib/department-theme'
+import { getDeptTheme, getDeptBrandName } from '@/lib/department-theme'
 
 async function getUserContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -130,6 +130,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const adminLabel = viewingSysAdminOverview ? 'System Admin' : 'Dept Admin'
   const theme = getDeptTheme(departmentType)
+  const brandName = viewingSysAdminOverview ? 'FireOps7' : getDeptBrandName(departmentType)
 
   const userInfo = {
     name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
@@ -142,9 +143,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-zinc-100">
       <aside className={`hidden md:flex w-64 ${theme.sidebarBg} text-white flex-col shrink-0`}>
-        <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} />
+        <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} brandName={brandName} />
       </aside>
-      <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} />
+      <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} brandName={brandName} />
       <main className="flex-1 pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 overflow-y-auto">
         <PageNavBar />
         {children}
@@ -153,17 +154,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   )
 }
 
-function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo, theme }: {
+function SidebarContent({ navGroups, adminNavItems, adminLabel, userInfo, theme, brandName }: {
   navGroups: NavGroup[]
   adminNavItems: { href: string; label: string }[]
   adminLabel: string
   userInfo: { name: string; role: string; departmentName: string | null; profileHref: string | null; canSwitchDepartment: boolean }
   theme: ReturnType<typeof getDeptTheme>
+  brandName: string
 }) {
   return (
     <>
       <div className={`px-6 py-5 border-b ${theme.border}`}>
-        <h1 className="text-xl font-bold tracking-tight">FireOps7</h1>
+        <h1 className="text-xl font-bold tracking-tight">{brandName}</h1>
         {userInfo.departmentName && <p className={`text-xs ${theme.textMuted} mt-0.5 truncate`}>{userInfo.departmentName}</p>}
         {userInfo.canSwitchDepartment && (
           <a href="/select-department" className={`text-xs ${theme.switchLink} underline mt-0.5 inline-block hover:text-white`}>

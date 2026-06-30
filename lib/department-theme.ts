@@ -40,3 +40,14 @@ const NAVY_THEME: DeptTheme = {
 export function getDeptTheme(departmentType: string): DeptTheme {
   return departmentType === 'fire' ? FIRE_THEME : NAVY_THEME
 }
+
+export function getDeptBrandName(departmentType: string): string {
+  switch (departmentType) {
+    case 'fire':
+      return 'FireOps7'
+    case 'law_enforcement':
+      return 'PoliceOps'
+    default:
+      return 'MuniOps'
+  }
+}
