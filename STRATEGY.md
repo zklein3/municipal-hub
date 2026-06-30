@@ -6,7 +6,7 @@ Session notes captured 2026-06-26. Forward-looking roadmap — not yet built. Se
 
 ## MuniOps — Parent Brand Concept
 
-- `muniops.com` — check domain availability, register through Vercel if available
+- `municipal-hub.com` — parent brand domain, purchasing 2026-06-29
 - Parent brand sits above FireOps7 and future vertical products
 - Think Intuit (QuickBooks, TurboTax) — one company, multiple focused products
 - FireOps7 stays exactly as is — it's the fire vertical, already branded
