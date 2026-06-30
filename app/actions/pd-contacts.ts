@@ -366,6 +366,16 @@ async function resolvePersons(
   for (const p of persons) {
     if (p.person_id) {
       personIds.push(p.person_id)
+      // Existing person selected from search — let the officer fill in or
+      // correct DOB/phone/address right on the Contact form instead of only
+      // being able to set these when creating a brand-new person record.
+      const updates: Record<string, string> = {}
+      if (p.dob) updates.dob = p.dob
+      if (p.phone) updates.phone = p.phone
+      if (p.address) updates.address = p.address
+      if (Object.keys(updates).length > 0) {
+        await adminClient.from('pd_persons').update(updates).eq('id', p.person_id).eq('department_id', department_id)
+      }
       continue
     }
     if (!p.first_name?.trim() || !p.last_name?.trim()) continue

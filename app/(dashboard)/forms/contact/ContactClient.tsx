@@ -399,6 +399,19 @@ export default function ContactClient({
     setPersonChips(prev => prev.filter(c => c.key !== key))
   }
 
+  const [editingChipKey, setEditingChipKey] = useState<string | null>(null)
+  const [chipEditDraft, setChipEditDraft] = useState({ dob: '', phone: '', address: '' })
+
+  function startEditChip(c: PersonChip) {
+    setEditingChipKey(c.key)
+    setChipEditDraft({ dob: c.dob, phone: c.phone, address: c.address })
+  }
+
+  function saveChipEdit(key: string) {
+    setPersonChips(prev => prev.map(c => c.key === key ? { ...c, ...chipEditDraft } : c))
+    setEditingChipKey(null)
+  }
+
   const filteredPersons = personSearch.trim()
     ? persons.filter(p =>
         `${p.first_name} ${p.last_name}`.toLowerCase().includes(personSearch.trim().toLowerCase())
@@ -560,25 +573,62 @@ export default function ContactClient({
               <div className="flex flex-col gap-1.5 mb-2">
                 {personChips.map(c => (
                   <div key={c.key}
-                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                    className={`rounded-lg border px-3 py-2 ${
                       c.is_dangerous ? 'border-red-300 bg-red-50' : 'border-zinc-200 bg-zinc-50'
                     }`}>
-                    <div className="min-w-0">
-                      {c.person_id ? (
-                        <button type="button" onClick={() => openPersonCard(c.person_id!)}
-                          className={`text-sm font-semibold hover:underline ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
-                          {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
-                        </button>
-                      ) : (
-                        <p className={`text-sm font-semibold ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
-                          {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
-                        </p>
-                      )}
-                      <p className="text-xs text-zinc-500">
-                        {c.dob ? `DOB ${c.dob}` : 'No DOB on file'}{c.phone ? ` · ${c.phone}` : ''}{c.address ? ` · ${c.address}` : ''}
-                      </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        {c.person_id ? (
+                          <button type="button" onClick={() => openPersonCard(c.person_id!)}
+                            className={`text-sm font-semibold hover:underline ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
+                            {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
+                          </button>
+                        ) : (
+                          <p className={`text-sm font-semibold ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
+                            {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
+                          </p>
+                        )}
+                        {editingChipKey !== c.key && (
+                          <p className="text-xs text-zinc-500">
+                            {c.dob ? `DOB ${c.dob}` : 'No DOB on file'}{c.phone ? ` · ${c.phone}` : ' · No phone on file'}{c.address ? ` · ${c.address}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        {c.person_id && editingChipKey !== c.key && (
+                          <button type="button" onClick={() => startEditChip(c)} className="text-xs text-zinc-400 hover:text-zinc-700 underline">
+                            Edit
+                          </button>
+                        )}
+                        <button type="button" onClick={() => removePersonChip(c.key)} className="text-zinc-400 hover:text-red-600">✕</button>
+                      </div>
                     </div>
-                    <button type="button" onClick={() => removePersonChip(c.key)} className="shrink-0 text-zinc-400 hover:text-red-600">✕</button>
+
+                    {editingChipKey === c.key && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">DOB</label>
+                            <input type="date" value={chipEditDraft.dob} onChange={e => setChipEditDraft(p => ({ ...p, dob: e.target.value }))} className={inputCls} />
+                          </div>
+                          <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">Phone</label>
+                            <input type="text" value={chipEditDraft.phone} onChange={e => setChipEditDraft(p => ({ ...p, phone: e.target.value }))} className={inputCls} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-zinc-700">Address</label>
+                          <input type="text" value={chipEditDraft.address} onChange={e => setChipEditDraft(p => ({ ...p, address: e.target.value }))} className={inputCls} placeholder="Personal address" />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button type="button" onClick={() => setEditingChipKey(null)} className="text-xs text-zinc-400 hover:text-zinc-700">Cancel</button>
+                          <button type="button" onClick={() => saveChipEdit(c.key)}
+                            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-900">
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
