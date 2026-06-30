@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { dispenseStock, receiveStock, transferStock, updateBagInventoryMode } from '@/app/actions/medical'
+import { dispenseStock, receiveStock, wasteStock, transferStock, updateBagInventoryMode } from '@/app/actions/medical'
 
 interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -12,6 +12,8 @@ interface Storeroom { id: string; name: string }
 interface SrcLot { id: string; storeroom_inventory_id: string; lot_number: string | null; quantity_remaining: number; expiration_date: string | null }
 interface Personnel { id: string; name: string }
 interface BagTemplate { id: string; name: string }
+
+const WASTE_REASONS = ['Expired', 'Damaged', 'Contaminated', 'Administered / Used on Scene', 'Other']
 
 const STATUS_COLORS = {
   expired: 'bg-red-100 text-red-700', expiring: 'bg-amber-100 text-amber-700',
@@ -67,11 +69,18 @@ export default function MedicalBagsSection({
     isControlled: boolean; srcLotId: string; destStoreroomId: string
     maxQty: number; quantity: string; notes: string
   }
+  type WasteForm = {
+    invId: string; lotId: string; supplyName: string; unitOfMeasure: string
+    isControlled: boolean; requiredSigs: number; lotNumber: string | null
+    maxQty: number; quantity: string; wasteReason: string; notes: string
+    signer1Id: string; signer2Id: string
+  }
 
   const [useForm, setUseForm] = useState<UseForm | null>(null)
   const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
   const [restockForm, setRestockForm] = useState<RestockForm | null>(null)
   const [transferOutForm, setTransferOutForm] = useState<TransferOutForm | null>(null)
+  const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
 
   const supplyMap = Object.fromEntries(supplyTypes.map(s => [s.id, s]))
   const lotsFor = (invId: string) => bagLots.filter(l => l.storeroom_inventory_id === invId)
@@ -122,6 +131,36 @@ export default function MedicalBagsSection({
       srcLotId: oldest.id, destStoreroomId: validDests[0].id,
       maxQty: oldest.quantity_remaining, quantity: '1', notes: '',
     })
+  }
+
+  function openWaste(inv: InventoryRow, lot: Lot) {
+    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
+    setError(null)
+    setWasteForm({
+      invId: inv.id, lotId: lot.id, supplyName: supply.name, unitOfMeasure: supply.unit_of_measure,
+      isControlled: supply.is_controlled, requiredSigs: supply.required_signatures,
+      lotNumber: lot.lot_number, maxQty: lot.quantity_remaining, quantity: String(lot.quantity_remaining),
+      wasteReason: WASTE_REASONS[0], notes: '',
+      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
+      signer2Id: '',
+    })
+  }
+
+  async function handleWasteSubmit() {
+    if (!wasteForm) return
+    const qty = parseInt(wasteForm.quantity)
+    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} available in this lot.`); return }
+    if (!wasteForm.wasteReason) { setError('Waste reason is required.'); return }
+    setError(null); setLoading(true)
+    const r = await wasteStock({
+      storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty,
+      waste_reason: wasteForm.wasteReason, notes: wasteForm.notes || null,
+      signer_1_id: wasteForm.signer1Id || null, signer_2_id: wasteForm.signer2Id || null,
+    })
+    if (r?.error) setError(r.error)
+    else { setSuccess(`Wasted ${qty} ${wasteForm.unitOfMeasure} of ${wasteForm.supplyName}.`); setWasteForm(null); router.refresh() }
+    setLoading(false)
   }
 
   async function handleUseSubmit() {
@@ -311,11 +350,17 @@ export default function MedicalBagsSection({
                                     <p className="text-sm font-medium text-zinc-900">{lot.lot_number ? `Lot ${lot.lot_number}` : 'No lot #'}</p>
                                     <p className="text-xs text-zinc-400">Received {fmtDate(lot.received_date)}</p>
                                   </div>
-                                  <div className="flex items-center gap-3 shrink-0 text-right">
+                                  <div className="flex items-center gap-3 shrink-0">
                                     {supply.tracks_expiration && (
                                       <p className={`text-xs font-semibold ${expired ? 'text-red-600' : expiring ? 'text-amber-600' : 'text-zinc-500'}`}>
                                         {expired ? '⚠ Exp' : expiring ? '⚠ Exp soon' : 'Exp'} {fmtDate(lot.expiration_date)}
                                       </p>
+                                    )}
+                                    {isOfficerOrAbove && lot.quantity_remaining > 0 && (
+                                      <button onClick={() => openWaste(item, lot)}
+                                        className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors">
+                                        Waste
+                                      </button>
                                     )}
                                     <div className="text-right">
                                       <p className="text-lg font-bold text-zinc-900">{lot.quantity_remaining}</p>
@@ -476,6 +521,67 @@ export default function MedicalBagsSection({
           </div>
         )
       })()}
+
+      {/* Waste Modal */}
+      {wasteForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Waste Stock</h2>
+            <p className="text-sm text-zinc-500 mb-1">
+              {wasteForm.supplyName}
+              {wasteForm.isControlled && <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5">Controlled</span>}
+            </p>
+            {wasteForm.lotNumber && <p className="text-xs text-zinc-400 mb-4">Lot {wasteForm.lotNumber}</p>}
+            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Reason <span className="text-red-500">*</span></label>
+                <select value={wasteForm.wasteReason} onChange={e => setWasteForm(f => f ? { ...f, wasteReason: e.target.value } : f)} className={inputCls}>
+                  {WASTE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">
+                  Quantity <span className="text-red-500">*</span>
+                  <span className="ml-1 text-zinc-400 font-normal">({wasteForm.maxQty} available)</span>
+                </label>
+                <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
+                  onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                <input type="text" value={wasteForm.notes} placeholder="Optional"
+                  onChange={e => setWasteForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
+              </div>
+              {wasteForm.requiredSigs >= 1 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Wasted By <span className="text-red-500">*</span></label>
+                  <select value={wasteForm.signer1Id} onChange={e => setWasteForm(f => f ? { ...f, signer1Id: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select...</option>
+                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {wasteForm.requiredSigs >= 2 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Witness <span className="text-red-500">*</span> <span className="text-amber-600 font-normal">(controlled)</span></label>
+                  <select value={wasteForm.signer2Id} onChange={e => setWasteForm(f => f ? { ...f, signer2Id: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select...</option>
+                    {personnel.filter(p => p.id !== wasteForm.signer1Id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleWasteSubmit} disabled={loading}
+                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {loading ? 'Saving...' : 'Confirm Waste'}
+              </button>
+              <button onClick={() => { setWasteForm(null); setError(null) }} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Transfer Out Modal */}
       {transferOutForm && (() => {
