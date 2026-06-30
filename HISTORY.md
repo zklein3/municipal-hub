@@ -70,6 +70,8 @@
 - Storage bucket `training-docs` created for outside training document photos
 - Error logging + email via notify-on-log Edge Function
 - Vercel deployed + fireops7.com DNS live
+- PD Contact Log (`/forms/contact`, Yutan PD pilot) — people-first form: People Involved block (name/DOB/phone/standard Address-City-State-Zip) up top, separate "Called To Address" (also standard Address/City/State/Zip), dept-configurable Contact Type and multi-select Action Taken lists (`/dept-admin/police`, lazy-seeded with sensible defaults, reorder/rename/deactivate, usage-aware delete), per-department Case Numbering (manual free text or auto `PREFIX-YY-0001` via atomic Postgres counter, with an admin "set starting number" override), single Narrative field, officer-safety flag on persons (`is_dangerous`/`danger_reason`) that surfaces anywhere that person appears, shared read-only Person Card modal, inline edit of DOB/phone/address on existing People Involved chips with write-back to the source `pd_persons`/`pd_addresses` row.
+- PD Business Check Log (`/forms/business-check`, Yutan PD pilot) — officers select businesses from a managed list to log a routine round (start time required, end time auto-stamped on submit); per-business detail sheet (doors/windows/lights secure, alarm status, interior check + findings, owner notified, disposition) can be opened inline before submitting the whole round as one batch.
 
 ## What's Not Yet Built
 - Immediate next build: inventory / equipment storage system. Build the unassigned item pool, member add-from-storage, move logging, and restore the quantity guard in `removeItemFromCompartment` (`app/actions/equipment.ts`) so quantity items move to storage instead of disappearing.
@@ -151,6 +153,19 @@ Items flagged during development — address during next cleanup pass:
 - `medical_stock_lots` — physical stock batches (`storeroom_inventory_id`, `department_id`, `lot_number`, `expiration_date`, `quantity_received`, `quantity_remaining`, `received_date`, `received_by`, `notes`, `active`)
 - `medical_stock_transactions` — full ledger (`department_id`, `storeroom_id`, `supply_type_id`, `lot_id`, `transaction_type` received/dispensed/wasted/transferred_out/transferred_in, `quantity`, `performed_by`, `signer_1_id`, `signer_1_at`, `signer_2_id`, `signer_2_at`, `notes`)
 
+### Police / PD Module (Yutan PD pilot)
+- `pd_addresses` — "called to" locations (`department_id`, `address`, `city`, `state`, `zip`)
+- `pd_persons` — people involved in contacts, reused across contacts by name lookup (`department_id`, `first_name`, `last_name`, `dob`, `phone`, `address`, `city`, `state`, `zip`, `is_dangerous`, `danger_reason`)
+- `pd_contacts` — one row per field interview/traffic stop/etc. (`department_id`, `officer_id`, `officer_name`, `contact_date`, `contact_time`, `address_id` → `pd_addresses`, `address`/`city`/`state`/`zip` (denormalized snapshot), `location_detail`, `contact_type`, `narrative`, `report_number` (the Case Number), `created_at`/`updated_at`; legacy `reason`/`action_taken` text columns retained but no longer written by the form)
+- `pd_contact_persons` — join table, `contact_id` → `pd_contacts`, `person_id` → `pd_persons` (many people per contact)
+- `pd_contact_types` — dept-configurable Contact Type dropdown (`department_id`, `label`, `sort_order`, `active`); lazy-seeded with defaults (Field Interview, Traffic Stop, Pedestrian Check, Business Contact, Follow-Up, Other) on first read
+- `pd_action_taken_types` — dept-configurable Action Taken options (`department_id`, `label`, `sort_order`, `active`); lazy-seeded with defaults (Verbal Warning, Citation Issued, Arrest, Report Filed, No Action)
+- `pd_contact_actions` — join table, `contact_id` → `pd_contacts`, `action_type_id` → `pd_action_taken_types` (multi-select Action Taken)
+- `pd_contact_number_counters` — atomic per-dept-per-year sequence (`department_id`, `year`, `seq`), incremented via the `increment_pd_contact_counter` Postgres function to avoid select-then-update races
+- `departments.pd_case_number_mode` (`'auto' | 'manual'`, default `'manual'`), `.pd_case_number_prefix` — drives whether Case Number is officer-typed or system-assigned as `{prefix}{YY}-{seq, 4-digit padded}`
+- `pd_businesses` — dept's managed business list for the Business Check round (`department_id`, `name`, `address`, `active`)
+- `pd_business_checks` — one row per business per round (`department_id`, `officer_id`, `officer_name`, `business_id` → `pd_businesses`, `round_id`, `check_date`, `time_arrived`, `time_cleared`, `business_name`, `address`, `check_type`, `doors_secure`, `windows_secure`, `lights_as_expected`, `suspicious_activity`, `interior_check`, `interior_authorized_by`, `interior_findings`, `alarm_status`, `owner_notified`, `owner_name`, `owner_notified_time`, `secured_on_departure`, `disposition`, `notes`)
+
 ### Key Fields Added Over Time
 - `apparatus.qr_code`, `apparatus.exclude_from_iso`
 - `apparatus_compartments.qr_code`
@@ -166,6 +181,23 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-06-29 — PD Contact Log: Standard Address Fields + Mobile Case Number Fix (+ backfilled PD module history)
+
+**Tonight's changes** (`app/actions/pd-contacts.ts`, `app/(dashboard)/forms/contact/page.tsx`, `ContactClient.tsx`):
+- People Involved address (`pd_persons`) and Called To Address (`pd_addresses`/`pd_contacts`) both reworked from a single freeform address line into standard contact-card layout: separate Address / City / State / Zip entry boxes, matching layout in both places (City flex-1, State w-20 maxLength=2, Zip w-24). New `fullAddress()` helper composes the four fields back into one display line everywhere an address is shown (person card, chip summary, history list, detail modal, called-to autocomplete results).
+- Both `pd_persons` and `pd_addresses` gained `city`/`state`/`zip` text columns (`pd_contacts` too, to snapshot the called-to address at time of contact). When an officer selects an *existing* person or address and fills in previously-missing city/state/zip on the form, those corrections write back to the source row (conditional partial UPDATE — only touches fields with a submitted value, never blanks out existing good data). Mirrors the existing `resolvePersons()` write-back pattern.
+- Mobile layout bug: Case Number was the third item in a 3-column flex row with Date/Time and got clipped on small screens. Moved to its own full-width row below Date/Time.
+
+**Backfilled — the PD Contact Log / Business Check Log module had no prior Session History entries despite being built across several earlier sessions this week for the Yutan PD pilot (Terry, fire dept member + Yutan police chief). Consolidated summary of that arc:**
+- `409df66` — Business Check Log built from scratch: officers select businesses from a managed list, log a routine round (start required, end auto-stamped), per-business detail sheet, submit as one batch. New `pd_businesses`, `pd_business_checks`.
+- `d8fe79c` — Contact Log built from scratch: normalized schema (`pd_addresses`, `pd_persons`, `pd_contacts`, `pd_contact_persons`) replacing an empty placeholder single-row table; multiple people per contact, address-based contact history, reverse name lookup, officer-safety flag (`is_dangerous`/`danger_reason`) surfaced wherever a person appears, shared Person Card modal, read-only contact detail view.
+- `8b62b08` — Added `/dept-admin/police` settings area (Contact Types, Action Taken, Case Numbering tabs) backed by new lazy-seeded `pd_contact_types`/`pd_action_taken_types` tables and `pd_case_number_mode`/`prefix` on `departments`.
+- `bf5619a` — Cut the form over to people-first layout per direct chief feedback: People Involved moved to the top of the form and applies to every contact type (not just traffic stops); old required `reason` field retired in favor of a single `narrative` field; Contact Type and Action Taken now read from the dept-configurable lists instead of hardcoded values.
+- `7ff148a` — Renamed "Report Number" to "Case Number" throughout the UI to match how officers actually refer to it.
+- `5d7c903` — Fixed a race condition where `pd_contact_types`/`pd_action_taken_types` lazy-seeding could insert duplicate default rows under concurrent first-load; added an admin "set starting case number" override (for departments that hand-numbered cases before turning on auto mode) and usage-aware delete (can't deactivate a type that's still referenced by historical contacts without an explicit override).
+- `4ceeacc` — Made case number assignment opt-in per contact rather than auto-assigning on every save once a dept is in Auto mode (officers sometimes draft/save without wanting to burn a number yet); People Involved chips started showing DOB/phone inline instead of name-only.
+- `b8e19c0` — Extended DOB/phone/address editing to *existing* People Involved chips (previously those fields only existed on the "Add New Person" path, so a selected existing person's stale info couldn't be corrected in-form).
 
 ### 2026-06-25 — Burn Permit Print Cleanup + Capacitor App Wrapper Fixes
 
