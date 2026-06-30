@@ -13,7 +13,188 @@ async function getContext() {
     officerName: `${ctx.firstName} ${ctx.lastName}`,
     department_id: ctx.departmentId,
     isOfficerOrAbove: ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin,
+    isAdmin: ctx.systemRole === 'admin' || ctx.isSysAdmin,
   }
+}
+
+const DEFAULT_CONTACT_TYPES = ['Field Interview', 'Traffic Stop', 'Pedestrian Check', 'Business Contact', 'Follow-Up', 'Other']
+const DEFAULT_ACTION_TAKEN_TYPES = ['Verbal Warning', 'Citation Issued', 'Arrest', 'Report Filed', 'No Action']
+
+// ─── Contact Types (admin-configurable list) ──────────────────────────────
+export async function ensurePdContactTypes(department_id: string) {
+  const adminClient = createAdminClient()
+  const { data: existing } = await adminClient.from('pd_contact_types').select('id').eq('department_id', department_id).limit(1)
+  if (existing && existing.length > 0) return { seeded: false }
+  const { error: dbErr } = await adminClient.from('pd_contact_types').insert(
+    DEFAULT_CONTACT_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true }))
+  )
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  return { seeded: true }
+}
+
+export async function getPdContactTypes(department_id: string) {
+  await ensurePdContactTypes(department_id)
+  const adminClient = createAdminClient()
+  const { data, error: dbErr } = await adminClient
+    .from('pd_contact_types')
+    .select('id, label, sort_order, active')
+    .eq('department_id', department_id)
+    .order('sort_order')
+  if (dbErr) return { items: [], error: dbErr.message }
+  return { items: data ?? [] }
+}
+
+export async function addPdContactType(departmentId: string, label: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (!label.trim()) return { error: 'Label is required.' }
+  const adminClient = createAdminClient()
+  const { data: last } = await adminClient.from('pd_contact_types').select('sort_order').eq('department_id', departmentId).order('sort_order', { ascending: false }).limit(1)
+  const sort_order = (last?.[0]?.sort_order ?? -1) + 1
+  const { error: dbErr } = await adminClient.from('pd_contact_types').insert({ department_id: departmentId, label: label.trim(), sort_order, active: true })
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function updatePdContactType(id: string, label: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (!label.trim()) return { error: 'Label is required.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('pd_contact_types').update({ label: label.trim() }).eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function togglePdContactType(id: string, active: boolean) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('pd_contact_types').update({ active }).eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function reorderPdContactTypes(departmentId: string, orderedIds: string[]) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  await Promise.all(orderedIds.map((id, i) =>
+    adminClient.from('pd_contact_types').update({ sort_order: i }).eq('id', id).eq('department_id', departmentId)
+  ))
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+// ─── Action Taken Types (admin-configurable list) ─────────────────────────
+export async function ensurePdActionTakenTypes(department_id: string) {
+  const adminClient = createAdminClient()
+  const { data: existing } = await adminClient.from('pd_action_taken_types').select('id').eq('department_id', department_id).limit(1)
+  if (existing && existing.length > 0) return { seeded: false }
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').insert(
+    DEFAULT_ACTION_TAKEN_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true }))
+  )
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  return { seeded: true }
+}
+
+export async function getPdActionTakenTypes(department_id: string) {
+  await ensurePdActionTakenTypes(department_id)
+  const adminClient = createAdminClient()
+  const { data, error: dbErr } = await adminClient
+    .from('pd_action_taken_types')
+    .select('id, label, sort_order, active')
+    .eq('department_id', department_id)
+    .order('sort_order')
+  if (dbErr) return { items: [], error: dbErr.message }
+  return { items: data ?? [] }
+}
+
+export async function addPdActionTakenType(departmentId: string, label: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (!label.trim()) return { error: 'Label is required.' }
+  const adminClient = createAdminClient()
+  const { data: last } = await adminClient.from('pd_action_taken_types').select('sort_order').eq('department_id', departmentId).order('sort_order', { ascending: false }).limit(1)
+  const sort_order = (last?.[0]?.sort_order ?? -1) + 1
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').insert({ department_id: departmentId, label: label.trim(), sort_order, active: true })
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function updatePdActionTakenType(id: string, label: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (!label.trim()) return { error: 'Label is required.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').update({ label: label.trim() }).eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function togglePdActionTakenType(id: string, active: boolean) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').update({ active }).eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+export async function reorderPdActionTakenTypes(departmentId: string, orderedIds: string[]) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  await Promise.all(orderedIds.map((id, i) =>
+    adminClient.from('pd_action_taken_types').update({ sort_order: i }).eq('id', id).eq('department_id', departmentId)
+  ))
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+// ─── Case numbering ────────────────────────────────────────────────────────
+export async function getPdCaseNumberSettings(department_id: string) {
+  const adminClient = createAdminClient()
+  const { data, error: dbErr } = await adminClient
+    .from('departments')
+    .select('pd_case_number_mode, pd_case_number_prefix')
+    .eq('id', department_id)
+    .single()
+  if (dbErr || !data) return { mode: 'manual' as const, prefix: null }
+  return { mode: (data.pd_case_number_mode as 'auto' | 'manual') ?? 'manual', prefix: data.pd_case_number_prefix as string | null }
+}
+
+export async function updatePdCaseNumberSettings(departmentId: string, mode: 'auto' | 'manual', prefix: string | null) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (mode === 'auto' && !prefix?.trim()) return { error: 'A prefix is required for auto-numbering.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('departments')
+    .update({ pd_case_number_mode: mode, pd_case_number_prefix: prefix?.trim() || null })
+    .eq('id', departmentId)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+// Generates the next case number for a department in 'auto' mode, e.g. YPD26-0001.
+// Returns null when the department is in 'manual' mode (officer types their own).
+export async function generatePdCaseNumber(department_id: string): Promise<string | null> {
+  const { mode, prefix } = await getPdCaseNumberSettings(department_id)
+  if (mode !== 'auto' || !prefix) return null
+  const adminClient = createAdminClient()
+  const year = new Date().getFullYear()
+  const { data: seq, error: dbErr } = await adminClient.rpc('increment_pd_contact_counter', { p_department_id: department_id, p_year: year })
+  if (dbErr || seq == null) { await logError(dbErr?.message ?? 'counter rpc failed', '/forms/contact'); return null }
+  const yy = String(year).slice(-2)
+  return `${prefix}${yy}-${String(seq).padStart(4, '0')}`
 }
 
 type PersonInput = {

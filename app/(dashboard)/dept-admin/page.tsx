@@ -14,6 +14,7 @@ export default async function DeptAdminPage() {
 
   const departmentId = ctx.departmentId
   const isFireDept = ctx.departmentType === 'fire'
+  const isPoliceDept = ctx.departmentType === 'law_enforcement'
 
   const [
     { data: deptFlags },
@@ -89,6 +90,13 @@ export default async function DeptAdminPage() {
           description="Vehicle check items and inspection session settings"
           href="/dept-admin/inspections"
         />
+        {isPoliceDept && (
+          <HubCard
+            title="Police Settings"
+            description="Contact types, action-taken options, and case numbering"
+            href="/dept-admin/police"
+          />
+        )}
         {moduleIso && (
           <HubCard
             title="ISO"
