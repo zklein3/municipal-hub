@@ -330,29 +330,44 @@ type PersonInput = {
   dob?: string | null
   phone?: string | null
   address?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
   is_dangerous?: boolean
   danger_reason?: string | null
 }
 
 // Resolves an address into an address_id, creating a new pd_addresses row
-// if the officer typed a new one rather than picking an existing match.
+// if the officer typed a new one rather than picking an existing match. If an
+// existing address was selected but the officer corrected city/state/zip on
+// the Contact form, those corrections are written back to the pd_addresses row.
 async function resolveAddress(
   adminClient: ReturnType<typeof createAdminClient>,
   department_id: string,
   address_id: string | null,
-  addressText: string | null
-): Promise<{ address_id: string | null; address: string | null; error?: string }> {
+  addressText: string | null,
+  city: string | null,
+  state: string | null,
+  zip: string | null
+): Promise<{ address_id: string | null; address: string | null; city: string | null; state: string | null; zip: string | null; error?: string }> {
   if (address_id) {
-    const { data, error } = await adminClient.from('pd_addresses').select('id, address').eq('id', address_id).eq('department_id', department_id).single()
-    if (error || !data) return { address_id: null, address: addressText, error: 'Selected address not found.' }
-    return { address_id: data.id, address: data.address }
+    const { data, error } = await adminClient.from('pd_addresses').select('id, address, city, state, zip').eq('id', address_id).eq('department_id', department_id).single()
+    if (error || !data) return { address_id: null, address: addressText, city, state, zip, error: 'Selected address not found.' }
+    const updates: Record<string, string> = {}
+    if (city) updates.city = city
+    if (state) updates.state = state
+    if (zip) updates.zip = zip
+    if (Object.keys(updates).length > 0) {
+      await adminClient.from('pd_addresses').update(updates).eq('id', address_id)
+    }
+    return { address_id: data.id, address: data.address, city: city || data.city, state: state || data.state, zip: zip || data.zip }
   }
   if (addressText && addressText.trim()) {
-    const { data, error } = await adminClient.from('pd_addresses').insert({ department_id, address: addressText.trim() }).select('id, address').single()
-    if (error || !data) return { address_id: null, address: addressText, error: error?.message }
-    return { address_id: data.id, address: data.address }
+    const { data, error } = await adminClient.from('pd_addresses').insert({ department_id, address: addressText.trim(), city, state, zip }).select('id, address, city, state, zip').single()
+    if (error || !data) return { address_id: null, address: addressText, city, state, zip, error: error?.message }
+    return { address_id: data.id, address: data.address, city: data.city, state: data.state, zip: data.zip }
   }
-  return { address_id: null, address: null }
+  return { address_id: null, address: null, city: null, state: null, zip: null }
 }
 
 // Resolves a list of person inputs into person_ids, creating new pd_persons
@@ -373,6 +388,9 @@ async function resolvePersons(
       if (p.dob) updates.dob = p.dob
       if (p.phone) updates.phone = p.phone
       if (p.address) updates.address = p.address
+      if (p.city) updates.city = p.city
+      if (p.state) updates.state = p.state
+      if (p.zip) updates.zip = p.zip
       if (Object.keys(updates).length > 0) {
         await adminClient.from('pd_persons').update(updates).eq('id', p.person_id).eq('department_id', department_id)
       }
@@ -389,6 +407,9 @@ async function resolvePersons(
         dob: p.dob || null,
         phone: p.phone || null,
         address: p.address || null,
+        city: p.city || null,
+        state: p.state || null,
+        zip: p.zip || null,
         is_dangerous: p.is_dangerous ?? false,
         danger_reason: p.is_dangerous ? (p.danger_reason || null) : null,
       })
@@ -439,6 +460,9 @@ export async function createContact(formData: FormData) {
 
   const address_id = (formData.get('address_id') as string) || null
   const addressText = (formData.get('address') as string) || null
+  const city = (formData.get('city') as string) || null
+  const state = (formData.get('state') as string) || null
+  const zip = (formData.get('zip') as string) || null
   const personsRaw = formData.get('persons') as string
   let persons: PersonInput[] = []
   if (personsRaw) {
@@ -446,7 +470,7 @@ export async function createContact(formData: FormData) {
   }
   const actionTypeIds = actionTypeIdsFromForm(formData)
 
-  const addressResult = await resolveAddress(adminClient, ctx.department_id, address_id, addressText)
+  const addressResult = await resolveAddress(adminClient, ctx.department_id, address_id, addressText, city, state, zip)
   if (addressResult.error) { await logError(addressResult.error, '/forms/contact'); return { error: addressResult.error } }
 
   const personsResult = await resolvePersons(adminClient, ctx.department_id, persons)
@@ -461,6 +485,9 @@ export async function createContact(formData: FormData) {
     officer_name: ctx.officerName,
     address_id: addressResult.address_id,
     address: addressResult.address,
+    city: addressResult.city,
+    state: addressResult.state,
+    zip: addressResult.zip,
     ...fields,
   }).select('id').single()
 
@@ -490,6 +517,9 @@ export async function updateContact(id: string, formData: FormData) {
 
   const address_id = (formData.get('address_id') as string) || null
   const addressText = (formData.get('address') as string) || null
+  const city = (formData.get('city') as string) || null
+  const state = (formData.get('state') as string) || null
+  const zip = (formData.get('zip') as string) || null
   const personsRaw = formData.get('persons') as string
   let persons: PersonInput[] = []
   if (personsRaw) {
@@ -497,7 +527,7 @@ export async function updateContact(id: string, formData: FormData) {
   }
   const actionTypeIds = actionTypeIdsFromForm(formData)
 
-  const addressResult = await resolveAddress(adminClient, ctx.department_id!, address_id, addressText)
+  const addressResult = await resolveAddress(adminClient, ctx.department_id!, address_id, addressText, city, state, zip)
   if (addressResult.error) { await logError(addressResult.error, '/forms/contact'); return { error: addressResult.error } }
 
   const personsResult = await resolvePersons(adminClient, ctx.department_id!, persons)
@@ -508,6 +538,9 @@ export async function updateContact(id: string, formData: FormData) {
     .update({
       address_id: addressResult.address_id,
       address: addressResult.address,
+      city: addressResult.city,
+      state: addressResult.state,
+      zip: addressResult.zip,
       ...fields,
     })
     .eq('id', id)

@@ -23,6 +23,9 @@ function nowTime() {
 interface Address {
   id: string
   address: string
+  city: string | null
+  state: string | null
+  zip: string | null
 }
 
 interface ListOption {
@@ -37,6 +40,9 @@ interface Person {
   dob: string | null
   phone: string | null
   address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
   is_dangerous: boolean
   danger_reason: string | null
 }
@@ -45,6 +51,9 @@ interface Contact {
   id: string
   address_id: string | null
   address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
   location_detail: string | null
   contact_date: string
   contact_time: string | null
@@ -63,8 +72,16 @@ interface PersonChip {
   dob: string
   phone: string
   address: string
+  city: string
+  state: string
+  zip: string
   is_dangerous: boolean
   danger_reason: string
+}
+
+function fullAddress(p: { address?: string | null; city?: string | null; state?: string | null; zip?: string | null }) {
+  const cityStateZip = [p.city, [p.state, p.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return [p.address, cityStateZip].filter(Boolean).join(', ')
 }
 
 function PersonCardModal({
@@ -108,10 +125,11 @@ function PersonCardModal({
           <p className="text-lg font-bold text-zinc-900 mt-0.5">
             {current.is_dangerous && '⚠ '}{current.first_name} {current.last_name}
           </p>
-          {(current.dob || current.phone || current.address) && (
+          {(current.dob || current.phone || current.address || current.city || current.state || current.zip) && (
             <p className="text-xs text-zinc-500">
               {current.dob ? `DOB ${current.dob}` : null}{current.dob && current.phone ? ' · ' : null}{current.phone}
-              {(current.dob || current.phone) && current.address ? ' · ' : null}{current.address}
+              {(current.dob || current.phone) && (current.address || current.city) ? ' · ' : null}
+              {fullAddress(current)}
             </p>
           )}
         </div>
@@ -161,7 +179,7 @@ function PersonCardModal({
                 {contacts.map(c => (
                   <button key={c.id} type="button" onClick={() => onOpenContact(c)}
                     className="w-full text-left px-3 py-2 hover:bg-zinc-50">
-                    <p className="text-sm text-zinc-800">{c.address || 'No address recorded'}</p>
+                    <p className="text-sm text-zinc-800">{fullAddress(c) || 'No address recorded'}</p>
                     <p className="text-xs text-zinc-400">
                       {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {c.contact_type}
                       {c.officer_name ? ` · ${c.officer_name}` : ''}
@@ -191,12 +209,15 @@ const emptyForm = {
   report_number: '',
   address_id: '',
   address: '',
+  city: '',
+  state: '',
+  zip: '',
   location_detail: '',
   contact_type: '',
   narrative: '',
 }
 
-const emptyNewPerson = { first_name: '', last_name: '', dob: '', phone: '', address: '', is_dangerous: false, danger_reason: '' }
+const emptyNewPerson = { first_name: '', last_name: '', dob: '', phone: '', address: '', city: '', state: '', zip: '', is_dangerous: false, danger_reason: '' }
 
 export default function ContactClient({
   addresses,
@@ -329,6 +350,9 @@ export default function ContactClient({
       report_number: c.report_number ?? '',
       address_id: c.address_id ?? '',
       address: c.address ?? '',
+      city: c.city ?? '',
+      state: c.state ?? '',
+      zip: c.zip ?? '',
       location_detail: c.location_detail ?? '',
       contact_type: c.contact_type,
       narrative: c.narrative ?? '',
@@ -339,7 +363,8 @@ export default function ContactClient({
       const p = personMap[pid]
       return p ? {
         key: p.id, person_id: p.id, first_name: p.first_name, last_name: p.last_name, dob: p.dob ?? '', phone: p.phone ?? '',
-        address: p.address ?? '', is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
+        address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '',
+        is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
       } : null
     }).filter(Boolean) as PersonChip[]
     setPersonChips(chips)
@@ -352,7 +377,7 @@ export default function ContactClient({
   }
 
   function selectAddress(a: Address) {
-    setForm(p => ({ ...p, address_id: a.id, address: a.address }))
+    setForm(p => ({ ...p, address_id: a.id, address: a.address, city: a.city ?? '', state: a.state ?? '', zip: a.zip ?? '' }))
     setAddressSearch(a.address)
   }
 
@@ -374,7 +399,8 @@ export default function ContactClient({
     if (personChips.some(c => c.person_id === p.id)) return
     setPersonChips(prev => [...prev, {
       key: p.id, person_id: p.id, first_name: p.first_name, last_name: p.last_name, dob: p.dob ?? '', phone: p.phone ?? '',
-      address: p.address ?? '', is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
+      address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '',
+      is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
     }])
     setPersonSearch('')
   }
@@ -388,6 +414,9 @@ export default function ContactClient({
       dob: newPerson.dob,
       phone: newPerson.phone,
       address: newPerson.address,
+      city: newPerson.city,
+      state: newPerson.state,
+      zip: newPerson.zip,
       is_dangerous: newPerson.is_dangerous,
       danger_reason: newPerson.danger_reason,
     }])
@@ -400,11 +429,11 @@ export default function ContactClient({
   }
 
   const [editingChipKey, setEditingChipKey] = useState<string | null>(null)
-  const [chipEditDraft, setChipEditDraft] = useState({ dob: '', phone: '', address: '' })
+  const [chipEditDraft, setChipEditDraft] = useState({ dob: '', phone: '', address: '', city: '', state: '', zip: '' })
 
   function startEditChip(c: PersonChip) {
     setEditingChipKey(c.key)
-    setChipEditDraft({ dob: c.dob, phone: c.phone, address: c.address })
+    setChipEditDraft({ dob: c.dob, phone: c.phone, address: c.address, city: c.city, state: c.state, zip: c.zip })
   }
 
   function saveChipEdit(key: string) {
@@ -450,6 +479,9 @@ export default function ContactClient({
         dob: newPerson.dob,
         phone: newPerson.phone,
         address: newPerson.address,
+        city: newPerson.city,
+        state: newPerson.state,
+        zip: newPerson.zip,
         is_dangerous: newPerson.is_dangerous,
         danger_reason: newPerson.danger_reason,
       })
@@ -465,6 +497,9 @@ export default function ContactClient({
       dob: c.dob || null,
       phone: c.phone || null,
       address: c.address || null,
+      city: c.city || null,
+      state: c.state || null,
+      zip: c.zip || null,
       is_dangerous: c.is_dangerous,
       danger_reason: c.danger_reason || null,
     }))))
@@ -543,25 +578,26 @@ export default function ContactClient({
                 </button>
               </div>
             </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-zinc-700">Case Number</label>
-              {showAssignButton ? (
-                <button type="button" onClick={handleAssignCaseNumber} disabled={assigningCaseNumber}
-                  className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-500 hover:border-red-400 hover:text-red-700 disabled:opacity-50">
-                  {assigningCaseNumber ? 'Assigning…' : '+ Assign Case Number'}
-                </button>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
-                    readOnly={caseNumberMode === 'auto' && !editingId}
-                    className={`${inputCls} ${caseNumberMode === 'auto' && !editingId ? 'bg-zinc-100 text-zinc-600' : ''}`} />
-                  {caseNumberMode === 'auto' && !editingId && (
-                    <button type="button" onClick={() => setForm(p => ({ ...p, report_number: '' }))}
-                      className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 underline">Clear</button>
-                  )}
-                </div>
-              )}
-            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Case Number</label>
+            {showAssignButton ? (
+              <button type="button" onClick={handleAssignCaseNumber} disabled={assigningCaseNumber}
+                className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-500 hover:border-red-400 hover:text-red-700 disabled:opacity-50">
+                {assigningCaseNumber ? 'Assigning…' : '+ Assign Case Number'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
+                  readOnly={caseNumberMode === 'auto' && !editingId}
+                  className={`${inputCls} ${caseNumberMode === 'auto' && !editingId ? 'bg-zinc-100 text-zinc-600' : ''}`} />
+                {caseNumberMode === 'auto' && !editingId && (
+                  <button type="button" onClick={() => setForm(p => ({ ...p, report_number: '' }))}
+                    className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 underline">Clear</button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-zinc-200 p-3">
@@ -590,7 +626,8 @@ export default function ContactClient({
                         )}
                         {editingChipKey !== c.key && (
                           <p className="text-xs text-zinc-500">
-                            {c.dob ? `DOB ${c.dob}` : 'No DOB on file'}{c.phone ? ` · ${c.phone}` : ' · No phone on file'}{c.address ? ` · ${c.address}` : ''}
+                            {c.dob ? `DOB ${c.dob}` : 'No DOB on file'}{c.phone ? ` · ${c.phone}` : ' · No phone on file'}
+                            {fullAddress(c) ? ` · ${fullAddress(c)}` : ''}
                           </p>
                         )}
                       </div>
@@ -618,7 +655,21 @@ export default function ContactClient({
                         </div>
                         <div>
                           <label className="mb-1 block text-xs font-medium text-zinc-700">Address</label>
-                          <input type="text" value={chipEditDraft.address} onChange={e => setChipEditDraft(p => ({ ...p, address: e.target.value }))} className={inputCls} placeholder="Personal address" />
+                          <input type="text" value={chipEditDraft.address} onChange={e => setChipEditDraft(p => ({ ...p, address: e.target.value }))} className={inputCls} placeholder="Street address" />
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">City</label>
+                            <input type="text" value={chipEditDraft.city} onChange={e => setChipEditDraft(p => ({ ...p, city: e.target.value }))} className={inputCls} />
+                          </div>
+                          <div className="w-20">
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">State</label>
+                            <input type="text" value={chipEditDraft.state} onChange={e => setChipEditDraft(p => ({ ...p, state: e.target.value }))} className={inputCls} maxLength={2} />
+                          </div>
+                          <div className="w-24">
+                            <label className="mb-1 block text-xs font-medium text-zinc-700">Zip</label>
+                            <input type="text" value={chipEditDraft.zip} onChange={e => setChipEditDraft(p => ({ ...p, zip: e.target.value }))} className={inputCls} />
+                          </div>
                         </div>
                         <div className="flex gap-2 justify-end">
                           <button type="button" onClick={() => setEditingChipKey(null)} className="text-xs text-zinc-400 hover:text-zinc-700">Cancel</button>
@@ -665,7 +716,21 @@ export default function ContactClient({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">Address <span className="text-zinc-400 font-normal">(optional)</span></label>
-                  <input type="text" value={newPerson.address} onChange={e => setNewPerson(p => ({ ...p, address: e.target.value }))} placeholder="Personal address" className={inputCls} />
+                  <input type="text" value={newPerson.address} onChange={e => setNewPerson(p => ({ ...p, address: e.target.value }))} placeholder="Street address" className={inputCls} />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">City</label>
+                    <input type="text" value={newPerson.city} onChange={e => setNewPerson(p => ({ ...p, city: e.target.value }))} className={inputCls} />
+                  </div>
+                  <div className="w-20">
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">State</label>
+                    <input type="text" value={newPerson.state} onChange={e => setNewPerson(p => ({ ...p, state: e.target.value }))} className={inputCls} maxLength={2} />
+                  </div>
+                  <div className="w-24">
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Zip</label>
+                    <input type="text" value={newPerson.zip} onChange={e => setNewPerson(p => ({ ...p, zip: e.target.value }))} className={inputCls} />
+                  </div>
                 </div>
                 <div className={`rounded-lg border-2 p-2.5 ${newPerson.is_dangerous ? 'border-red-300 bg-red-50' : 'border-zinc-200'}`}>
                   <label className="flex items-center gap-2 text-sm font-semibold">
@@ -701,11 +766,25 @@ export default function ContactClient({
                 {filteredAddresses.map(a => (
                   <button key={a.id} type="button" onClick={() => selectAddress(a)}
                     className="w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-                    {a.address}
+                    {fullAddress(a)}
                   </button>
                 ))}
               </div>
             )}
+            <div className="mt-2 flex gap-2">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">City</label>
+                <input type="text" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} className={inputCls} />
+              </div>
+              <div className="w-20">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">State</label>
+                <input type="text" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} className={inputCls} maxLength={2} />
+              </div>
+              <div className="w-24">
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Zip</label>
+                <input type="text" value={form.zip} onChange={e => setForm(p => ({ ...p, zip: e.target.value }))} className={inputCls} />
+              </div>
+            </div>
             {recentAtAddress.length > 0 && (
               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs font-semibold text-amber-800 mb-1.5">
@@ -814,7 +893,7 @@ export default function ContactClient({
                       )}
                     </div>
                     <div className="flex gap-3 mt-0.5 text-xs text-zinc-500 flex-wrap">
-                      {c.address && <span>{c.address}{c.location_detail ? ` (${c.location_detail})` : ''}</span>}
+                      {c.address && <span>{fullAddress(c)}{c.location_detail ? ` (${c.location_detail})` : ''}</span>}
                       {c.contact_time && <span>{c.contact_time.slice(0, 5)}</span>}
                       {c.report_number && <span>#{c.report_number}</span>}
                       {c.officer_name && <span>· {c.officer_name}</span>}
@@ -864,7 +943,7 @@ export default function ContactClient({
                   <span className="text-xs rounded-full px-2 py-0.5 font-semibold bg-red-600 text-white">⚠ Officer Safety</span>
                 )}
               </div>
-              <p className="text-lg font-bold text-zinc-900 mt-0.5">{viewingContact.address || 'No address recorded'}</p>
+              <p className="text-lg font-bold text-zinc-900 mt-0.5">{fullAddress(viewingContact) || 'No address recorded'}</p>
               {viewingContact.location_detail && <p className="text-xs text-zinc-500">{viewingContact.location_detail}</p>}
             </div>
 
