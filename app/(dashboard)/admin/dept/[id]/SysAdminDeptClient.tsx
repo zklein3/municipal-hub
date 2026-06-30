@@ -135,8 +135,8 @@ export default function SysAdminDeptClient({
         </span>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white rounded-xl border border-zinc-200 p-1 overflow-x-auto">
+      {/* Tabs — desktop horizontal strip */}
+      <div className="hidden sm:flex gap-1 mb-6 bg-white rounded-xl border border-zinc-200 p-1">
         {tabs.map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); resetForm() }}
             className={`flex-1 shrink-0 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -144,6 +144,19 @@ export default function SysAdminDeptClient({
             }`}>
             {t.label}
             {t.count != null && <span className={`ml-1.5 text-xs ${tab === t.key ? 'text-red-200' : 'text-zinc-400'}`}>{t.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Tabs — mobile stacked cards */}
+      <div className="sm:hidden flex flex-col gap-2 mb-6">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => { setTab(t.key); resetForm() }}
+            className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+              tab === t.key ? 'bg-red-700 border-red-700 text-white' : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+            }`}>
+            <span>{t.label}</span>
+            {t.count != null && <span className={`text-xs ${tab === t.key ? 'text-red-200' : 'text-zinc-400'}`}>{t.count}</span>}
           </button>
         ))}
       </div>

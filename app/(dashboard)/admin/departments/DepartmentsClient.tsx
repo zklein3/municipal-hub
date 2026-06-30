@@ -100,7 +100,7 @@ export default function DepartmentsClient({
               {error}
             </div>
           )}
-          <form action={handleCreate} className="flex gap-4 items-end">
+          <form action={handleCreate} className="flex flex-col sm:flex-row gap-4 sm:items-end">
             <div className="flex-1">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="name">
                 Department Name <span className="text-red-500">*</span>
@@ -114,7 +114,7 @@ export default function DepartmentsClient({
                 placeholder="Winslow Fire Department"
               />
             </div>
-            <div className="w-32">
+            <div className="w-full sm:w-32">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="code">
                 Code
               </label>
@@ -130,7 +130,7 @@ export default function DepartmentsClient({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+              className="w-full sm:w-auto rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Saving...' : 'Create'}
             </button>
@@ -138,56 +138,92 @@ export default function DepartmentsClient({
         </div>
       )}
 
-      {/* Departments Table */}
-      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
-        {departments.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-zinc-400">
-            No departments yet. Create one above.
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-50 border-b border-zinc-200">
-              <tr>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Name</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Code</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Status</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {departments.map((dept) => (
-                <tr key={dept.id} className="hover:bg-zinc-50">
-                  <td className="px-6 py-4 font-medium text-zinc-900">{dept.name}</td>
-                  <td className="px-6 py-4 text-zinc-500">{dept.code ?? '—'}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      dept.active
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-zinc-100 text-zinc-500'
-                    }`}>
-                      {dept.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 flex items-center gap-4">
-                    <a
-                      href={`/admin/dept/${dept.id}`}
-                      className="text-xs text-zinc-600 hover:text-zinc-900 font-medium"
-                    >
-                      Manage
-                    </a>
-                    <button
-                      onClick={() => handleToggle(dept.id, dept.active)}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium"
-                    >
-                      {dept.active ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </td>
+      {/* Departments */}
+      {departments.length === 0 ? (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+          No departments yet. Create one above.
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-50 border-b border-zinc-200">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Name</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Code</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Status</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {departments.map((dept) => (
+                  <tr key={dept.id} className="hover:bg-zinc-50">
+                    <td className="px-6 py-4 font-medium text-zinc-900">{dept.name}</td>
+                    <td className="px-6 py-4 text-zinc-500">{dept.code ?? '—'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        dept.active
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-zinc-100 text-zinc-500'
+                      }`}>
+                        {dept.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 flex items-center gap-4">
+                      <a
+                        href={`/admin/dept/${dept.id}`}
+                        className="text-xs text-zinc-600 hover:text-zinc-900 font-medium"
+                      >
+                        Manage
+                      </a>
+                      <button
+                        onClick={() => handleToggle(dept.id, dept.active)}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        {dept.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-3">
+            {departments.map((dept) => (
+              <div key={dept.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 p-4">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="font-semibold text-zinc-900">{dept.name}</p>
+                  <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    dept.active
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-zinc-100 text-zinc-500'
+                  }`}>
+                    {dept.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mb-3">Code: {dept.code ?? '—'}</p>
+                <div className="flex items-center gap-4 pt-3 border-t border-zinc-100">
+                  <a
+                    href={`/admin/dept/${dept.id}`}
+                    className="text-sm text-zinc-600 hover:text-zinc-900 font-medium"
+                  >
+                    Manage
+                  </a>
+                  <button
+                    onClick={() => handleToggle(dept.id, dept.active)}
+                    className="text-sm text-red-600 hover:text-red-800 font-medium"
+                  >
+                    {dept.active ? 'Deactivate' : 'Activate'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
