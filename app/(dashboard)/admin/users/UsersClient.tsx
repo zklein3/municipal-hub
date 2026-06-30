@@ -56,6 +56,11 @@ export default function UsersClient({ departments, users }: { departments: Depar
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [deptFilter, setDeptFilter] = useState('')
+
+  const filteredUsers = deptFilter
+    ? users.filter(u => u.department_personnel?.some(dp => dp.department_id === deptFilter))
+    : users
 
   const [managingUser, setManagingUser] = useState<User | null>(null)
   const [modalError, setModalError] = useState<string | null>(null)
@@ -118,17 +123,36 @@ export default function UsersClient({ departments, users }: { departments: Depar
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Users</h1>
-          <p className="text-sm text-zinc-500 mt-1">{users.length} user{users.length !== 1 ? 's' : ''} total</p>
+          <p className="text-sm text-zinc-500 mt-1">{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}{deptFilter ? '' : ' total'}</p>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setError(null); setSuccess(null) }}
-          className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
+          className="w-full sm:w-auto rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
         >
           {showForm ? 'Cancel' : '+ Add Dept Admin'}
         </button>
+      </div>
+
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="dept_filter">
+          Filter by Department
+        </label>
+        <select
+          id="dept_filter"
+          value={deptFilter}
+          onChange={e => setDeptFilter(e.target.value)}
+          className="w-full sm:w-72 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        >
+          <option value="">All Departments</option>
+          {departments.map(dept => (
+            <option key={dept.id} value={dept.id}>
+              {dept.name}{dept.code ? ` (${dept.code})` : ''}
+            </option>
+          ))}
+        </select>
       </div>
 
       {success && (
@@ -144,8 +168,8 @@ export default function UsersClient({ departments, users }: { departments: Depar
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>
           )}
-          <form action={handleCreate} className="flex gap-4 items-end flex-wrap">
-            <div className="flex-1 min-w-48">
+          <form action={handleCreate} className="flex flex-col sm:flex-row gap-4 sm:items-end sm:flex-wrap">
+            <div className="flex-1 sm:min-w-48">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="email">
                 Email Address <span className="text-red-500">*</span>
               </label>
@@ -153,7 +177,7 @@ export default function UsersClient({ departments, users }: { departments: Depar
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 placeholder="admin@department.com" />
             </div>
-            <div className="w-64">
+            <div className="w-full sm:w-64">
               <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="department_id">
                 Department <span className="text-red-500">*</span>
               </label>
@@ -168,72 +192,120 @@ export default function UsersClient({ departments, users }: { departments: Depar
               </select>
             </div>
             <button type="submit" disabled={loading}
-              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+              className="w-full sm:w-auto rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
               {loading ? 'Creating...' : 'Create'}
             </button>
           </form>
         </div>
       )}
 
-      <div className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-x-auto">
-        {users.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-zinc-400">No users yet.</div>
-        ) : (
-          <table className="w-full text-sm min-w-[700px]">
-            <thead className="bg-zinc-50 border-b border-zinc-200">
-              <tr>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Name</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Email</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Department</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Role</th>
-                <th className="px-6 py-3 text-left font-semibold text-zinc-600">Status</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {users.map((user) => {
-                const deptInfo = user.department_personnel?.[0]
-                const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
-                const inactive = deptInfo?.active === false || user.signup_status === 'denied'
-                return (
-                  <tr key={user.id} className={`hover:bg-zinc-50 ${inactive ? 'opacity-60' : ''}`}>
-                    <td className="px-6 py-4 font-medium text-zinc-900 whitespace-nowrap">
+      {filteredUsers.length === 0 ? (
+        <div className="rounded-xl bg-white shadow-sm border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+          {users.length === 0 ? 'No users yet.' : 'No users in this department.'}
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-50 border-b border-zinc-200">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Name</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Email</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Department</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Role</th>
+                  <th className="px-6 py-3 text-left font-semibold text-zinc-600">Status</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {filteredUsers.map((user) => {
+                  const deptInfo = user.department_personnel?.[0]
+                  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
+                  const inactive = deptInfo?.active === false || user.signup_status === 'denied'
+                  return (
+                    <tr key={user.id} className={`hover:bg-zinc-50 ${inactive ? 'opacity-60' : ''}`}>
+                      <td className="px-6 py-4 font-medium text-zinc-900 whitespace-nowrap">
+                        {name}
+                        {user.is_sys_admin && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                            Sys Admin
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">{user.email}</td>
+                      <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">
+                        {deptInfo?.department_name ?? '—'}
+                      </td>
+                      <td className="px-6 py-4 text-zinc-500 capitalize whitespace-nowrap">
+                        {deptInfo?.system_role ?? '—'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[user.signup_status] ?? 'bg-zinc-100 text-zinc-500'}`}>
+                          {STATUS_LABELS[user.signup_status] ?? user.signup_status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        {!user.is_sys_admin && (
+                          <button
+                            onClick={() => openManage(user)}
+                            className="text-xs font-medium text-red-700 hover:text-red-900 hover:underline"
+                          >
+                            Manage
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-3">
+            {filteredUsers.map((user) => {
+              const deptInfo = user.department_personnel?.[0]
+              const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
+              const inactive = deptInfo?.active === false || user.signup_status === 'denied'
+              return (
+                <div key={user.id} className={`rounded-xl bg-white shadow-sm border border-zinc-200 p-4 ${inactive ? 'opacity-60' : ''}`}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="font-semibold text-zinc-900 break-words">
                       {name}
                       {user.is_sys_admin && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                        <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 align-middle">
                           Sys Admin
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">{user.email}</td>
-                    <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">
-                      {deptInfo?.department_name ?? '—'}
-                    </td>
-                    <td className="px-6 py-4 text-zinc-500 capitalize whitespace-nowrap">
-                      {deptInfo?.system_role ?? '—'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[user.signup_status] ?? 'bg-zinc-100 text-zinc-500'}`}>
-                        {STATUS_LABELS[user.signup_status] ?? user.signup_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      {!user.is_sys_admin && (
-                        <button
-                          onClick={() => openManage(user)}
-                          className="text-xs font-medium text-red-700 hover:text-red-900 hover:underline"
-                        >
-                          Manage
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                    </p>
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[user.signup_status] ?? 'bg-zinc-100 text-zinc-500'}`}>
+                      {STATUS_LABELS[user.signup_status] ?? user.signup_status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 break-words mb-2">{user.email}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 mb-3">
+                    <span>{deptInfo?.department_name ?? '—'}</span>
+                    {deptInfo?.system_role && (
+                      <span className="capitalize">· {deptInfo.system_role}</span>
+                    )}
+                  </div>
+                  {!user.is_sys_admin && (
+                    <div className="pt-3 border-t border-zinc-100">
+                      <button
+                        onClick={() => openManage(user)}
+                        className="text-sm font-medium text-red-700 hover:text-red-900"
+                      >
+                        Manage
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {/* Manage User Modal */}
       {managingUser && (
