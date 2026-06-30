@@ -35,7 +35,7 @@ export default function PdCaseNumberClient({
     <div className="max-w-xl">
       <div className="mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Case Numbering</h2>
-        <p className="text-sm text-zinc-500 mt-0.5">Choose whether Report Number is assigned automatically or entered manually by the officer.</p>
+        <p className="text-sm text-zinc-500 mt-0.5">Choose whether Case Number is assigned automatically or entered manually by the officer.</p>
       </div>
 
       {error && (
@@ -46,7 +46,7 @@ export default function PdCaseNumberClient({
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-zinc-900">
             <input type="radio" name="mode" checked={mode === 'manual'} onChange={() => setMode('manual')} />
-            Manual — officer types their own case/report number
+            Manual — officer types their own case number
           </label>
           <label className="flex items-center gap-2 text-sm text-zinc-900">
             <input type="radio" name="mode" checked={mode === 'auto'} onChange={() => setMode('auto')} />

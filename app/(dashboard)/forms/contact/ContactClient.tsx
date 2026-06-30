@@ -519,7 +519,7 @@ export default function ContactClient({
               </div>
             </div>
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-zinc-700">Report Number</label>
+              <label className="mb-1 block text-xs font-medium text-zinc-700">Case Number</label>
               <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
                 disabled={reportNumberLocked} placeholder={reportNumberLocked ? 'Assigned on save' : ''}
                 className={`${inputCls} ${reportNumberLocked ? 'bg-zinc-100 text-zinc-400' : ''}`} />
@@ -827,7 +827,7 @@ export default function ContactClient({
 
               {viewingContact.report_number && (
                 <div>
-                  <p className="text-xs font-semibold text-zinc-500 mb-0.5">Report Number</p>
+                  <p className="text-xs font-semibold text-zinc-500 mb-0.5">Case Number</p>
                   <p className="text-zinc-800">{viewingContact.report_number}</p>
                 </div>
               )}
