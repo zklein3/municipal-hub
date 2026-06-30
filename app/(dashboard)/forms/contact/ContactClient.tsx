@@ -6,14 +6,13 @@ import { createContact, updateContact, deleteContact, updatePersonDangerFlag } f
 const inputCls = 'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
 const nowBtnCls = 'shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50'
 
-const CONTACT_TYPE_LABELS: Record<string, string> = {
-  field_interview: 'Field Interview', traffic_stop: 'Traffic Stop', pedestrian_check: 'Pedestrian Check',
-  business_contact: 'Business Contact', follow_up: 'Follow-Up', other: 'Other',
-}
 const CONTACT_TYPE_COLORS: Record<string, string> = {
-  field_interview: 'bg-blue-100 text-blue-700', traffic_stop: 'bg-purple-100 text-purple-700',
-  pedestrian_check: 'bg-cyan-100 text-cyan-700', business_contact: 'bg-amber-100 text-amber-700',
-  follow_up: 'bg-zinc-100 text-zinc-600', other: 'bg-zinc-100 text-zinc-600',
+  'Field Interview': 'bg-blue-100 text-blue-700',
+  'Traffic Stop': 'bg-purple-100 text-purple-700',
+  'Pedestrian Check': 'bg-cyan-100 text-cyan-700',
+  'Business Contact': 'bg-amber-100 text-amber-700',
+  'Follow-Up': 'bg-zinc-100 text-zinc-600',
+  'Other': 'bg-zinc-100 text-zinc-600',
 }
 
 function nowTime() {
@@ -26,12 +25,18 @@ interface Address {
   address: string
 }
 
+interface ListOption {
+  id: string
+  label: string
+}
+
 interface Person {
   id: string
   first_name: string
   last_name: string
   dob: string | null
   phone: string | null
+  address: string | null
   is_dangerous: boolean
   danger_reason: string | null
 }
@@ -44,10 +49,8 @@ interface Contact {
   contact_date: string
   contact_time: string | null
   contact_type: string
-  reason: string
-  action_taken: string | null
+  narrative: string | null
   report_number: string | null
-  notes: string | null
   officer_name: string | null
   created_at: string
 }
@@ -59,6 +62,7 @@ interface PersonChip {
   last_name: string
   dob: string
   phone: string
+  address: string
   is_dangerous: boolean
   danger_reason: string
 }
@@ -104,9 +108,10 @@ function PersonCardModal({
           <p className="text-lg font-bold text-zinc-900 mt-0.5">
             {current.is_dangerous && '⚠ '}{current.first_name} {current.last_name}
           </p>
-          {(current.dob || current.phone) && (
+          {(current.dob || current.phone || current.address) && (
             <p className="text-xs text-zinc-500">
               {current.dob ? `DOB ${current.dob}` : null}{current.dob && current.phone ? ' · ' : null}{current.phone}
+              {(current.dob || current.phone) && current.address ? ' · ' : null}{current.address}
             </p>
           )}
         </div>
@@ -158,10 +163,10 @@ function PersonCardModal({
                     className="w-full text-left px-3 py-2 hover:bg-zinc-50">
                     <p className="text-sm text-zinc-800">{c.address || 'No address recorded'}</p>
                     <p className="text-xs text-zinc-400">
-                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {CONTACT_TYPE_LABELS[c.contact_type] ?? c.contact_type}
+                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {c.contact_type}
                       {c.officer_name ? ` · ${c.officer_name}` : ''}
                     </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{c.reason}</p>
+                    {c.narrative && <p className="text-xs text-zinc-500 mt-0.5">{c.narrative}</p>}
                   </button>
                 ))}
               </div>
@@ -183,27 +188,35 @@ function PersonCardModal({
 const emptyForm = {
   contact_date: '',
   contact_time: '',
+  report_number: '',
   address_id: '',
   address: '',
   location_detail: '',
-  contact_type: 'field_interview',
-  reason: '',
-  action_taken: '',
-  report_number: '',
-  notes: '',
+  contact_type: '',
+  narrative: '',
 }
+
+const emptyNewPerson = { first_name: '', last_name: '', dob: '', phone: '', address: '', is_dangerous: false, danger_reason: '' }
 
 export default function ContactClient({
   addresses,
   persons: initialPersons,
   contacts: initialContacts,
   contactPersons,
+  contactActions,
+  contactTypes,
+  actionTypes,
+  caseNumberMode,
   isOfficerOrAbove,
 }: {
   addresses: Address[]
   persons: Person[]
   contacts: Contact[]
   contactPersons: { contact_id: string; person_id: string }[]
+  contactActions: { contact_id: string; action_type_id: string }[]
+  contactTypes: ListOption[]
+  actionTypes: ListOption[]
+  caseNumberMode: 'auto' | 'manual'
   isOfficerOrAbove: boolean
 }) {
   const [persons, setPersons] = useState(initialPersons)
@@ -213,11 +226,18 @@ export default function ContactClient({
 
   const today = new Date().toISOString().split('T')[0]
   const personMap = Object.fromEntries(persons.map(p => [p.id, p]))
+  const actionTypeMap = Object.fromEntries(actionTypes.map(a => [a.id, a.label]))
 
   const contactPersonsMap: Record<string, string[]> = {}
   contactPersons.forEach(cp => {
     if (!contactPersonsMap[cp.contact_id]) contactPersonsMap[cp.contact_id] = []
     contactPersonsMap[cp.contact_id].push(cp.person_id)
+  })
+
+  const contactActionsMap: Record<string, string[]> = {}
+  contactActions.forEach(ca => {
+    if (!contactActionsMap[ca.contact_id]) contactActionsMap[ca.contact_id] = []
+    contactActionsMap[ca.contact_id].push(ca.action_type_id)
   })
 
   function personNames(contactId: string) {
@@ -229,6 +249,10 @@ export default function ContactClient({
 
   function contactPersonsList(contactId: string): Person[] {
     return (contactPersonsMap[contactId] ?? []).map(pid => personMap[pid]).filter(Boolean) as Person[]
+  }
+
+  function contactActionLabels(contactId: string): string[] {
+    return (contactActionsMap[contactId] ?? []).map(id => actionTypeMap[id]).filter(Boolean) as string[]
   }
 
   function contactHasDanger(contactId: string) {
@@ -261,20 +285,22 @@ export default function ContactClient({
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTime, setEditingTime] = useState(false)
-  const [form, setForm] = useState({ ...emptyForm, contact_date: today })
+  const [form, setForm] = useState({ ...emptyForm, contact_date: today, contact_type: contactTypes[0]?.label ?? '' })
   const [addressSearch, setAddressSearch] = useState('')
   const [personSearch, setPersonSearch] = useState('')
   const [personChips, setPersonChips] = useState<PersonChip[]>([])
   const [addingNewPerson, setAddingNewPerson] = useState(false)
-  const [newPerson, setNewPerson] = useState({ first_name: '', last_name: '', dob: '', phone: '', is_dangerous: false, danger_reason: '' })
+  const [newPerson, setNewPerson] = useState(emptyNewPerson)
+  const [selectedActionIds, setSelectedActionIds] = useState<string[]>([])
 
   function resetForm() {
-    setForm({ ...emptyForm, contact_date: today })
+    setForm({ ...emptyForm, contact_date: today, contact_type: contactTypes[0]?.label ?? '' })
     setAddressSearch('')
     setPersonSearch('')
     setPersonChips([])
     setAddingNewPerson(false)
-    setNewPerson({ first_name: '', last_name: '', dob: '', phone: '', is_dangerous: false, danger_reason: '' })
+    setNewPerson(emptyNewPerson)
+    setSelectedActionIds([])
   }
 
   function handleOpenNew() {
@@ -299,14 +325,12 @@ export default function ContactClient({
     setForm({
       contact_date: c.contact_date,
       contact_time: c.contact_time ?? '',
+      report_number: c.report_number ?? '',
       address_id: c.address_id ?? '',
       address: c.address ?? '',
       location_detail: c.location_detail ?? '',
       contact_type: c.contact_type,
-      reason: c.reason,
-      action_taken: c.action_taken ?? '',
-      report_number: c.report_number ?? '',
-      notes: c.notes ?? '',
+      narrative: c.narrative ?? '',
     })
     setAddressSearch(c.address ?? '')
     setPersonSearch('')
@@ -314,11 +338,12 @@ export default function ContactClient({
       const p = personMap[pid]
       return p ? {
         key: p.id, person_id: p.id, first_name: p.first_name, last_name: p.last_name, dob: p.dob ?? '', phone: p.phone ?? '',
-        is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
+        address: p.address ?? '', is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
       } : null
     }).filter(Boolean) as PersonChip[]
     setPersonChips(chips)
     setAddingNewPerson(false)
+    setSelectedActionIds(contactActionsMap[c.id] ?? [])
     setShowForm(true)
     setError(null)
     setSuccess(null)
@@ -348,23 +373,24 @@ export default function ContactClient({
     if (personChips.some(c => c.person_id === p.id)) return
     setPersonChips(prev => [...prev, {
       key: p.id, person_id: p.id, first_name: p.first_name, last_name: p.last_name, dob: p.dob ?? '', phone: p.phone ?? '',
-      is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
+      address: p.address ?? '', is_dangerous: p.is_dangerous, danger_reason: p.danger_reason ?? '',
     }])
     setPersonSearch('')
   }
 
   function addNewPersonChip() {
-    if (!newPerson.first_name.trim() || !newPerson.last_name.trim()) return
+    if (!newPerson.first_name.trim() || !newPerson.last_name.trim() || !newPerson.dob) return
     setPersonChips(prev => [...prev, {
       key: `new-${Date.now()}`,
       first_name: newPerson.first_name.trim(),
       last_name: newPerson.last_name.trim(),
       dob: newPerson.dob,
       phone: newPerson.phone,
+      address: newPerson.address,
       is_dangerous: newPerson.is_dangerous,
       danger_reason: newPerson.danger_reason,
     }])
-    setNewPerson({ first_name: '', last_name: '', dob: '', phone: '', is_dangerous: false, danger_reason: '' })
+    setNewPerson(emptyNewPerson)
     setAddingNewPerson(false)
   }
 
@@ -379,24 +405,28 @@ export default function ContactClient({
       ).slice(0, 6)
     : []
 
+  function toggleActionType(id: string) {
+    setSelectedActionIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setSuccess(null)
 
     if (!form.contact_time) { setError('Tap "Now" on the contact time before saving — it can\'t be left blank.'); return }
-    if (!form.reason.trim()) { setError('Reason is required.'); return }
 
     // Catch a person typed into "Add New Person" but never confirmed with
     // the Add Person button — don't silently drop them from the contact.
     const pendingChips = [...personChips]
-    if (addingNewPerson && newPerson.first_name.trim() && newPerson.last_name.trim()) {
+    if (addingNewPerson && newPerson.first_name.trim() && newPerson.last_name.trim() && newPerson.dob) {
       pendingChips.push({
         key: `pending-${Date.now()}`,
         first_name: newPerson.first_name.trim(),
         last_name: newPerson.last_name.trim(),
         dob: newPerson.dob,
         phone: newPerson.phone,
+        address: newPerson.address,
         is_dangerous: newPerson.is_dangerous,
         danger_reason: newPerson.danger_reason,
       })
@@ -411,9 +441,11 @@ export default function ContactClient({
       last_name: c.last_name,
       dob: c.dob || null,
       phone: c.phone || null,
+      address: c.address || null,
       is_dangerous: c.is_dangerous,
       danger_reason: c.danger_reason || null,
     }))))
+    fd.set('action_type_ids', JSON.stringify(selectedActionIds))
 
     const result = editingId
       ? await updateContact(editingId, fd)
@@ -444,6 +476,8 @@ export default function ContactClient({
   const reverseMatches = reverseSearch.trim()
     ? persons.filter(p => `${p.first_name} ${p.last_name}`.toLowerCase().includes(reverseSearch.trim().toLowerCase())).slice(0, 8)
     : []
+
+  const reportNumberLocked = caseNumberMode === 'auto' && !editingId
 
   return (
     <div className="max-w-2xl">
@@ -484,55 +518,12 @@ export default function ContactClient({
                 </button>
               </div>
             </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Address</label>
-            <input type="text" value={addressSearch} onChange={e => handleAddressTextChange(e.target.value)}
-              placeholder="Type an address — pick a match or enter a new one" className={inputCls} />
-            {filteredAddresses.length > 0 && (
-              <div className="mt-1 rounded-lg border border-zinc-200 divide-y divide-zinc-100 overflow-hidden">
-                {filteredAddresses.map(a => (
-                  <button key={a.id} type="button" onClick={() => selectAddress(a)}
-                    className="w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
-                    {a.address}
-                  </button>
-                ))}
-              </div>
-            )}
-            {recentAtAddress.length > 0 && (
-              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-amber-800 mb-1.5">
-                  Recent contacts at this address ({recentAtAddress.length})
-                </p>
-                <div className="flex flex-col gap-1">
-                  {recentAtAddress.map(c => (
-                    <p key={c.id} className="text-xs text-amber-700">
-                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} — {personNames(c.id).join(', ') || 'No names recorded'}
-                      {c.officer_name ? ` · ${c.officer_name}` : ''}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Location Detail</label>
-            <input type="text" value={form.location_detail} onChange={e => setForm(p => ({ ...p, location_detail: e.target.value }))}
-              className={inputCls} placeholder="e.g. Apt 3, behind building" />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Contact Type</label>
-            <select value={form.contact_type} onChange={e => setForm(p => ({ ...p, contact_type: e.target.value }))} className={inputCls}>
-              {Object.entries(CONTACT_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Reason <span className="text-red-500">*</span></label>
-            <textarea value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} required className={inputCls} rows={2} />
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-zinc-700">Report Number</label>
+              <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
+                disabled={reportNumberLocked} placeholder={reportNumberLocked ? 'Assigned on save' : ''}
+                className={`${inputCls} ${reportNumberLocked ? 'bg-zinc-100 text-zinc-400' : ''}`} />
+            </div>
           </div>
 
           <div className="rounded-lg border border-zinc-200 p-3">
@@ -581,13 +572,17 @@ export default function ContactClient({
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">DOB <span className="text-zinc-400 font-normal">(optional)</span></label>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">DOB <span className="text-red-500">*</span></label>
                     <input type="date" value={newPerson.dob} onChange={e => setNewPerson(p => ({ ...p, dob: e.target.value }))} className={inputCls} />
                   </div>
                   <div className="flex-1">
                     <label className="mb-1 block text-xs font-medium text-zinc-700">Phone <span className="text-zinc-400 font-normal">(optional)</span></label>
                     <input type="text" value={newPerson.phone} onChange={e => setNewPerson(p => ({ ...p, phone: e.target.value }))} className={inputCls} />
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Address <span className="text-zinc-400 font-normal">(optional)</span></label>
+                  <input type="text" value={newPerson.address} onChange={e => setNewPerson(p => ({ ...p, address: e.target.value }))} placeholder="Personal address" className={inputCls} />
                 </div>
                 <div className={`rounded-lg border-2 p-2.5 ${newPerson.is_dangerous ? 'border-red-300 bg-red-50' : 'border-zinc-200'}`}>
                   <label className="flex items-center gap-2 text-sm font-semibold">
@@ -600,8 +595,8 @@ export default function ContactClient({
                   )}
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <button type="button" onClick={() => setAddingNewPerson(false)} className="text-xs text-zinc-400 hover:text-zinc-700">Cancel</button>
-                  <button type="button" onClick={addNewPersonChip} disabled={!newPerson.first_name.trim() || !newPerson.last_name.trim()}
+                  <button type="button" onClick={() => { setAddingNewPerson(false); setNewPerson(emptyNewPerson) }} className="text-xs text-zinc-400 hover:text-zinc-700">Cancel</button>
+                  <button type="button" onClick={addNewPersonChip} disabled={!newPerson.first_name.trim() || !newPerson.last_name.trim() || !newPerson.dob}
                     className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
                     Add Person
                   </button>
@@ -615,18 +610,70 @@ export default function ContactClient({
           </div>
 
           <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Called To Address</label>
+            <input type="text" value={addressSearch} onChange={e => handleAddressTextChange(e.target.value)}
+              placeholder="Type an address — pick a match or enter a new one" className={inputCls} />
+            {filteredAddresses.length > 0 && (
+              <div className="mt-1 rounded-lg border border-zinc-200 divide-y divide-zinc-100 overflow-hidden">
+                {filteredAddresses.map(a => (
+                  <button key={a.id} type="button" onClick={() => selectAddress(a)}
+                    className="w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
+                    {a.address}
+                  </button>
+                ))}
+              </div>
+            )}
+            {recentAtAddress.length > 0 && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-semibold text-amber-800 mb-1.5">
+                  Recent contacts at this address ({recentAtAddress.length})
+                </p>
+                <div className="flex flex-col gap-1">
+                  {recentAtAddress.map(c => (
+                    <p key={c.id} className="text-xs text-amber-700">
+                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} — {personNames(c.id).join(', ') || 'No names recorded'}
+                      {c.officer_name ? ` · ${c.officer_name}` : ''}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Location Detail</label>
+            <input type="text" value={form.location_detail} onChange={e => setForm(p => ({ ...p, location_detail: e.target.value }))}
+              className={inputCls} placeholder="e.g. Apt 3, behind building" />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Contact Type</label>
+            <select value={form.contact_type} onChange={e => setForm(p => ({ ...p, contact_type: e.target.value }))} className={inputCls}>
+              {contactTypes.map(t => <option key={t.id} value={t.label}>{t.label}</option>)}
+            </select>
+          </div>
+
+          <div>
             <label className="mb-1 block text-xs font-medium text-zinc-700">Action Taken</label>
-            <input type="text" value={form.action_taken} onChange={e => setForm(p => ({ ...p, action_taken: e.target.value }))} className={inputCls} />
+            <div className="flex flex-wrap gap-2">
+              {actionTypes.length === 0 && <p className="text-xs text-zinc-400 italic">No action-taken options configured.</p>}
+              {actionTypes.map(a => {
+                const checked = selectedActionIds.includes(a.id)
+                return (
+                  <button key={a.id} type="button" onClick={() => toggleActionType(a.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium border transition-colors ${
+                      checked ? 'bg-red-700 border-red-700 text-white' : 'bg-white border-zinc-300 text-zinc-600 hover:bg-zinc-50'
+                    }`}>
+                    {a.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Report Number</label>
-            <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))} className={inputCls} />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
-            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className={inputCls} rows={2} />
+            <label className="mb-1 block text-xs font-medium text-zinc-700">Narrative</label>
+            <textarea value={form.narrative} onChange={e => setForm(p => ({ ...p, narrative: e.target.value }))} className={inputCls} rows={5} />
           </div>
 
           <button type="submit" disabled={loading}
@@ -677,7 +724,7 @@ export default function ContactClient({
                         {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()}
                       </span>
                       <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[c.contact_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                        {CONTACT_TYPE_LABELS[c.contact_type] ?? c.contact_type}
+                        {c.contact_type}
                       </span>
                       {danger && (
                         <span className="text-xs rounded-full px-2 py-0.5 font-medium bg-red-600 text-white">⚠ Officer Safety</span>
@@ -686,9 +733,10 @@ export default function ContactClient({
                     <div className="flex gap-3 mt-0.5 text-xs text-zinc-500 flex-wrap">
                       {c.address && <span>{c.address}{c.location_detail ? ` (${c.location_detail})` : ''}</span>}
                       {c.contact_time && <span>{c.contact_time.slice(0, 5)}</span>}
+                      {c.report_number && <span>#{c.report_number}</span>}
                       {c.officer_name && <span>· {c.officer_name}</span>}
                     </div>
-                    <p className="text-sm text-zinc-700 mt-1">{c.reason}</p>
+                    {c.narrative && <p className="text-sm text-zinc-700 mt-1">{c.narrative}</p>}
                     {contactPersonsList(c.id).length > 0 && (
                       <p className="text-xs text-zinc-500 mt-0.5 flex flex-wrap gap-x-1">
                         People:{' '}
@@ -703,7 +751,9 @@ export default function ContactClient({
                         ))}
                       </p>
                     )}
-                    {c.notes && <p className="text-xs text-zinc-400 mt-0.5 italic">{c.notes}</p>}
+                    {contactActionLabels(c.id).length > 0 && (
+                      <p className="text-xs text-zinc-400 mt-0.5">Action: {contactActionLabels(c.id).join(', ')}</p>
+                    )}
                   </div>
                   {isOfficerOrAbove && (
                     <div className="shrink-0 flex gap-3" onClick={e => e.stopPropagation()}>
@@ -736,18 +786,13 @@ export default function ContactClient({
             </div>
 
             <div className="px-5 py-4 flex flex-col gap-3 text-sm">
-              <div className="flex gap-3 text-xs text-zinc-500">
+              <div className="flex gap-3 text-xs text-zinc-500 flex-wrap">
                 <span>{new Date(viewingContact.contact_date + 'T12:00:00').toLocaleDateString()}</span>
                 {viewingContact.contact_time && <span>{viewingContact.contact_time.slice(0, 5)}</span>}
                 <span className={`rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[viewingContact.contact_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                  {CONTACT_TYPE_LABELS[viewingContact.contact_type] ?? viewingContact.contact_type}
+                  {viewingContact.contact_type}
                 </span>
                 {viewingContact.officer_name && <span>· {viewingContact.officer_name}</span>}
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold text-zinc-500 mb-0.5">Reason</p>
-                <p className="text-zinc-800">{viewingContact.reason}</p>
               </div>
 
               <div>
@@ -769,10 +814,14 @@ export default function ContactClient({
                 )}
               </div>
 
-              {viewingContact.action_taken && (
+              {contactActionLabels(viewingContact.id).length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-zinc-500 mb-0.5">Action Taken</p>
-                  <p className="text-zinc-800">{viewingContact.action_taken}</p>
+                  <p className="text-xs font-semibold text-zinc-500 mb-1">Action Taken</p>
+                  <div className="flex flex-wrap gap-2">
+                    {contactActionLabels(viewingContact.id).map(label => (
+                      <span key={label} className="rounded-full px-2.5 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-700">{label}</span>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -783,10 +832,10 @@ export default function ContactClient({
                 </div>
               )}
 
-              {viewingContact.notes && (
+              {viewingContact.narrative && (
                 <div>
-                  <p className="text-xs font-semibold text-zinc-500 mb-0.5">Notes</p>
-                  <p className="text-zinc-600 italic">{viewingContact.notes}</p>
+                  <p className="text-xs font-semibold text-zinc-500 mb-0.5">Narrative</p>
+                  <p className="text-zinc-800 whitespace-pre-wrap">{viewingContact.narrative}</p>
                 </div>
               )}
             </div>

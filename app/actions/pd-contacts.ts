@@ -203,6 +203,7 @@ type PersonInput = {
   last_name: string
   dob?: string | null
   phone?: string | null
+  address?: string | null
   is_dangerous?: boolean
   danger_reason?: string | null
 }
@@ -242,6 +243,7 @@ async function resolvePersons(
       continue
     }
     if (!p.first_name?.trim() || !p.last_name?.trim()) continue
+    if (!p.dob) return { personIds, error: `DOB is required for new person ${p.first_name} ${p.last_name}.` }
     const { data, error } = await adminClient
       .from('pd_persons')
       .insert({
@@ -250,6 +252,7 @@ async function resolvePersons(
         last_name: p.last_name.trim(),
         dob: p.dob || null,
         phone: p.phone || null,
+        address: p.address || null,
         is_dangerous: p.is_dangerous ?? false,
         danger_reason: p.is_dangerous ? (p.danger_reason || null) : null,
       })
@@ -266,12 +269,28 @@ function contactFieldsFromForm(formData: FormData) {
     contact_date: formData.get('contact_date') as string,
     contact_time: (formData.get('contact_time') as string) || null,
     location_detail: (formData.get('location_detail') as string) || null,
-    contact_type: (formData.get('contact_type') as string) || 'field_interview',
-    reason: formData.get('reason') as string,
-    action_taken: (formData.get('action_taken') as string) || null,
+    contact_type: (formData.get('contact_type') as string) || null,
     report_number: (formData.get('report_number') as string) || null,
-    notes: (formData.get('notes') as string) || null,
+    narrative: (formData.get('narrative') as string) || null,
   }
+}
+
+function actionTypeIdsFromForm(formData: FormData): string[] {
+  const raw = formData.get('action_type_ids') as string
+  if (!raw) return []
+  try { return JSON.parse(raw) } catch { return [] }
+}
+
+async function syncContactActions(adminClient: ReturnType<typeof createAdminClient>, contactId: string, actionTypeIds: string[]) {
+  const { error: deleteErr } = await adminClient.from('pd_contact_actions').delete().eq('contact_id', contactId)
+  if (deleteErr) return { error: deleteErr.message }
+  if (actionTypeIds.length > 0) {
+    const { error: insertErr } = await adminClient.from('pd_contact_actions').insert(
+      actionTypeIds.map(action_type_id => ({ contact_id: contactId, action_type_id }))
+    )
+    if (insertErr) return { error: insertErr.message }
+  }
+  return {}
 }
 
 export async function createContact(formData: FormData) {
@@ -281,7 +300,6 @@ export async function createContact(formData: FormData) {
 
   const fields = contactFieldsFromForm(formData)
   if (!fields.contact_date) return { error: 'Date is required.' }
-  if (!fields.reason?.trim()) return { error: 'Reason is required.' }
 
   const address_id = (formData.get('address_id') as string) || null
   const addressText = (formData.get('address') as string) || null
@@ -290,12 +308,18 @@ export async function createContact(formData: FormData) {
   if (personsRaw) {
     try { persons = JSON.parse(personsRaw) } catch { /* ignore malformed input */ }
   }
+  const actionTypeIds = actionTypeIdsFromForm(formData)
 
   const addressResult = await resolveAddress(adminClient, ctx.department_id, address_id, addressText)
   if (addressResult.error) { await logError(addressResult.error, '/forms/contact'); return { error: addressResult.error } }
 
   const personsResult = await resolvePersons(adminClient, ctx.department_id, persons)
   if (personsResult.error) { await logError(personsResult.error, '/forms/contact'); return { error: personsResult.error } }
+
+  let report_number = fields.report_number
+  if (!report_number?.trim()) {
+    report_number = await generatePdCaseNumber(ctx.department_id)
+  }
 
   const { data: contact, error } = await adminClient.from('pd_contacts').insert({
     department_id: ctx.department_id,
@@ -304,6 +328,7 @@ export async function createContact(formData: FormData) {
     address_id: addressResult.address_id,
     address: addressResult.address,
     ...fields,
+    report_number,
   }).select('id').single()
 
   if (error || !contact) { await logError(error?.message ?? 'insert failed', '/forms/contact'); return { error: error?.message ?? 'Failed to save contact.' } }
@@ -314,6 +339,9 @@ export async function createContact(formData: FormData) {
     )
     if (linkError) { await logError(linkError.message, '/forms/contact'); return { error: linkError.message } }
   }
+
+  const actionsResult = await syncContactActions(adminClient, contact.id, actionTypeIds)
+  if (actionsResult.error) { await logError(actionsResult.error, '/forms/contact'); return { error: actionsResult.error } }
 
   revalidatePath('/forms/contact')
   return { success: true }
@@ -326,7 +354,6 @@ export async function updateContact(id: string, formData: FormData) {
 
   const fields = contactFieldsFromForm(formData)
   if (!fields.contact_date) return { error: 'Date is required.' }
-  if (!fields.reason?.trim()) return { error: 'Reason is required.' }
 
   const address_id = (formData.get('address_id') as string) || null
   const addressText = (formData.get('address') as string) || null
@@ -335,6 +362,7 @@ export async function updateContact(id: string, formData: FormData) {
   if (personsRaw) {
     try { persons = JSON.parse(personsRaw) } catch { /* ignore malformed input */ }
   }
+  const actionTypeIds = actionTypeIdsFromForm(formData)
 
   const addressResult = await resolveAddress(adminClient, ctx.department_id!, address_id, addressText)
   if (addressResult.error) { await logError(addressResult.error, '/forms/contact'); return { error: addressResult.error } }
@@ -363,6 +391,9 @@ export async function updateContact(id: string, formData: FormData) {
     )
     if (linkError) { await logError(linkError.message, '/forms/contact'); return { error: linkError.message } }
   }
+
+  const actionsResult = await syncContactActions(adminClient, id, actionTypeIds)
+  if (actionsResult.error) { await logError(actionsResult.error, '/forms/contact'); return { error: actionsResult.error } }
 
   revalidatePath('/forms/contact')
   return { success: true }
