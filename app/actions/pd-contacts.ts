@@ -283,6 +283,17 @@ export async function generatePdCaseNumber(department_id: string): Promise<strin
   return `${prefix}${yy}-${String(seq).padStart(4, '0')}`
 }
 
+// Officer-triggered case number assignment — called when the officer taps
+// "Assign Case Number" on the Contact form. Not every contact needs one, so
+// this is opt-in per contact rather than automatic on every save.
+export async function assignPdCaseNumber() {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  const caseNumber = await generatePdCaseNumber(ctx.department_id)
+  if (!caseNumber) return { error: 'Case numbering is not set to Auto for this department.' }
+  return { caseNumber }
+}
+
 // Returns the current sequence value for this department/year (0 if no counter row exists yet,
 // meaning the next auto-generated number will be 0001).
 export async function getPdCaseNumberCounter(department_id: string, year: number): Promise<number> {
@@ -431,11 +442,9 @@ export async function createContact(formData: FormData) {
   const personsResult = await resolvePersons(adminClient, ctx.department_id, persons)
   if (personsResult.error) { await logError(personsResult.error, '/forms/contact'); return { error: personsResult.error } }
 
-  let report_number = fields.report_number
-  if (!report_number?.trim()) {
-    report_number = await generatePdCaseNumber(ctx.department_id)
-  }
-
+  // Not every contact warrants a case number — the officer must explicitly
+  // tap "Assign Case Number" on the form (assignPdCaseNumber) rather than one
+  // being silently generated for every save.
   const { data: contact, error } = await adminClient.from('pd_contacts').insert({
     department_id: ctx.department_id,
     officer_id: ctx.personnelId,
@@ -443,7 +452,6 @@ export async function createContact(formData: FormData) {
     address_id: addressResult.address_id,
     address: addressResult.address,
     ...fields,
-    report_number,
   }).select('id').single()
 
   if (error || !contact) { await logError(error?.message ?? 'insert failed', '/forms/contact'); return { error: error?.message ?? 'Failed to save contact.' } }

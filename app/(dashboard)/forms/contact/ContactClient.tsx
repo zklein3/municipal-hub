@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createContact, updateContact, deleteContact, updatePersonDangerFlag } from '@/app/actions/pd-contacts'
+import { createContact, updateContact, deleteContact, updatePersonDangerFlag, assignPdCaseNumber } from '@/app/actions/pd-contacts'
 
 const inputCls = 'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
 const nowBtnCls = 'shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50'
@@ -292,6 +292,7 @@ export default function ContactClient({
   const [addingNewPerson, setAddingNewPerson] = useState(false)
   const [newPerson, setNewPerson] = useState(emptyNewPerson)
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>([])
+  const [assigningCaseNumber, setAssigningCaseNumber] = useState(false)
 
   function resetForm() {
     setForm({ ...emptyForm, contact_date: today, contact_type: contactTypes[0]?.label ?? '' })
@@ -409,6 +410,15 @@ export default function ContactClient({
     setSelectedActionIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
+  async function handleAssignCaseNumber() {
+    setAssigningCaseNumber(true)
+    setError(null)
+    const result = await assignPdCaseNumber()
+    setAssigningCaseNumber(false)
+    if (result?.error) { setError(result.error); return }
+    if (result?.caseNumber) setForm(p => ({ ...p, report_number: result.caseNumber }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -477,7 +487,9 @@ export default function ContactClient({
     ? persons.filter(p => `${p.first_name} ${p.last_name}`.toLowerCase().includes(reverseSearch.trim().toLowerCase())).slice(0, 8)
     : []
 
-  const reportNumberLocked = caseNumberMode === 'auto' && !editingId
+  // New contact in auto mode: case number isn't generated automatically —
+  // the officer taps "Assign Case Number" only when this contact warrants one.
+  const showAssignButton = caseNumberMode === 'auto' && !editingId && !form.report_number
 
   return (
     <div className="max-w-2xl">
@@ -520,9 +532,22 @@ export default function ContactClient({
             </div>
             <div className="flex-1">
               <label className="mb-1 block text-xs font-medium text-zinc-700">Case Number</label>
-              <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
-                disabled={reportNumberLocked} placeholder={reportNumberLocked ? 'Assigned on save' : ''}
-                className={`${inputCls} ${reportNumberLocked ? 'bg-zinc-100 text-zinc-400' : ''}`} />
+              {showAssignButton ? (
+                <button type="button" onClick={handleAssignCaseNumber} disabled={assigningCaseNumber}
+                  className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-500 hover:border-red-400 hover:text-red-700 disabled:opacity-50">
+                  {assigningCaseNumber ? 'Assigning…' : '+ Assign Case Number'}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input type="text" value={form.report_number} onChange={e => setForm(p => ({ ...p, report_number: e.target.value }))}
+                    readOnly={caseNumberMode === 'auto' && !editingId}
+                    className={`${inputCls} ${caseNumberMode === 'auto' && !editingId ? 'bg-zinc-100 text-zinc-600' : ''}`} />
+                  {caseNumberMode === 'auto' && !editingId && (
+                    <button type="button" onClick={() => setForm(p => ({ ...p, report_number: '' }))}
+                      className="shrink-0 text-xs text-zinc-400 hover:text-zinc-700 underline">Clear</button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -532,21 +557,29 @@ export default function ContactClient({
             </p>
 
             {personChips.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-col gap-1.5 mb-2">
                 {personChips.map(c => (
-                  <span key={c.key} title={c.is_dangerous ? (c.danger_reason || 'Officer safety flag') : undefined}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-                      c.is_dangerous ? 'bg-red-100 text-red-800 ring-1 ring-red-300' : 'bg-zinc-100 text-zinc-700'
+                  <div key={c.key}
+                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                      c.is_dangerous ? 'border-red-300 bg-red-50' : 'border-zinc-200 bg-zinc-50'
                     }`}>
-                    {c.person_id ? (
-                      <button type="button" onClick={() => openPersonCard(c.person_id!)} className="hover:underline">
-                        {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
-                      </button>
-                    ) : (
-                      <span>{c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}</span>
-                    )}
-                    <button type="button" onClick={() => removePersonChip(c.key)} className="text-zinc-400 hover:text-red-600">✕</button>
-                  </span>
+                    <div className="min-w-0">
+                      {c.person_id ? (
+                        <button type="button" onClick={() => openPersonCard(c.person_id!)}
+                          className={`text-sm font-semibold hover:underline ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
+                          {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
+                        </button>
+                      ) : (
+                        <p className={`text-sm font-semibold ${c.is_dangerous ? 'text-red-800' : 'text-zinc-800'}`}>
+                          {c.is_dangerous && '⚠ '}{c.first_name} {c.last_name}
+                        </p>
+                      )}
+                      <p className="text-xs text-zinc-500">
+                        {c.dob ? `DOB ${c.dob}` : 'No DOB on file'}{c.phone ? ` · ${c.phone}` : ''}{c.address ? ` · ${c.address}` : ''}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => removePersonChip(c.key)} className="shrink-0 text-zinc-400 hover:text-red-600">✕</button>
+                  </div>
                 ))}
               </div>
             )}
