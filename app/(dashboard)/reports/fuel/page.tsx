@@ -31,6 +31,111 @@ export default async function FuelReportPage({
     .eq('active', true)
     .order('unit_number')
 
+  // ── Tank storage report ───────────────────────────────────────────────────
+  const { data: deptFlags } = await adminClient
+    .from('departments')
+    .select('module_fuel_storage')
+    .eq('id', department_id)
+    .single()
+
+  const tankReport: Array<{
+    id: string; name: string; fuel_type: string
+    capacity_gallons: number; low_level_threshold_gallons: number; current_gallons: number
+    avg_cost_per_gallon: number | null; daily_usage: number | null; days_until_reorder: number | null
+    ledger: Array<{ date: string; type: 'delivery' | 'draw'; gallons: number; label: string; cost_per_gallon: number | null; total_cost: number | null; running_balance: number }>
+  }> = []
+
+  if (deptFlags?.module_fuel_storage) {
+    const { data: tanksRaw } = await adminClient
+      .from('fuel_tanks')
+      .select('id, name, fuel_type, capacity_gallons, low_level_threshold_gallons')
+      .eq('department_id', department_id)
+      .eq('active', true)
+      .order('created_at')
+
+    const tankIds = (tanksRaw ?? []).map(t => t.id)
+    if (tankIds.length > 0) {
+      const [allDeliveriesResult, allDrawsResult] = await Promise.all([
+        adminClient.from('fuel_tank_deliveries')
+          .select('tank_id, delivery_date, gallons, cost_per_gallon, total_cost, vendor')
+          .in('tank_id', tankIds)
+          .order('delivery_date'),
+        adminClient.from('apparatus_fuel_logs')
+          .select('fuel_tank_id, fuel_date, gallons, apparatus_id')
+          .in('fuel_tank_id', tankIds)
+          .eq('department_id', department_id)
+          .order('fuel_date'),
+      ])
+
+      const allDeliveries = allDeliveriesResult.data ?? []
+      const allDraws = allDrawsResult.data ?? []
+
+      // Apparatus names for draw labels
+      const drawApparatusIds = [...new Set(allDraws.map(d => d.apparatus_id).filter(Boolean) as string[])]
+      const { data: drawApparatus } = drawApparatusIds.length > 0
+        ? await adminClient.from('apparatus').select('id, unit_number').in('id', drawApparatusIds)
+        : { data: [] }
+      const drawApparatusMap = Object.fromEntries((drawApparatus ?? []).map(a => [a.id, a.unit_number]))
+
+      // 90-day cutoff for usage rate
+      const ninetyDaysAgo = new Date()
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+      const cutoff90 = ninetyDaysAgo.toISOString().split('T')[0]
+
+      for (const t of tanksRaw ?? []) {
+        const tDel = allDeliveries.filter(d => d.tank_id === t.id)
+        const tDrw = allDraws.filter(d => d.fuel_tank_id === t.id)
+
+        const totalIn = tDel.reduce((s, d) => s + Number(d.gallons), 0)
+        const totalOut = tDrw.reduce((s, d) => s + Number(d.gallons), 0)
+        const current_gallons = Math.max(0, totalIn - totalOut)
+
+        const withCost = tDel.filter(d => d.cost_per_gallon != null)
+        const avg_cost_per_gallon = withCost.length > 0
+          ? withCost.reduce((s, d) => s + Number(d.cost_per_gallon!), 0) / withCost.length
+          : null
+
+        const used90 = tDrw.filter(d => d.fuel_date >= cutoff90).reduce((s, d) => s + Number(d.gallons), 0)
+        const daily_usage = used90 > 0 ? used90 / 90 : null
+        const days_until_reorder = daily_usage && current_gallons > t.low_level_threshold_gallons
+          ? Math.floor((current_gallons - t.low_level_threshold_gallons) / daily_usage)
+          : null
+
+        // Date-filtered ledger with running balance
+        const preIn = tDel.filter(d => d.delivery_date < from).reduce((s, d) => s + Number(d.gallons), 0)
+        const preOut = tDrw.filter(d => d.fuel_date < from).reduce((s, d) => s + Number(d.gallons), 0)
+        let balance = Math.max(0, preIn - preOut)
+
+        const combined = [
+          ...tDel.filter(d => d.delivery_date >= from && d.delivery_date <= to).map(d => ({
+            date: d.delivery_date, type: 'delivery' as const,
+            gallons: Number(d.gallons), label: d.vendor ?? 'Delivery',
+            cost_per_gallon: d.cost_per_gallon != null ? Number(d.cost_per_gallon) : null,
+            total_cost: d.total_cost != null ? Number(d.total_cost) : null,
+          })),
+          ...tDrw.filter(d => d.fuel_date >= from && d.fuel_date <= to).map(d => ({
+            date: d.fuel_date, type: 'draw' as const,
+            gallons: Number(d.gallons), label: `Unit ${drawApparatusMap[d.apparatus_id] ?? '—'}`,
+            cost_per_gallon: null, total_cost: null,
+          })),
+        ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+
+        const ledger = combined.map(row => {
+          balance = row.type === 'delivery' ? balance + row.gallons : balance - row.gallons
+          return { ...row, running_balance: Math.max(0, balance) }
+        })
+
+        tankReport.push({
+          id: t.id, name: t.name, fuel_type: t.fuel_type,
+          capacity_gallons: t.capacity_gallons,
+          low_level_threshold_gallons: t.low_level_threshold_gallons,
+          current_gallons, avg_cost_per_gallon, daily_usage, days_until_reorder, ledger,
+        })
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   let query = adminClient
     .from('apparatus_fuel_logs')
     .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
@@ -77,6 +182,7 @@ export default async function FuelReportPage({
       entries={entries}
       apparatus={apparatusRaw ?? []}
       filters={{ from, to, apparatusId: apparatusId ?? '' }}
+      tankReport={tankReport}
     />
   )
 }

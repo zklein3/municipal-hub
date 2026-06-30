@@ -73,6 +73,24 @@ export async function updateDepartmentModules(
   return { success: true }
 }
 
+export async function setFuelStorageModule(enabled: boolean) {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (ctx.systemRole !== 'admin') return { error: 'Only admins can change this setting.' }
+  if (!ctx.departmentId) return { error: 'No department found.' }
+
+  const admin = createAdminClient()
+  const { error: dbErr } = await admin
+    .from('departments')
+    .update({ module_fuel_storage: enabled })
+    .eq('id', ctx.departmentId)
+
+  if (dbErr) return { error: dbErr.message }
+  revalidatePath('/dept-admin')
+  revalidatePath('/fuel')
+  return { success: true }
+}
+
 export async function saveNerisEntityId(departmentId: string, nerisEntityId: string) {
   const adminClient = createAdminClient()
   const { error } = await adminClient

@@ -35,6 +35,7 @@ export async function logFuel(formData: FormData) {
   const engine_hours = formData.get('engine_hours') as string
   const vendor = formData.get('vendor') as string
   const notes = formData.get('notes') as string
+  const fuel_tank_id = (formData.get('fuel_tank_id') as string | null) || null
 
   if (!apparatus_id) return { error: 'Apparatus is required.' }
   if (!fuel_date) return { error: 'Date is required.' }
@@ -55,6 +56,7 @@ export async function logFuel(formData: FormData) {
     engine_hours: engine_hours ? parseFloat(engine_hours) : null,
     vendor: vendor || null,
     notes: notes || null,
+    fuel_tank_id,
   })
 
   if (error) { await logError(error.message, '/fuel'); return { error: error.message } }
@@ -81,6 +83,7 @@ export async function updateFuelEntry(id: string, formData: FormData) {
   const engine_hours = formData.get('engine_hours') as string
   const vendor = formData.get('vendor') as string
   const notes = formData.get('notes') as string
+  const fuel_tank_id = (formData.get('fuel_tank_id') as string | null) || null
 
   if (!fuel_date) return { error: 'Date is required.' }
   if (!gallons || parseFloat(gallons) <= 0) return { error: 'Gallons must be greater than 0.' }
@@ -99,6 +102,7 @@ export async function updateFuelEntry(id: string, formData: FormData) {
       engine_hours: engine_hours ? parseFloat(engine_hours) : null,
       vendor: vendor || null,
       notes: notes || null,
+      fuel_tank_id,
     })
     .eq('id', id)
     .eq('department_id', ctx.department_id!)

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import Image from 'next/image'
 import HubCard from '@/components/HubCard'
+import FuelStorageToggle from './FuelStorageToggle'
 
 export default async function DeptAdminPage() {
   const adminClient = createAdminClient()
@@ -20,7 +21,7 @@ export default async function DeptAdminPage() {
     { count: pendingSetupCount },
   ] = await Promise.all([
     adminClient.from('departments')
-      .select('module_iso, module_neris, module_medical, public_site_enabled')
+      .select('module_iso, module_neris, module_medical, module_fuel_storage, public_site_enabled')
       .eq('id', departmentId)
       .single(),
     adminClient.from('department_personnel')
@@ -36,6 +37,7 @@ export default async function DeptAdminPage() {
   const moduleIso = (deptFlags as any)?.module_iso ?? false
   const moduleNeris = (deptFlags as any)?.module_neris ?? false
   const moduleMedical = (deptFlags as any)?.module_medical ?? false
+  const moduleFuelStorage = (deptFlags as any)?.module_fuel_storage ?? false
   const publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
   const hasPendingSetup = (pendingSetupCount ?? 0) > 0
 
@@ -108,6 +110,18 @@ export default async function DeptAdminPage() {
             href="/dept-admin/public-inbox"
           />
         )}
+        {moduleFuelStorage && (
+          <HubCard
+            title="Fuel Tanks"
+            description="Manage on-site storage tanks and fuel deliveries"
+            href="/dept-admin/fuel-tanks"
+          />
+        )}
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-zinc-700 mb-3">Department Features</h2>
+        <FuelStorageToggle enabled={moduleFuelStorage} />
       </div>
 
       {/* NERIS promo — fire depts only, shown only when module is not yet enabled */}

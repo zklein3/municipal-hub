@@ -23,6 +23,8 @@ interface FuelEntry {
   vendor: string | null
   notes: string | null
   logged_by_name: string | null
+  fuel_tank_id: string | null
+  tank_name: string | null
 }
 
 interface Apparatus {
@@ -31,14 +33,22 @@ interface Apparatus {
   apparatus_name: string | null
 }
 
+interface FuelTank {
+  id: string
+  name: string
+  fuel_type: string
+}
+
 export default function FuelClient({
   entries: initialEntries,
   apparatus,
+  fuelTanks = [],
   fixedApparatusId,
   isOfficerOrAbove,
 }: {
   entries: FuelEntry[]
   apparatus: Apparatus[]
+  fuelTanks?: FuelTank[]
   fixedApparatusId?: string
   isOfficerOrAbove: boolean
 }) {
@@ -51,6 +61,7 @@ export default function FuelClient({
   const [success, setSuccess] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [fuelSource, setFuelSource] = useState<'external' | 'tank'>('external')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -68,6 +79,7 @@ export default function FuelClient({
     engine_hours: string
     vendor: string
     notes: string
+    fuel_tank_id: string
   }>({
     apparatus_id: fixedApparatusId ?? '',
     fuel_date: today,
@@ -81,6 +93,7 @@ export default function FuelClient({
     engine_hours: '',
     vendor: '',
     notes: '',
+    fuel_tank_id: '',
   })
 
   function applyParsed(data: ParsedFuelReceipt) {
@@ -124,6 +137,7 @@ export default function FuelClient({
 
   function handleEdit(entry: FuelEntry) {
     setEditingId(entry.id)
+    setFuelSource(entry.fuel_tank_id ? 'tank' : 'external')
     setForm({
       apparatus_id: entry.apparatus_id,
       fuel_date: entry.fuel_date,
@@ -137,6 +151,7 @@ export default function FuelClient({
       engine_hours: entry.engine_hours != null ? String(entry.engine_hours) : '',
       vendor: entry.vendor ?? '',
       notes: entry.notes ?? '',
+      fuel_tank_id: entry.fuel_tank_id ?? '',
     })
     setShowForm(true)
     setError(null)
@@ -147,9 +162,10 @@ export default function FuelClient({
   function handleCancelForm() {
     setShowForm(false)
     setEditingId(null)
+    setFuelSource('external')
     setError(null)
     setSuccess(null)
-    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '' }))
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '', fuel_tank_id: '' }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -158,7 +174,12 @@ export default function FuelClient({
     setError(null)
     setSuccess(null)
     const fd = new FormData()
-    Object.entries(form).forEach(([k, v]) => { if (v) fd.set(k, v) })
+    // Don't send fuel_tank_id via the catch-all — handle it explicitly below
+    const { fuel_tank_id: _ftid, ...regularFields } = form
+    Object.entries(regularFields).forEach(([k, v]) => { if (v) fd.set(k, v) })
+    if (fuelSource === 'tank' && form.fuel_tank_id) {
+      fd.set('fuel_tank_id', form.fuel_tank_id)
+    }
 
     if (editingId) {
       const result = await updateFuelEntry(editingId, fd)
@@ -187,7 +208,8 @@ export default function FuelClient({
 
     setShowForm(false)
     setEditingId(null)
-    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '' }))
+    setFuelSource('external')
+    setForm(prev => ({ ...prev, gallons: '', cost_per_gallon: '', total_cost: '', fuel_system: 'main', aux_description: '', odometer: '', engine_hours: '', vendor: '', notes: '', fuel_date: today, apparatus_id: fixedApparatusId ?? '', fuel_tank_id: '' }))
     setLoading(false)
   }
 
@@ -273,6 +295,58 @@ export default function FuelClient({
                 </select>
               </div>
             </div>
+
+            {/* Fuel source — only shown when dept has on-site tanks */}
+            {fuelTanks.length > 0 && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-700">Fuel Source</label>
+                <div className="flex gap-4 mb-2">
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fuel_source"
+                      checked={fuelSource === 'external'}
+                      onChange={() => {
+                        setFuelSource('external')
+                        setForm(p => ({ ...p, fuel_tank_id: '' }))
+                      }}
+                      className="accent-red-600"
+                    />
+                    External (vendor)
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="fuel_source"
+                      checked={fuelSource === 'tank'}
+                      onChange={() => {
+                        setFuelSource('tank')
+                        const matching = fuelTanks.filter(t => t.fuel_type === form.fuel_type)
+                        setForm(p => ({ ...p, fuel_tank_id: matching.length === 1 ? matching[0].id : '' }))
+                      }}
+                      className="accent-red-600"
+                    />
+                    Department Tank
+                  </label>
+                </div>
+                {fuelSource === 'tank' && (
+                  <select
+                    value={form.fuel_tank_id}
+                    onChange={e => setForm(p => ({ ...p, fuel_tank_id: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Select tank…</option>
+                    {fuelTanks
+                      .filter(t => t.fuel_type === form.fuel_type)
+                      .map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                    }
+                    {fuelTanks.filter(t => t.fuel_type === form.fuel_type).length === 0 && (
+                      <option disabled>No {form.fuel_type} tanks configured</option>
+                    )}
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Fuel system */}
             <div className="flex gap-3">
@@ -363,6 +437,11 @@ export default function FuelClient({
                     {entry.fuel_system === 'auxiliary' && (
                       <span className="text-xs rounded-full bg-purple-100 text-purple-700 px-2 py-0.5">
                         Aux{entry.aux_description ? ` — ${entry.aux_description}` : ''}
+                      </span>
+                    )}
+                    {entry.tank_name && (
+                      <span className="text-xs rounded-full bg-green-100 text-green-700 px-2 py-0.5">
+                        Dept Tank — {entry.tank_name}
                       </span>
                     )}
                   </div>

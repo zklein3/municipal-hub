@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import BackButton from '@/components/BackButton'
 import FuelClient from './FuelClient'
+import TankStatusSection from './TankStatusSection'
 
 export default async function FuelPage() {
   const adminClient = createAdminClient()
@@ -21,13 +22,52 @@ export default async function FuelPage() {
     .eq('active', true)
     .order('unit_number')
 
+  const { data: deptFlags } = await adminClient
+    .from('departments')
+    .select('module_fuel_storage')
+    .eq('id', department_id)
+    .single()
+
+  const fuelTanksRaw = deptFlags?.module_fuel_storage
+    ? (await adminClient.from('fuel_tanks')
+        .select('id, name, fuel_type, capacity_gallons, low_level_threshold_gallons')
+        .eq('department_id', department_id)
+        .eq('active', true)
+        .order('created_at')).data ?? []
+    : []
+
+  // Compute current level per tank from deliveries minus draws
+  const tankIds = fuelTanksRaw.map(t => t.id)
+  const [tankDeliveryResult, tankDrawResult] = tankIds.length > 0
+    ? await Promise.all([
+        adminClient.from('fuel_tank_deliveries').select('tank_id, gallons').in('tank_id', tankIds),
+        adminClient.from('apparatus_fuel_logs').select('fuel_tank_id, gallons').in('fuel_tank_id', tankIds),
+      ])
+    : [{ data: [] }, { data: [] }]
+
+  const deliverySum: Record<string, number> = {}
+  const drawSum: Record<string, number> = {}
+  for (const d of tankDeliveryResult.data ?? []) {
+    deliverySum[d.tank_id] = (deliverySum[d.tank_id] ?? 0) + Number(d.gallons)
+  }
+  for (const d of tankDrawResult.data ?? []) {
+    if (d.fuel_tank_id) drawSum[d.fuel_tank_id] = (drawSum[d.fuel_tank_id] ?? 0) + Number(d.gallons)
+  }
+  const tanksWithLevel = fuelTanksRaw.map(t => ({
+    ...t,
+    fuel_type: t.fuel_type as 'diesel' | 'gasoline' | 'other',
+    current_gallons: Math.max(0, (deliverySum[t.id] ?? 0) - (drawSum[t.id] ?? 0)),
+  }))
+
   const { data: logsRaw } = await adminClient
     .from('apparatus_fuel_logs')
-    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
+    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id, fuel_tank_id')
     .eq('department_id', department_id)
     .order('fuel_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(100)
+
+  const tankMap = Object.fromEntries(fuelTanksRaw.map(t => [t.id, t.name as string]))
 
   const personnelIds = [...new Set((logsRaw ?? []).map(l => l.logged_by_personnel_id).filter(Boolean) as string[])]
   const { data: personnelRaw } = personnelIds.length > 0
@@ -56,6 +96,8 @@ export default async function FuelPage() {
     vendor: l.vendor,
     notes: l.notes,
     logged_by_name: l.logged_by_personnel_id ? (personnelMap[l.logged_by_personnel_id] ?? null) : null,
+    fuel_tank_id: l.fuel_tank_id ?? null,
+    tank_name: l.fuel_tank_id ? (tankMap[l.fuel_tank_id] ?? null) : null,
   }))
 
   return (
@@ -67,9 +109,15 @@ export default async function FuelPage() {
       <div className="mb-5">
         <BackButton />
       </div>
+      {tanksWithLevel.length > 0 && (
+        <div className="mb-6">
+          <TankStatusSection tanks={tanksWithLevel} />
+        </div>
+      )}
       <FuelClient
         entries={entries}
         apparatus={apparatusRaw ?? []}
+        fuelTanks={fuelTanksRaw}
         isOfficerOrAbove={isOfficerOrAbove}
       />
     </div>

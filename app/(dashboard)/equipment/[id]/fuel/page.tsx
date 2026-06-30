@@ -24,9 +24,25 @@ export default async function ApparatusFuelPage({
     .select('id, unit_number, apparatus_name').eq('id', id).eq('department_id', department_id).single()
   if (!apparatus) redirect('/inspections')
 
+  const { data: deptFlags } = await adminClient
+    .from('departments')
+    .select('module_fuel_storage')
+    .eq('id', department_id)
+    .single()
+
+  const fuelTanksRaw = deptFlags?.module_fuel_storage
+    ? (await adminClient.from('fuel_tanks')
+        .select('id, name, fuel_type')
+        .eq('department_id', department_id)
+        .eq('active', true)
+        .order('created_at')).data ?? []
+    : []
+
+  const tankMap = Object.fromEntries(fuelTanksRaw.map(t => [t.id, t.name]))
+
   const { data: logsRaw } = await adminClient
     .from('apparatus_fuel_logs')
-    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id')
+    .select('id, apparatus_id, fuel_date, gallons, cost_per_gallon, total_cost, fuel_type, fuel_system, aux_description, odometer, engine_hours, vendor, notes, logged_by_personnel_id, fuel_tank_id')
     .eq('apparatus_id', id)
     .eq('department_id', department_id)
     .order('fuel_date', { ascending: false })
@@ -56,6 +72,8 @@ export default async function ApparatusFuelPage({
     vendor: l.vendor,
     notes: l.notes,
     logged_by_name: l.logged_by_personnel_id ? (personnelMap[l.logged_by_personnel_id] ?? null) : null,
+    fuel_tank_id: l.fuel_tank_id ?? null,
+    tank_name: l.fuel_tank_id ? (tankMap[l.fuel_tank_id] ?? null) : null,
   }))
 
   return (
@@ -70,6 +88,7 @@ export default async function ApparatusFuelPage({
       <FuelClient
         entries={entries}
         apparatus={[{ id: apparatus.id, unit_number: apparatus.unit_number, apparatus_name: apparatus.apparatus_name }]}
+        fuelTanks={fuelTanksRaw}
         fixedApparatusId={id}
         isOfficerOrAbove={isOfficerOrAbove}
       />
