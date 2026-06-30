@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
-import { getPdContactTypes, getPdActionTakenTypes, getPdCaseNumberSettings } from '@/app/actions/pd-contacts'
+import {
+  getPdContactTypes, getPdActionTakenTypes, getPdCaseNumberSettings,
+  getPdContactTypeUsageCounts, getPdActionTakenUsageCounts, getPdCaseNumberCounter,
+} from '@/app/actions/pd-contacts'
 import PdListClient from './PdListClient'
 import PdCaseNumberClient from './PdCaseNumberClient'
 
@@ -17,12 +20,26 @@ export default async function PoliceSettingsPage({
   if (!ctx.departmentId || (ctx.systemRole !== 'admin' && !ctx.isSysAdmin)) redirect('/dashboard')
 
   const departmentId = ctx.departmentId
+  const year = new Date().getFullYear()
 
-  const [{ items: contactTypes }, { items: actionTypes }, caseNumberSettings] = await Promise.all([
+  const [
+    { items: contactTypesRaw },
+    { items: actionTypesRaw },
+    caseNumberSettings,
+    contactTypeUsage,
+    actionTypeUsage,
+    currentSeq,
+  ] = await Promise.all([
     getPdContactTypes(departmentId),
     getPdActionTakenTypes(departmentId),
     getPdCaseNumberSettings(departmentId),
+    getPdContactTypeUsageCounts(departmentId),
+    getPdActionTakenUsageCounts(departmentId),
+    getPdCaseNumberCounter(departmentId, year),
   ])
+
+  const contactTypes = contactTypesRaw.map(t => ({ ...t, usageCount: contactTypeUsage[t.label] ?? 0 }))
+  const actionTypes = actionTypesRaw.map(a => ({ ...a, usageCount: actionTypeUsage[a.id] ?? 0 }))
 
   return (
     <div className="pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 max-w-3xl">
@@ -81,7 +98,13 @@ export default async function PoliceSettingsPage({
       )}
 
       {activeTab === 'numbering' && (
-        <PdCaseNumberClient departmentId={departmentId} initialMode={caseNumberSettings.mode} initialPrefix={caseNumberSettings.prefix} />
+        <PdCaseNumberClient
+          departmentId={departmentId}
+          initialMode={caseNumberSettings.mode}
+          initialPrefix={caseNumberSettings.prefix}
+          year={year}
+          currentSeq={currentSeq}
+        />
       )}
     </div>
   )

@@ -25,8 +25,12 @@ export async function ensurePdContactTypes(department_id: string) {
   const adminClient = createAdminClient()
   const { data: existing } = await adminClient.from('pd_contact_types').select('id').eq('department_id', department_id).limit(1)
   if (existing && existing.length > 0) return { seeded: false }
-  const { error: dbErr } = await adminClient.from('pd_contact_types').insert(
-    DEFAULT_CONTACT_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true }))
+  // upsert + ignoreDuplicates (not insert) — the unique (department_id, label)
+  // constraint means concurrent first-page-loads racing this seed can't both
+  // succeed and create duplicate rows.
+  const { error: dbErr } = await adminClient.from('pd_contact_types').upsert(
+    DEFAULT_CONTACT_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true })),
+    { onConflict: 'department_id,label', ignoreDuplicates: true }
   )
   if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
   return { seeded: true }
@@ -52,7 +56,11 @@ export async function addPdContactType(departmentId: string, label: string) {
   const { data: last } = await adminClient.from('pd_contact_types').select('sort_order').eq('department_id', departmentId).order('sort_order', { ascending: false }).limit(1)
   const sort_order = (last?.[0]?.sort_order ?? -1) + 1
   const { error: dbErr } = await adminClient.from('pd_contact_types').insert({ department_id: departmentId, label: label.trim(), sort_order, active: true })
-  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: 'A contact type with that label already exists.' }
+    await logError(dbErr.message, '/dept-admin/police')
+    return { error: dbErr.message }
+  }
   revalidatePath('/dept-admin/police')
   return { success: true }
 }
@@ -63,7 +71,11 @@ export async function updatePdContactType(id: string, label: string) {
   if (!label.trim()) return { error: 'Label is required.' }
   const adminClient = createAdminClient()
   const { error: dbErr } = await adminClient.from('pd_contact_types').update({ label: label.trim() }).eq('id', id)
-  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: 'A contact type with that label already exists.' }
+    await logError(dbErr.message, '/dept-admin/police')
+    return { error: dbErr.message }
+  }
   revalidatePath('/dept-admin/police')
   return { success: true }
 }
@@ -89,13 +101,46 @@ export async function reorderPdContactTypes(departmentId: string, orderedIds: st
   return { success: true }
 }
 
+// contact_type is stored on pd_contacts as a free-text label (not a foreign key),
+// so usage is counted by matching label text rather than an id.
+export async function getPdContactTypeUsageCounts(department_id: string): Promise<Record<string, number>> {
+  const adminClient = createAdminClient()
+  const { data } = await adminClient.from('pd_contacts').select('contact_type').eq('department_id', department_id)
+  const counts: Record<string, number> = {}
+  for (const row of data ?? []) {
+    if (!row.contact_type) continue
+    counts[row.contact_type] = (counts[row.contact_type] ?? 0) + 1
+  }
+  return counts
+}
+
+export async function deletePdContactType(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  const { data: row, error: fetchErr } = await adminClient.from('pd_contact_types').select('department_id, label').eq('id', id).single()
+  if (fetchErr || !row) return { error: 'Contact type not found.' }
+  const { count, error: countErr } = await adminClient
+    .from('pd_contacts')
+    .select('id', { count: 'exact', head: true })
+    .eq('department_id', row.department_id)
+    .eq('contact_type', row.label)
+  if (countErr) { await logError(countErr.message, '/dept-admin/police'); return { error: countErr.message } }
+  if ((count ?? 0) > 0) return { error: 'This contact type is used by existing contacts and cannot be deleted. Deactivate it instead.' }
+  const { error: dbErr } = await adminClient.from('pd_contact_types').delete().eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
 // ─── Action Taken Types (admin-configurable list) ─────────────────────────
 export async function ensurePdActionTakenTypes(department_id: string) {
   const adminClient = createAdminClient()
   const { data: existing } = await adminClient.from('pd_action_taken_types').select('id').eq('department_id', department_id).limit(1)
   if (existing && existing.length > 0) return { seeded: false }
-  const { error: dbErr } = await adminClient.from('pd_action_taken_types').insert(
-    DEFAULT_ACTION_TAKEN_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true }))
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').upsert(
+    DEFAULT_ACTION_TAKEN_TYPES.map((label, i) => ({ department_id, label, sort_order: i, active: true })),
+    { onConflict: 'department_id,label', ignoreDuplicates: true }
   )
   if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
   return { seeded: true }
@@ -121,7 +166,11 @@ export async function addPdActionTakenType(departmentId: string, label: string) 
   const { data: last } = await adminClient.from('pd_action_taken_types').select('sort_order').eq('department_id', departmentId).order('sort_order', { ascending: false }).limit(1)
   const sort_order = (last?.[0]?.sort_order ?? -1) + 1
   const { error: dbErr } = await adminClient.from('pd_action_taken_types').insert({ department_id: departmentId, label: label.trim(), sort_order, active: true })
-  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: 'An action taken type with that label already exists.' }
+    await logError(dbErr.message, '/dept-admin/police')
+    return { error: dbErr.message }
+  }
   revalidatePath('/dept-admin/police')
   return { success: true }
 }
@@ -132,7 +181,11 @@ export async function updatePdActionTakenType(id: string, label: string) {
   if (!label.trim()) return { error: 'Label is required.' }
   const adminClient = createAdminClient()
   const { error: dbErr } = await adminClient.from('pd_action_taken_types').update({ label: label.trim() }).eq('id', id)
-  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: 'An action taken type with that label already exists.' }
+    await logError(dbErr.message, '/dept-admin/police')
+    return { error: dbErr.message }
+  }
   revalidatePath('/dept-admin/police')
   return { success: true }
 }
@@ -154,6 +207,39 @@ export async function reorderPdActionTakenTypes(departmentId: string, orderedIds
   await Promise.all(orderedIds.map((id, i) =>
     adminClient.from('pd_action_taken_types').update({ sort_order: i }).eq('id', id).eq('department_id', departmentId)
   ))
+  revalidatePath('/dept-admin/police')
+  return { success: true }
+}
+
+// action_type_id IS a foreign key (pd_contact_actions.action_type_id), so usage
+// is counted by id via the junction table, scoped to this department's contacts.
+export async function getPdActionTakenUsageCounts(department_id: string): Promise<Record<string, number>> {
+  const adminClient = createAdminClient()
+  const { data: contacts } = await adminClient.from('pd_contacts').select('id').eq('department_id', department_id)
+  const contactIds = (contacts ?? []).map(c => c.id)
+  if (contactIds.length === 0) return {}
+  const { data } = await adminClient.from('pd_contact_actions').select('action_type_id').in('contact_id', contactIds)
+  const counts: Record<string, number> = {}
+  for (const row of data ?? []) {
+    counts[row.action_type_id] = (counts[row.action_type_id] ?? 0) + 1
+  }
+  return counts
+}
+
+export async function deletePdActionTakenType(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  const adminClient = createAdminClient()
+  const { data: row, error: fetchErr } = await adminClient.from('pd_action_taken_types').select('department_id').eq('id', id).single()
+  if (fetchErr || !row) return { error: 'Action taken type not found.' }
+  const { count, error: countErr } = await adminClient
+    .from('pd_contact_actions')
+    .select('contact_id', { count: 'exact', head: true })
+    .eq('action_type_id', id)
+  if (countErr) { await logError(countErr.message, '/dept-admin/police'); return { error: countErr.message } }
+  if ((count ?? 0) > 0) return { error: 'This action is used by existing contacts and cannot be deleted. Deactivate it instead.' }
+  const { error: dbErr } = await adminClient.from('pd_action_taken_types').delete().eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
   revalidatePath('/dept-admin/police')
   return { success: true }
 }
@@ -195,6 +281,35 @@ export async function generatePdCaseNumber(department_id: string): Promise<strin
   if (dbErr || seq == null) { await logError(dbErr?.message ?? 'counter rpc failed', '/forms/contact'); return null }
   const yy = String(year).slice(-2)
   return `${prefix}${yy}-${String(seq).padStart(4, '0')}`
+}
+
+// Returns the current sequence value for this department/year (0 if no counter row exists yet,
+// meaning the next auto-generated number will be 0001).
+export async function getPdCaseNumberCounter(department_id: string, year: number): Promise<number> {
+  const adminClient = createAdminClient()
+  const { data } = await adminClient
+    .from('pd_contact_number_counters')
+    .select('seq')
+    .eq('department_id', department_id)
+    .eq('year', year)
+    .maybeSingle()
+  return data?.seq ?? 0
+}
+
+// Admin sets the starting number so the next contact logged gets `nextNumber`.
+// Useful when a department already issued case numbers by hand earlier in the
+// year before switching this dept to auto mode.
+export async function setPdCaseNumberStart(departmentId: string, year: number, nextNumber: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admin only.' }
+  if (!Number.isInteger(nextNumber) || nextNumber < 1) return { error: 'Enter a whole number of 1 or greater.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('pd_contact_number_counters')
+    .upsert({ department_id: departmentId, year, seq: nextNumber - 1 }, { onConflict: 'department_id,year' })
+  if (dbErr) { await logError(dbErr.message, '/dept-admin/police'); return { error: dbErr.message } }
+  revalidatePath('/dept-admin/police')
+  return { success: true }
 }
 
 type PersonInput = {

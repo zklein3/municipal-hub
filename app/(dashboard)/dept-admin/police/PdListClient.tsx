@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import {
-  addPdContactType, updatePdContactType, togglePdContactType, reorderPdContactTypes,
-  addPdActionTakenType, updatePdActionTakenType, togglePdActionTakenType, reorderPdActionTakenTypes,
+  addPdContactType, updatePdContactType, togglePdContactType, reorderPdContactTypes, deletePdContactType,
+  addPdActionTakenType, updatePdActionTakenType, togglePdActionTakenType, reorderPdActionTakenTypes, deletePdActionTakenType,
 } from '@/app/actions/pd-contacts'
 
 interface ListItem {
@@ -11,11 +11,12 @@ interface ListItem {
   label: string
   sort_order: number
   active: boolean
+  usageCount?: number
 }
 
 const ACTIONS = {
-  'contact-type': { add: addPdContactType, update: updatePdContactType, toggle: togglePdContactType, reorder: reorderPdContactTypes },
-  'action-type': { add: addPdActionTakenType, update: updatePdActionTakenType, toggle: togglePdActionTakenType, reorder: reorderPdActionTakenTypes },
+  'contact-type': { add: addPdContactType, update: updatePdContactType, toggle: togglePdContactType, reorder: reorderPdContactTypes, delete: deletePdContactType },
+  'action-type': { add: addPdActionTakenType, update: updatePdActionTakenType, toggle: togglePdActionTakenType, reorder: reorderPdActionTakenTypes, delete: deletePdActionTakenType },
 } as const
 
 export default function PdListClient({
@@ -49,8 +50,16 @@ export default function PdListClient({
     const res = await actions.add(departmentId, newLabel.trim())
     setAdding(false)
     if (res?.error) { setError(res.error); return }
-    setItems(prev => [...prev, { id: crypto.randomUUID(), label: newLabel.trim(), sort_order: prev.length, active: true }])
+    setItems(prev => [...prev, { id: crypto.randomUUID(), label: newLabel.trim(), sort_order: prev.length, active: true, usageCount: 0 }])
     setNewLabel('')
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this option permanently? This cannot be undone.')) return
+    setError(null)
+    const res = await actions.delete(id)
+    if (res?.error) { setError(res.error); return }
+    setItems(prev => prev.filter(i => i.id !== id))
   }
 
   async function handleRename(id: string) {
@@ -139,6 +148,14 @@ export default function PdListClient({
                   className={`text-xs ${item.active ? 'text-zinc-400 hover:text-red-600' : 'text-zinc-400 hover:text-green-600'}`}>
                   {item.active ? 'Deactivate' : 'Activate'}
                 </button>
+                {(item.usageCount ?? 0) === 0 ? (
+                  <button type="button" onClick={() => handleDelete(item.id)}
+                    className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
+                ) : (
+                  <span className="text-xs text-zinc-300" title={`Used by ${item.usageCount} existing contact${item.usageCount === 1 ? '' : 's'} — deactivate instead`}>
+                    In use
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -158,7 +175,7 @@ export default function PdListClient({
           {adding ? 'Adding...' : 'Add'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-zinc-400">Deactivating hides an option from new contacts but keeps it on existing historical records.</p>
+      <p className="mt-2 text-xs text-zinc-400">Deactivating hides an option from new contacts but keeps it on existing historical records. Delete is only available for options that have never been used.</p>
     </div>
   )
 }
