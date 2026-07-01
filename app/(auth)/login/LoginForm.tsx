@@ -1,9 +1,33 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { signIn } from '@/app/actions/auth'
 
-export default function LoginForm({ next }: { next?: string }) {
+export interface LoginTheme {
+  brand: string
+  monogram: string
+  category: string
+  avatarBg: string       // e.g. 'bg-red-700'
+  inputFocus: string     // e.g. 'focus:border-red-500 focus:ring-red-500'
+  button: string         // e.g. 'bg-red-700 hover:bg-red-800'
+  backHref: string
+  backLabel: string
+  icon?: React.ReactNode
+}
+
+const MUNIOPS_THEME: LoginTheme = {
+  brand: 'MuniOps',
+  monogram: 'MO',
+  category: 'Municipal Operations Platform',
+  avatarBg: 'bg-blue-800',
+  inputFocus: 'focus:border-blue-600 focus:ring-blue-600',
+  button: 'bg-blue-800 hover:bg-blue-700',
+  backHref: '/',
+  backLabel: 'MuniOps',
+}
+
+export default function LoginForm({ next, theme = MUNIOPS_THEME }: { next?: string; theme?: LoginTheme }) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -22,13 +46,24 @@ export default function LoginForm({ next }: { next?: string }) {
     <div className="flex min-h-screen items-center justify-center bg-zinc-100">
       <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-md">
 
+        {/* Back link */}
+        <div className="mb-6">
+          <Link href={theme.backHref} className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            {theme.backLabel}
+          </Link>
+        </div>
+
         {/* Logo / Title */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-red-700">
-            <span className="text-2xl font-bold text-white">F7</span>
+          <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${theme.avatarBg}`}>
+            {theme.icon ?? <span className="text-2xl font-bold text-white">{theme.monogram}</span>}
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900">FireOps7</h1>
-          <p className="mt-1 text-sm text-zinc-500">Sign in to your account</p>
+          <h1 className="text-2xl font-bold text-zinc-900">{theme.brand}</h1>
+          <p className="mt-1 text-xs font-medium text-zinc-400 uppercase tracking-widest">{theme.category}</p>
+          <p className="mt-2 text-sm text-zinc-500">Sign in to your account</p>
         </div>
 
         {/* Error */}
@@ -52,7 +87,7 @@ export default function LoginForm({ next }: { next?: string }) {
               type="email"
               required
               autoComplete="email"
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              className={`w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-1 ${theme.inputFocus}`}
               placeholder="you@example.com"
             />
           </div>
@@ -68,7 +103,7 @@ export default function LoginForm({ next }: { next?: string }) {
                 type={showPassword ? 'text' : 'password'}
                 required
                 autoComplete="current-password"
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 pr-10 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                className={`w-full rounded-lg border border-zinc-300 px-3 py-2 pr-10 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-1 ${theme.inputFocus}`}
                 placeholder="••••••••"
               />
               <button
@@ -94,7 +129,7 @@ export default function LoginForm({ next }: { next?: string }) {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
+            className={`mt-2 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors ${theme.button}`}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

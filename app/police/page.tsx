@@ -31,7 +31,7 @@ export default function LawEnforcementComingSoon() {
             <span className="text-lg font-bold tracking-tight text-white">LawOps</span>
           </div>
           <Link
-            href="/login"
+            href="/police/login"
             className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 transition-colors"
           >
             Sign In

@@ -31,7 +31,7 @@ export default function PublicWorksComingSoon() {
             <span className="text-lg font-bold tracking-tight text-white">CivicOps</span>
           </div>
           <Link
-            href="/login"
+            href="/public-works/login"
             className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600 transition-colors"
           >
             Sign In

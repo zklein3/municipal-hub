@@ -86,7 +86,7 @@ export default async function FireOps7Landing() {
             <span className="text-lg font-bold tracking-tight text-white">FireOps7</span>
           </div>
           <Link
-            href="/login"
+            href="/fire/login"
             className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
           >
             Sign In
@@ -111,7 +111,7 @@ export default async function FireOps7Landing() {
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
-            href="/login"
+            href="/fire/login"
             className="rounded-lg bg-red-700 px-8 py-3 text-base font-semibold text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-900/30"
           >
             Sign In to Your Department
