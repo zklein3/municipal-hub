@@ -66,7 +66,7 @@ export default async function ScanPage({
       .eq('asset_tag', code)
       .eq('department_id', department_id)
       .limit(1)
-    if (data?.[0]) redirect(`/equipment/assets?search=${encodeURIComponent(code)}${from ? '&from=' + encodeURIComponent(from) : ''}`)
+    if (data?.[0]) redirect(`/equipment/assets/${data[0].id}`)
   }
 
   return (

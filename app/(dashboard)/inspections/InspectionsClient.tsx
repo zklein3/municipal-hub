@@ -127,7 +127,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
               {station.apparatus.map(a => (
                 <div key={a.id} className="rounded-xl bg-white border border-zinc-200 overflow-hidden">
                   {/* Apparatus header */}
-                  <div className="px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-lg font-bold text-zinc-900">{a.unit_number}</span>
@@ -142,7 +142,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                         {a.compartments.length} compartment{a.compartments.length !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                    <div className="flex gap-2 flex-wrap">
                       <Link
                         href={`/equipment/${a.id}?from=/inspections`}
                         className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
@@ -170,7 +170,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                       {a.compartments.map((c, i) => (
                         <div
                           key={c.id}
-                          className={`flex items-center justify-between px-5 py-3 gap-4 ${
+                          className={`flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 gap-2 ${
                             i < a.compartments.length - 1 ? 'border-b border-zinc-100' : ''
                           } ${c.item_count === 0 ? 'opacity-40' : ''}`}
                         >
@@ -183,7 +183,7 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                             )}
                             <span className="text-xs text-zinc-400 shrink-0">{c.item_count} item{c.item_count !== 1 ? 's' : ''}</span>
                           </div>
-                          <div className="flex gap-2 shrink-0">
+                          <div className="flex gap-2 flex-wrap">
                             <Link
                               href={`/equipment/${a.id}/${c.id}?from=/inspections`}
                               className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors"
