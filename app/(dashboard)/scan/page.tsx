@@ -18,8 +18,10 @@ export default async function ScanPage({
     const scanPath = `/scan?${new URLSearchParams({ ...(type ? { type } : {}), ...(code ? { code } : {}) }).toString()}`
     redirect(`/login?next=${encodeURIComponent(scanPath)}`)
   }
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
-  if (!ctx.departmentId) redirect('/dashboard')
+  if (!ctx.departmentId) {
+    const returnUrl = `/scan?${new URLSearchParams({ ...(type ? { type } : {}), ...(code ? { code } : {}) }).toString()}`
+    redirect(`/select-department?next=${encodeURIComponent(returnUrl)}`)
+  }
 
   const department_id = ctx.departmentId
 
