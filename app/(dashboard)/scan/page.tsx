@@ -58,15 +58,29 @@ export default async function ScanPage({
     }
   }
 
-  // Try asset (asset_tag field)
+  // Try asset (asset_tag field) — go to asset inspection if templates exist, otherwise detail page
   if (!type || type === 'asset') {
-    const { data } = await adminClient
+    const { data: assetData } = await adminClient
       .from('item_assets')
-      .select('id')
+      .select('id, item_id')
       .eq('asset_tag', code)
       .eq('department_id', department_id)
       .limit(1)
-    if (data?.[0]) redirect(`/equipment/assets/${data[0].id}`)
+    if (assetData?.[0]) {
+      const asset = assetData[0]
+      // Check if this item type has inspection templates
+      const { data: templates } = await adminClient
+        .from('item_inspection_templates')
+        .select('id')
+        .eq('item_id', asset.item_id)
+        .eq('active', true)
+        .limit(1)
+      if (templates && templates.length > 0) {
+        redirect(`/inspections/asset/${asset.id}`)
+      }
+      // No templates — go to service log / detail page
+      redirect(`/equipment/assets/${asset.id}`)
+    }
   }
 
   return (
