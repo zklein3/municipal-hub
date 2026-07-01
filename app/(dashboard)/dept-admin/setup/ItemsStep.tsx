@@ -914,10 +914,22 @@ export default function ItemsStep({
                         )}
                         <span className="ml-2 text-xs text-zinc-500">{itemAssets.filter(a => a.active).length} assets</span>
                       </div>
-                      <button onClick={() => { setAddingAssetFor(addingAssetFor === item.id ? null : item.id); clear() }}
-                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors">
-                        {addingAssetFor === item.id ? 'Cancel' : '+ Add Asset'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {itemAssets.filter(a => a.active).length > 0 && (
+                          <Link
+                            href={`/print/qr-batch?item_id=${item.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+                          >
+                            Print All QRs
+                          </Link>
+                        )}
+                        <button onClick={() => { setAddingAssetFor(addingAssetFor === item.id ? null : item.id); clear() }}
+                          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors">
+                          {addingAssetFor === item.id ? 'Cancel' : '+ Add Asset'}
+                        </button>
+                      </div>
                     </div>
                     {addingAssetFor === item.id && (
                       <div className="p-4 border-b border-zinc-100">
