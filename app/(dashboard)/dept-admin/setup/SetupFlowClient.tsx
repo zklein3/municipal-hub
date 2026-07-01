@@ -35,6 +35,7 @@ export default function SetupFlowClient({
   steps,
   departmentId,
   moduleIso,
+  customFieldDefs,
 }: {
   department: { id: string; name: string }
   stations: any[]
@@ -53,6 +54,7 @@ export default function SetupFlowClient({
   steps: any[]
   departmentId: string
   moduleIso: boolean
+  customFieldDefs: Record<string, { id: string; item_id: string; field_label: string; field_order: number }[]>
 }) {
   const [activeTab, setActiveTab] = useState('stations')
 
@@ -139,6 +141,7 @@ export default function SetupFlowClient({
                 id: a.id,
                 label: a.unit_number + (a.apparatus_name ? ` — ${a.apparatus_name}` : ''),
               }))}
+              customFieldDefs={customFieldDefs}
               {...helpProps}
             />
           )}

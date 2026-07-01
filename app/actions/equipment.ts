@@ -158,6 +158,14 @@ export async function createAsset(formData: FormData) {
   if (!item_id) return { error: 'Item type is required.' }
   if (!asset_name) return { error: 'Asset name is required.' }
   if (!department_id) return { error: 'Department not found.' }
+  // Collect custom field values (inputs named cf_<fieldDefId>)
+  const customFields: Record<string, string> = {}
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('cf_') && typeof value === 'string' && value.trim()) {
+      customFields[key.slice(3)] = value.trim()
+    }
+  }
+
   const { error } = await adminClient.from('item_assets').insert({
     department_id, item_id,
     asset_tag: asset_name,
@@ -168,6 +176,7 @@ export async function createAsset(formData: FormData) {
     status: ASSET_STATUS.active,
     has_linked_asset,
     linked_item_type_id: (has_linked_asset && linked_item_type_id) ? linked_item_type_id : null,
+    ...(Object.keys(customFields).length > 0 ? { custom_field_values: customFields } : {}),
   })
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
   revalidatePath('/dept-admin/items')
@@ -196,6 +205,14 @@ export async function updateAsset(formData: FormData) {
     ? status
     : ASSET_STATUS.active
 
+  // Collect custom field values (inputs named cf_<fieldDefId>)
+  const customFields: Record<string, string> = {}
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('cf_') && typeof value === 'string') {
+      customFields[key.slice(3)] = value
+    }
+  }
+
   const { error } = await adminClient.from('item_assets').update({
     asset_tag: asset_name,
     serial_number: serial_number || null,
@@ -206,9 +223,9 @@ export async function updateAsset(formData: FormData) {
     notes: notes || null,
     has_linked_asset,
     linked_item_type_id: (has_linked_asset && linked_item_type_id) ? linked_item_type_id : null,
+    ...(Object.keys(customFields).length > 0 ? { custom_field_values: customFields } : {}),
   }).eq('id', id)
   if (error) { await logError(error.message, '/dept-admin/items'); return { error: error.message } }
-  revalidatePath('/dept-admin/items')
   revalidatePath('/dept-admin/setup')
   return { success: true }
 }

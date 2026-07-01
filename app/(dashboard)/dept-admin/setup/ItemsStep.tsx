@@ -13,6 +13,7 @@ import {
   addTemplateStep, updateTemplateStep,
   reorderTemplateSteps, deleteTemplateStep,
 } from '@/app/actions/inspections'
+import { saveCustomFieldDefinitions } from '@/app/actions/assets'
 import HelpPrompt from './HelpPrompt'
 
 type Tab = 'items' | 'categories' | 'assets'
@@ -26,8 +27,9 @@ interface Item {
 interface Asset {
   id: string; item_id: string; asset_tag: string; serial_number: string | null
   in_service_date: string | null; status: string; active: boolean; notes: string | null
-  apparatus_id: string | null
+  apparatus_id: string | null; custom_field_values: Record<string, string>
 }
+interface CustomFieldDef { id: string; item_id: string; field_label: string; field_order: number }
 interface Template { id: string; item_id: string; template_name: string; template_description: string | null; active: boolean }
 interface Step {
   id: string; template_id: string; step_text: string; step_type: string
@@ -42,7 +44,7 @@ const STEP_TYPES = [
 ]
 
 export default function ItemsStep({
-  categories, items, assets, templates, steps, departmentId, apparatusOptions, showHelp, helpResetKey,
+  categories, items, assets, templates, steps, departmentId, apparatusOptions, customFieldDefs, showHelp, helpResetKey,
 }: {
   categories: Category[]
   items: Item[]
@@ -51,6 +53,7 @@ export default function ItemsStep({
   steps: Step[]
   departmentId: string
   apparatusOptions: { id: string; label: string }[]
+  customFieldDefs: Record<string, CustomFieldDef[]>
   showHelp: boolean
   helpResetKey: number
 }) {
@@ -97,6 +100,28 @@ export default function ItemsStep({
       setAssignments(prev => ({ ...prev, [assetId]: newApparatusId }))
       setEditingLocationId(null)
     })
+  }
+
+  // Custom field definition state (Items tab)
+  const [fieldsOpenForItem, setFieldsOpenForItem] = useState<string | null>(null)
+  const [fieldDraftsByItem, setFieldDraftsByItem] = useState<Record<string, string[]>>({})
+  const [savingFields, setSavingFields] = useState(false)
+
+  function openFieldsPanel(itemId: string) {
+    setFieldsOpenForItem(fieldsOpenForItem === itemId ? null : itemId)
+    setFieldDraftsByItem(prev => ({
+      ...prev,
+      [itemId]: prev[itemId] ?? (customFieldDefs[itemId] ?? []).map(d => d.field_label),
+    }))
+  }
+
+  async function handleSaveFields(itemId: string) {
+    setSavingFields(true)
+    const labels = fieldDraftsByItem[itemId] ?? []
+    const result = await saveCustomFieldDefinitions(itemId, departmentId, labels)
+    if (result?.error) setError(result.error)
+    else setSuccess('Custom fields saved.')
+    setSavingFields(false)
   }
 
   // Template state
@@ -652,23 +677,94 @@ export default function ItemsStep({
                       </form>
                     </div>
                   ) : (
-                    <div className="flex items-start justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-zinc-900">{item.item_name}</span>
-                          {item.category_id && catMap[item.category_id] && <span className="text-xs text-zinc-400">{catMap[item.category_id]}</span>}
-                          {!item.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
+                    <>
+                      <div className="flex items-start justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-zinc-900">{item.item_name}</span>
+                            {item.category_id && catMap[item.category_id] && <span className="text-xs text-zinc-400">{catMap[item.category_id]}</span>}
+                            {!item.active && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">Inactive</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {item.requires_inspection && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">Inspection</span>}
+                            {item.requires_presence_check && <span className="rounded-full bg-yellow-50 px-2 py-0.5 text-xs text-yellow-600">Presence Check</span>}
+                            {item.tracks_assets && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs text-purple-600">Asset Tracked</span>}
+                            {item.tracks_expiration && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-orange-600">Expiration</span>}
+                            {(customFieldDefs[item.id] ?? []).length > 0 && (
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600">
+                                {customFieldDefs[item.id].length} custom field{customFieldDefs[item.id].length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {item.requires_inspection && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">Inspection</span>}
-                          {item.requires_presence_check && <span className="rounded-full bg-yellow-50 px-2 py-0.5 text-xs text-yellow-600">Presence Check</span>}
-                          {item.tracks_assets && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs text-purple-600">Asset Tracked</span>}
-                          {item.tracks_expiration && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-orange-600">Expiration</span>}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => openFieldsPanel(item.id)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              fieldsOpenForItem === item.id
+                                ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                                : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+                            }`}
+                          >
+                            Fields
+                          </button>
+                          <button onClick={() => { setEditingItemId(item.id); setShowItemForm(false); clear() }}
+                            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
                         </div>
                       </div>
-                      <button onClick={() => { setEditingItemId(item.id); setShowItemForm(false); clear() }}
-                        className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
-                    </div>
+                      {/* Custom field definitions panel */}
+                      {fieldsOpenForItem === item.id && (
+                        <div className="border-t border-indigo-100 bg-indigo-50/40 px-4 py-3">
+                          <p className="text-xs font-semibold text-indigo-800 mb-2">Custom Fields for {item.item_name}</p>
+                          <p className="text-xs text-zinc-500 mb-3">Define extra fields that appear on every asset of this type (e.g. Regulator #, Cylinder #).</p>
+                          <div className="flex flex-col gap-2 mb-3">
+                            {(fieldDraftsByItem[item.id] ?? (customFieldDefs[item.id] ?? []).map(d => d.field_label)).map((label, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={label}
+                                  placeholder={`Field ${idx + 1} name`}
+                                  onChange={e => setFieldDraftsByItem(prev => {
+                                    const drafts = [...(prev[item.id] ?? [])]
+                                    drafts[idx] = e.target.value
+                                    return { ...prev, [item.id]: drafts }
+                                  })}
+                                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setFieldDraftsByItem(prev => {
+                                    const drafts = (prev[item.id] ?? []).filter((_, i) => i !== idx)
+                                    return { ...prev, [item.id]: drafts }
+                                  })}
+                                  className="text-zinc-400 hover:text-red-500 transition-colors text-sm px-1"
+                                >✕</button>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setFieldDraftsByItem(prev => ({
+                                ...prev,
+                                [item.id]: [...(prev[item.id] ?? (customFieldDefs[item.id] ?? []).map(d => d.field_label)), ''],
+                              }))}
+                              className="rounded-lg border-2 border-dashed border-indigo-200 px-3 py-1 text-xs text-indigo-600 hover:border-indigo-400 transition-colors"
+                            >
+                              + Add Field
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveFields(item.id)}
+                              disabled={savingFields}
+                              className="rounded-lg bg-indigo-700 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 transition-colors"
+                            >
+                              {savingFields ? 'Saving…' : 'Save Fields'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
@@ -854,6 +950,24 @@ export default function ItemsStep({
                               </select>
                             </div>
                           </div>
+                          {/* Custom fields for this item type */}
+                          {(customFieldDefs[item.id] ?? []).length > 0 && (
+                            <div className="border-t border-zinc-100 pt-3">
+                              <p className="text-xs font-semibold text-zinc-600 mb-2">Component Numbers</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                {(customFieldDefs[item.id] ?? []).map(def => (
+                                  <div key={def.id}>
+                                    <label className="mb-1 block text-xs font-medium text-zinc-600">{def.field_label}</label>
+                                    <input
+                                      name={`cf_${def.id}`}
+                                      type="text"
+                                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <button type="submit" disabled={loading}
                             className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
                             {loading ? 'Adding...' : 'Add Asset'}
@@ -899,6 +1013,25 @@ export default function ItemsStep({
                                       </select>
                                     </div>
                                   </div>
+                                  {/* Custom fields for this item type */}
+                                  {(customFieldDefs[item.id] ?? []).length > 0 && (
+                                    <div className="border-t border-zinc-100 pt-3">
+                                      <p className="text-xs font-semibold text-zinc-600 mb-2">Component Numbers</p>
+                                      <div className="grid grid-cols-2 gap-3">
+                                        {(customFieldDefs[item.id] ?? []).map(def => (
+                                          <div key={def.id}>
+                                            <label className="mb-1 block text-xs font-medium text-zinc-600">{def.field_label}</label>
+                                            <input
+                                              name={`cf_${def.id}`}
+                                              type="text"
+                                              defaultValue={asset.custom_field_values?.[def.id] ?? ''}
+                                              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                   <div className="flex gap-2">
                                     <button type="submit" disabled={loading}
                                       className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
@@ -912,8 +1045,22 @@ export default function ItemsStep({
                             ) : (
                               <div className="flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
                                 <div className="flex items-center gap-3 min-w-0 flex-wrap">
-                                  <span className="font-mono font-semibold text-zinc-900">{asset.asset_tag}</span>
+                                  <Link
+                                    href={`/equipment/assets/${asset.id}`}
+                                    className="font-mono font-semibold text-zinc-900 hover:text-red-700 transition-colors"
+                                  >
+                                    {asset.asset_tag}
+                                  </Link>
                                   {asset.serial_number && <span className="text-xs text-zinc-500">SN: {asset.serial_number}</span>}
+                                  {/* Custom field values preview */}
+                                  {(customFieldDefs[item.id] ?? []).map(def => {
+                                    const val = asset.custom_field_values?.[def.id]
+                                    return val ? (
+                                      <span key={def.id} className="text-xs text-zinc-500">
+                                        {def.field_label}: <span className="font-mono">{val}</span>
+                                      </span>
+                                    ) : null
+                                  })}
                                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                                     asset.status === 'IN SERVICE' ? 'bg-green-100 text-green-700' :
                                     asset.status === 'OUT OF SERVICE' ? 'bg-yellow-100 text-yellow-700' :
@@ -955,8 +1102,24 @@ export default function ItemsStep({
                                     <span className="text-xs text-red-600">{locationError}</span>
                                   )}
                                 </div>
-                                <button onClick={() => { setEditingAssetId(asset.id); clear() }}
-                                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Link
+                                    href={`/equipment/assets/${asset.id}`}
+                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition-colors"
+                                  >
+                                    Service Log
+                                  </Link>
+                                  <a
+                                    href={`/print/qr?code=${encodeURIComponent(asset.asset_tag)}&type=asset&title=${encodeURIComponent(asset.asset_tag)}&subtitle=${encodeURIComponent(item.item_name)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition-colors"
+                                  >
+                                    Print QR
+                                  </a>
+                                  <button onClick={() => { setEditingAssetId(asset.id); clear() }}
+                                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors">Edit</button>
+                                </div>
                               </div>
                             )}
                           </div>

@@ -115,13 +115,26 @@ export default async function SetupPage() {
 
   // Fetch assets for tracks_assets items
   const assetItemIds = (items ?? []).filter(i => i.tracks_assets).map(i => i.id)
-  const { data: assets } = assetItemIds.length > 0
-    ? await adminClient.from('item_assets')
-        .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes, apparatus_id')
-        .eq('department_id', department_id)
-        .in('item_id', assetItemIds)
-        .order('asset_tag')
-    : { data: [] }
+  const [{ data: assets }, { data: customFieldDefsRaw }] = await Promise.all([
+    assetItemIds.length > 0
+      ? adminClient.from('item_assets')
+          .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes, apparatus_id, custom_field_values')
+          .eq('department_id', department_id)
+          .in('item_id', assetItemIds)
+          .order('asset_tag')
+      : Promise.resolve({ data: [] }),
+    adminClient.from('item_custom_field_definitions')
+      .select('id, item_id, field_label, field_order')
+      .eq('department_id', department_id)
+      .order('field_order'),
+  ])
+
+  // Group custom field defs by item_id
+  const customFieldDefs: Record<string, { id: string; item_id: string; field_label: string; field_order: number }[]> = {}
+  for (const def of customFieldDefsRaw ?? []) {
+    if (!customFieldDefs[def.item_id]) customFieldDefs[def.item_id] = []
+    customFieldDefs[def.item_id].push(def)
+  }
 
   // Fetch inspection templates + steps for inspectable items
   const inspectionItemIds = (items ?? []).filter(i => i.requires_inspection).map(i => i.id)
@@ -163,6 +176,7 @@ export default async function SetupPage() {
       steps={steps ?? []}
       departmentId={department_id}
       moduleIso={deptData?.module_iso ?? false}
+      customFieldDefs={customFieldDefs}
     />
   )
 }
