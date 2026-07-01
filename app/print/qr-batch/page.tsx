@@ -10,72 +10,86 @@ type Asset = { id: string; asset_tag: string; serial_number: string | null }
 
 type Format = 'sheet' | 'avery5163' | 'avery5164' | 'avery5160'
 
-const FORMATS: { id: Format; label: string; description: string; cols: number; qrSize: number; cardStyle: React.CSSProperties }[] = [
+// Base sheet margins per format (in inches) — these match Avery template specs
+const FORMAT_DEFAULTS: Record<Format, { top: number; left: number }> = {
+  sheet:      { top: 0.5,  left: 0.5 },
+  avery5160:  { top: 0.5,  left: 0.19 },
+  avery5163:  { top: 1.0,  left: 0.15625 },
+  avery5164:  { top: 0.5,  left: 0.15625 },
+}
+
+const FORMATS: {
+  id: Format; label: string; description: string
+  cols: number; qrSize: number; cardStyle: React.CSSProperties
+  colGap: string; rowGap: string
+}[] = [
   {
     id: 'sheet',
     label: 'Sheet (3-up)',
     description: '3 per row · full page · cut apart',
-    cols: 3,
-    qrSize: 140,
+    cols: 3, qrSize: 140, colGap: '0.2in', rowGap: '0.2in',
     cardStyle: { padding: '0.2in', border: '1.5px dashed #a1a1aa', borderRadius: '8px' },
   },
   {
     id: 'avery5160',
     label: 'Avery 5160',
     description: '30 per sheet · 2⅝″ × 1″',
-    cols: 3,
-    qrSize: 56,
+    cols: 3, qrSize: 56, colGap: '0.125in', rowGap: '0',
     cardStyle: {
       width: '2.625in', height: '1in',
       padding: '0.05in 0.08in',
-      overflow: 'hidden',
-      boxSizing: 'border-box' as const,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      gap: '6px',
+      overflow: 'hidden', boxSizing: 'border-box' as const,
+      flexDirection: 'row' as const, alignItems: 'center' as const, gap: '6px',
     },
   },
   {
     id: 'avery5163',
     label: 'Avery 5163',
     description: '10 per sheet · 4″ × 2″',
-    cols: 2,
-    qrSize: 112,
+    cols: 2, qrSize: 90, colGap: '0.1875in', rowGap: '0',
     cardStyle: {
       width: '4in', height: '2in',
-      padding: '0.1in 0.15in',
-      overflow: 'hidden',
-      boxSizing: 'border-box' as const,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      gap: '0.12in',
+      padding: '0.1in',
+      overflow: 'hidden', boxSizing: 'border-box' as const,
+      justifyContent: 'center' as const, alignItems: 'center' as const,
     },
   },
   {
     id: 'avery5164',
     label: 'Avery 5164',
     description: '6 per sheet · 4″ × 3⅓″',
-    cols: 2,
-    qrSize: 160,
+    cols: 2, qrSize: 160, colGap: '0.1875in', rowGap: '0',
     cardStyle: {
       width: '4in', height: '3.33in',
       padding: '0.15in',
-      overflow: 'hidden',
-      boxSizing: 'border-box' as const,
+      overflow: 'hidden', boxSizing: 'border-box' as const,
+      justifyContent: 'center' as const, alignItems: 'center' as const,
     },
   },
 ]
 
-function AssetCard({ asset, itemName, qrSize, cardStyle, isRow, tagFontSize = '11px', metaFontSize = '9px' }: {
-  asset: Asset
-  itemName: string
-  qrSize: number
-  cardStyle: React.CSSProperties
-  isRow: boolean
-  tagFontSize?: string
-  metaFontSize?: string
+function OffsetBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '2px 7px', borderRadius: '4px', fontSize: '13px', fontWeight: 700,
+        border: '1px solid #52525b', background: 'transparent', color: '#fff',
+        cursor: 'pointer', fontFamily: 'sans-serif', lineHeight: 1.4,
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
+  asset: Asset; itemName: string; qrSize: number
+  cardStyle: React.CSSProperties; isRow: boolean
 }) {
   const qrValue = `${BASE_URL}/scan?type=asset&code=${encodeURIComponent(asset.asset_tag)}`
+  const tagSize = isRow ? '11px' : '13px'
+  const metaSize = isRow ? '9px' : '10px'
   return (
     <div style={{
       display: 'flex',
@@ -88,15 +102,15 @@ function AssetCard({ asset, itemName, qrSize, cardStyle, isRow, tagFontSize = '1
     }}>
       <QRCodeSVG value={qrValue} size={qrSize} level="M" style={{ flexShrink: 0 }} />
       <div style={{ textAlign: isRow ? 'left' : 'center', minWidth: 0 }}>
-        <p style={{ fontFamily: 'monospace', fontSize: tagFontSize, fontWeight: 700, color: '#18181b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{ fontFamily: 'monospace', fontSize: tagSize, fontWeight: 700, color: '#18181b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {asset.asset_tag}
         </p>
         {asset.serial_number && (
-          <p style={{ fontSize: metaFontSize, color: '#71717a', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <p style={{ fontSize: metaSize, color: '#71717a', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {asset.serial_number}
           </p>
         )}
-        <p style={{ fontSize: metaFontSize, color: '#a1a1aa', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{ fontSize: metaSize, color: '#a1a1aa', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {itemName}
         </p>
       </div>
@@ -111,7 +125,9 @@ function BatchContent() {
   const [itemName, setItemName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [format, setFormat] = useState<Format>('sheet')
+  const [format, setFormat] = useState<Format>('avery5163')
+  const [topOffset, setTopOffset] = useState(0)   // extra inches added to base top margin
+  const [leftOffset, setLeftOffset] = useState(0) // extra inches added to base left margin
 
   useEffect(() => {
     if (!itemId) { setError('No item specified.'); setLoading(false); return }
@@ -125,6 +141,13 @@ function BatchContent() {
       .catch(() => setError('Failed to load assets.'))
       .finally(() => setLoading(false))
   }, [itemId])
+
+  // Reset offsets when format changes
+  function changeFormat(f: Format) {
+    setFormat(f)
+    setTopOffset(0)
+    setLeftOffset(0)
+  }
 
   if (loading) {
     return (
@@ -143,50 +166,70 @@ function BatchContent() {
   }
 
   const fmt = FORMATS.find(f => f.id === format) ?? FORMATS[0]
-  const isRow = format === 'avery5160' || format === 'avery5163'
+  const isRow = format === 'avery5160'
+  const base = FORMAT_DEFAULTS[format]
+  const topIn = (base.top + topOffset).toFixed(4)
+  const leftIn = (base.left + leftOffset).toFixed(4)
 
-  const pageStyle: React.CSSProperties = format === 'sheet'
-    ? { padding: '0.5in', background: '#fff', fontFamily: 'sans-serif' }
-    : format === 'avery5160'
-    ? { padding: '0.5in 0.19in 0 0.19in', background: '#fff', fontFamily: 'sans-serif' }
-    : format === 'avery5163'
-    ? { padding: '0.5in 0.15625in 0 0.15625in', background: '#fff', fontFamily: 'sans-serif' }
-    : { padding: '0.5in 0.15625in 0 0.15625in', background: '#fff', fontFamily: 'sans-serif' }
-
-  const gap = format === 'avery5160' ? '0 0.125in' : format === 'avery5163' ? '0 0.1875in' : format === 'avery5164' ? '0 0.1875in' : '0.2in'
+  const step = 0.05
 
   return (
     <>
       {/* Controls — hidden on print */}
       <div className="no-print" style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: '#18181b', padding: '10px 16px',
-        display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+        background: '#18181b', padding: '8px 14px',
+        display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
       }}>
         <span style={{ color: '#fff', fontFamily: 'sans-serif', fontSize: '13px', fontWeight: 600 }}>
-          {itemName} QR Codes ({assets.length})
+          {itemName} ({assets.length})
         </span>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+
+        {/* Format buttons */}
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           {FORMATS.map(f => (
             <button
               key={f.id}
-              onClick={() => setFormat(f.id)}
+              onClick={() => changeFormat(f.id)}
+              title={f.description}
               style={{
-                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
+                padding: '3px 9px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
                 border: format === f.id ? '2px solid #ef4444' : '1px solid #52525b',
                 background: format === f.id ? '#ef4444' : 'transparent',
                 color: '#fff', cursor: 'pointer', fontFamily: 'sans-serif',
               }}
-              title={f.description}
             >
               {f.label}
             </button>
           ))}
         </div>
+
+        {/* Offset nudge controls */}
+        {format !== 'sheet' && (
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: '#a1a1aa', fontSize: '11px', fontFamily: 'sans-serif' }}>Top</span>
+              <OffsetBtn label="−" onClick={() => setTopOffset(v => Math.round((v - step) * 100) / 100)} />
+              <span style={{ color: '#e4e4e7', fontSize: '11px', fontFamily: 'monospace', minWidth: '38px', textAlign: 'center' }}>
+                {topIn}″
+              </span>
+              <OffsetBtn label="+" onClick={() => setTopOffset(v => Math.round((v + step) * 100) / 100)} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ color: '#a1a1aa', fontSize: '11px', fontFamily: 'sans-serif' }}>Left</span>
+              <OffsetBtn label="−" onClick={() => setLeftOffset(v => Math.round((v - step) * 100) / 100)} />
+              <span style={{ color: '#e4e4e7', fontSize: '11px', fontFamily: 'monospace', minWidth: '38px', textAlign: 'center' }}>
+                {leftIn}″
+              </span>
+              <OffsetBtn label="+" onClick={() => setLeftOffset(v => Math.round((v + step) * 100) / 100)} />
+            </div>
+          </div>
+        )}
+
         <button
           onClick={() => window.print()}
           style={{
-            marginLeft: 'auto', padding: '6px 16px', borderRadius: '8px', fontSize: '13px',
+            marginLeft: 'auto', padding: '5px 14px', borderRadius: '8px', fontSize: '13px',
             fontWeight: 700, background: '#b91c1c', color: '#fff', border: 'none',
             cursor: 'pointer', fontFamily: 'sans-serif',
           }}
@@ -196,18 +239,25 @@ function BatchContent() {
       </div>
 
       {/* Print content */}
-      <div style={{ ...pageStyle, paddingTop: format === 'sheet' ? '0.5in' : pageStyle.paddingTop }}>
+      <div style={{
+        paddingTop: `${topIn}in`,
+        paddingLeft: `${leftIn}in`,
+        paddingRight: 0,
+        paddingBottom: 0,
+        background: '#fff',
+        fontFamily: 'sans-serif',
+      }}>
         {format === 'sheet' && (
-          <div style={{ marginBottom: '0.25in', borderBottom: '1px solid #e4e4e7', paddingBottom: '0.1in' }}>
+          <div style={{ marginBottom: '0.25in', borderBottom: '1px solid #e4e4e7', paddingBottom: '0.1in', paddingRight: '0.5in' }}>
             <p style={{ fontSize: '15px', fontWeight: 700, color: '#18181b', margin: 0 }}>{itemName}</p>
             <p style={{ fontSize: '10px', color: '#71717a', margin: '2px 0 0' }}>{assets.length} asset{assets.length !== 1 ? 's' : ''}</p>
           </div>
         )}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${fmt.cols}, ${format === 'sheet' ? '1fr' : 'auto'})`,
-          gap,
-          rowGap: format === 'avery5160' ? 0 : format === 'avery5163' ? 0 : format === 'avery5164' ? 0 : '0.2in',
+          gridTemplateColumns: `repeat(${fmt.cols}, ${format === 'sheet' ? '1fr' : 'max-content'})`,
+          columnGap: fmt.colGap,
+          rowGap: fmt.rowGap,
         }}>
           {assets.map(asset => (
             <AssetCard
@@ -217,8 +267,6 @@ function BatchContent() {
               qrSize={fmt.qrSize}
               cardStyle={fmt.cardStyle}
               isRow={isRow}
-              tagFontSize={format === 'avery5163' ? '14px' : format === 'sheet' || format === 'avery5164' ? '13px' : '11px'}
-              metaFontSize={format === 'avery5163' ? '11px' : '9px'}
             />
           ))}
         </div>
