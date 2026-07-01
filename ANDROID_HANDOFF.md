@@ -23,7 +23,7 @@ See [NATIVE.md](NATIVE.md) for overall Capacitor architecture.
 - All native source edits (`android/app/src/main/java/...` — e.g. `MainActivity.java`, custom Capacitor plugins)
 - `npm run build` to confirm the web app compiles before anything ships
 - `npx cap sync android` after native source/plugin changes — regenerates `capacitor.settings.gradle` / `capacitor.build.gradle` and copies web assets
-- `git commit` + `git push` to `main` — Vercel auto-deploys; the app pulls web changes live since `capacitor.config.ts` points at `https://www.fireops7.com`
+- `git commit` + `git push` to `main` — Vercel auto-deploys; the app pulls web changes live since `capacitor.config.ts` points at `https://municipal-hub.com`
 
 **Android Studio agent does:**
 - Gradle sync / dependency resolution inside the IDE
@@ -82,5 +82,5 @@ Pure JS/TSX/CSS changes in `app/`, `components/`, `lib/` → git push only, no A
 - **`window.print()` is a silent no-op** in Android's native WebView — printing requires a custom native plugin using `PrintManager`. See `NativePrintPlugin.java` above. ✅ Resolved.
 - **Emulator vs. real device** — Android Studio's run/device dropdown can silently target a test emulator. Always confirm it shows the Samsung SM-S948U before trusting a build "worked."
 - **USB debugging must be active on the phone** — the deploy only works when the Samsung is physically connected via USB with USB debugging enabled AND set as the target device in Android Studio's device dropdown. If the deploy seems to succeed but nothing changes on the phone, check these two things first. Confirmed working under these conditions (2026-06-25).
-- **Web changes vs. APK changes** — the app loads `https://www.fireops7.com` live. JS/TSX fixes go live via git push + Vercel. Only native Java changes need a new APK.
+- **Web changes vs. APK changes** — the app loads `https://municipal-hub.com` live. JS/TSX fixes go live via git push + Vercel. Only native Java changes need a new APK.
 - **Source set matters** — native plugin Java files must go in `src/main/`, NOT `src/androidTest/` or `src/test/`. Only `main` ships in the APK.

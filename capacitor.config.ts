@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   // Points at the live production URL — Capacitor loads the web app in a WebView
   // Change to a local dev server URL during native development
   server: {
-    url: 'https://www.fireops7.com',
+    url: 'https://municipal-hub.com',
     cleartext: false,
   },
   ios: {
