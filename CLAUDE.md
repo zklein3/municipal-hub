@@ -188,6 +188,15 @@ See `STRATEGY.md` for the full roadmap this work is drawn from.
 - Asset Roster moved to Reports hub (read-only). Apparatus assignment moved to Setup → Items → Assets.
 - Scattered "Storage →" shortcut buttons removed; Storage now accessed from Inventory page card
 
+### 0f. Batch QR Print — Asset Classes SHIPPED ✅ (2026-07-01); Compartments + Apparatus TODO ⬅
+
+**Shipped:** `/print/qr-batch?item_id=...` — prints all active assets for an item class. Format selector: Sheet 3-up / Avery 5160 (30-up, 2⅝"×1") / Avery 5163 (10-up, 4"×2") / Avery 5164 (6-up, 4"×3⅓"). Avery 26116 (weatherproof) uses same layout as 5163. "Print All QRs" button in Dept Admin → Setup → Items → Assets tab per item group. Backed by `/api/assets-for-item`.
+
+**Still to build — extend batch QR to the rest of the truck:**
+- **Compartments** — "Print All QR Codes" per apparatus in Dept Admin → Setup → Compartments. Route: `/print/qr-batch?apparatus_id=...&type=compartments`. Backed by a new `/api/compartments-for-apparatus` route. Each card: compartment `[unit_number] - [code]`, QR encodes `/scan?type=compartment&code=[qr_code]`.
+- **Apparatus** — print the apparatus QR itself (one per page or as a single large label for the cab door). Route: `/print/qr-batch?apparatus_id=...&type=apparatus`.
+- When building: reuse the same format selector component — extract it into `components/QrBatchPrint.tsx` so sheet/label logic isn't duplicated across routes.
+
 ### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
 Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
 
