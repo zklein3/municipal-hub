@@ -4,7 +4,7 @@ import { Suspense, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 
-const BASE_URL = 'https://www.fireops7.com'
+const BASE_URL = 'https://municipal-hub.com'
 
 function PrintContent() {
   const searchParams = useSearchParams()

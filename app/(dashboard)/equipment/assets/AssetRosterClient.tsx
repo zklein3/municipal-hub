@@ -259,6 +259,7 @@ export default function AssetRosterClient({
                   <th className="px-4 py-3 font-semibold text-zinc-700">Status</th>
                   <th className="px-4 py-3 font-semibold text-zinc-700">In Service</th>
                   <th className="px-4 py-3 font-semibold text-zinc-700">Location</th>
+                  <th className="px-4 py-3 font-semibold text-zinc-700"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -278,6 +279,16 @@ export default function AssetRosterClient({
                       <td className="px-4 py-3 text-zinc-500">{fmt(a.in_service_date)}</td>
                       <td className="px-4 py-3">
                         <LocationCell assetId={a.id} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <a
+                          href={`/print/qr?code=${encodeURIComponent(a.asset_tag)}&type=asset&title=${encodeURIComponent(a.asset_tag)}&subtitle=${encodeURIComponent(a.item_name)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-zinc-400 hover:text-zinc-600 transition-colors"
+                        >
+                          Print QR
+                        </a>
                       </td>
                     </tr>
                   )
@@ -304,6 +315,18 @@ export default function AssetRosterClient({
                   {a.serial_number && (
                     <p className="text-xs text-zinc-400 mt-1 font-mono">S/N: {a.serial_number}</p>
                   )}
+
+                  {/* Mobile Print QR */}
+                  <div className="mt-2">
+                    <a
+                      href={`/print/qr?code=${encodeURIComponent(a.asset_tag)}&type=asset&title=${encodeURIComponent(a.asset_tag)}&subtitle=${encodeURIComponent(a.item_name)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-zinc-400 hover:text-zinc-600 transition-colors"
+                    >
+                      Print QR
+                    </a>
+                  </div>
 
                   {/* Mobile location + assign */}
                   <div className="mt-3 pt-3 border-t border-zinc-100">

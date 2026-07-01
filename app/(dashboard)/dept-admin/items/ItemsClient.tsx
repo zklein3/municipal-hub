@@ -471,6 +471,14 @@ export default function ItemsClient({
                                               </div>
                                               <div className="flex items-center gap-3">
                                                 <span className={`text-xs rounded-full px-2 py-0.5 ${statusBadge(asset.status)}`}>{statusLabel(asset.status)}</span>
+                                                <a
+                                                  href={`/print/qr?code=${encodeURIComponent(asset.asset_tag)}&type=asset&title=${encodeURIComponent(asset.asset_tag)}&subtitle=${encodeURIComponent(item.item_name)}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-xs font-semibold text-zinc-500 hover:text-zinc-700"
+                                                >
+                                                  Print QR
+                                                </a>
                                                 <button onClick={() => { setEditingAssetId(asset.id); reset() }} className="text-xs font-semibold text-red-600 hover:text-red-800">Edit</button>
                                               </div>
                                             </div>
