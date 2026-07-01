@@ -265,9 +265,9 @@ export default function AssetDetailClient({
     <div className="max-w-2xl">
       {/* Back + header */}
       <div className="mb-6">
-        <Link href="/dept-admin/setup" className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors">
-          ← Equipment Setup
-        </Link>
+        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors">
+          ← Back
+        </button>
         <div className="flex items-start justify-between mt-2 gap-3">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 font-mono">{asset.asset_tag}</h1>
