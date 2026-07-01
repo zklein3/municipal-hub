@@ -18,9 +18,9 @@
 - **Tailwind CSS v4**, **@supabase/ssr**, **Resend** (email via Supabase Edge Functions)
 
 ## GitHub & Machines
-- Repo: https://github.com/zklein3/FireOps7-Next — branch: main
-- Personal: `C:\Users\zklein3\Documents\FireOps7-Next`
-- Shared: `C:\Users\zklei\Documents\FireOps7-Next`
+- Repo: https://github.com/zklein3/municipal-hub — branch: main
+- Primary (sole active machine): `C:\Users\zklein3\Documents\FireOps7-Next`
+- Backup only (emergency failover — not actively used): `C:\Users\zklei\Documents\FireOps7-Next` — keep git pull available in case primary machine dies
 
 ## Production
 - Vercel: https://fire-ops7-next.vercel.app | Domain: https://www.fireops7.com
