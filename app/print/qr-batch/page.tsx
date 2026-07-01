@@ -40,12 +40,15 @@ const FORMATS: { id: Format; label: string; description: string; cols: number; q
     label: 'Avery 5163',
     description: '10 per sheet · 4″ × 2″',
     cols: 2,
-    qrSize: 100,
+    qrSize: 112,
     cardStyle: {
       width: '4in', height: '2in',
-      padding: '0.1in',
+      padding: '0.1in 0.15in',
       overflow: 'hidden',
       boxSizing: 'border-box' as const,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: '0.12in',
     },
   },
   {
@@ -63,12 +66,14 @@ const FORMATS: { id: Format; label: string; description: string; cols: number; q
   },
 ]
 
-function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
+function AssetCard({ asset, itemName, qrSize, cardStyle, isRow, tagFontSize = '11px', metaFontSize = '9px' }: {
   asset: Asset
   itemName: string
   qrSize: number
   cardStyle: React.CSSProperties
   isRow: boolean
+  tagFontSize?: string
+  metaFontSize?: string
 }) {
   const qrValue = `${BASE_URL}/scan?type=asset&code=${encodeURIComponent(asset.asset_tag)}`
   return (
@@ -83,15 +88,15 @@ function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
     }}>
       <QRCodeSVG value={qrValue} size={qrSize} level="M" style={{ flexShrink: 0 }} />
       <div style={{ textAlign: isRow ? 'left' : 'center', minWidth: 0 }}>
-        <p style={{ fontFamily: 'monospace', fontSize: isRow ? '11px' : '13px', fontWeight: 700, color: '#18181b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{ fontFamily: 'monospace', fontSize: tagFontSize, fontWeight: 700, color: '#18181b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {asset.asset_tag}
         </p>
         {asset.serial_number && (
-          <p style={{ fontSize: '9px', color: '#71717a', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <p style={{ fontSize: metaFontSize, color: '#71717a', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {asset.serial_number}
           </p>
         )}
-        <p style={{ fontSize: '9px', color: '#a1a1aa', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <p style={{ fontSize: metaFontSize, color: '#a1a1aa', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {itemName}
         </p>
       </div>
@@ -138,7 +143,7 @@ function BatchContent() {
   }
 
   const fmt = FORMATS.find(f => f.id === format) ?? FORMATS[0]
-  const isRow = format === 'avery5160'
+  const isRow = format === 'avery5160' || format === 'avery5163'
 
   const pageStyle: React.CSSProperties = format === 'sheet'
     ? { padding: '0.5in', background: '#fff', fontFamily: 'sans-serif' }
@@ -212,15 +217,21 @@ function BatchContent() {
               qrSize={fmt.qrSize}
               cardStyle={fmt.cardStyle}
               isRow={isRow}
+              tagFontSize={format === 'avery5163' ? '14px' : format === 'sheet' || format === 'avery5164' ? '13px' : '11px'}
+              metaFontSize={format === 'avery5163' ? '11px' : '9px'}
             />
           ))}
         </div>
       </div>
 
       <style>{`
+        @page {
+          size: 8.5in 11in;
+          margin: 0;
+        }
         @media print {
           .no-print { display: none !important; }
-          body { margin: 0; }
+          html, body { margin: 0; padding: 0; }
         }
       `}</style>
     </>
