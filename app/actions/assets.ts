@@ -250,7 +250,7 @@ export async function parseAssetDocument(
 
 Return ONLY a JSON object with no other text:
 {
-  "serial_number": "Unit ID number from the form (NOT the testing machine serial number) or null",
+  "serial_number": "Unit ID from the form, or null if not present",
   "service_date": "YYYY-MM-DD or null",
   "result": "pass" or "fail" or null,
   "technician": "name/initials or null",

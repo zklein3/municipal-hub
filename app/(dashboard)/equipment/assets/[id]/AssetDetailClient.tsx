@@ -143,6 +143,13 @@ export default function AssetDetailClient({
       const v = d.custom_fields?.[def.field_label]
       if (v) cfVals[def.id] = v
     }
+    // Always copy Reducer # into Serial # (user can correct in the review panel)
+    for (const def of fieldDefs) {
+      if (def.field_label.toLowerCase().includes('reducer') && cfVals[def.id]) {
+        setParsedSerialNumber(cfVals[def.id])
+        break
+      }
+    }
     setParsedCfValues(cfVals)
   }
 
@@ -249,6 +256,13 @@ export default function AssetDetailClient({
       const v = d.custom_fields?.[def.field_label]
       if (v) cfVals[def.id] = v
     }
+    // Always copy Reducer # into Serial # (user can correct in the review panel)
+    for (const def of fieldDefs) {
+      if (def.field_label.toLowerCase().includes('reducer') && cfVals[def.id]) {
+        setParsedSerialNumber(cfVals[def.id])
+        break
+      }
+    }
     setParsedCfValues(cfVals)
     setSuccess('Document parsed — review the pre-filled service log below.')
   }
@@ -265,9 +279,9 @@ export default function AssetDetailClient({
     <div className="max-w-2xl">
       {/* Back + header */}
       <div className="mb-6">
-        <button onClick={() => router.back()} className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors">
-          ← Back
-        </button>
+        <Link href="/dept-admin/setup?tab=items&sub=assets" className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors">
+          ← Back to Assets
+        </Link>
         <div className="flex items-start justify-between mt-2 gap-3">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 font-mono">{asset.asset_tag}</h1>

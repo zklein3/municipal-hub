@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import StationsStep from './StationsStep'
 import ApparatusStep from './ApparatusStep'
@@ -56,7 +57,8 @@ export default function SetupFlowClient({
   moduleIso: boolean
   customFieldDefs: Record<string, { id: string; item_id: string; field_label: string; field_order: number }[]>
 }) {
-  const [activeTab, setActiveTab] = useState('stations')
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') ?? 'stations')
 
   const helpProps = { showHelp: false, helpResetKey: 0 }
 
@@ -142,6 +144,7 @@ export default function SetupFlowClient({
                 label: a.unit_number + (a.apparatus_name ? ` — ${a.apparatus_name}` : ''),
               }))}
               customFieldDefs={customFieldDefs}
+              initialSubTab={searchParams.get('sub') ?? undefined}
               {...helpProps}
             />
           )}

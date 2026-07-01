@@ -44,7 +44,7 @@ const STEP_TYPES = [
 ]
 
 export default function ItemsStep({
-  categories, items, assets, templates, steps, departmentId, apparatusOptions, customFieldDefs, showHelp, helpResetKey,
+  categories, items, assets, templates, steps, departmentId, apparatusOptions, customFieldDefs, initialSubTab, showHelp, helpResetKey,
 }: {
   categories: Category[]
   items: Item[]
@@ -54,10 +54,11 @@ export default function ItemsStep({
   departmentId: string
   apparatusOptions: { id: string; label: string }[]
   customFieldDefs: Record<string, CustomFieldDef[]>
+  initialSubTab?: string
   showHelp: boolean
   helpResetKey: number
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>('items')
+  const [activeTab, setActiveTab] = useState<Tab>((initialSubTab as Tab) ?? 'items')
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
