@@ -803,3 +803,23 @@ export async function closeInspectionSession(session_id: string) {
   revalidatePath('/inspections', 'layout')
   return { success: true }
 }
+
+// ─── Delete Session (officer/admin) — used when cancelling with 0 completed ──
+export async function deleteInspectionSession(session_id: string) {
+  const ctx = await getContext()
+  const adminClient = createAdminClient()
+
+  if (!ctx?.isOfficerOrAbove) {
+    return { error: 'Only officers and admins can cancel sessions.' }
+  }
+
+  // CASCADE on session_id FK removes inspection_session_compartments rows automatically
+  const { error: dbErr } = await adminClient
+    .from('inspection_sessions')
+    .delete()
+    .eq('id', session_id)
+
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/inspections', 'layout')
+  return { success: true }
+}

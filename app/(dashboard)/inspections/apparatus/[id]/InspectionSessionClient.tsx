@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
+import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, deleteInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
 import { moveAssetsToStorage } from '@/app/actions/equipment'
 
 interface SessionCompartment {
@@ -120,9 +120,11 @@ export default function InspectionSessionClient({
   async function handleAbandon() {
     setError(null)
     setClosing(true)
-    const closeRes = await closeInspectionSession(session.id)
-    if (closeRes?.error) {
-      setError(closeRes.error)
+    const res = done === 0
+      ? await deleteInspectionSession(session.id)
+      : await closeInspectionSession(session.id)
+    if (res?.error) {
+      setError(res.error)
       setClosing(false)
       setAbandonConfirm(false)
       return
@@ -347,14 +349,16 @@ export default function InspectionSessionClient({
             ) : (
               <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
                 <p className="text-xs text-red-800">
-                  Close with {total - done} compartment{total - done !== 1 ? 's' : ''} incomplete?
+                  {done === 0
+                    ? 'Cancel this inspection? It will be removed.'
+                    : `Close with ${total - done} compartment${total - done !== 1 ? 's' : ''} incomplete?`}
                 </p>
                 <button
                   onClick={handleAbandon}
                   disabled={closing}
                   className="rounded bg-red-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50"
                 >
-                  {closing ? 'Closing…' : 'Yes, Abandon'}
+                  {closing ? (done === 0 ? 'Removing…' : 'Closing…') : (done === 0 ? 'Yes, Cancel' : 'Yes, Abandon')}
                 </button>
                 <button
                   onClick={() => setAbandonConfirm(false)}
