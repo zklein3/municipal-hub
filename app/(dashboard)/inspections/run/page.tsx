@@ -70,14 +70,25 @@ export default async function InspectionRunPage({
         .neq('status', 'RETIRED')
     : { data: [] }
 
-  // Exclude assets already confirmed in earlier compartments this session
+  // Exclude assets already confirmed in OTHER compartments this session
+  // (assets from the current compartment stay visible so they show as already-submitted on resume)
   let usedAssetIds = new Set<string>()
+  let initialSubmittedAssets: string[] = []
   if (session_id && assetItemIds.length > 0) {
-    const { data: usedLogs } = await adminClient
-      .from('item_asset_inspection_logs')
-      .select('asset_id')
-      .eq('inspection_session_id', session_id)
-    usedAssetIds = new Set((usedLogs ?? []).map(l => l.asset_id))
+    const [{ data: otherLogs }, { data: currentLogs }] = await Promise.all([
+      adminClient
+        .from('item_asset_inspection_logs')
+        .select('asset_id')
+        .eq('inspection_session_id', session_id)
+        .neq('compartment_id', compartment_id),
+      adminClient
+        .from('item_asset_inspection_logs')
+        .select('asset_id')
+        .eq('inspection_session_id', session_id)
+        .eq('compartment_id', compartment_id),
+    ])
+    usedAssetIds = new Set((otherLogs ?? []).map(l => l.asset_id))
+    initialSubmittedAssets = (currentLogs ?? []).map(l => l.asset_id)
   }
 
   // For each asset-tracked item, fetch its inspection templates + steps
@@ -151,6 +162,7 @@ export default async function InspectionRunPage({
       presenceOnly={presenceOnly}
       inspectionSessionId={session_id}
       sessionCompartmentId={session_compartment_id}
+      initialSubmittedAssets={initialSubmittedAssets}
     />
   )
 }

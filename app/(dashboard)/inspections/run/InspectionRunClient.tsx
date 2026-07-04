@@ -72,7 +72,7 @@ function hasInspection(item: ChecklistItem): boolean {
 
 export default function InspectionRunClient({
   apparatus, compartment, compartmentId, checklistItems, inspectorName, personnelId, departmentId, presenceOnly,
-  inspectionSessionId, sessionCompartmentId,
+  inspectionSessionId, sessionCompartmentId, initialSubmittedAssets,
 }: {
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
   compartment: { code: string; name: string | null }
@@ -84,6 +84,7 @@ export default function InspectionRunClient({
   presenceOnly: boolean
   inspectionSessionId?: string
   sessionCompartmentId?: string
+  initialSubmittedAssets?: string[]
 }) {
   const router = useRouter()
 
@@ -102,7 +103,7 @@ export default function InspectionRunClient({
   const [missingSlots, setMissingSlots] = useState<Record<string, boolean[]>>({})
   const [missingNotes, setMissingNotes] = useState<Record<string, string[]>>({})
 
-  const [submittedAssets, setSubmittedAssets] = useState<Set<string>>(new Set())
+  const [submittedAssets, setSubmittedAssets] = useState<Set<string>>(new Set(initialSubmittedAssets ?? []))
   const [submittingAsset, setSubmittingAsset] = useState<string | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
