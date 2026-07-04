@@ -213,6 +213,7 @@ export async function submitInspection(payload: {
         .insert({
           asset_id: inspection.asset_id,
           template_id: inspection.template_id,
+          department_id: payload.department_id,
           inspected_at: now,
           overall_result,
           inspected_by_personnel_id: payload.personnel_id,
