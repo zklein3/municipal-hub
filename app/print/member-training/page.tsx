@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import PrintButton from '../training-signin/PrintButton'
 
 export default async function MemberTrainingRecordPage({
@@ -45,6 +46,11 @@ export default async function MemberTrainingRecordPage({
     .limit(1)
   const deptPersonnel = deptPersonnelList?.[0]
   const department_id = deptPersonnel?.department_id ?? null
+
+  const ctx = await getCurrentDepartmentContext()
+  if (ctx?.departmentId && department_id && ctx.departmentId !== department_id && !ctx.isSysAdmin) {
+    return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Record not found.</p>
+  }
 
   const [deptResult, roleResult] = await Promise.all([
     department_id

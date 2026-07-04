@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import PrintButton from '../training-signin/PrintButton'
 import PrintBackButton from '../training-signin/PrintBackButton'
 import { parseCountyContacts } from '@/lib/county-contacts'
@@ -31,6 +32,12 @@ export default async function BurnPermitPrintPage({
     .single()
 
   if (!permit) return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Permit not found.</p>
+
+  const ctx = await getCurrentDepartmentContext()
+  if (ctx?.departmentId && ctx.departmentId !== permit.department_id) {
+    return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Permit not found.</p>
+  }
+
   if (permit.status !== 'approved') return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>This permit has not been approved yet.</p>
 
   const { data: dept } = await adminClient

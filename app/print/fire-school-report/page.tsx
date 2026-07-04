@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import ReportView from './ReportView'
 
 export const dynamic = 'force-dynamic'
@@ -43,6 +45,10 @@ function calcExpiry(baseDate: string, years: number): string {
 }
 
 export default async function FireSchoolReportPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
   const admin = createAdminClient()
 
   const [{ data: bottles }, { data: fillLogs }] = await Promise.all([

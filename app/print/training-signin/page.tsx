@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { getCurrentDepartmentContext } from '@/lib/current-department'
 import PrintButton from './PrintButton'
 
 export default async function TrainingSignInPage({
@@ -24,6 +25,11 @@ export default async function TrainingSignInPage({
     .eq('id', event_id)
     .single()
   if (!evt) return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Event not found.</p>
+
+  const ctx = await getCurrentDepartmentContext()
+  if (ctx?.departmentId && ctx.departmentId !== evt.department_id) {
+    return <p style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Event not found.</p>
+  }
 
   // Fetch department name
   const { data: dept } = await adminClient
