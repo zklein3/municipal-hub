@@ -102,6 +102,9 @@ export default function InspectionRunClient({
   const [missingSlots, setMissingSlots] = useState<Record<string, boolean[]>>({})
   const [missingNotes, setMissingNotes] = useState<Record<string, string[]>>({})
 
+  const [submittedAssets, setSubmittedAssets] = useState<Set<string>>(new Set())
+  const [submittingAsset, setSubmittingAsset] = useState<string | null>(null)
+
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -156,6 +159,46 @@ export default function InspectionRunClient({
     return item.templates.find(t => t.id === selected) ?? item.templates[0]
   }
 
+  function isAssetComplete(assetId: string, item: ChecklistItem): boolean {
+    const template = getTemplate(item, assetId)
+    if (!template) return false
+    for (const step of template.steps) {
+      if (!step.required) continue
+      const resp = stepResponses[assetId]?.[step.id]
+      if (!resp) return false
+      if (step.step_type === 'BOOLEAN' && resp.boolean_value === undefined) return false
+      if (step.step_type === 'BOOLEAN' && resp.boolean_value === false && step.fail_if_negative && !resp.text_value?.trim()) return false
+      if (step.step_type === 'NUMERIC' && resp.numeric_value === undefined) return false
+    }
+    return true
+  }
+
+  async function handleSubmitAsset(item: ChecklistItem, slotIndex: number) {
+    const asset = getAssetForSlot(item, slotIndex)
+    if (!asset) return
+    const template = getTemplate(item, asset.id)
+    if (!template) return
+    setSubmittingAsset(asset.id)
+    setError(null)
+    const result = await submitInspection({
+      apparatus_id: apparatus.id,
+      compartment_id: compartmentId,
+      personnel_id: personnelId,
+      department_id: departmentId,
+      inspector_name: inspectorName,
+      inspection_session_id: inspectionSessionId,
+      session_compartment_id: sessionCompartmentId,
+      asset_inspections: [{ asset_id: asset.id, template_id: template.id, responses: Object.values(stepResponses[asset.id] ?? {}) }],
+      presence_checks: [],
+    })
+    setSubmittingAsset(null)
+    if (result?.error) {
+      setError(result.error)
+    } else {
+      setSubmittedAssets(prev => new Set([...prev, asset.id]))
+    }
+  }
+
   function handleScanResult(raw: string) {
     if (!activeScanner) return
     const code = parseAssetCode(raw)
@@ -198,6 +241,7 @@ export default function InspectionRunClient({
           if (isSlotMissing(item.location_standard_id, i)) continue
           const asset = getAssetForSlot(item, i)
           if (!asset) return false
+          if (submittedAssets.has(asset.id)) continue
           const template = getTemplate(item, asset.id)
           if (!template) continue
           for (const step of template.steps) {
@@ -236,6 +280,7 @@ export default function InspectionRunClient({
             }
             const asset = getAssetForSlot(item, i)
             if (!asset) continue
+            if (submittedAssets.has(asset.id)) continue  // already saved individually
             const template = getTemplate(item, asset.id)
             if (!template) continue
             const responses = Object.values(stepResponses[asset.id] ?? {})
@@ -543,8 +588,8 @@ export default function InspectionRunClient({
                           )}
                         </div>
 
-                        {/* Template selector (if multiple) */}
-                        {asset && item.templates.length > 1 && (
+                        {/* Template selector (if multiple) — only when not yet submitted */}
+                        {asset && item.templates.length > 1 && !submittedAssets.has(asset.id) && (
                           <div className="mb-4">
                             <label className="mb-1.5 block text-sm font-medium text-zinc-700">Inspection Type</label>
                             <select
@@ -558,6 +603,7 @@ export default function InspectionRunClient({
 
                         {/* Checklist steps */}
                         {asset && template && (
+                          <div className={submittedAssets.has(asset.id) ? 'pointer-events-none opacity-50' : ''}>
                           <div className="flex flex-col gap-0 border border-zinc-200 rounded-lg overflow-hidden">
                             {template.steps.map((step, stepIdx) => {
                               const resp = stepResponses[asset.id]?.[step.id] ?? {}
@@ -647,6 +693,32 @@ export default function InspectionRunClient({
                               )
                             })}
                           </div>
+                          </div>
+                        )}
+
+                        {/* Per-asset save button / saved indicator */}
+                        {asset && template && (
+                          submittedAssets.has(asset.id) ? (
+                            <div className="mt-3 rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-3">
+                              <span className="text-green-600 text-xl leading-none">✓</span>
+                              <div>
+                                <p className="text-sm font-semibold text-green-800">{asset.asset_tag} saved</p>
+                                <p className="text-xs text-green-600">Inspection recorded</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleSubmitAsset(item, slotIndex)}
+                              disabled={submittingAsset === asset.id || !isAssetComplete(asset.id, item)}
+                              className="mt-3 w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                            >
+                              {submittingAsset === asset.id
+                                ? 'Saving…'
+                                : isAssetComplete(asset.id, item)
+                                  ? `Save ${asset.asset_tag}`
+                                  : 'Complete required steps to save'}
+                            </button>
+                          )
                         )}
                       </div>
                     )
