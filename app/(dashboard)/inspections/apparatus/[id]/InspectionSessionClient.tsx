@@ -221,6 +221,13 @@ export default function InspectionSessionClient({
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                     In Progress
                   </span>
+                  <button
+                    onClick={() => handleInspect(sc)}
+                    disabled={loadingId === sc.id || isPending}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {loadingId === sc.id ? 'Opening…' : 'Resume'}
+                  </button>
                   {isOfficerOrAdmin && (
                     <button
                       onClick={() => handleRelease(sc)}
