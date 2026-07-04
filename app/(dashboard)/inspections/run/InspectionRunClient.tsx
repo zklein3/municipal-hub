@@ -4,6 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitInspection } from '@/app/actions/inspections'
 import { moveAssetToApparatus } from '@/app/actions/equipment'
+import QRScanner from '@/components/QRScanner'
+
+function parseAssetCode(raw: string): string | null {
+  try {
+    const url = new URL(raw)
+    if (url.searchParams.get('type') === 'asset') return url.searchParams.get('code')
+  } catch {}
+  return raw.trim() || null
+}
 
 interface Step {
   id: string
@@ -83,6 +92,9 @@ export default function InspectionRunClient({
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [stepResponses, setStepResponses] = useState<Record<string, Record<string, StepResponse>>>({})
 
+  const [activeScanner, setActiveScanner] = useState<{ locationId: string; slotIndex: number; itemName: string; assets: Asset[] } | null>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
+
   const [pendingReassign, setPendingReassign] = useState<{ locationId: string; slotIndex: number; assetId: string; assetLabel: string } | null>(null)
   const [confirmedReassigns, setConfirmedReassigns] = useState<string[]>([])
   const [reassigning, setReassigning] = useState(false)
@@ -142,6 +154,38 @@ export default function InspectionRunClient({
     if (item.templates.length === 1) return item.templates[0]
     const selected = selectedTemplates[assetId]
     return item.templates.find(t => t.id === selected) ?? item.templates[0]
+  }
+
+  function handleScanResult(raw: string) {
+    if (!activeScanner) return
+    const code = parseAssetCode(raw)
+    if (!code) { setScanError('Could not read QR code. Try again.'); return }
+
+    const asset = activeScanner.assets.find(a => a.asset_tag === code)
+    if (!asset) {
+      setScanError(`"${code}" is not an expected ${activeScanner.itemName} in this compartment.`)
+      return
+    }
+
+    const existingSlots = selectedAssets[activeScanner.locationId] ?? []
+    if (existingSlots.some((id, i) => id === asset.id && i !== activeScanner.slotIndex)) {
+      setScanError(`${code} is already assigned to another slot in this inspection.`)
+      return
+    }
+
+    setAssetForSlot(activeScanner.locationId, activeScanner.slotIndex, asset.id)
+
+    if (asset.apparatus_id && asset.apparatus_id !== apparatus.id && !confirmedReassigns.includes(asset.id)) {
+      const label = asset.asset_tag + (asset.serial_number ? ` — S/N: ${asset.serial_number}` : '')
+      setPendingReassign({ locationId: activeScanner.locationId, slotIndex: activeScanner.slotIndex, assetId: asset.id, assetLabel: label })
+    } else if (!asset.apparatus_id) {
+      moveAssetToApparatus(asset.id, apparatus.id).then(res => {
+        if (res?.error) setError(res.error)
+      })
+    }
+
+    setActiveScanner(null)
+    setScanError(null)
   }
 
   function isComplete(): boolean {
@@ -391,16 +435,27 @@ export default function InspectionRunClient({
                             </div>
                           ) : (
                           <>
-                          <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center justify-between mb-1.5 gap-2">
                             <label className="text-sm font-medium text-zinc-700">
                               Which {item.item_name} is present?
                             </label>
-                            <button
-                              onClick={() => markSlotMissing(item.location_standard_id, slotIndex, true)}
-                              className="text-xs text-zinc-400 hover:text-red-600 underline transition-colors"
-                            >
-                              Not present
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setScanError(null)
+                                  setActiveScanner({ locationId: item.location_standard_id, slotIndex, itemName: item.item_name, assets: item.assets })
+                                }}
+                                className="text-xs rounded-lg bg-red-700 px-2.5 py-1 text-white font-semibold hover:bg-red-800 transition-colors"
+                              >
+                                Scan QR
+                              </button>
+                              <button
+                                onClick={() => markSlotMissing(item.location_standard_id, slotIndex, true)}
+                                className="text-xs text-zinc-400 hover:text-red-600 underline transition-colors"
+                              >
+                                Not present
+                              </button>
+                            </div>
                           </div>
                           {availableAssets.length === 0 ? (
                             <p className="text-sm text-zinc-400">No assets found. Add assets in Dept Admin → Items.</p>
@@ -612,6 +667,40 @@ export default function InspectionRunClient({
           {submitting ? 'Submitting...' : isComplete() ? 'Submit Inspection' : 'Complete All Required Steps to Submit'}
         </button>
       </div>
+
+      {/* QR Scanner modal */}
+      {activeScanner && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col p-4 safe-area-inset">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-white font-bold text-lg">Scan {activeScanner.itemName}</h2>
+              <p className="text-zinc-400 text-xs mt-0.5">Point camera at the QR label on the asset</p>
+            </div>
+            <button
+              onClick={() => { setActiveScanner(null); setScanError(null) }}
+              className="rounded-full bg-zinc-800 w-9 h-9 flex items-center justify-center text-white text-lg hover:bg-zinc-700"
+            >
+              ✕
+            </button>
+          </div>
+          {scanError && (
+            <div className="mb-3 rounded-lg bg-red-900/80 border border-red-700 px-4 py-3 text-sm text-red-200">
+              {scanError}
+              <button
+                onClick={() => setScanError(null)}
+                className="ml-3 text-xs underline text-red-300 hover:text-red-100"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          <QRScanner
+            onScan={handleScanResult}
+            onClose={() => { setActiveScanner(null); setScanError(null) }}
+            hint={`Scan the QR label on the ${activeScanner.itemName}`}
+          />
+        </div>
+      )}
     </div>
   )
 }
