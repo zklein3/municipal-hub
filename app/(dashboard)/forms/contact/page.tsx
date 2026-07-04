@@ -28,7 +28,7 @@ export default async function ContactFormPage() {
     adminClient.from('pd_persons').select('id, first_name, last_name, dob, phone, address, city, state, zip, is_dangerous, danger_reason').eq('department_id', department_id).order('last_name'),
     adminClient
       .from('pd_contacts')
-      .select('id, address_id, address, city, state, zip, location_detail, contact_date, contact_time, contact_type, narrative, report_number, officer_name, created_at')
+      .select('id, address_id, address, city, state, zip, location_detail, contact_date, contact_time, contact_type_id, narrative, report_number, officer_name, created_at')
       .eq('department_id', department_id)
       .order('contact_date', { ascending: false })
       .order('created_at', { ascending: false })

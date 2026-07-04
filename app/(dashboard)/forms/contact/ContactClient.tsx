@@ -57,7 +57,7 @@ interface Contact {
   location_detail: string | null
   contact_date: string
   contact_time: string | null
-  contact_type: string
+  contact_type_id: string | null
   narrative: string | null
   report_number: string | null
   officer_name: string | null
@@ -181,7 +181,7 @@ function PersonCardModal({
                     className="w-full text-left px-3 py-2 hover:bg-zinc-50">
                     <p className="text-sm text-zinc-800">{fullAddress(c) || 'No address recorded'}</p>
                     <p className="text-xs text-zinc-400">
-                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {c.contact_type}
+                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {typeLabel(c.contact_type_id)}
                       {c.officer_name ? ` · ${c.officer_name}` : ''}
                     </p>
                     {c.narrative && <p className="text-xs text-zinc-500 mt-0.5">{c.narrative}</p>}
@@ -213,7 +213,7 @@ const emptyForm = {
   state: '',
   zip: '',
   location_detail: '',
-  contact_type: '',
+  contact_type_id: '',
   narrative: '',
 }
 
@@ -306,7 +306,10 @@ export default function ContactClient({
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTime, setEditingTime] = useState(false)
-  const [form, setForm] = useState({ ...emptyForm, contact_date: today, contact_type: contactTypes[0]?.label ?? '' })
+  const contactTypeMap = Object.fromEntries(contactTypes.map(t => [t.id, t.label]))
+  function typeLabel(id: string | null) { return id ? (contactTypeMap[id] ?? id) : '—' }
+
+  const [form, setForm] = useState({ ...emptyForm, contact_date: today, contact_type_id: contactTypes[0]?.id ?? '' })
   const [addressSearch, setAddressSearch] = useState('')
   const [personSearch, setPersonSearch] = useState('')
   const [personChips, setPersonChips] = useState<PersonChip[]>([])
@@ -316,7 +319,7 @@ export default function ContactClient({
   const [assigningCaseNumber, setAssigningCaseNumber] = useState(false)
 
   function resetForm() {
-    setForm({ ...emptyForm, contact_date: today, contact_type: contactTypes[0]?.label ?? '' })
+    setForm({ ...emptyForm, contact_date: today, contact_type_id: contactTypes[0]?.id ?? '' })
     setAddressSearch('')
     setPersonSearch('')
     setPersonChips([])
@@ -354,7 +357,7 @@ export default function ContactClient({
       state: c.state ?? '',
       zip: c.zip ?? '',
       location_detail: c.location_detail ?? '',
-      contact_type: c.contact_type,
+      contact_type_id: c.contact_type_id ?? '',
       narrative: c.narrative ?? '',
     })
     setAddressSearch(c.address ?? '')
@@ -810,8 +813,8 @@ export default function ContactClient({
 
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-700">Contact Type</label>
-            <select value={form.contact_type} onChange={e => setForm(p => ({ ...p, contact_type: e.target.value }))} className={inputCls}>
-              {contactTypes.map(t => <option key={t.id} value={t.label}>{t.label}</option>)}
+            <select name="contact_type_id" value={form.contact_type_id} onChange={e => setForm(p => ({ ...p, contact_type_id: e.target.value }))} className={inputCls}>
+              {contactTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </div>
 
@@ -885,8 +888,8 @@ export default function ContactClient({
                       <span className="text-sm font-semibold text-zinc-900">
                         {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()}
                       </span>
-                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[c.contact_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                        {c.contact_type}
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[typeLabel(c.contact_type_id)] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                        {typeLabel(c.contact_type_id)}
                       </span>
                       {danger && (
                         <span className="text-xs rounded-full px-2 py-0.5 font-medium bg-red-600 text-white">⚠ Officer Safety</span>
@@ -951,8 +954,8 @@ export default function ContactClient({
               <div className="flex gap-3 text-xs text-zinc-500 flex-wrap">
                 <span>{new Date(viewingContact.contact_date + 'T12:00:00').toLocaleDateString()}</span>
                 {viewingContact.contact_time && <span>{viewingContact.contact_time.slice(0, 5)}</span>}
-                <span className={`rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[viewingContact.contact_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                  {viewingContact.contact_type}
+                <span className={`rounded-full px-2 py-0.5 font-medium ${CONTACT_TYPE_COLORS[typeLabel(viewingContact.contact_type_id)] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                  {typeLabel(viewingContact.contact_type_id)}
                 </span>
                 {viewingContact.officer_name && <span>· {viewingContact.officer_name}</span>}
               </div>

@@ -101,15 +101,13 @@ export async function reorderPdContactTypes(departmentId: string, orderedIds: st
   return { success: true }
 }
 
-// contact_type is stored on pd_contacts as a free-text label (not a foreign key),
-// so usage is counted by matching label text rather than an id.
 export async function getPdContactTypeUsageCounts(department_id: string): Promise<Record<string, number>> {
   const adminClient = createAdminClient()
-  const { data } = await adminClient.from('pd_contacts').select('contact_type').eq('department_id', department_id)
+  const { data } = await adminClient.from('pd_contacts').select('contact_type_id').eq('department_id', department_id)
   const counts: Record<string, number> = {}
   for (const row of data ?? []) {
-    if (!row.contact_type) continue
-    counts[row.contact_type] = (counts[row.contact_type] ?? 0) + 1
+    if (!row.contact_type_id) continue
+    counts[row.contact_type_id] = (counts[row.contact_type_id] ?? 0) + 1
   }
   return counts
 }
@@ -118,13 +116,13 @@ export async function deletePdContactType(id: string) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admin only.' }
   const adminClient = createAdminClient()
-  const { data: row, error: fetchErr } = await adminClient.from('pd_contact_types').select('department_id, label').eq('id', id).single()
+  const { data: row, error: fetchErr } = await adminClient.from('pd_contact_types').select('department_id').eq('id', id).single()
   if (fetchErr || !row) return { error: 'Contact type not found.' }
   const { count, error: countErr } = await adminClient
     .from('pd_contacts')
     .select('id', { count: 'exact', head: true })
     .eq('department_id', row.department_id)
-    .eq('contact_type', row.label)
+    .eq('contact_type_id', id)
   if (countErr) { await logError(countErr.message, '/dept-admin/police'); return { error: countErr.message } }
   if ((count ?? 0) > 0) return { error: 'This contact type is used by existing contacts and cannot be deleted. Deactivate it instead.' }
   const { error: dbErr } = await adminClient.from('pd_contact_types').delete().eq('id', id)
@@ -426,7 +424,7 @@ function contactFieldsFromForm(formData: FormData) {
     contact_date: formData.get('contact_date') as string,
     contact_time: (formData.get('contact_time') as string) || null,
     location_detail: (formData.get('location_detail') as string) || null,
-    contact_type: (formData.get('contact_type') as string) || null,
+    contact_type_id: (formData.get('contact_type_id') as string) || null,
     report_number: (formData.get('report_number') as string) || null,
     narrative: (formData.get('narrative') as string) || null,
   }
