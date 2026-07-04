@@ -24,6 +24,7 @@ export default async function InspectionSessionPage({
     .from('apparatus')
     .select('id, unit_number, apparatus_name')
     .eq('id', apparatus_id)
+    .eq('department_id', ctx.departmentId)
   const apparatus = appList?.[0]
   if (!apparatus) redirect('/inspections')
 

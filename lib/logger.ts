@@ -24,7 +24,11 @@ export async function logError(
   page: string,
   context?: { personnel_id?: string; department_id?: string; metadata?: Record<string, any> }
 ) {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error
+    ? error.message
+    : typeof (error as any)?.message === 'string'
+      ? (error as any).message
+      : String(error)
   await logEvent({
     log_type: 'error',
     page,

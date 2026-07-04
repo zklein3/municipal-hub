@@ -22,6 +22,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
     .from('apparatus')
     .select('id, unit_number, apparatus_name, make, model, model_year, vin, license_plate, active, in_service_date, out_of_service_date, notes, apparatus_type_id, station_id, qr_code, exclude_from_iso, has_air_brakes, has_engine_hours')
     .eq('id', id)
+    .eq('department_id', ctx.departmentId)
 
   const apparatus = apparatusList?.[0]
   if (!apparatus) redirect('/apparatus')

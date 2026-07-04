@@ -14,7 +14,7 @@ export default async function TrainingPage() {
 
   const me = { id: ctx.personnelId, first_name: ctx.firstName, last_name: ctx.lastName }
   const department_id = ctx.departmentId
-  const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer'
+  const isOfficerOrAbove = ctx.systemRole === 'admin' || ctx.systemRole === 'officer' || ctx.isSysAdmin
 
   // My enrollments
   const { data: enrollments } = await adminClient
