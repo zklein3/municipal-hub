@@ -72,7 +72,7 @@ function hasInspection(item: ChecklistItem): boolean {
 
 export default function InspectionRunClient({
   apparatus, compartment, compartmentId, checklistItems, inspectorName, personnelId, departmentId, presenceOnly,
-  inspectionSessionId, sessionCompartmentId, initialSubmittedAssets,
+  inspectionSessionId, sessionCompartmentId, initialSubmittedAssets, initialSelectedAssets,
 }: {
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
   compartment: { code: string; name: string | null }
@@ -85,11 +85,12 @@ export default function InspectionRunClient({
   inspectionSessionId?: string
   sessionCompartmentId?: string
   initialSubmittedAssets?: string[]
+  initialSelectedAssets?: Record<string, string[]>
 }) {
   const router = useRouter()
 
   const [presenceResponses, setPresenceResponses] = useState<Record<string, PresenceResponse>>({})
-  const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>({})
+  const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>(initialSelectedAssets ?? {})
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const [stepResponses, setStepResponses] = useState<Record<string, Record<string, StepResponse>>>({})
 

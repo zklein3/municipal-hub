@@ -74,6 +74,7 @@ export default async function InspectionRunPage({
   // (assets from the current compartment stay visible so they show as already-submitted on resume)
   let usedAssetIds = new Set<string>()
   let initialSubmittedAssets: string[] = []
+  let initialSelectedAssets: Record<string, string[]> = {}
   if (session_id && assetItemIds.length > 0) {
     const [{ data: otherLogs }, { data: currentLogs }] = await Promise.all([
       adminClient
@@ -89,6 +90,18 @@ export default async function InspectionRunPage({
     ])
     usedAssetIds = new Set((otherLogs ?? []).map(l => l.asset_id))
     initialSubmittedAssets = (currentLogs ?? []).map(l => l.asset_id)
+
+    // Rebuild selectedAssets so each slot shows the asset that was previously saved
+    const assetToItemId = Object.fromEntries((assets ?? []).map(a => [a.id, a.item_id]))
+    const itemIdToLocStdId = Object.fromEntries((locationStandards ?? []).map(ls => [ls.item_id, ls.id]))
+    for (const log of currentLogs ?? []) {
+      const itemId = assetToItemId[log.asset_id]
+      const locStdId = itemId ? itemIdToLocStdId[itemId] : null
+      if (locStdId) {
+        if (!initialSelectedAssets[locStdId]) initialSelectedAssets[locStdId] = []
+        initialSelectedAssets[locStdId].push(log.asset_id)
+      }
+    }
   }
 
   // For each asset-tracked item, fetch its inspection templates + steps
@@ -163,6 +176,7 @@ export default async function InspectionRunPage({
       inspectionSessionId={session_id}
       sessionCompartmentId={session_compartment_id}
       initialSubmittedAssets={initialSubmittedAssets}
+      initialSelectedAssets={initialSelectedAssets}
     />
   )
 }
