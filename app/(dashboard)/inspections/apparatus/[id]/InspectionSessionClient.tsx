@@ -111,9 +111,14 @@ export default function InspectionSessionClient({
     setError(null)
     startTransition(async () => {
       const res = await reopenCompartment(sc.id)
-      if (res?.error) setError(res.error)
-      setLoadingId(null)
-      router.refresh()
+      if (res?.error) {
+        setError(res.error)
+        setLoadingId(null)
+        return
+      }
+      router.push(
+        `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${sc.compartment_id}&session_id=${session.id}&session_compartment_id=${sc.id}`
+      )
     })
   }
 
