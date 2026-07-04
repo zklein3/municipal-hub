@@ -87,6 +87,7 @@ function fullAddress(p: { address?: string | null; city?: string | null; state?:
 function PersonCardModal({
   person,
   contacts,
+  contactTypeMap,
   isOfficerOrAbove,
   onClose,
   onOpenContact,
@@ -94,6 +95,7 @@ function PersonCardModal({
 }: {
   person: Person
   contacts: Contact[]
+  contactTypeMap: Record<string, string>
   isOfficerOrAbove: boolean
   onClose: () => void
   onOpenContact: (c: Contact) => void
@@ -181,7 +183,7 @@ function PersonCardModal({
                     className="w-full text-left px-3 py-2 hover:bg-zinc-50">
                     <p className="text-sm text-zinc-800">{fullAddress(c) || 'No address recorded'}</p>
                     <p className="text-xs text-zinc-400">
-                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {typeLabel(c.contact_type_id)}
+                      {new Date(c.contact_date + 'T12:00:00').toLocaleDateString()} · {c.contact_type_id ? (contactTypeMap[c.contact_type_id] ?? c.contact_type_id) : '—'}
                       {c.officer_name ? ` · ${c.officer_name}` : ''}
                     </p>
                     {c.narrative && <p className="text-xs text-zinc-500 mt-0.5">{c.narrative}</p>}
@@ -1026,6 +1028,7 @@ export default function ContactClient({
           key={viewingPersonId}
           person={personMap[viewingPersonId]}
           contacts={contacts.filter(c => (contactPersonsMap[c.id] ?? []).includes(viewingPersonId))}
+          contactTypeMap={contactTypeMap}
           isOfficerOrAbove={isOfficerOrAbove}
           onClose={() => setViewingPersonId(null)}
           onOpenContact={openContactCard}
