@@ -536,6 +536,8 @@ export async function submitToNeris(incident_id: string) {
   if (!neris.completed_at) return { error: 'Mark the report as ready before submitting.' }
   if (!neris.neris_incident_type) return { error: 'NERIS incident type is required before submitting.' }
   if (!neris.neris_incident_type.includes('||') && ambiguousIncidentTypeLeafs.has(neris.neris_incident_type)) {
+    const msg = `NERIS submit blocked — ambiguous incident type "${neris.neris_incident_type}" matches multiple categories. Re-select from the form dropdown.`
+    await logError(msg, '/incidents/neris/validate', { department_id: department_id ?? undefined })
     return { error: `The incident type "${neris.neris_incident_type}" matches multiple NERIS categories. Open the NERIS report, re-select the correct incident type from the dropdown (choose the specific category — e.g. Medical / Injury or Hazardous Non-Chemical), save, then submit.` }
   }
   if (!getIncidentState(incident)) return { error: 'Incident must have a State set before submitting to NERIS. Edit the incident and fill in the City, State, and Zip fields.' }
