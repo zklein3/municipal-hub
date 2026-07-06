@@ -6,6 +6,42 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { nerisValidateIncident, nerisSubmitIncident } from '@/lib/neris-api'
+import { NERIS_ACTIONS_TAKEN, NERIS_PROPERTY_USE, NERIS_MEDICAL_DISPOSITION } from '@/lib/neris-value-sets'
+
+// Build leaf→full-code maps from value sets so old flat codes stored in DB
+// (before parent-prefix was added) are upgraded transparently at payload time.
+type NerisGroup = { group: string; codes: { code: string }[] }
+function buildLeafMap(groups: NerisGroup[]): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const g of groups) {
+    for (const item of g.codes) {
+      const leaf = item.code.includes('||') ? item.code.split('||').pop()! : item.code
+      if (!m.has(leaf)) m.set(leaf, item.code)
+    }
+  }
+  return m
+}
+const actionsLeafMap = buildLeafMap(NERIS_ACTIONS_TAKEN as NerisGroup[])
+const propertyUseLeafMap = buildLeafMap(NERIS_PROPERTY_USE as NerisGroup[])
+function upgradeCode(code: string, map: Map<string, string>): string {
+  if (!code || code.includes('||')) return code
+  return map.get(code) ?? code
+}
+// Legacy transport_disposition values replaced in NERIS API update
+const LEGACY_TRANSPORT: Record<string, string> = {
+  NO_TREATMENT_REQUIRED: 'NO_TRANSPORT',
+  TREATED_RELEASED: 'NO_TRANSPORT',
+  TRANSPORTED_BLS: 'TRANSPORT_BY_EMS_UNIT',
+  TRANSPORTED_ALS: 'TRANSPORT_BY_EMS_UNIT',
+  PATIENT_REFUSED: 'PATIENT_REFUSED_TRANSPORT',
+  MUTUAL_AID_TRANSPORT: 'OTHER_AGENCY_TRANSPORT',
+}
+const validTransportCodes = new Set(NERIS_MEDICAL_DISPOSITION.map((c: { code: string }) => c.code))
+function upgradeTransport(code: string): string {
+  if (!code) return code
+  if (validTransportCodes.has(code)) return code
+  return LEGACY_TRANSPORT[code] ?? code
+}
 
 async function getContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -219,7 +255,7 @@ function buildNerisPayload(
 
   // ── Locations module (confirmed 2026-05-15) ──────────────────────────────
   if (neris?.property_use) {
-    base.location_use = { use_type: neris.property_use }
+    base.location_use = { use_type: upgradeCode(neris.property_use, propertyUseLeafMap) }
   }
   if (neris?.displaced_persons != null && neris.displaced_persons > 0) {
     base.displacement_count = neris.displaced_persons
@@ -248,7 +284,7 @@ function buildNerisPayload(
     payload.actions_tactics = {
       action_noaction: {
         type: 'ACTION',
-        actions: neris.actions_taken,
+        actions: (neris.actions_taken as string[]).map(a => upgradeCode(a, actionsLeafMap)),
       },
     }
   } else if (neris.no_action_reason) {
@@ -380,7 +416,7 @@ function buildNerisPayload(
         patient_care_evaluation: p.evaluation_care,
       }
       if (p.improved_status) patient.patient_status = p.improved_status
-      if (p.disposition) patient.transport_disposition = p.disposition
+      if (p.disposition) patient.transport_disposition = upgradeTransport(p.disposition)
       return patient
     })
   }
@@ -536,11 +572,14 @@ export async function submitToNeris(incident_id: string) {
     return { error: `NERIS connection failed: ${err.message}` }
   }
   if (!validation.ok) {
-    await adminClient.from('incident_neris').update({
-      neris_status: 'error',
-      neris_last_error: `Validation failed: ${validation.error}`,
-      updated_at: new Date().toISOString(),
-    }).eq('incident_id', incident_id)
+    await Promise.all([
+      adminClient.from('incident_neris').update({
+        neris_status: 'error',
+        neris_last_error: `Validation failed: ${validation.error}`,
+        updated_at: new Date().toISOString(),
+      }).eq('incident_id', incident_id),
+      logError(`NERIS validation failed: ${validation.error}`, '/incidents/neris/validate'),
+    ])
     return { error: `NERIS validation failed: ${validation.error}` }
   }
 
