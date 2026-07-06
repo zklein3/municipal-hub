@@ -995,7 +995,7 @@ export default function IncidentDetailClient({
               <div key={p.id} className="flex items-center justify-between py-2 border-b border-yellow-100 last:border-0">
                 <div>
                   <p className="text-sm font-semibold text-zinc-800">{p.name}</p>
-                  <p className="text-xs text-zinc-500 uppercase">{ROLE_LABELS[p.role]}{p.apparatus_unit ? ` · ${p.apparatus_unit}` : ' · POV'}</p>
+                  <p className="text-xs text-zinc-500 uppercase">{ROLE_LABELS[p.role]}{p.apparatus_unit ? ` · ${p.apparatus_unit}` : p.role === 'standby' ? ' · Station' : ' · POV'}</p>
                 </div>
                 {rejectingId === p.id ? (
                   <div className="flex flex-col gap-2 items-end">
@@ -1073,7 +1073,7 @@ export default function IncidentDetailClient({
                     {p.status === 'present' ? 'Present' : p.status === 'absent' ? 'Absent' : 'Pending'}
                   </span>
                 </div>
-                <p className="text-xs text-zinc-500 uppercase">{ROLE_LABELS[p.role]}{p.apparatus_unit ? ` · ${p.apparatus_unit}` : ' · POV'}</p>
+                <p className="text-xs text-zinc-500 uppercase">{ROLE_LABELS[p.role]}{p.apparatus_unit ? ` · ${p.apparatus_unit}` : p.role === 'standby' ? ' · Station' : ' · POV'}</p>
                 {p.rejection_reason && <p className="text-xs text-red-600 mt-0.5">Reason: {p.rejection_reason}</p>}
               </div>
               {isOfficerOrAbove && canEdit && (
@@ -1112,9 +1112,9 @@ export default function IncidentDetailClient({
               </div>
             </div>
             <div>
-              <label className={labelCls}>Apparatus <span className="text-zinc-400 font-normal">(leave blank = POV)</span></label>
+              <label className={labelCls}>Apparatus <span className="text-zinc-400 font-normal">(leave blank = POV or station staging)</span></label>
               <select value={newPersonnel.apparatus_id} onChange={e => setNewPersonnel(p => ({ ...p, apparatus_id: e.target.value }))} className={inputCls}>
-                <option value="">POV / Not on apparatus</option>
+                <option value="">POV / Station (no apparatus)</option>
                 {incidentApparatus.map(a => (
                   <option key={a.apparatus_id} value={a.apparatus_id}>{a.unit_number}</option>
                 ))}
