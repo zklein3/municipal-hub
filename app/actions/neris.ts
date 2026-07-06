@@ -24,6 +24,22 @@ function buildLeafMap(groups: NerisGroup[]): Map<string, string> {
 const actionsLeafMap = buildLeafMap(NERIS_ACTIONS_TAKEN as NerisGroup[])
 const propertyUseLeafMap = buildLeafMap(NERIS_PROPERTY_USE as NerisGroup[])
 const incidentTypesLeafMap = buildLeafMap(NERIS_INCIDENT_TYPES as NerisGroup[])
+
+// Leaf codes that exist in multiple NERIS incident type groups — can't auto-resolve.
+// User must re-select from the form so the full code is stored.
+function buildAmbiguousLeafs(groups: NerisGroup[]): Set<string> {
+  const seen = new Set<string>()
+  const dupes = new Set<string>()
+  for (const g of groups) {
+    for (const item of g.codes) {
+      const leaf = item.code.includes('||') ? item.code.split('||').pop()! : item.code
+      if (seen.has(leaf)) dupes.add(leaf)
+      else seen.add(leaf)
+    }
+  }
+  return dupes
+}
+const ambiguousIncidentTypeLeafs = buildAmbiguousLeafs(NERIS_INCIDENT_TYPES as NerisGroup[])
 function upgradeCode(code: string, map: Map<string, string>): string {
   if (!code || code.includes('||')) return code
   return map.get(code) ?? code
@@ -519,6 +535,9 @@ export async function submitToNeris(incident_id: string) {
   if (neris.neris_status === 'submitted') return { error: 'Already submitted to NERIS.' }
   if (!neris.completed_at) return { error: 'Mark the report as ready before submitting.' }
   if (!neris.neris_incident_type) return { error: 'NERIS incident type is required before submitting.' }
+  if (!neris.neris_incident_type.includes('||') && ambiguousIncidentTypeLeafs.has(neris.neris_incident_type)) {
+    return { error: `The incident type "${neris.neris_incident_type}" matches multiple NERIS categories. Open the NERIS report, re-select the correct incident type from the dropdown (choose the specific category — e.g. Medical / Injury or Hazardous Non-Chemical), save, then submit.` }
+  }
   if (!getIncidentState(incident)) return { error: 'Incident must have a State set before submitting to NERIS. Edit the incident and fill in the City, State, and Zip fields.' }
 
   // Fetch apparatus

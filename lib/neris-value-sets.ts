@@ -65,7 +65,7 @@ export const NERIS_INCIDENT_TYPES: NerisGroup[] = [
     group: 'Hazardous Situation — Non-Chemical',
     coverTypeFilter: ['special', 'rescue'],
     codes: [
-      { code: 'HAZSIT||HAZARD_NONCHEM||MOTOR_VEHICLE_COLLISION', label: 'Motor Vehicle Collision' },
+      { code: 'HAZSIT||HAZARD_NONCHEM||MOTOR_VEHICLE_COLLISION', label: 'Motor Vehicle Collision — Hazard / Non-Chemical' },
       { code: 'HAZSIT||HAZARD_NONCHEM||ELEC_POWER_LINE_DOWN_ARCHING_MALFUNC', label: 'Electrical Power Line Down / Arching / Malfunction' },
       { code: 'HAZSIT||HAZARD_NONCHEM||ELEC_HAZARD_SHORT_CIRCUIT', label: 'Electrical Hazard / Short Circuit' },
       { code: 'HAZSIT||HAZARD_NONCHEM||BOMB_THREAT_RESPONSE_SUSPICIOUS_PACKAGE', label: 'Bomb Threat / Response / Suspicious Package' },
