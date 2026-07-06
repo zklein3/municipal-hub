@@ -246,7 +246,6 @@ export const NERIS_INCIDENT_TYPES: NerisGroup[] = [
   },
   {
     group: 'No Emergency — False Alarm',
-    coverTypeFilter: ['other'],
     codes: [
       { code: 'NOEMERG||FALSE_ALARM||MALFUNCTIONING_ALARM', label: 'Malfunctioning Alarm' },
       { code: 'NOEMERG||FALSE_ALARM||ACCIDENTAL_ALARM', label: 'Accidental Alarm' },
@@ -257,7 +256,6 @@ export const NERIS_INCIDENT_TYPES: NerisGroup[] = [
   },
   {
     group: 'No Emergency — Good Intent',
-    coverTypeFilter: ['other', 'standby'],
     codes: [
       { code: 'NOEMERG||GOOD_INTENT||NO_INCIDENT_FOUND_LOCATION_ERROR', label: 'No Incident Found / Location Error' },
       { code: 'NOEMERG||GOOD_INTENT||SMOKE_FROM_NONHOSTILE_SOURCE', label: 'Smoke from Nonhostile Source' },
@@ -267,7 +265,6 @@ export const NERIS_INCIDENT_TYPES: NerisGroup[] = [
   },
   {
     group: 'No Emergency — Cancelled',
-    coverTypeFilter: ['other', 'standby'],
     codes: [
       { code: 'NOEMERG||CANCELLED', label: 'Cancelled / Dispatched and Cancelled En Route' },
     ],
