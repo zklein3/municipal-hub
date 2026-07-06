@@ -44,6 +44,21 @@ function upgradeCode(code: string, map: Map<string, string>): string {
   if (!code || code.includes('||')) return code
   return map.get(code) ?? code
 }
+// Legacy actions_taken codes renamed or removed in NERIS API update.
+// null = drop the code entirely (e.g. mutual aid is a separate NERIS field, not an action).
+const LEGACY_ACTIONS: Record<string, string | null> = {
+  INCIDENT_COMMAND:     'COMMAND_AND_CONTROL||ESTABLISH_INCIDENT_COMMAND',
+  BLS_CARE:             'EMERGENCY_MEDICAL_CARE||PROVIDE_BASIC_LIFE_SUPPORT',
+  ALS_CARE:             'EMERGENCY_MEDICAL_CARE||PROVIDE_ADVANCED_LIFE_SUPPORT',
+  MUTUAL_AID_RECEIVED:  null,
+  MUTUAL_AID_GIVEN:     null,
+}
+function upgradeAction(code: string): string | null {
+  if (!code) return null
+  if (code.includes('||')) return code
+  if (Object.prototype.hasOwnProperty.call(LEGACY_ACTIONS, code)) return LEGACY_ACTIONS[code]
+  return actionsLeafMap.get(code) ?? code
+}
 // Legacy transport_disposition values replaced in NERIS API update
 const LEGACY_TRANSPORT: Record<string, string> = {
   NO_TREATMENT_REQUIRED: 'NO_TRANSPORT',
@@ -301,7 +316,7 @@ function buildNerisPayload(
     payload.actions_tactics = {
       action_noaction: {
         type: 'ACTION',
-        actions: (neris.actions_taken as string[]).map(a => upgradeCode(a, actionsLeafMap)),
+        actions: (neris.actions_taken as string[]).map(upgradeAction).filter((a): a is string => a !== null),
       },
     }
   } else if (neris.no_action_reason) {
