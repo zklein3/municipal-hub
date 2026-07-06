@@ -6,7 +6,7 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { nerisValidateIncident, nerisSubmitIncident } from '@/lib/neris-api'
-import { NERIS_ACTIONS_TAKEN, NERIS_PROPERTY_USE, NERIS_MEDICAL_DISPOSITION } from '@/lib/neris-value-sets'
+import { NERIS_ACTIONS_TAKEN, NERIS_PROPERTY_USE, NERIS_MEDICAL_DISPOSITION, NERIS_INCIDENT_TYPES } from '@/lib/neris-value-sets'
 
 // Build leaf→full-code maps from value sets so old flat codes stored in DB
 // (before parent-prefix was added) are upgraded transparently at payload time.
@@ -23,6 +23,7 @@ function buildLeafMap(groups: NerisGroup[]): Map<string, string> {
 }
 const actionsLeafMap = buildLeafMap(NERIS_ACTIONS_TAKEN as NerisGroup[])
 const propertyUseLeafMap = buildLeafMap(NERIS_PROPERTY_USE as NerisGroup[])
+const incidentTypesLeafMap = buildLeafMap(NERIS_INCIDENT_TYPES as NerisGroup[])
 function upgradeCode(code: string, map: Map<string, string>): string {
   if (!code || code.includes('||')) return code
   return map.get(code) ?? code
@@ -275,7 +276,7 @@ function buildNerisPayload(
       })),
     },
     incident_types: neris.neris_incident_type
-      ? [{ type: neris.neris_incident_type }]
+      ? [{ type: upgradeCode(neris.neris_incident_type, incidentTypesLeafMap) }]
       : [],
   }
 
