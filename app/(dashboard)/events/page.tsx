@@ -23,36 +23,34 @@ export default async function EventsPage() {
     .eq('active', true)
     .order('excuse_name')
 
-  // Event instances: past 30 days + future 365 (special events) / 60 days (all others)
+  // Series info — fetch dept series first, then scope instances to those series only
+  const { data: seriesData } = await adminClient
+    .from('event_series')
+    .select('id, title, event_type, department_id, recurrence_type, description, duration_minutes, is_training, training_hours')
+    .eq('department_id', department_id)
+
+  const seriesIds = (seriesData ?? []).map(s => s.id)
+  const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
+
+  // Event instances: scoped to this dept's series, past 30 days + future 365
   const past30 = new Date()
   past30.setDate(past30.getDate() - 30)
   const future365 = new Date()
   future365.setDate(future365.getDate() + 365)
   const future60str = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-  const { data: instances } = await adminClient
-    .from('event_instances')
-    .select('id, series_id, event_date, start_time, location, status, notes, requires_verification, requires_signature')
-    .gte('event_date', past30.toISOString().split('T')[0])
-    .lte('event_date', future365.toISOString().split('T')[0])
-    .order('event_date', { ascending: true })
-
-  // Series info — display fields + training flags
-  const seriesIds = [...new Set((instances ?? []).map(i => i.series_id))]
-  const { data: seriesData } = seriesIds.length > 0
+  const { data: instances } = seriesIds.length > 0
     ? await adminClient
-        .from('event_series')
-        .select('id, title, event_type, department_id, recurrence_type, description, duration_minutes, is_training, training_hours')
-        .in('id', seriesIds)
-        .eq('department_id', department_id)
+        .from('event_instances')
+        .select('id, series_id, event_date, start_time, location, status, notes, requires_verification, requires_signature')
+        .in('series_id', seriesIds)
+        .gte('event_date', past30.toISOString().split('T')[0])
+        .lte('event_date', future365.toISOString().split('T')[0])
+        .order('event_date', { ascending: true })
     : { data: [] }
 
-  const deptSeriesIds = new Set((seriesData ?? []).map(s => s.id))
-  const seriesMap = Object.fromEntries((seriesData ?? []).map(s => [s.id, s]))
-
-  // Filter to this dept; trim non-special events to 60-day future window
+  // Trim non-special events to 60-day future window
   const deptInstances = (instances ?? []).filter(i => {
-    if (!deptSeriesIds.has(i.series_id)) return false
     const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
     if (!isSpecial && i.event_date > future60str) return false
     return true

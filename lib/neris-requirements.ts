@@ -404,12 +404,13 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
 
   const hasActionsTaken = hasItems(neris.actions_taken)
   const hasNoActionReason = hasText(neris.no_action_reason)
+  const isNoemerg = (neris.neris_incident_type ?? '').startsWith('NOEMERG')
   add({
     id: 'actions.taken',
     section: 'actions',
     label: 'Actions taken or no-action reason',
     severity: 'required',
-    status: completeIf(hasActionsTaken || hasNoActionReason),
+    status: completeIf(isNoemerg || hasActionsTaken || hasNoActionReason),
     source: 'neris_report',
     detail: hasNoActionReason && !hasActionsTaken ? 'No-action reason supplied instead of actions taken.' : undefined,
   })

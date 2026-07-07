@@ -6,15 +6,27 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { revalidatePath } from 'next/cache'
 import { nerisCheckEntityExists } from '@/lib/neris-api'
 
+async function assertSysAdmin(): Promise<string | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 'Not authenticated.'
+  const adminClient = createAdminClient()
+  const { data: meList } = await adminClient.from('personnel').select('is_sys_admin').eq('auth_user_id', user.id)
+  if (!meList?.[0]?.is_sys_admin) return 'Not authorized.'
+  return null
+}
+
 export async function createDepartment(formData: FormData) {
   const name = formData.get('name') as string
   const code = formData.get('code') as string
 
   if (!name) return { error: 'Department name is required.' }
 
-  const supabase = await createClient()
+  const authErr = await assertSysAdmin()
+  if (authErr) return { error: authErr }
 
-  const { error } = await supabase
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
     .from('departments')
     .insert({ name, code: code || null, active: true })
 
@@ -25,8 +37,11 @@ export async function createDepartment(formData: FormData) {
 }
 
 export async function toggleDepartment(id: string, active: boolean) {
-  const supabase = await createClient()
-  const { error } = await supabase
+  const authErr = await assertSysAdmin()
+  if (authErr) return { error: authErr }
+
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
     .from('departments')
     .update({ active })
     .eq('id', id)
@@ -61,8 +76,11 @@ export async function updateDepartmentModules(
   departmentId: string,
   modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; module_medical?: boolean; public_site_enabled?: boolean }
 ) {
-  const supabase = await createClient()
-  const { error } = await supabase
+  const authErr = await assertSysAdmin()
+  if (authErr) return { error: authErr }
+
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
     .from('departments')
     .update(modules)
     .eq('id', departmentId)
@@ -92,6 +110,9 @@ export async function setFuelStorageModule(enabled: boolean) {
 }
 
 export async function saveNerisEntityId(departmentId: string, nerisEntityId: string) {
+  const authErr = await assertSysAdmin()
+  if (authErr) return { error: authErr }
+
   const adminClient = createAdminClient()
   const { error } = await adminClient
     .from('departments')
