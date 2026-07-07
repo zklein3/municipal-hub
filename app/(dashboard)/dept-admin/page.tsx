@@ -63,6 +63,11 @@ export default async function DeptAdminPage() {
           description="Manage attendance, approvals, and event settings"
           href="/dept-admin/events"
         />
+        <HubCard
+          title="Attendance Settings"
+          description="Excuse types and participation requirements"
+          href="/dept-admin/attendance"
+        />
         {moduleMedical && (
           <HubCard
             title="Medical"

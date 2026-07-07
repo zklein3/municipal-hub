@@ -927,27 +927,3 @@ export async function transferQuantityBetweenStorage(
   return { success: true }
 }
 
-// ─── Get Suggested Department Quantity ───────────────────────────────────────
-export async function getSuggestedDepartmentQuantity(item_id: string) {
-  const ctx = await getContext()
-  if (!ctx?.isAdmin) return { error: 'Not authorized.' }
-  const department_id = ctx.department_id
-  if (!department_id) return { error: 'Department not found.' }
-  const adminClient = createAdminClient()
-
-  const { data: standards } = await adminClient
-    .from('item_location_standards')
-    .select('expected_quantity')
-    .eq('item_id', item_id)
-    .eq('active', true)
-  const compartmentTotal = standards?.reduce((sum, s) => sum + (s.expected_quantity ?? 0), 0) ?? 0
-
-  const { data: storageList } = await adminClient
-    .from('department_item_storage')
-    .select('par_quantity')
-    .eq('department_id', department_id)
-    .eq('item_id', item_id)
-  const storagePar = storageList?.[0]?.par_quantity ?? 0
-
-  return { success: true, suggested: compartmentTotal + storagePar }
-}

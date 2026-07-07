@@ -90,37 +90,6 @@ async function getContext() {
   }
 }
 
-// ─── Get or create NERIS record ───────────────────────────────────────────────
-// Returns existing record or creates a blank draft.
-export async function getOrCreateNerisRecord(incident_id: string) {
-  const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove) return { error: 'Only officers and admins can access NERIS reports.' }
-  const department_id = ctx.department_id
-  if (!department_id) return { error: 'Department not found.' }
-  const adminClient = createAdminClient()
-
-  // Verify incident belongs to dept
-  const { data: incidentList } = await adminClient
-    .from('incidents')
-    .select('id, department_id')
-    .eq('id', incident_id)
-    .eq('department_id', department_id)
-  if (!incidentList?.[0]) return { error: 'Incident not found.' }
-
-  const { data: existing } = await adminClient
-    .from('incident_neris')
-    .select('*')
-    .eq('incident_id', incident_id)
-  if (existing?.[0]) return { success: true, record: existing[0] }
-
-  const { data: created, error: dbErr } = await adminClient
-    .from('incident_neris')
-    .insert({ incident_id, department_id, neris_status: 'draft' })
-    .select('*')
-    .single()
-  if (dbErr) { await logError(dbErr.message, '/incidents/neris'); return { error: dbErr.message } }
-  return { success: true, record: created }
-}
 
 // ─── Save NERIS report (upsert) ───────────────────────────────────────────────
 export async function saveNerisReport(incident_id: string, data: {

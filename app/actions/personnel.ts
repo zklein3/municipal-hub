@@ -174,18 +174,6 @@ export async function submitUserReport(formData: FormData) {
   return { success: true }
 }
 
-// ─── Save raw QR scan for format analysis ────────────────────────────────────
-export async function saveQrDebugScan(rawValue: string) {
-  const admin = createAdminClient()
-  const { data, error: dbErr } = await admin
-    .from('qr_debug_scans')
-    .insert({ raw_value: rawValue })
-    .select()
-
-  if (dbErr) return { error: dbErr.message }
-  if (!data || data.length === 0) return { error: 'Insert returned no rows.' }
-  return { success: true }
-}
 
 // ─── Link a QR/barcode token to a personnel record ───────────────────────────
 export async function linkQrToken(

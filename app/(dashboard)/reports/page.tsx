@@ -64,6 +64,11 @@ export default async function ReportsPage() {
               href="/reports/inventory-status"
             />
             <HubCard
+              title="Inventory Log"
+              description="Asset inspection history and movement log by apparatus"
+              href="/reports/inventory"
+            />
+            <HubCard
               title="Fuel Report"
               description="Apparatus fuel usage and cost tracking"
               href="/reports/fuel"

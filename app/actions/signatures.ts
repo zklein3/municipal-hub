@@ -92,7 +92,7 @@ export async function saveIncidentSignature(formData: FormData) {
 
   if (updErr) return { error: updErr.message }
 
-  revalidatePath('/signatures')
+  revalidatePath('/inbox')
   revalidatePath(`/incidents/${existing.incident_id}`)
   return { success: true }
 }

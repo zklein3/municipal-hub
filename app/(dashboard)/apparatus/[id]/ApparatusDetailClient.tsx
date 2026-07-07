@@ -675,7 +675,7 @@ export default function ApparatusDetailClient({
             {compartmentNames.length === 0 ? (
               <p className="text-xs text-zinc-400">
                 No compartment names defined yet. Go to{' '}
-                <a href="/dept-admin/compartments" className="text-red-600 hover:underline">Dept Admin → Compartments</a> to add them.
+                <a href="/dept-admin/setup?tab=compartments" className="text-red-600 hover:underline">Dept Admin → Setup → Compartments</a> to add them.
               </p>
             ) : availableCompartments.length === 0 ? (
               <p className="text-xs text-zinc-400">All department compartments have been assigned to this apparatus.</p>

@@ -22,7 +22,7 @@ export default async function ApparatusFuelPage({
 
   const { data: apparatus } = await adminClient.from('apparatus')
     .select('id, unit_number, apparatus_name').eq('id', id).eq('department_id', department_id).single()
-  if (!apparatus) redirect('/inspections')
+  if (!apparatus) redirect('/equipment')
 
   const { data: deptFlags } = await adminClient
     .from('departments')
