@@ -59,6 +59,11 @@ export default async function DeptAdminPage() {
           alert={hasPendingSetup}
         />
         <HubCard
+          title="Department Settings"
+          description="Timezone and display preferences"
+          href="/dept-admin/settings"
+        />
+        <HubCard
           title="Events"
           description="Manage attendance, approvals, and event settings"
           href="/dept-admin/events"

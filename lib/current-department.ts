@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SELECTED_DEPARTMENT_COOKIE, SYS_ADMIN_SENTINEL } from '@/lib/auth-cookies'
+import { DEFAULT_TIMEZONE } from '@/lib/format-datetime'
 
 export type CurrentDepartmentContext = {
   personnelId: string
@@ -11,6 +12,7 @@ export type CurrentDepartmentContext = {
   departmentId: string | null
   departmentName: string | null
   departmentType: string
+  departmentTimezone: string
   systemRole: string | null
   hasMultipleDepartments: boolean
   // True when the user has more than one viewing option (departments and/or
@@ -40,7 +42,7 @@ export async function getCurrentDepartmentContext(): Promise<CurrentDepartmentCo
 
   const { data: deptList } = await adminClient
     .from('department_personnel')
-    .select('system_role, department_id, departments(name, department_type)')
+    .select('system_role, department_id, departments(name, department_type, timezone)')
     .eq('personnel_id', me.id)
     .eq('active', true)
 
@@ -76,6 +78,7 @@ export async function getCurrentDepartmentContext(): Promise<CurrentDepartmentCo
     departmentId: viewingAsSysAdmin ? null : dept?.department_id ?? null,
     departmentName: (dept?.departments as any)?.name ?? null,
     departmentType: (dept?.departments as any)?.department_type ?? 'fire',
+    departmentTimezone: (dept?.departments as any)?.timezone ?? DEFAULT_TIMEZONE,
     systemRole: dept?.system_role ?? null,
     hasMultipleDepartments: totalOptions > 1,
     selectionPending,

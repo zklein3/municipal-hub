@@ -235,6 +235,7 @@ export default async function PrintReportPage({
       preplans={preplans ?? []}
       mutualAid={(mutualAid ?? []).filter(a => a.active)}
       responseTimes={{ runs: responseRuns, avgResponseMin, avgDispatchMin, total: responseRuns.length }}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

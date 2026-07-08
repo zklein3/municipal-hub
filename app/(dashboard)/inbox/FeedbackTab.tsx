@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updatePublicFeedbackStatus, replyToPublicFeedback, deletePublicFeedback } from '@/app/actions/public-site'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Status = 'new' | 'reviewed' | 'resolved'
 
@@ -46,15 +47,11 @@ const FILTER_LABELS: Record<Filter, string> = {
   archived: 'Archived',
 }
 
-function formatDateTime(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
 function isArchivedFeedback(item: Feedback) {
   return item.status === 'resolved'
 }
 
-export default function FeedbackTab({ items: initialItems }: { items: Feedback[] }) {
+export default function FeedbackTab({ items: initialItems, departmentTimezone }: { items: Feedback[]; departmentTimezone: string }) {
   const [items, setItems] = useState(initialItems)
   const [filter, setFilter] = useState<Filter>('active')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -201,7 +198,7 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
                       {isExpanded ? 'Close' : 'Review'}
                     </button>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(item.created_at)}</p>
+                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatLocalDateTime(item.created_at, departmentTimezone)}</p>
                 </div>
 
                 {isExpanded && (
@@ -233,7 +230,7 @@ export default function FeedbackTab({ items: initialItems }: { items: Feedback[]
                         <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 mb-2">
                           <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-line">{item.reply_message}</p>
                           <p className="text-xs text-zinc-400 mt-1">
-                            Sent {item.replied_at ? formatDateTime(item.replied_at) : ''}
+                            Sent {item.replied_at ? formatLocalDateTime(item.replied_at, departmentTimezone) : ''}
                             {item.replied_by_name ? ` by ${item.replied_by_name}` : ''}
                           </p>
                         </div>

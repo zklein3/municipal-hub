@@ -192,6 +192,7 @@ export default async function MedicalPage() {
       lotNumberMap={lotNumberMap}
       personnelMap={personnelMap}
       pendingReorderIds={pendingReorderIds}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

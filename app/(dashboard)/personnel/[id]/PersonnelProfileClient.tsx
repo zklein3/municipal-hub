@@ -72,6 +72,7 @@ export default function PersonnelProfileClient({
   isMe,
   isAdmin,
   isOfficerOrAbove,
+  departmentTimezone,
 }: {
   person: Person
   deptRecord: DeptRecord
@@ -81,6 +82,7 @@ export default function PersonnelProfileClient({
   isMe: boolean
   isAdmin: boolean
   isOfficerOrAbove: boolean
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [profileError, setProfileError] = useState<string | null>(null)
@@ -475,7 +477,7 @@ export default function PersonnelProfileClient({
       )}
 
       {/* ── Biometric Unlock — own profile only ─────────────────────────── */}
-      {isMe && <BiometricSettings initialCredentials={biometricCredentials} />}
+      {isMe && <BiometricSettings initialCredentials={biometricCredentials} departmentTimezone={departmentTimezone} />}
 
       {/* ── Change Password — own profile only ───────────────────────────── */}
       {isMe && (

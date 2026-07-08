@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { createAnnouncement, deleteAnnouncement, pinAnnouncement, markAnnouncementRead } from '@/app/actions/announcements'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Announcement = {
   id: string
@@ -17,10 +18,12 @@ export default function AnnouncementsClient({
   announcements,
   isOfficerOrAbove,
   isAdmin,
+  departmentTimezone,
 }: {
   announcements: Announcement[]
   isOfficerOrAbove: boolean
   isAdmin: boolean
+  departmentTimezone: string
 }) {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,7 +141,7 @@ export default function AnnouncementsClient({
                 </div>
                 <p className="text-sm text-zinc-700 whitespace-pre-wrap">{a.body}</p>
                 <p className="text-xs text-zinc-400 mt-2">
-                  {a.author_name} &middot; {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {a.author_name} &middot; {formatLocalDateTime(a.created_at, departmentTimezone)}
                 </p>
               </div>
 

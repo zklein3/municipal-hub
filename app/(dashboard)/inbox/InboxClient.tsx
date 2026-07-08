@@ -61,6 +61,7 @@ export default function InboxClient({
   deptName,
   burnPermitCountyInfo,
   burnPermitRestrictions,
+  departmentTimezone,
 }: {
   permits: any[]
   requests: any[]
@@ -75,6 +76,7 @@ export default function InboxClient({
   deptName: string | null
   burnPermitCountyInfo: string | null
   burnPermitRestrictions: string | null
+  departmentTimezone: string
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const [pendingSigs, setPendingSigs] = useState<SignatureRow[]>(signatureRows)
@@ -290,11 +292,12 @@ export default function InboxClient({
           deptName={deptName}
           burnPermitCountyInfo={burnPermitCountyInfo}
           burnPermitRestrictions={burnPermitRestrictions}
+          departmentTimezone={departmentTimezone}
         />
       )}
 
       {tab === 'records' && isOfficerOrAbove && (
-        <RecordRequestsTab requests={requests} />
+        <RecordRequestsTab requests={requests} departmentTimezone={departmentTimezone} />
       )}
 
       {tab === 'restock' && isOfficerOrAbove && moduleMedical && (
@@ -302,7 +305,7 @@ export default function InboxClient({
       )}
 
       {tab === 'feedback' && isOfficerOrAbove && (
-        <FeedbackTab items={feedbackItems} />
+        <FeedbackTab items={feedbackItems} departmentTimezone={departmentTimezone} />
       )}
 
       {activeSig && activeSig.type === 'incident' && (

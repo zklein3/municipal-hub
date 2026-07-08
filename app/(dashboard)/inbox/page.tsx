@@ -232,6 +232,7 @@ export default async function InboxPage({
       deptName={deptConfig?.name ?? null}
       burnPermitCountyInfo={deptConfig?.burn_permit_county_info ?? null}
       burnPermitRestrictions={deptConfig?.burn_permit_restrictions ?? null}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

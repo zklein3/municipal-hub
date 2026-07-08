@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, deleteInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
 import { moveAssetsToStorage } from '@/app/actions/equipment'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface SessionCompartment {
   id: string
@@ -37,6 +38,7 @@ export default function InspectionSessionClient({
   apparatus_unit_number,
   personnel_id,
   isOfficerOrAdmin,
+  departmentTimezone,
 }: {
   session: Session
   compartments: SessionCompartment[]
@@ -44,6 +46,7 @@ export default function InspectionSessionClient({
   apparatus_unit_number: string
   personnel_id: string
   isOfficerOrAdmin: boolean
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -206,7 +209,7 @@ export default function InspectionSessionClient({
               {sc.status === 'completed' && (
                 <p className="text-xs text-green-600 mt-0.5">
                   Completed by {sc.completed_by_name ?? 'Unknown'}
-                  {sc.completed_at ? ` · ${new Date(sc.completed_at).toLocaleTimeString([], { timeStyle: 'short' })}` : ''}
+                  {sc.completed_at ? ` · ${formatLocalDateTime(sc.completed_at, departmentTimezone, { month: undefined, day: undefined })}` : ''}
                 </p>
               )}
             </div>

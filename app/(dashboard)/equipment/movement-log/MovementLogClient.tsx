@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatLocalDate, formatLocalDateTime } from '@/lib/format-datetime'
 
 interface LogEntry {
   id: string
@@ -21,7 +22,7 @@ const SOURCE_COLORS: Record<string, string> = {
   Manual: 'bg-zinc-100 text-zinc-600',
 }
 
-export default function MovementLogClient({ logs }: { logs: LogEntry[] }) {
+export default function MovementLogClient({ logs, departmentTimezone }: { logs: LogEntry[]; departmentTimezone: string }) {
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
@@ -82,10 +83,10 @@ export default function MovementLogClient({ logs }: { logs: LogEntry[] }) {
                 {/* Date/time */}
                 <div className="shrink-0 text-right w-24">
                   <p className="text-xs font-medium text-zinc-700">
-                    {new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    {formatLocalDate(log.created_at, departmentTimezone, { month: 'short', day: 'numeric', year: undefined })}
                   </p>
                   <p className="text-xs text-zinc-400">
-                    {new Date(log.created_at).toLocaleTimeString([], { timeStyle: 'short' })}
+                    {formatLocalDateTime(log.created_at, departmentTimezone, { month: undefined, day: undefined })}
                   </p>
                 </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateRecordRequestStatus } from '@/app/actions/public-site'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Status = 'pending' | 'in_review' | 'fulfilled' | 'denied'
 
@@ -58,11 +59,7 @@ function formatDate(d: string | null) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function formatDateTime(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
-export default function RecordRequestsTab({ requests: initialRequests }: { requests: RecordRequest[] }) {
+export default function RecordRequestsTab({ requests: initialRequests, departmentTimezone }: { requests: RecordRequest[]; departmentTimezone: string }) {
   const [requests, setRequests] = useState(initialRequests)
   const [filter, setFilter] = useState<Filter>('active')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -165,7 +162,7 @@ export default function RecordRequestsTab({ requests: initialRequests }: { reque
                       {isExpanded ? 'Close' : canAct ? 'Review' : 'Details'}
                     </button>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(req.created_at)}</p>
+                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatLocalDateTime(req.created_at, departmentTimezone)}</p>
                 </div>
 
                 {/* Expanded detail */}

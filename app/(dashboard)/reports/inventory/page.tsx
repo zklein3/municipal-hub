@@ -134,6 +134,7 @@ export default async function InventoryReportPage({
       selectedApparatusId={apparatusId ?? null}
       dateFrom={dateFrom}
       dateTo={dateTo}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

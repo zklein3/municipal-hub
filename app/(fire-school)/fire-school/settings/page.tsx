@@ -1,19 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-const TIMEZONES = [
-  { value: 'America/New_York',    label: 'Eastern (ET)' },
-  { value: 'America/Chicago',     label: 'Central (CT)' },
-  { value: 'America/Denver',      label: 'Mountain (MT)' },
-  { value: 'America/Phoenix',     label: 'Mountain – No DST (AZ)' },
-  { value: 'America/Los_Angeles', label: 'Pacific (PT)' },
-  { value: 'America/Anchorage',   label: 'Alaska (AKT)' },
-  { value: 'America/Honolulu',    label: 'Hawaii (HT)' },
-]
+import { TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/format-datetime'
 
 export const TZ_KEY = 'fire_school_timezone'
-export const TZ_DEFAULT = 'America/Chicago'
+export const TZ_DEFAULT = DEFAULT_TIMEZONE
 
 export default function FireSchoolSettingsPage() {
   const [timezone, setTimezone] = useState(TZ_DEFAULT)

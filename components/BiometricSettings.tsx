@@ -8,6 +8,7 @@ import {
   listBiometricCredentials,
   removeBiometricCredential,
 } from '@/app/actions/biometric'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface Credential {
   id: string
@@ -16,7 +17,7 @@ interface Credential {
   last_used_at: string | null
 }
 
-export default function BiometricSettings({ initialCredentials }: { initialCredentials: Credential[] }) {
+export default function BiometricSettings({ initialCredentials, departmentTimezone }: { initialCredentials: Credential[]; departmentTimezone: string }) {
   const [credentials, setCredentials] = useState(initialCredentials)
   const [supported, setSupported] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,8 +87,8 @@ export default function BiometricSettings({ initialCredentials }: { initialCrede
               <div>
                 <p className="font-medium text-zinc-900">{c.device_label || 'Device'}</p>
                 <p className="text-xs text-zinc-400">
-                  Added {new Date(c.created_at).toLocaleDateString()}
-                  {c.last_used_at && ` · Last used ${new Date(c.last_used_at).toLocaleDateString()}`}
+                  Added {formatLocalDateTime(c.created_at, departmentTimezone)}
+                  {c.last_used_at && ` · Last used ${formatLocalDateTime(c.last_used_at, departmentTimezone)}`}
                 </p>
               </div>
               <button

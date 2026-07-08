@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface ApparatusItem {
   id: string
@@ -49,12 +50,6 @@ interface AssetInfo {
   item_id: string
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-  })
-}
-
 function stepResult(step: StepLog): { label: string; severity: 'pass' | 'warn' | 'fail' } {
   if (step.step_type === 'BOOLEAN') {
     if (step.boolean_value === true) return { label: 'Yes', severity: 'pass' }
@@ -84,6 +79,7 @@ const severityClass: Record<string, string> = {
 export default function InventoryReportClient({
   apparatusList, inspLogs, allStepLogs, presenceLogs,
   assetMap, assetItemMap, selectedApparatusId, dateFrom, dateTo,
+  departmentTimezone,
 }: {
   apparatusList: ApparatusItem[]
   inspLogs: InspLog[]
@@ -94,6 +90,7 @@ export default function InventoryReportClient({
   selectedApparatusId: string | null
   dateFrom: string
   dateTo: string
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -179,7 +176,7 @@ export default function InventoryReportClient({
             <h1 className="text-2xl font-bold text-zinc-900">Inventory Inspection Report</h1>
             <p className="text-sm text-zinc-600 mt-1">
               {apparatusList.find(a => a.id === printLog.apparatus_id)?.unit_number ?? '—'}
-              {' · '}{formatDate(printLog.inspected_at)}
+              {' · '}{formatLocalDateTime(printLog.inspected_at, departmentTimezone)}
             </p>
             <p className="text-sm text-zinc-600">Inspector: {printLog.inspected_by_name ?? '—'}</p>
             <p className="text-sm font-semibold mt-1">
@@ -366,7 +363,7 @@ export default function InventoryReportClient({
                       <p className="text-sm font-semibold text-zinc-900">
                         {itemName ?? 'Inspection'} — {asset?.asset_tag ?? '—'}
                       </p>
-                      <p className="text-xs text-zinc-500 mt-0.5">{formatDate(log.inspected_at)}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{formatLocalDateTime(log.inspected_at, departmentTimezone)}</p>
                       <p className="text-xs text-zinc-500">Inspector: {log.inspected_by_name ?? '—'}</p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -430,7 +427,7 @@ export default function InventoryReportClient({
                         <div>
                           <span className="text-sm font-medium text-zinc-800">{p.item_name}</span>
                           <span className="text-xs text-zinc-400 ml-2">
-                            {formatDate(p.inspected_at)} · {p.inspected_by_name ?? '—'}
+                            {formatLocalDateTime(p.inspected_at, departmentTimezone)} · {p.inspected_by_name ?? '—'}
                           </span>
                         </div>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { logAttendance, logAbsentAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
 import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface AttendanceRecord {
   id: string
@@ -121,10 +122,6 @@ function formatEndTime(startTime: string | null, durationMinutes: number | null)
   return `${hour12}:${String(endM).padStart(2, '0')} ${ampm}`
 }
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
 function isWindowOpen(event_date: string, start_time: string | null): boolean {
   const eventDateTime = new Date(`${event_date}T${start_time || '00:00'}`)
   const windowClose = new Date(eventDateTime.getTime() + 12 * 60 * 60 * 1000)
@@ -136,7 +133,7 @@ function isPast(event_date: string): boolean {
 }
 
 export default function EventsAdminClient({
-  events, personnelList, excuseTypes, certTypes, myPersonnelId, myName, isAdmin, publicSiteEnabled, departmentId,
+  events, personnelList, excuseTypes, certTypes, myPersonnelId, myName, isAdmin, publicSiteEnabled, departmentId, departmentTimezone,
 }: {
   events: Event[]
   personnelList: Personnel[]
@@ -147,6 +144,7 @@ export default function EventsAdminClient({
   isAdmin: boolean
   publicSiteEnabled: boolean
   departmentId: string
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -673,7 +671,7 @@ export default function EventsAdminClient({
                               <div className="flex items-center px-4 py-3 gap-3">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold text-zinc-900">{sub.name}</p>
-                                  <p className="text-xs text-zinc-400">Submitted {formatDateTime(sub.submitted_at)}</p>
+                                  <p className="text-xs text-zinc-400">Submitted {formatLocalDateTime(sub.submitted_at, departmentTimezone)}</p>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
                                   <button onClick={() => handleApprove(sub.id)} disabled={loading}
@@ -721,7 +719,7 @@ export default function EventsAdminClient({
                                   <p className="text-sm font-semibold text-zinc-900">{sub.name}</p>
                                   <p className="text-xs text-blue-700 font-medium mt-0.5">{sub.excuse_type}</p>
                                   {sub.notes && <p className="text-xs text-zinc-500 mt-1">{sub.notes}</p>}
-                                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(sub.submitted_at)}</p>
+                                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatLocalDateTime(sub.submitted_at, departmentTimezone)}</p>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
                                   <button onClick={() => handleApproveExcuse(sub.id)} disabled={loading}

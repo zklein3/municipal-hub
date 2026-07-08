@@ -72,6 +72,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
       logs={logs}
       documents={documents ?? []}
       isOfficer={isOfficer}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

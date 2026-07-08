@@ -181,6 +181,7 @@ export default async function TrainingAdminPage() {
       submissions={submissions}
       isAdmin={isAdmin}
       departmentId={department_id}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

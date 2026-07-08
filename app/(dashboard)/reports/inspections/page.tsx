@@ -285,6 +285,7 @@ export default async function InspectionReportPage({
       dateTo={dateTo}
       selectedApparatusId={apparatusId ?? null}
       selectedPersonnelId={personnelId ?? null}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

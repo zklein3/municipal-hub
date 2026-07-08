@@ -189,6 +189,7 @@ export default async function EventsAdminPage() {
       isAdmin={isAdmin}
       publicSiteEnabled={publicSiteEnabled}
       departmentId={department_id}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { DEFAULT_TIMEZONE } from '@/lib/format-datetime'
 import LogsClient from './LogsClient'
 
 export default async function LogsPage() {
@@ -59,5 +60,8 @@ export default async function LogsPage() {
     }]))
   }
 
-  return <LogsClient logs={logs ?? []} personnelMap={personnelMap} feedbackMap={feedbackMap} />
+  // This is a sys-admin, system-wide page (all departments' logs) — there is
+  // no single department context to resolve a timezone from, so fall back
+  // to the system default rather than forcing a department lookup.
+  return <LogsClient logs={logs ?? []} personnelMap={personnelMap} feedbackMap={feedbackMap} departmentTimezone={DEFAULT_TIMEZONE} />
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Apparatus = {
   id: string; unit_number: string; apparatus_name: string | null
@@ -34,6 +35,7 @@ export default function PrintReportClient({
   deptName, months, generatedAt,
   apparatus, staffing, hoseInventory, activeHoses,
   hydrants, training, certSummary, preplans, mutualAid, responseTimes,
+  departmentTimezone,
 }: {
   deptName: string
   months: number
@@ -48,6 +50,7 @@ export default function PrintReportClient({
   preplans: { id: string; location_name: string; address: string | null; surveyed_date: string | null }[]
   mutualAid: MutualAid[]
   responseTimes: { runs: ResponseRun[]; avgResponseMin: number | null; avgDispatchMin: number | null; total: number }
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [auditDate, setAuditDate] = useState('')
@@ -68,7 +71,7 @@ export default function PrintReportClient({
     router.push(`/iso/report/print?months=${m}`)
   }
 
-  const generatedDate = new Date(generatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const generatedDate = formatLocalDateTime(generatedAt, departmentTimezone, { month: 'long', day: 'numeric', year: 'numeric', hour: undefined, minute: undefined })
   const hosesTestedCount = activeHoses.filter(h => h.tested).length
   const hosesTestedPct = activeHoses.length > 0 ? Math.round(hosesTestedCount / activeHoses.length * 100) : null
   const hydrantsTestedCount = hydrants.filter(h => h.tested).length

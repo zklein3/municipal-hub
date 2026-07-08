@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getOrCreateInspectionSession } from '@/app/actions/inspections'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 import InspectionSessionClient from './InspectionSessionClient'
 
 export default async function InspectionSessionPage({
@@ -46,8 +47,8 @@ export default async function InspectionSessionPage({
           Inspection Session — {apparatus.unit_number || apparatus.apparatus_name}
         </h1>
         <p className="text-sm text-zinc-500 mt-1">
-          Started {new Date(result.session.started_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-          {' · '}Expires {new Date(result.session.expires_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+          Started {formatLocalDateTime(result.session.started_at, ctx.departmentTimezone, { dateStyle: 'medium', timeStyle: 'short' })}
+          {' · '}Expires {formatLocalDateTime(result.session.expires_at, ctx.departmentTimezone, { dateStyle: 'medium', timeStyle: 'short' })}
         </p>
       </div>
 
@@ -58,6 +59,7 @@ export default async function InspectionSessionPage({
         apparatus_unit_number={apparatus.unit_number}
         personnel_id={personnelId}
         isOfficerOrAdmin={isOfficerOrAdmin}
+        departmentTimezone={ctx.departmentTimezone}
       />
     </div>
   )

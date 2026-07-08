@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { checkBottle, logFill, verifyFill } from '@/app/actions/fire-school'
 import QRScanner from '@/components/QRScanner'
+import { TZ_KEY, TZ_DEFAULT } from './settings/page'
 
 const CYLINDER_TYPE_LABELS: Record<string, string> = {
   composite_15: 'Carbon Fiber (15yr)',
@@ -51,6 +52,12 @@ function FillStationContent() {
   const [verified, setVerified] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [skippedVerify, setSkippedVerify] = useState(false)
+  const [timezone, setTimezone] = useState(TZ_DEFAULT)
+
+  useEffect(() => {
+    const stored = localStorage.getItem(TZ_KEY)
+    if (stored) setTimezone(stored)
+  }, [])
 
   const extractBottleIdFromScan = useCallback((raw: string): string => {
     const trimmed = raw.trim()
@@ -237,7 +244,7 @@ function FillStationContent() {
                   <p className="text-xs text-zinc-400 mb-6">
                     Filled at{' '}
                     {new Date(result.unverifiedFill.filled_at).toLocaleString('en-US', {
-                      timeZone: 'America/Chicago',
+                      timeZone: timezone,
                       month: 'short', day: 'numeric',
                       hour: 'numeric', minute: '2-digit',
                     })}

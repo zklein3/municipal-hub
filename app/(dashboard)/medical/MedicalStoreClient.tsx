@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
+import { formatLocalDate } from '@/lib/format-datetime'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -159,7 +160,7 @@ export default function MedicalStoreClient({
   storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, personnel, stations, apparatusMap,
   allApparatus, allCompartments,
   isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
-  transactions, lotNumberMap, personnelMap,
+  transactions, lotNumberMap, personnelMap, departmentTimezone,
 }: {
   storerooms: Storeroom[]
   inventory: InventoryRow[]
@@ -179,6 +180,7 @@ export default function MedicalStoreClient({
   lotNumberMap: Record<string, string | null>
   personnelMap: Record<string, string>
   pendingReorderIds: Set<string>
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [view, setView] = useState<'inventory' | 'history'>('inventory')
@@ -668,7 +670,6 @@ export default function MedicalStoreClient({
                 const performedBy = tx.performed_by ? personnelMap[tx.performed_by] : null
                 const signer1 = tx.signer_1_id ? personnelMap[tx.signer_1_id] : null
                 const signer2 = tx.signer_2_id ? personnelMap[tx.signer_2_id] : null
-                const txDate = new Date(tx.created_at)
                 const isOut = ['dispensed', 'wasted', 'transferred_out'].includes(tx.transaction_type)
                 return (
                   <div key={tx.id} className="rounded-xl bg-white border border-zinc-200 px-4 py-3 flex items-start gap-3">
@@ -694,7 +695,7 @@ export default function MedicalStoreClient({
                         {isOut ? '−' : '+'}{tx.quantity} {supply?.unit_of_measure ?? ''}
                       </p>
                       <p className="text-xs text-zinc-400">
-                        {txDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {formatLocalDate(tx.created_at, departmentTimezone, { year: undefined })}
                       </p>
                     </div>
                   </div>

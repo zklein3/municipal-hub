@@ -145,6 +145,25 @@ export async function saveDeptAdminNerisEntityId(departmentId: string, nerisEnti
   return { success: true }
 }
 
+export async function saveDeptTimezone(departmentId: string, timezone: string) {
+  const adminClient = createAdminClient()
+
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) return { error: 'Only admins can update department settings.' }
+  if (ctx.departmentId !== departmentId && !ctx.isSysAdmin) return { error: 'Department mismatch.' }
+  if (!timezone) return { error: 'Timezone is required.' }
+
+  const { error } = await adminClient
+    .from('departments')
+    .update({ timezone })
+    .eq('id', departmentId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dept-admin/settings')
+  return { success: true }
+}
+
 export async function testNerisConnection(nerisEntityId: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient()
   const adminClient = createAdminClient()

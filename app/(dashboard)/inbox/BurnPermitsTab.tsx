@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { updateBurnPermitStatus, deleteBurnPermit } from '@/app/actions/public-site'
 import PermitSignatureModal from './PermitSignatureModal'
 import PermitContactModal from './PermitContactModal'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Status = 'pending' | 'approved' | 'denied' | 'cancelled'
 
@@ -39,10 +40,6 @@ function formatDate(d: string | null) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function formatDateTime(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
 function isExpiredPermit(p: Permit) {
   return p.status === 'approved' &&
     !!p.permit_expiry_date &&
@@ -58,11 +55,13 @@ export default function BurnPermitsTab({
   deptName,
   burnPermitCountyInfo,
   burnPermitRestrictions,
+  departmentTimezone,
 }: {
   permits: Permit[]
   deptName: string | null
   burnPermitCountyInfo: string | null
   burnPermitRestrictions: string | null
+  departmentTimezone: string
 }) {
   const [permits, setPermits] = useState(initialPermits)
   const [filter, setFilter] = useState<'active' | 'pending' | 'approved' | 'archived'>('active')
@@ -274,7 +273,7 @@ export default function BurnPermitsTab({
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatDateTime(permit.created_at)}</p>
+                  <p className="text-xs text-zinc-400 mt-1">Submitted {formatLocalDateTime(permit.created_at, departmentTimezone)}</p>
                 </div>
 
                 {/* Expanded detail */}
@@ -294,10 +293,10 @@ export default function BurnPermitsTab({
                           <p className="text-zinc-700">Expires: {formatDate(permit.permit_expiry_date)}</p>
                           {permit.approved_by_name && <p className="text-zinc-700">Officer: {permit.approved_by_name}</p>}
                           {permit.applicant_signed_at && (
-                            <p className="text-zinc-700">Applicant: Signed online {formatDateTime(permit.applicant_signed_at)}</p>
+                            <p className="text-zinc-700">Applicant: Signed online {formatLocalDateTime(permit.applicant_signed_at, departmentTimezone)}</p>
                           )}
                           {permit.applicant_acknowledged_at && (
-                            <p className="text-zinc-700">Applicant: Printed &amp; signed by hand {formatDateTime(permit.applicant_acknowledged_at)}</p>
+                            <p className="text-zinc-700">Applicant: Printed &amp; signed by hand {formatLocalDateTime(permit.applicant_acknowledged_at, departmentTimezone)}</p>
                           )}
                         </div>
                       )}

@@ -12,6 +12,7 @@ import {
   deleteAssetDocument,
   type ParsedAssetDoc,
 } from '@/app/actions/assets'
+import { formatLocalDate } from '@/lib/format-datetime'
 
 type FieldDef = { id: string; field_label: string; field_order: number }
 type AssetDoc = {
@@ -58,6 +59,7 @@ export default function AssetDetailClient({
   logs,
   documents: initialDocuments,
   isOfficer,
+  departmentTimezone,
 }: {
   asset: {
     id: string
@@ -75,6 +77,7 @@ export default function AssetDetailClient({
   logs: ServiceLog[]
   documents: AssetDoc[]
   isOfficer: boolean
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -440,7 +443,7 @@ export default function AssetDetailClient({
               <div key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3">
                 <div>
                   <p className="text-sm font-medium text-zinc-900">{doc.document_name}</p>
-                  <p className="text-xs text-zinc-400">{new Date(doc.created_at).toLocaleDateString()}</p>
+                  <p className="text-xs text-zinc-400">{formatLocalDate(doc.created_at, departmentTimezone)}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button

@@ -140,7 +140,7 @@ export default async function MovementLogPage() {
           ← Storage
         </Link>
       </div>
-      <MovementLogClient logs={logs} />
+      <MovementLogClient logs={logs} departmentTimezone={ctx.departmentTimezone} />
     </div>
   )
 }

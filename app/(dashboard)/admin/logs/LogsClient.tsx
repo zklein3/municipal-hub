@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { resolveLog, resolveAllLogs } from '@/app/actions/admin'
 import { replyToPublicFeedback } from '@/app/actions/public-site'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface LogEntry {
   id: string
@@ -31,6 +32,7 @@ interface Props {
   logs: LogEntry[]
   personnelMap: Record<string, string>
   feedbackMap: Record<string, FeedbackInfo>
+  departmentTimezone: string
 }
 
 function formatDateTime(d: string) {
@@ -52,7 +54,7 @@ const TYPE_BADGE: Record<string, string> = {
   info: 'bg-zinc-100 text-zinc-600',
 }
 
-export default function LogsClient({ logs, personnelMap, feedbackMap: initialFeedbackMap }: Props) {
+export default function LogsClient({ logs, personnelMap, feedbackMap: initialFeedbackMap, departmentTimezone }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>('all')
   const [showResolved, setShowResolved] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -192,7 +194,7 @@ export default function LogsClient({ logs, personnelMap, feedbackMap: initialFee
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-zinc-900 truncate">{log.message}</p>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-zinc-400">
-                      <span>{new Date(log.created_at).toLocaleString()}</span>
+                      <span>{formatLocalDateTime(log.created_at, departmentTimezone)}</span>
                       {log.page && <span>Page: {log.page}</span>}
                       {log.personnel_id && personnelMap[log.personnel_id] && (
                         <span>User: {personnelMap[log.personnel_id]}</span>

@@ -62,6 +62,7 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
       isMe={isMe}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}
+      departmentTimezone={ctx.departmentTimezone}
     />
   )
 }

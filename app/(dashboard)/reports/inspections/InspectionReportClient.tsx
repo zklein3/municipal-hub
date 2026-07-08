@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import type { InspectionLogRow, PresenceCheckRow, StepRow } from './page'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type ApparatusOption = { id: string; name: string }
 type PersonnelOption = { id: string; name: string }
@@ -15,13 +16,6 @@ type DisplayRow =
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
-  })
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit',
   })
 }
 
@@ -92,10 +86,12 @@ function AssetDrillIn({
   asset,
   logs,
   onBack,
+  departmentTimezone,
 }: {
   asset: { id: string; tag: string; item_name: string }
   logs: InspectionLogRow[]
   onBack: () => void
+  departmentTimezone: string
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [printMode, setPrintMode] = useState(false)
@@ -169,7 +165,7 @@ function AssetDrillIn({
                   onClick={() => toggleExpand(log.id)}
                 >
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm font-medium text-zinc-700 whitespace-nowrap">{formatDateTime(log.inspected_at)}</span>
+                    <span className="text-sm font-medium text-zinc-700 whitespace-nowrap">{formatLocalDateTime(log.inspected_at, departmentTimezone)}</span>
                     <span className="text-sm text-zinc-500">{log.apparatus_name}</span>
                     {log.compartment !== '—' && <span className="text-xs text-zinc-400">{log.compartment}</span>}
                     <span className="text-sm text-zinc-500">{log.inspector_name}</span>
@@ -204,6 +200,7 @@ export default function InspectionReportClient({
   dateTo,
   selectedApparatusId,
   selectedPersonnelId,
+  departmentTimezone,
 }: {
   logs: InspectionLogRow[]
   presenceChecks: PresenceCheckRow[]
@@ -213,6 +210,7 @@ export default function InspectionReportClient({
   dateTo: string
   selectedApparatusId: string | null
   selectedPersonnelId: string | null
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -299,6 +297,7 @@ export default function InspectionReportClient({
           asset={selectedAsset}
           logs={drillLogs}
           onBack={() => setSelectedAsset(null)}
+          departmentTimezone={departmentTimezone}
         />
       </div>
     )

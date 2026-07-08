@@ -13,6 +13,7 @@ import {
   cancelTrainingEvent,
   reviewTrainingSubmission,
 } from '@/app/actions/training'
+import { formatLocalDateTime } from '@/lib/format-datetime'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const checkCls = "rounded border-zinc-300 text-red-600 focus:ring-red-500"
@@ -44,7 +45,7 @@ interface TrainingEvent {
 }
 
 export default function TrainingAdminClient({
-  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, linkedEventTitles = {}, memberCerts, submissions = [], isAdmin, departmentId,
+  certTypes, units, enrollments, pendingProgress, pendingSessions, allPersonnel, trainingEvents, linkedEventTitles = {}, memberCerts, submissions = [], isAdmin, departmentId, departmentTimezone,
 }: {
   certTypes: CertType[]; units: Unit[]; enrollments: Enrollment[]
   pendingProgress: PendingProgress[]; pendingSessions: PendingSession[]
@@ -55,6 +56,7 @@ export default function TrainingAdminClient({
   submissions?: TrainingSubmission[]
   isAdmin: boolean
   departmentId: string
+  departmentTimezone: string
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>(isAdmin ? 'certs' : 'member_certs')
@@ -621,7 +623,7 @@ export default function TrainingAdminClient({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-zinc-900">{s.name}</p>
                         <p className="text-xs text-zinc-500">{cert?.cert_name ?? '—'}</p>
-                        {s.session_logged_at && <p className="text-xs text-zinc-400">Logged {new Date(s.session_logged_at).toLocaleDateString()}</p>}
+                        {s.session_logged_at && <p className="text-xs text-zinc-400">Logged {formatLocalDateTime(s.session_logged_at, departmentTimezone)}</p>}
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <button onClick={() => wrap(() => verifyEnrollmentSession(s.id, 'verified'))} disabled={loading}
@@ -906,7 +908,7 @@ export default function TrainingAdminClient({
                                   <div className="flex items-center px-4 py-3 gap-3">
                                     <div className="flex-1">
                                       <p className="text-sm font-semibold text-zinc-900">{sub.name}</p>
-                                      <p className="text-xs text-zinc-400">Submitted {new Date(sub.submitted_at).toLocaleDateString()}</p>
+                                      <p className="text-xs text-zinc-400">Submitted {formatLocalDateTime(sub.submitted_at, departmentTimezone)}</p>
                                     </div>
                                     <div className="flex gap-2">
                                       <button onClick={() => wrap(() => verifyTrainingAttendance(sub.id, 'verified'))} disabled={loading}
@@ -967,7 +969,7 @@ export default function TrainingAdminClient({
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-zinc-900 truncate">{a.name}</p>
                                     {a.signed_at && (
-                                      <p className="text-xs text-zinc-400">{new Date(a.signed_at).toLocaleString()}</p>
+                                      <p className="text-xs text-zinc-400">{formatLocalDateTime(a.signed_at, departmentTimezone)}</p>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
