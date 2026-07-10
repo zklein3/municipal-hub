@@ -8,6 +8,8 @@ import {
   addIncidentApparatus, updateIncidentApparatus, removeIncidentApparatus,
   addIncidentPersonnel, updateIncidentPersonnel, logIncidentAttendance, verifyIncidentPersonnel, removeIncidentPersonnel,
 } from '@/app/actions/incidents'
+import { lookupZip } from '@/lib/zip-lookup'
+import { generateCheckinToken } from '@/app/actions/checkin'
 import { addMutualAid, removeMutualAid, updateMutualAid } from '@/app/actions/iso'
 import { parseRunSheet, type ParsedRunSheet } from '@/app/actions/parse-run-sheet'
 
@@ -39,6 +41,45 @@ function formatDate(d: string) {
 function toDatetimeLocal(dt: string | null) {
   if (!dt) return ''
   return new Date(dt).toISOString().slice(0, 16)
+}
+
+function AddressFields({ address, city, state, zip }: { address: string; city: string; state: string; zip: string }) {
+  const [addressVal, setAddressVal] = useState(address)
+  const [cityVal, setCityVal] = useState(city)
+  const [stateVal, setStateVal] = useState(state)
+  const [zipVal, setZipVal] = useState(zip)
+
+  async function handleZipBlur() {
+    if (cityVal || stateVal) return
+    const result = await lookupZip(zipVal)
+    if (result) {
+      setCityVal(result.city)
+      setStateVal(result.state)
+    }
+  }
+
+  return (
+    <>
+      <div>
+        <label className={labelCls}>Street Address</label>
+        <input name="address" type="text" value={addressVal} onChange={e => setAddressVal(e.target.value)} className={inputCls} />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="col-span-1">
+          <label className={labelCls}>City</label>
+          <input name="city" type="text" value={cityVal} onChange={e => setCityVal(e.target.value)} placeholder="Winslow" className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>State</label>
+          <input name="state" type="text" value={stateVal} onChange={e => setStateVal(e.target.value.toUpperCase())} placeholder="AZ" maxLength={2} className={`${inputCls} uppercase`} />
+        </div>
+        <div>
+          <label className={labelCls}>Zip</label>
+          <input name="zip" type="text" value={zipVal} onChange={e => setZipVal(e.target.value)} onBlur={handleZipBlur} placeholder="86047" maxLength={5} className={inputCls} />
+        </div>
+      </div>
+    </>
+  )
 }
 
 type ApparatusRow = { id: string; apparatus_id: string; unit_number: string; role: string; paged_at: string | null; enroute_at: string | null; on_scene_at: string | null; leaving_scene_at: string | null; available_at: string | null }
@@ -270,6 +311,13 @@ export default function IncidentDetailClient({
     })
   }
 
+  async function handleGenerateCheckinQr() {
+    const result = await generateCheckinToken('incident', incident.id)
+    if (result.error || !result.token) { setSelfLogError(result.error ?? 'Failed to generate check-in QR.'); return }
+    const params = new URLSearchParams({ type: 'checkin', code: result.token, title: `Incident ${incident.incident_number ?? ''}`.trim() })
+    window.open(`/print/qr?${params.toString()}`, '_blank')
+  }
+
   async function handleVerifyPersonnel(logId: string, status: 'present' | 'absent') {
     startTransition(async () => {
       await verifyIncidentPersonnel(logId, incident.id, status, status === 'absent' ? rejectReason : undefined)
@@ -478,24 +526,12 @@ export default function IncidentDetailClient({
                 </div>
               </div>
             )}
-            <div>
-              <label className={labelCls}>Street Address</label>
-              <input name="address" type="text" defaultValue={importedData?.address ?? incident.address ?? ''} className={inputCls} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <label className={labelCls}>City</label>
-                <input name="city" type="text" defaultValue={importedData?.city ?? incident.city ?? ''} placeholder="Winslow" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>State</label>
-                <input name="state" type="text" defaultValue={importedData?.state ?? incident.state ?? ''} placeholder="AZ" maxLength={2} className={`${inputCls} uppercase`} />
-              </div>
-              <div>
-                <label className={labelCls}>Zip</label>
-                <input name="zip" type="text" defaultValue={importedData?.zip ?? incident.zip ?? ''} placeholder="86047" maxLength={5} className={inputCls} />
-              </div>
-            </div>
+            <AddressFields
+              address={importedData?.address ?? incident.address ?? ''}
+              city={importedData?.city ?? incident.city ?? ''}
+              state={importedData?.state ?? incident.state ?? ''}
+              zip={importedData?.zip ?? incident.zip ?? ''}
+            />
             <div>
               <label className={labelCls}>Disposition</label>
               <input name="disposition" type="text" defaultValue={importedData?.disposition ?? incident.disposition ?? ''} className={inputCls} />
@@ -941,9 +977,14 @@ export default function IncidentDetailClient({
       <section className="rounded-xl bg-white border border-zinc-200 p-5 mt-5 mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-zinc-900">Personnel on Scene</h2>
-          {isOfficerOrAbove && canEdit && (
-            <button onClick={() => setShowAddPersonnel(true)} className="text-xs font-semibold text-red-700 hover:underline">+ Add member</button>
-          )}
+          <div className="flex items-center gap-3">
+            {isOfficerOrAbove && (
+              <button onClick={handleGenerateCheckinQr} className="text-xs font-semibold text-blue-600 hover:text-blue-800">Check-In QR</button>
+            )}
+            {isOfficerOrAbove && canEdit && (
+              <button onClick={() => setShowAddPersonnel(true)} className="text-xs font-semibold text-red-700 hover:underline">+ Add member</button>
+            )}
+          </div>
         </div>
 
         {/* Self-log */}

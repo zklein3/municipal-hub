@@ -74,7 +74,7 @@ export async function saveDeptInspectionSettings(formData: FormData) {
 
 export async function updateDepartmentModules(
   departmentId: string,
-  modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; module_medical?: boolean; public_site_enabled?: boolean }
+  modules: { module_operations?: boolean; module_iso?: boolean; module_neris?: boolean; module_medical?: boolean; module_fuel_storage?: boolean; public_site_enabled?: boolean }
 ) {
   const authErr = await assertSysAdmin()
   if (authErr) return { error: authErr }
@@ -87,6 +87,7 @@ export async function updateDepartmentModules(
 
   if (error) return { error: error.message }
   revalidatePath(`/admin/dept/${departmentId}`)
+  revalidatePath('/dept-admin')
   revalidatePath('/dashboard')
   return { success: true }
 }
@@ -121,6 +122,21 @@ export async function saveNerisEntityId(departmentId: string, nerisEntityId: str
 
   if (error) return { error: error.message }
   revalidatePath(`/admin/dept/${departmentId}`)
+  return { success: true }
+}
+
+export async function setNerisIssueDismissed(incidentNerisId: string, dismissed: boolean) {
+  const authErr = await assertSysAdmin()
+  if (authErr) return { error: authErr }
+
+  const adminClient = createAdminClient()
+  const { error } = await adminClient
+    .from('incident_neris')
+    .update({ neris_issue_dismissed: dismissed })
+    .eq('id', incidentNerisId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/admin/neris')
   return { success: true }
 }
 
@@ -161,6 +177,34 @@ export async function saveDeptTimezone(departmentId: string, timezone: string) {
 
   if (error) return { error: error.message }
   revalidatePath('/dept-admin/settings')
+  return { success: true }
+}
+
+export async function saveIsoReportSettings(departmentId: string, settings: {
+  auditDate: string | null
+  auditorName: string | null
+  defaultMonths: number
+  sections: Record<string, boolean>
+}) {
+  const adminClient = createAdminClient()
+
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) return { error: 'Only admins can update ISO report defaults.' }
+  if (ctx.departmentId !== departmentId && !ctx.isSysAdmin) return { error: 'Department mismatch.' }
+
+  const { error } = await adminClient
+    .from('departments')
+    .update({
+      iso_audit_date: settings.auditDate || null,
+      iso_auditor_name: settings.auditorName || null,
+      iso_report_default_months: settings.defaultMonths,
+      iso_report_sections: settings.sections,
+    })
+    .eq('id', departmentId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/iso/report/print')
   return { success: true }
 }
 

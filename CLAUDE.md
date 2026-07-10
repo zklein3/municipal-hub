@@ -188,14 +188,12 @@ See `STRATEGY.md` for the full roadmap this work is drawn from.
 - Asset Roster moved to Reports hub (read-only). Apparatus assignment moved to Setup → Items → Assets.
 - Scattered "Storage →" shortcut buttons removed; Storage now accessed from Inventory page card
 
-### 0f. Batch QR Print — Asset Classes SHIPPED ✅ (2026-07-01); Compartments + Apparatus TODO ⬅
+### 0f. Batch QR Print — Asset Classes, Compartments, Apparatus all SHIPPED ✅ (2026-07-10)
 
-**Shipped:** `/print/qr-batch?item_id=...` — prints all active assets for an item class. Format selector: Sheet 3-up / Avery 5160 (30-up, 2⅝"×1") / Avery 5163 (10-up, 4"×2") / Avery 5164 (6-up, 4"×3⅓"). Avery 26116 (weatherproof) uses same layout as 5163. "Print All QRs" button in Dept Admin → Setup → Items → Assets tab per item group. Backed by `/api/assets-for-item`.
-
-**Still to build — extend batch QR to the rest of the truck:**
-- **Compartments** — "Print All QR Codes" per apparatus in Dept Admin → Setup → Compartments. Route: `/print/qr-batch?apparatus_id=...&type=compartments`. Backed by a new `/api/compartments-for-apparatus` route. Each card: compartment `[unit_number] - [code]`, QR encodes `/scan?type=compartment&code=[qr_code]`.
-- **Apparatus** — print the apparatus QR itself (one per page or as a single large label for the cab door). Route: `/print/qr-batch?apparatus_id=...&type=apparatus`.
-- When building: reuse the same format selector component — extract it into `components/QrBatchPrint.tsx` so sheet/label logic isn't duplicated across routes.
+`/print/qr-batch` now handles all three via a `type` param (`asset` default / `compartment` / `apparatus`), same format selector (Sheet 3-up / Avery 5160 / 5163 / 5164), same page — no separate component extraction needed since it was never duplicated across routes.
+- **Assets** (2026-07-01): `?item_id=...` — unchanged, backed by `/api/assets-for-item`. "Print All QRs" button in Dept Admin → Setup → Items → Assets tab.
+- **Compartments**: `?type=compartment&apparatus_id=...` — backed by new `/api/compartments-for-apparatus` (flat-fetch + JS join, per the no-nested-joins rule). "Print All QR Codes" button on the apparatus detail page (`ApparatusDetailClient.tsx`), next to "Start Inspection Session". Only compartments with a `qr_code` already set are included.
+- **Apparatus**: `?type=apparatus&apparatus_id=...` — backed by new `/api/apparatus-qr`. "Print QR (Label Sheet)" link in the apparatus detail header, next to the existing single-page `QrPrintLabel` button — this one puts it on an Avery label instead of a full page. Only shown when `apparatus.qr_code` is set (same gating as the existing single-QR button).
 
 ### 0. Nav Hub-and-Spoke — SHIPPED ✅ (2026-05-20)
 Sidebar trimmed to 6 items. Hub pages live at `/operations`, `/equipment` (enhanced), `/reports`, `/dept-admin`, `/iso`. `PageNavBar` on every page. No further nav work needed unless user requests tweaks after testing.
@@ -267,6 +265,11 @@ V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.l
 
 **Auth situation:** Production credentials only work against `api.neris.fsri.org`. Test API (`api-test.neris.fsri.org`) had separate credentials that were retired. To go live: flip `NERIS_USE_TEST=false` in Vercel, set real dept FDID as `neris_entity_id`, dept must be enrolled and linked to vendor account `VN03615504`.
 
+**Admin panel resolve/dismiss — SHIPPED ✅ (2026-07-10):** `/admin/neris` was previously 100% read-only on both its Issues and Error Logs tabs — no way to close anything out from the panel itself.
+- **Error Logs tab:** now has per-row Resolve + bulk "Resolve All" (reuses `resolveLog`/existing `system_logs.resolved` flow already built for `/admin/logs`, just wasn't wired in here). Also: `submitToNeris()` (`app/actions/neris.ts`) now tags its `logError` calls with `metadata: { incident_id }`, and on a successful submission auto-resolves any earlier unresolved NERIS log rows tied to that same incident — closes the loop going forward instead of requiring a manual click every time a fix lands.
+- **Issues tab:** this was the actual bug behind "I fixed it but it still shows open" — the tab is a live filter on `incident_neris.neris_status`/`completed_at` with **no dismiss mechanism at all**, so a row can get permanently stuck (e.g. old test-era incidents marked ready under `NERIS_USE_TEST=true` before test credentials were retired — they can never be submitted through the normal flow again, so they sat in Issues forever). Added `incident_neris.neris_issue_dismissed` (boolean, migration `add_neris_issue_dismissed`) + `setNerisIssueDismissed()` (`app/actions/departments.ts`, sys-admin gated) + a Dismiss/Restore button per issue. Dismissed issues stay visible (grayed out, same convention as resolved logs) but drop out of the issue count and the sidebar badge.
+- Sys-admin nav badge on `/admin/neris` (added same session, see §12 below) now excludes dismissed issues from its count.
+
 **Dept enrollment UI built** (`/dept-admin/neris`) — 4-step guide, Client ID copy button, Test Connection.
 **Admin troubleshooting panel built** (`/admin/neris`) — Departments / Issues / Error Logs tabs.
 
@@ -316,7 +319,7 @@ V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.l
 - Requirements checker: `lib/neris-requirements.ts`
 - See `NERIS.md` for full field reference
 
-### 3. ISO Hose — Build Plan ✳️ ARCHITECTURE LOCKED
+### 3. ISO Hose — SHIPPED ✅ (was already built in a prior session; CLAUDE.md just never got updated — HISTORY.md had it right)
 
 **Two parallel systems — no overlap:**
 
@@ -331,26 +334,13 @@ V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.l
 - This is the source for on-truck totals in the ISO report
 - No changes needed — keep as-is
 
-**ISO Report hose section (to build):**
-- Total owned per diameter: sum from `hoses` table (what the dept owns)
-- On trucks per diameter: sum `hose_loads` across all apparatus specs
-- In storage = Total owned − On trucks (simple calculation)
+**ISO Report hose section** — built in `/iso/report`: Diameter / Total Owned / On Trucks / In Storage table (amber warning if In Storage goes negative — a real gap), plus a separate Hose Test Compliance (NFPA 1962) section showing Tested/Failed/Overdue per hose off the last 12 months of `hose_tests`.
 
-Example output:
-| Diameter | Total Owned | On Trucks | In Storage |
-|---|---|---|---|
-| 3" | 1,000 ft | 500 ft | 500 ft |
-| 1.75" | 500 ft | 500 ft | 0 ft |
+**Hose testing session** — `/iso/hoses/session` (`HoseTestSessionClient.tsx`), matches the spec: header set once (date, pressure, duration default 5min, tester read from login), per-hose Pass/Fail with failure reason on Fail, warns if entered pressure is below the hose's required PSI, submits via `submitHoseTestSession()` → one `hose_tests` row per hose. Also reachable via a per-hose "Log Test" inline form on `/iso/hoses` for one-off (non-session) logging.
 
-**Hose testing session (to build):**
-- Header set once: date, pressure used (PSI), duration (min, default 5), tester (auto from login)
-- List of all active hoses with NFPA 1962 required PSI shown per diameter:
-  - Attack hose (1"–3"): 300 PSI required
-  - Supply hose (4"–6"): 200 PSI required
-- Tester marks each hose Pass / Fail; failure reason field appears on Fail
-- Submit creates one `hose_test` record per hose with shared session params + individual result
+**Fixed 2026-07-10:** `requiredPsi()` was keyed primarily off the user-assigned `hose_type` field (attack/supply/forestry/etc.) with a diameter override only for `>=4"`, so a mistagged hose (e.g. a 2" hose typed `supply`) would get shown the wrong required PSI. Changed to purely diameter-driven (`>=4" → 200 PSI, else 300 PSI`) matching the NFPA 1962 rule as documented above — `hose_type` still displays for context, just no longer drives the PSI requirement.
 
-**Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`
+**Key files:** `app/(dashboard)/iso/hoses/HosesClient.tsx`, `app/(dashboard)/iso/hoses/session/HoseTestSessionClient.tsx`, `app/actions/iso.ts`, `app/(dashboard)/iso/report/page.tsx`
 
 ### 4. ISO Module — Gating Architecture Decision ✳️ FUTURE REFACTOR
 Current state: hose inventory, hose testing, hydrant tests all gated behind `module_iso`.
@@ -376,27 +366,15 @@ Current: manual entry by user (Phase 1, built 2026-05-16).
 
 **Key files when building:** `app/(dashboard)/iso/mutual-aid/`, `app/actions/iso.ts` → mutual aid actions, `iso_mutual_aid_agreements` table.
 
-### 6. ISO — Configurable Single-Page Report Builder (next ISO phase)
-All current ISO report sections on one print-ready page. Admin controls which sections appear and their date ranges/filters.
+### 6. ISO — Configurable Single-Page Report Builder — SHIPPED ✅ (was already built in a prior session at `/iso/report/print`; CLAUDE.md just never got updated, same pattern as §3)
 
-**Sections to include:**
-- Apparatus specs + pump test status
-- Personnel & staffing
-- Training hours (configurable date range — default 12 months)
-- Training certifications breakdown
-- Hose inventory summary + test compliance
-- Hydrant flow test compliance
-- Mutual aid agreements with apparatus
-- Pre-fire plans list
+`/iso/report/print` (`PrintReportClient.tsx`) already had all 10 sections (the 8 listed above plus Certifications and Response Times, which the original spec didn't call out), section show/hide toggles, a 6/12/24/36-month date range selector (`?months=` searchParam, re-fetches server-side), audit date/auditor name header fields, and a Print/Save PDF button — but every one of those controls was **ephemeral, reset on reload, never persisted**. That's the actual gap this session closed:
 
-**Admin controls per section:**
-- Show/hide toggle per section
-- Date range override (e.g. change training window from 12 to 24 months)
-- Dept name / ISO audit date / auditor name fields for the report header
-
-**Output:** Single scrollable page with print stylesheet — `window.print()` produces a clean multi-page PDF matching ISO audit format.
-
-**Route:** `/iso/report/print` or a print mode toggle on `/iso/report`.
+- New `departments` columns (migration `add_iso_report_settings`): `iso_audit_date`, `iso_auditor_name`, `iso_report_default_months` (default 12), `iso_report_sections` (jsonb, default all-true).
+- `saveIsoReportSettings(departmentId, settings)` (`app/actions/departments.ts`) — admin-only (mirrors `saveDeptTimezone`'s gate), writes those columns.
+- "Save as Default" button on the report builder panel (admin-only, next to Print/Save PDF) — persists whatever audit date/auditor/months/section-toggles are currently set as the department's defaults, so the next person to open the report starts from those instead of blank/all-sections-on. Per-visit overrides still work exactly as before; this only changes the *starting* values.
+- `/iso/report/print/page.tsx` now reads the saved defaults and uses `iso_report_default_months` as the fallback when no `?months=` param is given (was hardcoded to 12 regardless of dept preference).
+- **Print-chrome fix (affects every in-dashboard print page, not just ISO):** the sidebar (`<aside>` in `app/(dashboard)/layout.tsx`), mobile top bar (`MobileSidebar.tsx`), and the "← Back" bar (`PageNavBar.tsx`) had no `print:hidden` anywhere — they'd bleed into the printed/PDF output on every dashboard-embedded print page (ISO report, `/reports/inspections`, etc.). Added `print:hidden` to all three. This was a real, previously-unnoticed gap in the "clean multi-page PDF" requirement, not ISO-specific.
 
 ### 7. ISO — Aerial Testing (deferred — build when dept has aerial apparatus)
 Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload per apparatus.
@@ -413,7 +391,7 @@ Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, a
 - `createDeptMember` / `createDeptAdmin` (`app/actions/users.ts`) each take a `send_welcome_email` checkbox (default checked) plus optional `first_name`/`last_name` on the Add Personnel / Add Dept Admin forms.
 - Checked → generates a random 10-char temp password (`generateTempPassword()`) and emails it inline via Resend (`sendWelcomeEmail()`, same `noreply@fireops7.com` sender as other transactional email — brand text and login link vary by `department_type` via `getDeptBrandName()` / `getLoginPath()`: fire→`/fire/login`, law_enforcement→`/police/login`, public_works→`/public-works/login`, else→`/login`).
 - Unchecked → uses the fixed `Hello1!` password, no email sent — intended for test/demo account creation.
-- Removed the old dead `adminClient.functions.invoke('send-welcome-email', ...)` call (that Edge Function was never built); implementation is inline in `users.ts`, not a separate Edge Function.
+- Removed the old dead `adminClient.functions.invoke('send-welcome-email', ...)` call — implementation is now inline in `users.ts`, not a separate Edge Function. **Correction (audit session 5, 2026-07-10):** the `send-welcome-email` Edge Function itself was NOT "never built" as this note originally said — it's deployed on Supabase (v3, `ACTIVE`), real code exists there, it was just never actually wired up correctly by the old `.invoke()` call. It's dead/unused now regardless (nothing in the codebase calls it) — **pending manual deletion** via Supabase dashboard or `supabase functions delete send-welcome-email` (no MCP tool available to delete it directly).
 - If the email send fails (or is skipped), the action returns `tempPassword` so the UI shows it on-screen for the admin to relay manually instead of it disappearing.
 - **Known unresolved:** brand naming still disagrees between `lib/department-theme.ts` (`PoliceOps`/`MuniOps`, red/navy binary) and the marketing/login pages (`LawOps`/`CivicOps`, red/blue/green) — the welcome email currently follows `department-theme.ts` naming. Not yet decided which is canonical; revisit when picking one.
 
@@ -422,49 +400,38 @@ Most small departments aren't actually set up to handle public records requests 
 
 **Note:** Facebook page now links to the public site (set up 2026-06-09) — public site is getting real outside traffic now, so any future removal should be a deliberate UI change, not a silent drop (residents may have bookmarked/shared links).
 
-### 10. QR Self Check-In — Event / Training / Incident ⬅ PINNED FOR LATER
-Officer creates an event, training session, or incident → system generates a unique QR code for that session. Members scan with phone camera → opens a lightweight page → attendance/participation logged automatically. No app install required.
+### 10. QR Self Check-In — Event / Training / Incident — SHIPPED ✅ (2026-07-10)
+`lib/checkin-token.ts` — HMAC-SHA256 signed token (`base64url(payload).signature`, no new dependency, signed with `SUPABASE_SERVICE_ROLE_KEY`), payload `{ type: 'event_instance' | 'training_event' | 'incident', id, exp }`. No DB table — tokens are minted on demand, not stored, so there's nothing to clean up and officers just regenerate a fresh QR if one expires.
+- `app/actions/checkin.ts` → `generateCheckinToken(type, id)` — officer/admin only, verifies the record's `department_id` matches the caller's current department before minting (blocks a multi-dept officer from generating a token for the wrong department). TTL: 24h for events/training, 7 days for incidents (matches the existing self-log windows those actions already enforce independently).
+- `/checkin/[token]` (`app/(dashboard)/checkin/[token]/`) — verifies the token, requires login (`redirect('/login?next=/checkin/...')` if not, reusing the existing `next` param support already built into `signIn`/`/select-department`), re-verifies department ownership server-side (defense in depth beyond the token check), shows the event/incident name + "Checking in as [name]", one tap to confirm. Already-checked-in visits show the confirmation immediately instead of a duplicate button.
+- **Reuses the existing attendance actions as-is** rather than inventing new logging paths: `logAttendance()` for event instances, `selfReportTrainingAttendance()` for standalone training events, `logIncidentAttendance()` (with a role picker, default Crew) for incidents — so a check-in produces exactly the same `pending`/`present`/`verified` record a manual "Log Attendance" click would, no new status vocabulary.
+- "Check-In QR" button added at the three officer-facing surfaces: `EventsAdminClient.tsx` (per event card — covers plain events AND training-linked events, since both write to `event_attendance`), `TrainingClient.tsx` (per standalone training event only — training linked to an `/events` entry is out of scope here since attendance for those goes through the event instance, not `training_event_attendance`), `IncidentDetailClient.tsx` (Personnel on Scene header). Each opens `/print/qr?type=checkin&code={token}&title={name}` in a new tab — extended `app/print/qr/page.tsx`'s existing `qrValue` branching rather than building a parallel print page; the raw token isn't shown as text under the QR (unlike apparatus/asset codes) since it's long and meaningless to a human.
+- Distinct from Salamander card scanning (§10a) — this is member self-check-in, not officer-scans-others-cards. §10a (incident accountability/PAR) can now be picked up per the original sequencing note.
 
-**Design notes:**
-- QR encodes a signed URL: `/checkin/[token]` where token encodes `{ type: 'event'|'training'|'incident', id, expires }`
-- Token signed with `SUPABASE_SERVICE_ROLE_KEY` or a dedicated secret — prevents guessing other sessions
-- Landing page: shows event/incident name, confirms identity (member is already logged in via cookie), one-tap check-in
-- If not logged in: prompt login first, then redirect back to check-in URL
-- Officer generates QR from event/training/incident detail page — displays on screen or prints
-- Distinct from Salamander card scanning — this is member self-check-in, not officer scanning cards
+### 10a. Salamander QR — Incident Accountability (PAR) — SHIPPED ✅ (this whole section was stale — actually built 2026-05-24 through 2026-06-26, several sessions ago)
+Salamander cards are for officer-scans-others-cards at a scene, not self check-in (distinct from §10 QR Self Check-In). Full board system live at `/accountability` (list) → `/accountability/[boardId]` (`AccountabilityBoard.tsx`, 567 lines) → `/accountability/new`.
+- **Parser:** `lib/salamander.ts` → `parseSalamanderCard(raw)` (not `parseSalamanderQR` — correcting a stale function name in this doc), returns `{ firstName, lastName, department, title, certs[] } | null`. Single regex pipeline, all-or-nothing on name+department match — **known brittle, every new physical card variant so far has needed a hand-added regex branch** (see git log: 183f02b, 48c480a, 28c075d). Don't attempt to "fix" this blind — there's no synthetic test data that reflects real card encoding quirks.
+- **Matching:** `personnel_qr_tokens` table links a card's canonical key (`salamanderCanonicalKey()` → `SAL:LAST:FIRST:DEPT`) to a `personnel_id`. Unmatched cards (valid parse, no linked token) or fully-failed parses fall back to `raw_name`/`raw_dept` on the entry — treated as mutual aid/visitor, not an error state.
+- **Tables (actual names — differ from an earlier draft of this note):** `accountability_boards` (title, board_date, status, `linked_incident_id`/`linked_training_event_id`/`linked_event_instance_id`), `accountability_lane_templates` (dept-level defaults: Staging, Command, Interior Attack, Exterior/Suppression, Ventilation, RIT/RIC, Rehab, EMS), `accountability_lanes` (per-board, copied from templates on "Start Accountability"), `accountability_entries` (`board_id`, `lane_id` nullable→Unassigned, `personnel_id` nullable, `raw_name`, `raw_dept`, `status`, `checked_in_at`), `accountability_par_checks` (jsonb snapshot of lane→names at time of check).
+- **Manual entry is first-class**, not a fallback bolted on — same `checkInPerson()` action as scanning, dropdown of known dept members or free-text name/agency for visitors, and any raw-name entry (scanned or manual) can be corrected in place via "Edit Name" without re-scanning.
+- **Realtime sync** via Postgres changes subscription (board updates live across multiple officers' phones) — required an explicit `supabase.realtime.setAuth()` call before subscribing, was silently broken twice (f95843f, 5eee1ec) before landing.
+- **Debug scan capture + viewer — SHIPPED ✅ (2026-07-10):** `qr_debug_scans` (id, raw_value, scanned_at, source) captures every scan that fails to parse (auto) plus anything pasted into the board's "paste raw scan data" panel (manual, officer-triggered, always available regardless of parse success). Previously write-only — had to query Supabase directly to see what a failing card contained. Now viewable at `/admin/qr-debug-scans` (sys admin only, added to the sys-admin nav) — `lib/salamander.ts` → `unescapeDebugRaw()` reverses the hex-escaping applied before storage, then **re-runs the current parser against every captured scan live** so each row shows "✓ Parses now" or "✗ Still fails" plus the extracted fields when successful — no more guessing whether an old capture was already fixed by a later regex change. Delete/Clear All included since the table has no other cleanup path.
+  - `source` column (migration `add_qr_debug_scans_source`, default `'accountability'`) added forward-looking for whenever Salamander scanning expands beyond incident accountability (meeting/class attendance, etc. — not built yet). `saveDebugScan(rawValue, source?)` (`app/actions/accountability.ts`) takes an optional source tag; any new scan point just needs to pass its own source string when calling it and entries will show up distinguishable in the same shared viewer. The source filter dropdown/per-source Clear only appears in the UI once more than one source actually exists — invisible today since everything is still `'accountability'`.
+- **Sys-admin nav badges — SHIPPED ✅ (2026-07-10):** the sys-admin-only nav items (`/admin/neris`, `/admin/qr-debug-scans`) now show an unread-style count badge — NERIS badge = same "Issues" definition used on `/admin/neris` itself (status=error, or draft with `completed_at` set), QR badge = count of debug scans that **still fail** under the current parser (not raw row count — already-resolved captures don't nag). Computed in `app/(dashboard)/layout.tsx`, only when `viewingSysAdminOverview` (i.e. never shown to dept admins). `/admin/neris` had no badge before this either — same "you have to remember to check" gap existed there too, now fixed for both at once.
 
-### 10a. Salamander QR — Incident Accountability (PAR) ⬅ SEPARATE USE CASE
-Salamander cards are for officer-scans-others-cards at a scene, not self check-in.
-- Parser: `lib/salamander.ts` → `parseSalamanderQR(raw)` returns `{ firstName, lastName, department, certs[] } | null`
-- Match parsed name to `personnel` table; unmatched = store raw name + dept (mutual aid)
-- `incident_accountability` table: `incident_id`, `personnel_id` (nullable), `raw_name`, `raw_dept`, `assignment`, `checked_in_at`, `status`
-- PAR check logs a timestamped snapshot of everyone currently on scene
-- Build incident accountability after QR self check-in is working
+### 11. Officer Sub-Menu — SHIPPED ✅ (2026-07-10)
+`/officer` hub page (`app/(dashboard)/officer/page.tsx`), nav item shown between Inbox and Personnel for officer/admin, fire depts only (`ctx.departmentType === 'fire'`, redirects to `/dashboard` otherwise — non-fire depts don't have the underlying Operations/Inventory/Inbox pages this links to). Three sections: Operations (Manage Events, Accountability, Hose Testing Session if `module_iso`), Reports (deep links to all 8 officer-gated `/reports/*` cards + Movement Log, which was previously only reachable two clicks deep via `/equipment/storage`), Inbox (Burn Permits/Records if `public_site_enabled`, Restock if `module_medical`, Feedback always — via `/inbox?tab=...`).
 
-### 11. Officer Sub-Menu
-Officers need elevated access similar to admin hub scoped to operational functions. Not yet designed.
+**Known tradeoff, decided deliberately:** most of these links were already one click away from `/reports`, `/iso/hoses`, `/operations`, or the `/events` page — this hub mostly duplicates existing entry points rather than filling gaps (the only genuinely new discoverability fix is Movement Log). Built anyway per explicit request, valued as a single "everything officer" bookmark over marginal duplication.
 
-### 11. Zip Code Auto-Fill on Incident Forms
-When a zip code is entered on new/edit incident forms, city and state should auto-populate.
-- On blur of zip field: hit `https://api.zippopotam.us/us/{zip}` (free, no key)
-- Parse response → fill city + state fields automatically
-- Only fill if fields are currently empty or user confirms overwrite
-- Key files when building: `app/(dashboard)/incidents/new/NewIncidentClient.tsx`, incident edit form
+### 11. Zip Code Auto-Fill on Incident Forms — SHIPPED ✅ (2026-07-10)
+`lib/zip-lookup.ts` → `lookupZip(zip)` hits `https://api.zippopotam.us/us/{zip}` (free, no key), returns `{ city, state }` or null. Wired to the zip field's `onBlur` on both New Incident (`NewIncidentClient.tsx`, already-controlled fields) and Edit Incident (`IncidentDetailClient.tsx` — address/city/state/zip pulled into a new `AddressFields` child component so they could become controlled without breaking the "Cancel discards edits" behavior, which relied on the fields being uncontrolled/remounting). Only fills city/state when both are currently empty — no overwrite-confirm dialog, kept simple.
 
-### 12. Timezone Setting per Department
-All timestamps currently display in UTC on Vercel (server-rendered). Fire school fill log hardcoded to `America/Chicago` as a temporary fix.
+### 12. Timezone Setting per Department — SHIPPED ✅ (2026-07-08)
+`departments.timezone` column + Dept Admin → Settings picker (IANA tz names). Shared `format-datetime` helper renders timestamps in the dept's local zone instead of hardcoded `America/Chicago`/UTC — rolled out across logs, announcements, events admin, and other timestamp displays.
 
-**Build:**
-- Add `timezone` column to `departments` table (text, default `'America/Chicago'`)
-- Dept admin can select timezone in dept settings (dropdown of IANA tz names — US zones at minimum)
-- Pass `timezone` through server layouts wherever timestamps are displayed
-- Replace all `'America/Chicago'` hardcodes with dept timezone
-- Fire school: use a system-level default timezone setting (no dept context) or read from a config table
-
-**Key files when building:** `departments` table, `app/(dashboard)/dept-admin/`, all pages using `toLocaleString()` or `formatDT()`.
-
-### 12. Module / Feature Flag System
-`module_operations` + `module_iso` in DB and nav-gated. Remaining: sys admin toggle UI, plan presets (A/B/C/D bundles in MODULES.md).
+### 12. Module / Feature Flag System — mostly already done, was stale ✅ (2026-07-10)
+Turns out the sys-admin toggle UI already existed and was fully built out: `/admin/dept/[id]` → Modules tab (`ModulesTab.tsx` + `updateDepartmentModules()`) already covers Bundle A (`module_operations`), NERIS, Bundle B/ISO (`module_iso`), Bundle D/Medical (`module_medical`), and Bundle C/Public Engagement (`public_site_enabled`) — this note was just out of date. The one real gap — `module_fuel_storage` had no sys-admin visibility, only a dept-admin self-service toggle (`app/(dashboard)/dept-admin/FuelStorageToggle.tsx`) — is now closed: added as a bundle in `ModulesTab.tsx`, both toggle paths write the same column so they stay in sync.
 
 ---
 
@@ -500,21 +467,15 @@ Salamander personnel accountability cards encode binary data with readable text 
 - Title/Role: text near end of payload after cert block
 - Certifications: uppercase codes (ACLS, FFII, EMT_P, etc.) separated by control characters
 
-**Debug table:** `qr_debug_scans` — raw scan strings saved here for analysis. RLS disabled (debug only).
+**Debug table:** `qr_debug_scans` — see §10a above for the current viewer/schema (this note was stale — table has a `source` column now, and RLS is actually enabled with no policies; only the service-role admin client touches it).
 
-**Parser to build:** `lib/salamander.ts` → `parseSalamanderQR(raw: string)` returns `{ firstName, lastName, department, title, certs[] } | null`
+**Use Case A (Incident Accountability)** — see §10a above, shipped.
 
-### Use Case A — Incident Accountability (PAR)
-Scan cards at incident scenes to track who is on scene, by assignment.
-- New `incident_accountability` table: `incident_id`, `personnel_id` (nullable — mutual aid may not be in system), `raw_name`, `raw_dept`, `assignment`, `checked_in_at`, `checked_out_at`, `status` (on_scene | staged | released)
-- Tab on incident detail page: "Accountability" — scan or manual entry, live roster, PAR timestamp button
-- Must handle mutual aid personnel (not in personnel table) — store raw name/dept from QR
-- PAR check logs a timestamped snapshot of everyone currently on scene
+### Use Case B — Kiosk Login / Movement Tracking — SHIPPED ✅ (2026-07-10)
+Went with the documented preference: **Option A** (device credential, no full Supabase auth on the tablet).
 
-### Use Case B — Kiosk Login / Movement Tracking (future)
-Dedicated `/kiosk` page on a shared station tablet. Scan card → identifies who is at the station. Three options discussed:
-- **Option A (preferred for stations):** QR identifies person → short-lived device session token in DB → no full Supabase auth needed
-- **Option B:** Device pre-logged in as kiosk account → QR scan logs activity for that person
-- **Option C:** QR finds email in personnel → sends Supabase magic link to phone
-
-Decision deferred. Build incident accountability first, then revisit kiosk/movement.
+- **`kiosk_devices`** (`id, department_id, device_name, secret_hash, created_by, created_at, revoked_at`) — a device "credential" is `{id, secret}`, generated once via Dept Admin → Kiosk Devices (`app/(dashboard)/dept-admin/kiosk/`, admin-only), secret shown exactly once and stored in the tablet's browser `localStorage` (not a cookie — deliberately per-browser/per-device, survives across sessions with no expiry, revocable by an admin at any time by setting `revoked_at`). Secret is SHA-256 hashed at rest, compared with `crypto.timingSafeEqual`.
+- **`station_presence`** (`id, department_id, personnel_id` nullable, `raw_name, raw_dept` for mutual-aid/unmatched cards, `checked_in_at, checked_out_at` nullable, `kiosk_device_id`) — a null `checked_out_at` means currently present. No status enum needed; presence is just "has an open row or not."
+- **`/kiosk`** (`app/kiosk/page.tsx`) — standalone route outside `(dashboard)` and outside normal auth entirely (added to `middleware.ts`'s public-bypass list alongside `/fire`, `/police`, etc., since the tablet never logs in). Full-screen, dark, kiosk-friendly UI: department name, live roster of who's currently checked in (polls every 30s), a big Scan Card button (reuses `QRScanner`), and a Manual Check-In fallback (searchable name picker) for when a card won't scan or someone doesn't have one.
+- **`app/actions/kiosk.ts`** — `createKioskDevice`/`listKioskDevices`/`revokeKioskDevice` (admin-gated, normal session auth) vs. `getKioskContext`/`kioskScan`/`kioskManualEntry`/`getKioskRosterPickerList` (device-credential-gated, callable with zero Supabase session — every one of these re-verifies the device id+secret against `kiosk_devices` on every call, so a revoked device is locked out immediately, not just at next login). Scanning toggles presence (scan once to check in, scan again to check out) and reuses the exact same card-resolution logic as Accountability (`parseSalamanderCard`/`isFireOps7Card`/`personnel_qr_tokens`) — unparseable cards fall through to `saveDebugScan(raw, 'kiosk')`, which is the first real use of the `source` column built earlier this session.
+- Deliberately **not using Realtime** for the roster (poll instead) — Accountability's board already hit "Realtime silently not receiving updates" twice in its history (`f95843f`, `5eee1ec`), both traced to `setAuth()` needing a logged-in user's JWT. A kiosk device has no such session, so Realtime's auth story doesn't cleanly apply here; polling avoids that whole class of bug for a feature where 30-second staleness doesn't matter.

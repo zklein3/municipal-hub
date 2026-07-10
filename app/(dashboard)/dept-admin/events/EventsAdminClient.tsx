@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { logAttendance, logAbsentAttendance, verifyAttendance, cancelEventInstance, closeEventInstance, requestExcuse, deleteEventInstance, updateEventInstance, updateEventSeries } from '@/app/actions/attendance'
 import { toggleEventSeriesPublic } from '@/app/actions/public-site'
+import { generateCheckinToken } from '@/app/actions/checkin'
 import EventAttendanceSignaturePadModal from '@/app/(dashboard)/signatures/EventAttendanceSignaturePadModal'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 
@@ -323,6 +324,13 @@ export default function EventsAdminClient({
     setLoading(false)
   }
 
+  async function handleGenerateCheckinQr(event: Event) {
+    const result = await generateCheckinToken('event_instance', event.id)
+    if (result.error || !result.token) { setError(result.error ?? 'Failed to generate check-in QR.'); return }
+    const params = new URLSearchParams({ type: 'checkin', code: result.token, title: event.title })
+    window.open(`/print/qr?${params.toString()}`, '_blank')
+  }
+
   async function handleCancel(instance_id: string) {
     if (!confirm('Cancel this event?')) return
     reset(); setLoading(true)
@@ -479,6 +487,11 @@ export default function EventsAdminClient({
                         <button onClick={() => handleSelfLog(event)} disabled={loading}
                           className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
                           Log Attendance
+                        </button>
+                      )}
+                      {!cancelled && !completed && (
+                        <button onClick={() => handleGenerateCheckinQr(event)} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                          Check-In QR
                         </button>
                       )}
                       {!cancelled && (

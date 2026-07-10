@@ -91,6 +91,11 @@ export default async function DeptAdminPage() {
           href="/dept-admin/accountability"
         />
         <HubCard
+          title="Kiosk Devices"
+          description="Set up a station tablet for scan-in/scan-out presence tracking"
+          href="/dept-admin/kiosk"
+        />
+        <HubCard
           title="Equipment Setup"
           description="Item types, categories, and dept configuration"
           href="/dept-admin/setup"

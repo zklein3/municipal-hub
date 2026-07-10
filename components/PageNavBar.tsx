@@ -62,7 +62,7 @@ export default function PageNavBar() {
   if (!hub) return null
 
   return (
-    <div className="flex items-center gap-2 mb-5">
+    <div className="flex items-center gap-2 mb-5 print:hidden">
       <button
         onClick={() => router.back()}
         className="text-xs font-medium text-zinc-500 hover:text-zinc-800 transition-colors px-3 py-1.5 rounded-lg bg-white border border-zinc-200 hover:border-zinc-300 active:bg-zinc-50"

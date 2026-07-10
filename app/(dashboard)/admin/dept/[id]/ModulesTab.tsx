@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { updateDepartmentModules } from '@/app/actions/departments'
 
 interface Bundle {
-  key: 'module_operations' | 'module_iso' | 'module_neris' | 'module_medical' | 'public_site_enabled'
+  key: 'module_operations' | 'module_iso' | 'module_neris' | 'module_medical' | 'module_fuel_storage' | 'public_site_enabled'
   label: string
   description: string
   features: string[]
@@ -17,6 +17,7 @@ export default function ModulesTab({
   moduleIso,
   moduleNeris,
   moduleMedical,
+  moduleFuelStorage,
   publicSiteEnabled,
 }: {
   departmentId: string
@@ -24,6 +25,7 @@ export default function ModulesTab({
   moduleIso: boolean
   moduleNeris: boolean
   moduleMedical: boolean
+  moduleFuelStorage: boolean
   publicSiteEnabled: boolean
 }) {
   const [saving, setSaving] = useState<string | null>(null)
@@ -33,6 +35,7 @@ export default function ModulesTab({
     module_iso: moduleIso,
     module_neris: moduleNeris,
     module_medical: moduleMedical,
+    module_fuel_storage: moduleFuelStorage,
     public_site_enabled: publicSiteEnabled,
   })
 
@@ -84,6 +87,13 @@ export default function ModulesTab({
       description: 'Public-facing website, burn permits, records requests, and public inbox.',
       features: ['Public department website', 'Online burn permit requests', 'Public records requests', 'Public inbox (officer-managed)'],
       enabled: state.public_site_enabled,
+    },
+    {
+      key: 'module_fuel_storage',
+      label: 'Fuel Storage Tracking',
+      description: 'Fuel tank inventory and fill-up logging. Dept admins can also self-enable this from Dept Admin.',
+      features: ['Fuel tank inventory', 'Apparatus fuel log', 'Fuel usage & cost report'],
+      enabled: state.module_fuel_storage,
     },
   ]
 

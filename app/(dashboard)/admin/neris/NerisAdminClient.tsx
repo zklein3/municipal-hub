@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { testNerisConnection } from '@/app/actions/departments'
+import { testNerisConnection, setNerisIssueDismissed } from '@/app/actions/departments'
+import { resolveLog } from '@/app/actions/admin'
 
 type DeptStat = {
   id: string
@@ -21,6 +22,7 @@ type Issue = {
   neris_last_error: string | null
   completed_at: string | null
   updated_at: string | null
+  neris_issue_dismissed: boolean
   incident: { incident_number: string; incident_date: string; incident_type: string } | null
   dept: { name: string } | null
 }
@@ -89,17 +91,44 @@ type Tab = typeof TABS[number]
 
 export default function NerisAdminClient({
   deptStats,
-  issues,
-  errorLogs,
+  issues: initialIssues,
+  errorLogs: initialErrorLogs,
 }: {
   deptStats: DeptStat[]
   issues: Issue[]
   errorLogs: ErrorLog[]
 }) {
   const [tab, setTab] = useState<Tab>('Departments')
+  const [issues, setIssues] = useState(initialIssues)
+  const [errorLogs, setErrorLogs] = useState(initialErrorLogs)
+  const [resolving, setResolving] = useState<string | null>(null)
+  const [dismissing, setDismissing] = useState<string | null>(null)
 
-  const issueCount = issues.length
+  const issueCount = issues.filter(i => !i.neris_issue_dismissed).length
   const errorCount = errorLogs.filter(l => !l.resolved).length
+
+  async function handleResolve(id: string) {
+    setResolving(id)
+    const result = await resolveLog(id)
+    if (!result?.error) setErrorLogs(prev => prev.map(l => l.id === id ? { ...l, resolved: true } : l))
+    setResolving(null)
+  }
+
+  async function handleResolveAll() {
+    const unresolvedIds = errorLogs.filter(l => !l.resolved).map(l => l.id)
+    if (unresolvedIds.length === 0) return
+    setResolving('all')
+    await Promise.all(unresolvedIds.map(id => resolveLog(id)))
+    setErrorLogs(prev => prev.map(l => unresolvedIds.includes(l.id) ? { ...l, resolved: true } : l))
+    setResolving(null)
+  }
+
+  async function handleDismissIssue(id: string, dismissed: boolean) {
+    setDismissing(id)
+    const result = await setNerisIssueDismissed(id, dismissed)
+    if (!result?.error) setIssues(prev => prev.map(i => i.id === id ? { ...i, neris_issue_dismissed: dismissed } : i))
+    setDismissing(null)
+  }
 
   return (
     <div>
@@ -194,12 +223,13 @@ export default function NerisAdminClient({
           ) : (
             <div className="divide-y divide-zinc-100">
               {issues.map(issue => (
-                <div key={issue.id} className="px-5 py-4">
+                <div key={issue.id} className={`px-5 py-4 ${issue.neris_issue_dismissed ? 'opacity-50' : ''}`}>
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusBadge status={issue.neris_status} />
                         {issue.dept && <span className="text-xs text-zinc-400">{issue.dept.name}</span>}
+                        {issue.neris_issue_dismissed && <span className="text-xs text-green-600 font-medium">dismissed</span>}
                       </div>
                       {issue.incident && (
                         <p className="text-sm font-semibold text-zinc-900 mt-1">
@@ -216,14 +246,23 @@ export default function NerisAdminClient({
                         <p className="mt-1 text-xs text-yellow-700">Marked ready {formatDT(issue.completed_at)} — not yet submitted</p>
                       )}
                     </div>
-                    {issue.incident_id && (
-                      <Link
-                        href={`/incidents/${issue.incident_id}/neris`}
-                        className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      {issue.incident_id && (
+                        <Link
+                          href={`/incidents/${issue.incident_id}/neris`}
+                          className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors"
+                        >
+                          Open NERIS Form →
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => handleDismissIssue(issue.id, !issue.neris_issue_dismissed)}
+                        disabled={dismissing === issue.id}
+                        className="text-xs font-medium text-zinc-400 hover:text-zinc-700 disabled:opacity-40 transition-colors"
                       >
-                        Open NERIS Form →
-                      </Link>
-                    )}
+                        {dismissing === issue.id ? '…' : issue.neris_issue_dismissed ? 'Restore' : 'Dismiss'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -234,33 +273,55 @@ export default function NerisAdminClient({
 
       {/* Tab: Error Logs */}
       {tab === 'Error Logs' && (
-        <div className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
-          {errorLogs.length === 0 ? (
-            <p className="px-5 py-8 text-sm text-zinc-400 text-center">No NERIS-related error logs.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {errorLogs.map(log => (
-                <div key={log.id} className={`px-5 py-4 ${log.resolved ? 'opacity-50' : ''}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${
-                          log.log_type === 'error' ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600'
-                        }`}>
-                          {log.log_type}
-                        </span>
-                        <span className="text-xs text-zinc-400">{log.page}</span>
-                        {log.dept_name && <span className="text-xs text-zinc-400">· {log.dept_name}</span>}
-                        <span className="text-xs text-zinc-400">{formatDT(log.created_at)}</span>
-                        {log.resolved && <span className="text-xs text-green-600 font-medium">resolved</span>}
-                      </div>
-                      <p className="mt-1 text-sm text-zinc-800 break-words">{log.message}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <div>
+          {errorCount > 0 && (
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={handleResolveAll}
+                disabled={resolving !== null}
+                className="text-xs font-semibold text-red-600 hover:text-red-800 disabled:opacity-40 transition-colors"
+              >
+                {resolving === 'all' ? 'Resolving…' : `Resolve All (${errorCount})`}
+              </button>
             </div>
           )}
+          <div className="rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden">
+            {errorLogs.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-zinc-400 text-center">No NERIS-related error logs.</p>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {errorLogs.map(log => (
+                  <div key={log.id} className={`px-5 py-4 ${log.resolved ? 'opacity-50' : ''}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${
+                            log.log_type === 'error' ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-600'
+                          }`}>
+                            {log.log_type}
+                          </span>
+                          <span className="text-xs text-zinc-400">{log.page}</span>
+                          {log.dept_name && <span className="text-xs text-zinc-400">· {log.dept_name}</span>}
+                          <span className="text-xs text-zinc-400">{formatDT(log.created_at)}</span>
+                          {log.resolved && <span className="text-xs text-green-600 font-medium">resolved</span>}
+                        </div>
+                        <p className="mt-1 text-sm text-zinc-800 break-words">{log.message}</p>
+                      </div>
+                      {!log.resolved && (
+                        <button
+                          onClick={() => handleResolve(log.id)}
+                          disabled={resolving !== null}
+                          className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-800 disabled:opacity-40 transition-colors"
+                        >
+                          {resolving === log.id ? 'Resolving…' : 'Resolve'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

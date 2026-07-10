@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createIncident } from '@/app/actions/incidents'
 import { parseRunSheet } from '@/app/actions/parse-run-sheet'
 import type { ParsedRunSheet } from '@/app/actions/parse-run-sheet'
+import { lookupZip } from '@/lib/zip-lookup'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 const labelCls = "block text-sm font-medium text-zinc-700 mb-1"
@@ -92,6 +93,15 @@ export default function NewIncidentClient({
   const [newPersonnel, setNewPersonnel] = useState<PersonnelEntry>({ personnel_id: myPersonnelId, apparatus_id: '', role: 'crew' })
 
   const isFireType = incidentType === 'fire'
+
+  async function handleZipBlur() {
+    if (city || state) return
+    const result = await lookupZip(zip)
+    if (result) {
+      setCity(result.city)
+      setState(result.state)
+    }
+  }
 
   function addApparatusRow() {
     if (!newApparatus.apparatus_id) return
@@ -308,7 +318,7 @@ export default function NewIncidentClient({
             </div>
             <div>
               <label className={labelCls}>Zip</label>
-              <input name="zip" type="text" placeholder="86047" maxLength={5} value={zip} onChange={e => setZip(e.target.value)} className={inputCls} />
+              <input name="zip" type="text" placeholder="86047" maxLength={5} value={zip} onChange={e => setZip(e.target.value)} onBlur={handleZipBlur} className={inputCls} />
             </div>
           </div>
 

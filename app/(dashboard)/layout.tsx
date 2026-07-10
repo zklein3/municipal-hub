@@ -11,6 +11,7 @@ import type { NavGroup } from '@/components/NavGroups'
 import PageNavBar from '@/components/PageNavBar'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import { getDeptTheme, getDeptBrandName } from '@/lib/department-theme'
+import { isFireOps7Card, parseSalamanderCard, unescapeDebugRaw } from '@/lib/salamander'
 
 async function getUserContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -49,7 +50,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   const systemRole = user?.system_role ?? null
   const isDeptAdmin = systemRole === 'admin'
-  const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer'
+  const isOfficerOrAbove = isDeptAdmin || systemRole === 'officer' || isSysAdmin
 
   // Nav badge counts + dept module flags
   let announcementUnreadCount = 0
@@ -99,6 +100,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? inboxPendingCount + pendingSignatureCount
     : undefined
 
+  // Sys-admin-only nav badges — computed only when viewing the system admin overview
+  let nerisIssuesBadge: number | undefined
+  let qrDebugScansBadge: number | undefined
+  if (viewingSysAdminOverview) {
+    const adminClient = createAdminClient()
+    const { data: nerisDepts } = await adminClient.from('departments').select('id').eq('module_neris', true)
+    const nerisDeptIds = (nerisDepts ?? []).map(d => d.id)
+    const [{ data: nerisRecords }, { data: debugScans }] = await Promise.all([
+      nerisDeptIds.length > 0
+        ? adminClient.from('incident_neris').select('neris_status, completed_at, neris_issue_dismissed').in('department_id', nerisDeptIds)
+        : Promise.resolve({ data: [] }),
+      adminClient.from('qr_debug_scans').select('raw_value').limit(500),
+    ])
+    const issueCount = (nerisRecords ?? []).filter(r => !r.neris_issue_dismissed && (r.neris_status === 'error' || (r.neris_status === 'draft' && r.completed_at))).length
+    nerisIssuesBadge = issueCount > 0 ? issueCount : undefined
+
+    const failingScanCount = (debugScans ?? []).filter(s => {
+      const restored = unescapeDebugRaw(s.raw_value)
+      return !isFireOps7Card(restored) && !parseSalamanderCard(restored)
+    }).length
+    qrDebugScansBadge = failingScanCount > 0 ? failingScanCount : undefined
+  }
+
   const departmentType = user?.department_type ?? 'fire'
   const isFireDept = departmentType === 'fire'
 
@@ -108,6 +132,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { items: [{ href: '/dashboard', label: 'Dashboard' }] },
     { items: [{ href: '/operations', label: 'Operations', badge: opsBadge }] },
     { items: [{ href: '/inbox', label: 'Inbox', badge: inboxBadge }] },
+    ...(isOfficerOrAbove ? [{ items: [{ href: '/officer', label: 'Officer' }] }] : []),
     { items: [{ href: '/personnel', label: 'Personnel' }] },
     { items: [{ href: '/training', label: 'Training' }] },
     { items: [{ href: '/equipment', label: 'Inventory' }] },
@@ -123,7 +148,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: '/admin/departments', label: 'Departments' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/logs', label: 'System Logs' },
-    { href: '/admin/neris', label: 'NERIS' },
+    { href: '/admin/neris', label: 'NERIS', badge: nerisIssuesBadge },
+    { href: '/admin/qr-debug-scans', label: 'QR Debug Scans', badge: qrDebugScansBadge },
   ] : isDeptAdmin ? [
     { href: '/dept-admin', label: 'Dept Admin' },
   ] : []
@@ -142,7 +168,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
-      <aside className={`hidden md:flex w-64 ${theme.sidebarBg} text-white flex-col shrink-0`}>
+      <aside className={`hidden md:flex w-64 ${theme.sidebarBg} text-white flex-col shrink-0 print:hidden`}>
         <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} brandName={brandName} />
       </aside>
       <MobileSidebar navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} brandName={brandName} />

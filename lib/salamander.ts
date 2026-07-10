@@ -79,3 +79,13 @@ export function parseFireOps7Card(raw: string): string | null {
   const id = raw.slice(6).trim()
   return id.length > 0 ? id : null
 }
+
+/**
+ * Reverses the `\xNN` hex-escaping applied before storing a raw scan in
+ * qr_debug_scans (see saveDebugScan in app/actions/accountability.ts), so the
+ * original control-character bytes can be re-fed into parseSalamanderCard to
+ * check whether a captured failure now parses under the current regex.
+ */
+export function unescapeDebugRaw(sanitized: string): string {
+  return sanitized.replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+}

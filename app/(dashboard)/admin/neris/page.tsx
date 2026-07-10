@@ -27,7 +27,7 @@ export default async function NerisAdminPage() {
   const { data: nerisRecords } = deptIds.length > 0
     ? await adminClient
         .from('incident_neris')
-        .select('id, incident_id, department_id, neris_status, neris_submission_id, neris_submitted_at, neris_last_error, completed_at, updated_at')
+        .select('id, incident_id, department_id, neris_status, neris_submission_id, neris_submitted_at, neris_last_error, completed_at, updated_at, neris_issue_dismissed')
         .in('department_id', deptIds)
         .order('updated_at', { ascending: false })
     : { data: [] }

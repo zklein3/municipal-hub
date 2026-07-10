@@ -5,18 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { submitHoseTestSession } from '@/app/actions/iso'
 
-const REQUIRED_PSI: Record<string, number> = {
-  attack: 300,
-  forestry: 300,
-  booster: 300,
-  supply: 200,
-  hard_suction: 200,
-  other: 300,
-}
-
-function requiredPsi(diameter_in: number, hose_type: string): number {
-  if (diameter_in >= 4) return 200
-  return REQUIRED_PSI[hose_type] ?? 300
+// NFPA 1962: attack hose (1"–3") tests at 300 PSI, supply hose (4"–6") tests at 200 PSI —
+// driven purely by diameter, not the user-assigned hose_type (which can be mistagged).
+function requiredPsi(diameter_in: number): number {
+  return diameter_in >= 4 ? 200 : 300
 }
 
 type Hose = {
@@ -142,7 +134,7 @@ export default function HoseTestSessionClient({
       <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100 mb-5">
         {hoses.map(hose => {
           const result = results[hose.id]
-          const reqPsi = requiredPsi(hose.diameter_in, hose.hose_type)
+          const reqPsi = requiredPsi(hose.diameter_in)
           const psiMet = pressurePsi && parseInt(pressurePsi) >= reqPsi
           return (
             <div key={hose.id} className="px-4 py-4">

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { submitUnitProgress, selfReportTrainingAttendance, logCertSession, saveCertSignature } from '@/app/actions/training'
+import { generateCheckinToken } from '@/app/actions/checkin'
 import SignaturePadModal from '@/components/SignaturePadModal'
 import CertSignaturePadModal from '@/components/CertSignaturePadModal'
 import LogOutsideTrainingModal from '@/components/LogOutsideTrainingModal'
@@ -125,6 +126,14 @@ export default function TrainingClient({
     setLoading(false)
   }
 
+  async function handleGenerateCheckinQr(event_id: string, topic: string) {
+    reset()
+    const result = await generateCheckinToken('training_event', event_id)
+    if (result.error || !result.token) { setError(result.error ?? 'Failed to generate check-in QR.'); return }
+    const params = new URLSearchParams({ type: 'checkin', code: result.token, title: topic })
+    window.open(`/print/qr?${params.toString()}`, '_blank')
+  }
+
   async function handleLogSession(enrollment_id: string) {
     reset(); setLoading(true)
     const r = await logCertSession(enrollment_id)
@@ -231,6 +240,12 @@ export default function TrainingClient({
                         </a>
                       ) : (
                         <>
+                          {isOfficerOrAbove && (
+                            <button onClick={() => handleGenerateCheckinQr(evt.id, evt.topic)}
+                              className="text-xs font-semibold text-blue-600 hover:text-blue-800">
+                              Check-In QR
+                            </button>
+                          )}
                           {attended && evt.my_attendance!.status !== 'verified' && (
                             <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[evt.my_attendance!.status]}`}>
                               {evt.my_attendance!.status.charAt(0).toUpperCase() + evt.my_attendance!.status.slice(1)}

@@ -9,7 +9,6 @@ export default async function PrintReportPage({
   searchParams: Promise<{ months?: string }>
 }) {
   const { months: monthsParam } = await searchParams
-  const months = Math.min(Math.max(parseInt(monthsParam ?? '12') || 12, 6), 36)
 
   const adminClient = createAdminClient()
 
@@ -18,11 +17,18 @@ export default async function PrintReportPage({
   if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
   if (!ctx.departmentId) redirect('/dashboard')
 
-  const { data: deptData } = await adminClient.from('departments').select('name, module_iso').eq('id', ctx.departmentId).single()
+  const { data: deptData } = await adminClient
+    .from('departments')
+    .select('name, module_iso, iso_audit_date, iso_auditor_name, iso_report_default_months, iso_report_sections')
+    .eq('id', ctx.departmentId)
+    .single()
   if (!deptData?.module_iso) redirect('/dashboard')
+
+  const months = Math.min(Math.max(parseInt(monthsParam ?? '') || deptData.iso_report_default_months || 12, 6), 36)
 
   const department_id = ctx.departmentId
   const deptName = deptData.name ?? 'Fire Department'
+  const isAdmin = ctx.systemRole === 'admin' || ctx.isSysAdmin
 
   const cutoff = new Date()
   cutoff.setMonth(cutoff.getMonth() - months)
@@ -236,6 +242,11 @@ export default async function PrintReportPage({
       mutualAid={(mutualAid ?? []).filter(a => a.active)}
       responseTimes={{ runs: responseRuns, avgResponseMin, avgDispatchMin, total: responseRuns.length }}
       departmentTimezone={ctx.departmentTimezone}
+      departmentId={department_id}
+      isAdmin={isAdmin}
+      defaultAuditDate={deptData.iso_audit_date}
+      defaultAuditorName={deptData.iso_auditor_name}
+      defaultSections={deptData.iso_report_sections as Record<string, boolean>}
     />
   )
 }

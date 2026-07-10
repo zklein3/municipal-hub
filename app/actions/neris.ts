@@ -521,7 +521,7 @@ export async function submitToNeris(incident_id: string) {
   if (!neris.neris_incident_type) return { error: 'NERIS incident type is required before submitting.' }
   if (!neris.neris_incident_type.includes('||') && ambiguousIncidentTypeLeafs.has(neris.neris_incident_type)) {
     const msg = `NERIS submit blocked — ambiguous incident type "${neris.neris_incident_type}" matches multiple categories. Re-select from the form dropdown.`
-    await logError(msg, '/incidents/neris/validate', { department_id: department_id ?? undefined })
+    await logError(msg, '/incidents/neris/validate', { department_id: department_id ?? undefined, metadata: { incident_id } })
     return { error: `The incident type "${neris.neris_incident_type}" matches multiple NERIS categories. Open the NERIS report, re-select the correct incident type from the dropdown (choose the specific category — e.g. Medical / Injury or Hazardous Non-Chemical), save, then submit.` }
   }
   if (!getIncidentState(incident)) return { error: 'Incident must have a State set before submitting to NERIS. Edit the incident and fill in the City, State, and Zip fields.' }
@@ -574,7 +574,7 @@ export async function submitToNeris(incident_id: string) {
   try {
     validation = await nerisValidateIncident(nerisEntityId, payload)
   } catch (err: any) {
-    await logError(err.message, '/incidents/neris/validate')
+    await logError(err.message, '/incidents/neris/validate', { metadata: { incident_id } })
     return { error: `NERIS connection failed: ${err.message}` }
   }
   if (!validation.ok) {
@@ -584,7 +584,7 @@ export async function submitToNeris(incident_id: string) {
         neris_last_error: `Validation failed: ${validation.error}`,
         updated_at: new Date().toISOString(),
       }).eq('incident_id', incident_id),
-      logError(`NERIS validation failed: ${validation.error}`, '/incidents/neris/validate'),
+      logError(`NERIS validation failed: ${validation.error}`, '/incidents/neris/validate', { metadata: { incident_id } }),
     ])
     return { error: `NERIS validation failed: ${validation.error}` }
   }
@@ -595,7 +595,7 @@ export async function submitToNeris(incident_id: string) {
     const result = await nerisSubmitIncident(nerisEntityId, payload)
     nerisId = result.neris_id
   } catch (err: any) {
-    await logError(err.message, '/incidents/neris/submit')
+    await logError(err.message, '/incidents/neris/submit', { metadata: { incident_id } })
     await adminClient.from('incident_neris').update({
       neris_status: 'error',
       neris_last_error: err.message,
@@ -615,7 +615,15 @@ export async function submitToNeris(incident_id: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('incident_id', incident_id)
-  if (dbErr) { await logError(dbErr.message, '/incidents/neris/submit'); return { error: dbErr.message } }
+  if (dbErr) { await logError(dbErr.message, '/incidents/neris/submit', { metadata: { incident_id } }); return { error: dbErr.message } }
+
+  // Submission succeeded — auto-resolve any earlier NERIS error logs tied to this incident
+  // so the sys-admin Error Logs list doesn't keep flagging a problem that's now fixed.
+  await adminClient.from('system_logs')
+    .update({ resolved: true })
+    .eq('resolved', false)
+    .ilike('page', '%neris%')
+    .contains('metadata', { incident_id })
 
   await adminClient.from('incidents').update({ neris_reported: true, status: 'finalized' }).eq('id', incident_id)
 

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { saveIsoReportSettings } from '@/app/actions/departments'
 
 type Apparatus = {
   id: string; unit_number: string; apparatus_name: string | null
@@ -31,11 +32,17 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   )
 }
 
+const DEFAULT_SECTIONS = {
+  apparatus: true, staffing: true, training: true, certifications: true,
+  hoseInventory: true, hoseTesting: true, hydrants: true, preplans: true,
+  mutualAid: true, responseTimes: true,
+}
+
 export default function PrintReportClient({
   deptName, months, generatedAt,
   apparatus, staffing, hoseInventory, activeHoses,
   hydrants, training, certSummary, preplans, mutualAid, responseTimes,
-  departmentTimezone,
+  departmentTimezone, departmentId, isAdmin, defaultAuditDate, defaultAuditorName, defaultSections,
 }: {
   deptName: string
   months: number
@@ -51,16 +58,19 @@ export default function PrintReportClient({
   mutualAid: MutualAid[]
   responseTimes: { runs: ResponseRun[]; avgResponseMin: number | null; avgDispatchMin: number | null; total: number }
   departmentTimezone: string
+  departmentId: string
+  isAdmin: boolean
+  defaultAuditDate: string | null
+  defaultAuditorName: string | null
+  defaultSections: Record<string, boolean>
 }) {
   const router = useRouter()
-  const [auditDate, setAuditDate] = useState('')
-  const [auditorName, setAuditorName] = useState('')
+  const [auditDate, setAuditDate] = useState(defaultAuditDate ?? '')
+  const [auditorName, setAuditorName] = useState(defaultAuditorName ?? '')
   const [selectedMonths, setSelectedMonths] = useState(months)
-  const [sections, setSections] = useState({
-    apparatus: true, staffing: true, training: true, certifications: true,
-    hoseInventory: true, hoseTesting: true, hydrants: true, preplans: true,
-    mutualAid: true, responseTimes: true,
-  })
+  const [sections, setSections] = useState({ ...DEFAULT_SECTIONS, ...defaultSections })
+  const [savingDefaults, setSavingDefaults] = useState(false)
+  const [savedDefaults, setSavedDefaults] = useState(false)
 
   function toggleSection(key: keyof typeof sections) {
     setSections(s => ({ ...s, [key]: !s[key] }))
@@ -69,6 +79,22 @@ export default function PrintReportClient({
   function handleMonthsChange(m: number) {
     setSelectedMonths(m)
     router.push(`/iso/report/print?months=${m}`)
+  }
+
+  async function handleSaveDefaults() {
+    setSavingDefaults(true)
+    setSavedDefaults(false)
+    const result = await saveIsoReportSettings(departmentId, {
+      auditDate: auditDate || null,
+      auditorName: auditorName || null,
+      defaultMonths: selectedMonths,
+      sections,
+    })
+    setSavingDefaults(false)
+    if (!result?.error) {
+      setSavedDefaults(true)
+      setTimeout(() => setSavedDefaults(false), 2500)
+    }
   }
 
   const generatedDate = formatLocalDateTime(generatedAt, departmentTimezone, { month: 'long', day: 'numeric', year: 'numeric', hour: undefined, minute: undefined })
@@ -82,9 +108,19 @@ export default function PrintReportClient({
 
       {/* ── Config Panel (hidden on print) ──────────────────────────────────── */}
       <div className="print:hidden mb-8 rounded-xl bg-white border border-zinc-200 p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h1 className="text-base font-bold text-zinc-900">ISO Report Builder</h1>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {savedDefaults && <span className="text-xs font-medium text-green-600">✓ Saved</span>}
+            {isAdmin && (
+              <button
+                onClick={handleSaveDefaults}
+                disabled={savingDefaults}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+              >
+                {savingDefaults ? 'Saving…' : 'Save as Default'}
+              </button>
+            )}
             <Link href="/iso/report" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
               ← Back
             </Link>
@@ -96,6 +132,11 @@ export default function PrintReportClient({
             </button>
           </div>
         </div>
+        {isAdmin && (
+          <p className="text-xs text-zinc-400 mb-4">
+            "Save as Default" stores these fields and section choices on the department — they'll pre-fill the next time anyone opens this report.
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
           <div>

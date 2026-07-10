@@ -15,7 +15,11 @@ function PrintContent() {
 
   const qrValue = type === 'bottle'
     ? `${BASE_URL}/fire-school?scan=${encodeURIComponent(code)}`
+    : type === 'checkin'
+    ? `${BASE_URL}/checkin/${code}`
     : `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`
+
+  const displayCode = type === 'checkin' ? null : code
 
   useEffect(() => {
     const timer = setTimeout(() => window.print(), 600)
@@ -41,9 +45,11 @@ function PrintContent() {
         borderRadius: '12px',
       }}>
         <QRCodeSVG value={qrValue} size={220} level="M" />
-        <p style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.1em', color: '#18181b', margin: 0 }}>
-          {code}
-        </p>
+        {displayCode && (
+          <p style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.1em', color: '#18181b', margin: 0 }}>
+            {displayCode}
+          </p>
+        )}
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: '1rem', fontWeight: 600, color: '#27272a', margin: 0 }}>{title}</p>
           {subtitle && (

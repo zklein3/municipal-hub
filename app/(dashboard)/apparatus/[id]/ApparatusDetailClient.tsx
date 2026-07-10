@@ -236,6 +236,16 @@ export default function ApparatusDetailClient({
             buttonClassName="shrink-0 text-xs font-medium text-red-700 hover:underline print:hidden"
           />
         )}
+        {apparatus.qr_code && (
+          <Link
+            href={`/print/qr-batch?type=apparatus&apparatus_id=${apparatus.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-xs font-medium text-red-700 hover:underline print:hidden"
+          >
+            Print QR (Label Sheet)
+          </Link>
+        )}
       </div>
 
       {/* Apparatus Info */}
@@ -606,6 +616,16 @@ export default function ApparatusDetailClient({
                 className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
               >
                 Manage Equipment
+              </Link>
+            )}
+            {compartments.filter(c => c.active).length > 0 && (
+              <Link
+                href={`/print/qr-batch?type=compartment&apparatus_id=${apparatus.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+              >
+                Print All QR Codes
               </Link>
             )}
             {compartments.filter(c => c.active).length > 0 && (

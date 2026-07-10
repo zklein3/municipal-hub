@@ -30,7 +30,7 @@ export default function MobileSidebar({
   return (
     <>
       {/* Mobile Top Bar */}
-      <div id="mobile-header" className={`md:hidden fixed top-0 left-0 right-0 z-40 ${t.sidebarBg} text-white shadow`}>
+      <div id="mobile-header" className={`md:hidden print:hidden fixed top-0 left-0 right-0 z-40 ${t.sidebarBg} text-white shadow`}>
         <div className="flex items-center px-4 py-3 relative">
           <button
             onClick={() => setOpen(true)}

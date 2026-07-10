@@ -6,7 +6,10 @@ import { QRCodeSVG } from 'qrcode.react'
 
 const BASE_URL = 'https://municipal-hub.com'
 
-type Asset = { id: string; asset_tag: string; serial_number: string | null }
+type BatchType = 'asset' | 'compartment' | 'apparatus'
+
+// Normalized shape all three sources map into for rendering.
+type CardItem = { id: string; code: string; primary: string; secondary: string | null }
 
 type Format = 'sheet' | 'avery5163' | 'avery5164' | 'avery5160'
 
@@ -83,11 +86,11 @@ function OffsetBtn({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
-function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
-  asset: Asset; itemName: string; qrSize: number
+function QrCard({ item, type, groupLabel, qrSize, cardStyle, isRow }: {
+  item: CardItem; type: BatchType; groupLabel: string; qrSize: number
   cardStyle: React.CSSProperties; isRow: boolean
 }) {
-  const qrValue = `${BASE_URL}/scan?type=asset&code=${encodeURIComponent(asset.asset_tag)}`
+  const qrValue = `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(item.code)}`
   const tagSize = isRow ? '11px' : '13px'
   const metaSize = isRow ? '9px' : '10px'
   return (
@@ -103,15 +106,15 @@ function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
       <QRCodeSVG value={qrValue} size={qrSize} level="M" style={{ flexShrink: 0 }} />
       <div style={{ textAlign: isRow ? 'left' : 'center', minWidth: 0 }}>
         <p style={{ fontFamily: 'monospace', fontSize: tagSize, fontWeight: 700, color: '#18181b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {asset.asset_tag}
+          {item.primary}
         </p>
-        {asset.serial_number && (
+        {item.secondary && (
           <p style={{ fontSize: metaSize, color: '#71717a', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {asset.serial_number}
+            {item.secondary}
           </p>
         )}
         <p style={{ fontSize: metaSize, color: '#a1a1aa', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {itemName}
+          {groupLabel}
         </p>
       </div>
     </div>
@@ -120,9 +123,11 @@ function AssetCard({ asset, itemName, qrSize, cardStyle, isRow }: {
 
 function BatchContent() {
   const searchParams = useSearchParams()
+  const type = (searchParams.get('type') as BatchType) || 'asset'
   const itemId = searchParams.get('item_id') ?? ''
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [itemName, setItemName] = useState('')
+  const apparatusId = searchParams.get('apparatus_id') ?? ''
+  const [items, setItems] = useState<CardItem[]>([])
+  const [groupLabel, setGroupLabel] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [format, setFormat] = useState<Format>('avery5163')
@@ -130,17 +135,50 @@ function BatchContent() {
   const [leftOffset, setLeftOffset] = useState(0) // extra inches added to base left margin
 
   useEffect(() => {
+    if (type === 'compartment') {
+      if (!apparatusId) { setError('No apparatus specified.'); setLoading(false); return }
+      fetch(`/api/compartments-for-apparatus?apparatus_id=${encodeURIComponent(apparatusId)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { setError(data.error); return }
+          setItems(data.compartments.map((c: { id: string; qr_code: string; compartment_code: string; compartment_name: string }) => ({
+            id: c.id, code: c.qr_code, primary: c.compartment_code, secondary: c.compartment_name || null,
+          })))
+          setGroupLabel(`${data.unit_number} — Compartments`)
+        })
+        .catch(() => setError('Failed to load compartments.'))
+        .finally(() => setLoading(false))
+      return
+    }
+
+    if (type === 'apparatus') {
+      if (!apparatusId) { setError('No apparatus specified.'); setLoading(false); return }
+      fetch(`/api/apparatus-qr?apparatus_id=${encodeURIComponent(apparatusId)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) { setError(data.error); return }
+          const a = data.apparatus
+          setItems([{ id: a.id, code: a.qr_code, primary: a.unit_number, secondary: a.apparatus_name || null }])
+          setGroupLabel('Apparatus')
+        })
+        .catch(() => setError('Failed to load apparatus.'))
+        .finally(() => setLoading(false))
+      return
+    }
+
     if (!itemId) { setError('No item specified.'); setLoading(false); return }
     fetch(`/api/assets-for-item?item_id=${encodeURIComponent(itemId)}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) { setError(data.error); return }
-        setAssets(data.assets)
-        setItemName(data.item_name)
+        setItems(data.assets.map((a: { id: string; asset_tag: string; serial_number: string | null }) => ({
+          id: a.id, code: a.asset_tag, primary: a.asset_tag, secondary: a.serial_number,
+        })))
+        setGroupLabel(data.item_name)
       })
       .catch(() => setError('Failed to load assets.'))
       .finally(() => setLoading(false))
-  }, [itemId])
+  }, [type, itemId, apparatusId])
 
   // Reset offsets when format changes
   function changeFormat(f: Format) {
@@ -157,10 +195,14 @@ function BatchContent() {
     )
   }
 
-  if (error || assets.length === 0) {
+  const emptyMessage = type === 'compartment' ? 'No active compartments with QR codes found for this apparatus.'
+    : type === 'apparatus' ? 'No QR code found for this apparatus.'
+    : 'No active assets found for this item.'
+
+  if (error || items.length === 0) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-        <p style={{ color: '#ef4444' }}>{error || 'No active assets found for this item.'}</p>
+        <p style={{ color: '#ef4444' }}>{error || emptyMessage}</p>
       </div>
     )
   }
@@ -182,7 +224,7 @@ function BatchContent() {
         display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
       }}>
         <span style={{ color: '#fff', fontFamily: 'sans-serif', fontSize: '13px', fontWeight: 600 }}>
-          {itemName} ({assets.length})
+          {groupLabel} ({items.length})
         </span>
 
         {/* Format buttons */}
@@ -249,8 +291,8 @@ function BatchContent() {
       }}>
         {format === 'sheet' && (
           <div style={{ marginBottom: '0.25in', borderBottom: '1px solid #e4e4e7', paddingBottom: '0.1in', paddingRight: '0.5in' }}>
-            <p style={{ fontSize: '15px', fontWeight: 700, color: '#18181b', margin: 0 }}>{itemName}</p>
-            <p style={{ fontSize: '10px', color: '#71717a', margin: '2px 0 0' }}>{assets.length} asset{assets.length !== 1 ? 's' : ''}</p>
+            <p style={{ fontSize: '15px', fontWeight: 700, color: '#18181b', margin: 0 }}>{groupLabel}</p>
+            <p style={{ fontSize: '10px', color: '#71717a', margin: '2px 0 0' }}>{items.length} item{items.length !== 1 ? 's' : ''}</p>
           </div>
         )}
         <div style={{
@@ -259,11 +301,12 @@ function BatchContent() {
           columnGap: fmt.colGap,
           rowGap: fmt.rowGap,
         }}>
-          {assets.map(asset => (
-            <AssetCard
-              key={asset.id}
-              asset={asset}
-              itemName={itemName}
+          {items.map(item => (
+            <QrCard
+              key={item.id}
+              item={item}
+              type={type}
+              groupLabel={groupLabel}
               qrSize={fmt.qrSize}
               cardStyle={fmt.cardStyle}
               isRow={isRow}

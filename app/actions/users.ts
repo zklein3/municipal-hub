@@ -259,6 +259,12 @@ export async function sysAdminReactivateUser(personnelId: string) {
 
 // ─── Sys Admin: Create Dept Admin ─────────────────────────────────────────────
 export async function createDeptAdmin(formData: FormData) {
+  try {
+    await assertSysAdmin()
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Unauthorized.' }
+  }
+
   const email = formData.get('email') as string
   const department_id = formData.get('department_id') as string
   const first_name = (formData.get('first_name') as string)?.trim() || ''

@@ -254,7 +254,7 @@ export async function recordPAR(boardId: string, snapshot: { lane_name: string; 
   return { success: true }
 }
 
-export async function saveDebugScan(rawValue: string) {
+export async function saveDebugScan(rawValue: string, source: string = 'accountability') {
   const adminClient = createAdminClient()
   // Escape control chars so Postgres accepts the string
   const sanitized = Array.from(rawValue).map(c => {
@@ -264,6 +264,6 @@ export async function saveDebugScan(rawValue: string) {
     }
     return c
   }).join('')
-  await adminClient.from('qr_debug_scans').insert({ raw_value: sanitized })
+  await adminClient.from('qr_debug_scans').insert({ raw_value: sanitized, source })
   return { success: true }
 }
