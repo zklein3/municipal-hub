@@ -403,15 +403,19 @@ Same model as pump tests (NFPA 1911). Date, vendor, pass/fail, document upload p
 Only relevant for depts with aerial apparatus — skip until needed.
 Key files when building: `apparatus_pump_tests` pattern, `app/actions/iso.ts`, apparatus detail page.
 
-### 9. Pending Email Tasks — Domain transfer initiated 2026-06-01
+### 9. Email / Resend — DONE except welcome email ✅ (2026-07-10)
 
-`fireops7.com` transfer from Wix to Vercel initiated 2026-06-01. Auth code: `O;JiG{mp%#3u`. Waiting for Wix approval email → once transfer completes, verify domain in Resend, then wire up email tasks below.
+`fireops7.com` transfer + Resend verification complete (verified 2026-06-07). Permit approval email (`send-permit-approval` Edge Function) and landing page contact form (`app/actions/contact.ts`) both live.
 
-**When domain is ready:**
-1. **Permit Approval Email** — swap `logEvent` in `updateBurnPermitStatus` for `send-permit-approval` Edge Function.
-2. **Landing Page Contact Form** — `app/actions/contact.ts` currently writes to `system_logs` (`log_type: contact_request`). Add Resend `fetch` call to email `zklein3@gmail.com`. Use `from: 'FireOps7 <noreply@fireops7.com>'`, `reply_to: submitter email`. See `RequestAccessModal.tsx`.
-3. **New Member Welcome Email** — not yet built. Send when a dept admin creates a new personnel record / invite.
-4. **Resend setup steps:** Verify `fireops7.com` in Resend dashboard → add DNS records → set `from` addresses → install `resend` npm package or keep using raw `fetch` to `https://api.resend.com/emails`.
+`municipal-hub.com` (MuniOps parent brand, DNS via Vercel Domains) is **not** verified in Resend — plan only includes 1 domain, upgrade costs money not budgeted right now. Decision: leave it. Contact form (`RequestAccessModal` on `/` and `/fire`) sends from `noreply@fireops7.com` for both sources, but subject/body brand text (MuniOps vs FireOps7) is now correct per source page via a `source` hidden field — no Resend plan change needed for that fix. Revisit verifying `municipal-hub.com` only if/when upgrading Resend.
+
+**New Member Welcome Email — SHIPPED ✅ (2026-07-10)**
+- `createDeptMember` / `createDeptAdmin` (`app/actions/users.ts`) each take a `send_welcome_email` checkbox (default checked) plus optional `first_name`/`last_name` on the Add Personnel / Add Dept Admin forms.
+- Checked → generates a random 10-char temp password (`generateTempPassword()`) and emails it inline via Resend (`sendWelcomeEmail()`, same `noreply@fireops7.com` sender as other transactional email — brand text and login link vary by `department_type` via `getDeptBrandName()` / `getLoginPath()`: fire→`/fire/login`, law_enforcement→`/police/login`, public_works→`/public-works/login`, else→`/login`).
+- Unchecked → uses the fixed `Hello1!` password, no email sent — intended for test/demo account creation.
+- Removed the old dead `adminClient.functions.invoke('send-welcome-email', ...)` call (that Edge Function was never built); implementation is inline in `users.ts`, not a separate Edge Function.
+- If the email send fails (or is skipped), the action returns `tempPassword` so the UI shows it on-screen for the admin to relay manually instead of it disappearing.
+- **Known unresolved:** brand naming still disagrees between `lib/department-theme.ts` (`PoliceOps`/`MuniOps`, red/navy binary) and the marketing/login pages (`LawOps`/`CivicOps`, red/blue/green) — the welcome email currently follows `department-theme.ts` naming. Not yet decided which is canonical; revisit when picking one.
 
 ### 9a. Public Records Requests — Reconsider Removing from Public Site ⬅ PINNED FOR LATER
 Most small departments aren't actually set up to handle public records requests this way (no formal process). Don't remove yet — wait and see whether any department gets real submissions through `/dept/[slug]/records` (`public_record_requests` table) before deciding whether to pull the "Request Records" card from the public site.

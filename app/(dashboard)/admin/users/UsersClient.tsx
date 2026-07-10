@@ -112,7 +112,11 @@ export default function UsersClient({ departments, users }: { departments: Depar
     if (result?.error) {
       setError(result.error)
     } else {
-      setSuccess('Department admin created. They can log in with the temporary password.')
+      setSuccess(
+        result?.emailSent
+          ? 'Department admin created. A welcome email with login instructions was sent.'
+          : `Department admin created. Temporary password: ${result?.tempPassword ?? 'Hello1!'} — share this with them directly.`
+      )
       setShowForm(false)
     }
     setLoading(false)
@@ -163,38 +167,59 @@ export default function UsersClient({ departments, users }: { departments: Depar
         <div className="mb-6 rounded-xl bg-white p-6 shadow-sm border border-zinc-200">
           <h2 className="text-base font-semibold text-zinc-900 mb-1">Add Department Admin</h2>
           <p className="text-xs text-zinc-500 mb-4">
-            The user will be created with a temporary password of <span className="font-mono font-semibold">Hello1!</span> and will be required to change it on first login.
+            A temporary password is generated and must be changed on first login.
           </p>
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>
           )}
-          <form action={handleCreate} className="flex flex-col sm:flex-row gap-4 sm:items-end sm:flex-wrap">
-            <div className="flex-1 sm:min-w-48">
-              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="email">
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <input id="email" name="email" type="email" required
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                placeholder="admin@department.com" />
+          <form action={handleCreate} className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 sm:items-end sm:flex-wrap">
+              <div className="flex-1 sm:min-w-40">
+                <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="first_name">First Name</label>
+                <input id="first_name" name="first_name" type="text" placeholder="Optional"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
+              <div className="flex-1 sm:min-w-40">
+                <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="last_name">Last Name</label>
+                <input id="last_name" name="last_name" type="text" placeholder="Optional"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+              </div>
             </div>
-            <div className="w-full sm:w-64">
-              <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="department_id">
-                Department <span className="text-red-500">*</span>
-              </label>
-              <select id="department_id" name="department_id" required
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                <option value="">Select department...</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}{dept.code ? ` (${dept.code})` : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col sm:flex-row gap-4 sm:items-end sm:flex-wrap">
+              <div className="flex-1 sm:min-w-48">
+                <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="email">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input id="email" name="email" type="email" required
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  placeholder="admin@department.com" />
+              </div>
+              <div className="w-full sm:w-64">
+                <label className="mb-1 block text-sm font-medium text-zinc-700" htmlFor="department_id">
+                  Department <span className="text-red-500">*</span>
+                </label>
+                <select id="department_id" name="department_id" required
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                  <option value="">Select department...</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}{dept.code ? ` (${dept.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full sm:w-auto rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
+                {loading ? 'Creating...' : 'Create'}
+              </button>
             </div>
-            <button type="submit" disabled={loading}
-              className="w-full sm:w-auto rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
-              {loading ? 'Creating...' : 'Create'}
-            </button>
+            <label className="flex items-start gap-2 text-sm text-zinc-700">
+              <input type="checkbox" name="send_welcome_email" value="true" defaultChecked className="mt-0.5" />
+              <span>
+                Send welcome email with a random temporary password
+                <span className="block text-xs text-zinc-500">Uncheck for test/demo accounts — uses the default password Hello1! and sends no email.</span>
+              </span>
+            </label>
           </form>
         </div>
       )}

@@ -7,6 +7,8 @@ export async function submitContactRequest(formData: FormData) {
   const department = (formData.get('department') as string)?.trim()
   const email = (formData.get('email') as string)?.trim()
   const phone = (formData.get('phone') as string)?.trim()
+  const source = (formData.get('source') as string) === 'fire' ? 'fire' : 'muniops'
+  const brand = source === 'fire' ? 'FireOps7' : 'MuniOps'
 
   if (!name || !department || !email) {
     return { error: 'Name, department, and email are required.' }
@@ -29,7 +31,7 @@ export async function submitContactRequest(formData: FormData) {
   if (resendKey) {
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
-        <h2 style="color:#b91c1c">New Access Request — FireOps7</h2>
+        <h2 style="color:#b91c1c">New Access Request — ${brand}</h2>
         <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin:16px 0">
           <p style="margin:4px 0"><strong>Name:</strong> ${name}</p>
           <p style="margin:4px 0"><strong>Department:</strong> ${department}</p>
@@ -43,10 +45,10 @@ export async function submitContactRequest(formData: FormData) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'FireOps7 <noreply@fireops7.com>',
+        from: `${brand} <noreply@fireops7.com>`,
         to: 'zklein3@gmail.com',
         reply_to: email,
-        subject: `New Access Request — ${department}`,
+        subject: `New Access Request (${brand}) — ${department}`,
         html,
       }),
     })

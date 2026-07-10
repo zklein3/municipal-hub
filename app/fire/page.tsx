@@ -116,7 +116,7 @@ export default async function FireOps7Landing() {
           >
             Sign In to Your Department
           </Link>
-          <RequestAccessModal />
+          <RequestAccessModal source="fire" />
         </div>
       </section>
 

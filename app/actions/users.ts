@@ -1,12 +1,85 @@
 'use server'
 
+import crypto from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
+import { getDeptBrandName } from '@/lib/department-theme'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 const TEMP_PASSWORD = 'Hello1!'
+
+const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+
+function generateTempPassword(): string {
+  let pw = ''
+  for (let i = 0; i < 10; i++) pw += PASSWORD_CHARS[crypto.randomInt(PASSWORD_CHARS.length)]
+  return `${pw}!`
+}
+
+function getLoginPath(departmentType: string): string {
+  switch (departmentType) {
+    case 'law_enforcement': return '/police/login'
+    case 'public_works': return '/public-works/login'
+    case 'fire': return '/fire/login'
+    default: return '/login'
+  }
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// ─── Send New-Member Welcome Email ────────────────────────────────────────────
+async function sendWelcomeEmail({
+  email, firstName, departmentName, departmentType, tempPassword,
+}: {
+  email: string
+  firstName: string
+  departmentName: string
+  departmentType: string
+  tempPassword: string
+}): Promise<{ error?: string }> {
+  const resendKey = process.env.RESEND_API_KEY
+  if (!resendKey) return { error: 'Email sending is not configured.' }
+
+  const brand = getDeptBrandName(departmentType)
+  const accentColor = departmentType === 'fire' ? '#b91c1c' : '#1e3a8a'
+  const loginUrl = `https://www.fireops7.com${getLoginPath(departmentType)}`
+  const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi,'
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+      <h2 style="color:${accentColor}">Welcome to ${brand}</h2>
+      <p>${greeting}</p>
+      <p>An account has been created for you at <strong>${escapeHtml(departmentName)}</strong>.</p>
+      <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin:16px 0">
+        <p style="margin:4px 0"><strong>Email:</strong> ${escapeHtml(email)}</p>
+        <p style="margin:4px 0"><strong>Temporary password:</strong> ${tempPassword}</p>
+      </div>
+      <p>Log in below — you'll be asked to set your own password right away.</p>
+      <p style="margin-top:20px">
+        <a href="${loginUrl}" style="background:${accentColor};color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Log In</a>
+      </p>
+      <p style="margin-top:24px;color:#888;font-size:12px">If you weren't expecting this, contact your department administrator.</p>
+    </div>
+  `
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `${brand} <noreply@fireops7.com>`,
+      to: email,
+      subject: `Welcome to ${brand} — ${departmentName}`,
+      html,
+    }),
+  })
+
+  if (!emailRes.ok) return { error: await emailRes.text() }
+  return {}
+}
 
 // ─── Sys Admin Guard ──────────────────────────────────────────────────────────
 async function assertSysAdmin() {
@@ -188,6 +261,9 @@ export async function sysAdminReactivateUser(personnelId: string) {
 export async function createDeptAdmin(formData: FormData) {
   const email = formData.get('email') as string
   const department_id = formData.get('department_id') as string
+  const first_name = (formData.get('first_name') as string)?.trim() || ''
+  const last_name = (formData.get('last_name') as string)?.trim() || ''
+  const sendWelcome = formData.get('send_welcome_email') === 'true'
 
   if (!email || !department_id) return { error: 'Email and department are required.' }
 
@@ -202,9 +278,17 @@ export async function createDeptAdmin(formData: FormData) {
 
   if (existing) return { error: 'A user with this email already exists.' }
 
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name, department_type')
+    .eq('id', department_id)
+    .single()
+
+  const password = sendWelcome ? generateTempPassword() : TEMP_PASSWORD
+
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: TEMP_PASSWORD,
+    password,
     email_confirm: true,
   })
 
@@ -215,7 +299,7 @@ export async function createDeptAdmin(formData: FormData) {
 
   const { data: personnel, error: personnelError } = await adminClient
     .from('personnel')
-    .insert({ email, first_name: '', last_name: '', auth_user_id: authData.user.id, signup_status: 'temp_password', is_sys_admin: false })
+    .insert({ email, first_name, last_name, auth_user_id: authData.user.id, signup_status: 'temp_password', is_sys_admin: false })
     .select('id')
     .single()
 
@@ -233,13 +317,17 @@ export async function createDeptAdmin(formData: FormData) {
     return { error: deptError.message }
   }
 
-  const { error: emailErr } = await adminClient.functions.invoke('send-welcome-email', {
-    body: { personnel_id: personnel.id },
-  })
-  if (emailErr) await logError(emailErr, '/admin/users', { metadata: { email, report_type: 'welcome_email' } })
+  let emailSent = false
+  if (sendWelcome && dept) {
+    const { error: emailErr } = await sendWelcomeEmail({
+      email, firstName: first_name, departmentName: dept.name, departmentType: dept.department_type, tempPassword: password,
+    })
+    if (emailErr) await logError(emailErr, '/admin/users', { metadata: { email, report_type: 'welcome_email' } })
+    else emailSent = true
+  }
 
   revalidatePath('/admin/users')
-  return { success: true }
+  return { success: true, emailSent, tempPassword: emailSent ? undefined : password }
 }
 
 // ─── Dept Admin: Create Any Department User ───────────────────────────────────
@@ -249,6 +337,9 @@ export async function createDeptMember(formData: FormData) {
   const role_id = formData.get('role_id') as string
   const employee_number = formData.get('employee_number') as string
   const hire_date = formData.get('hire_date') as string
+  const first_name = (formData.get('first_name') as string)?.trim() || ''
+  const last_name = (formData.get('last_name') as string)?.trim() || ''
+  const sendWelcome = formData.get('send_welcome_email') === 'true'
 
   if (!email || !system_role) return { error: 'Email and access level are required.' }
 
@@ -275,9 +366,11 @@ export async function createDeptMember(formData: FormData) {
 
   if (existing) return { error: 'A user with this email already exists.' }
 
+  const password = sendWelcome ? generateTempPassword() : TEMP_PASSWORD
+
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: TEMP_PASSWORD,
+    password,
     email_confirm: true,
   })
 
@@ -288,7 +381,7 @@ export async function createDeptMember(formData: FormData) {
 
   const { data: personnel, error: personnelError } = await adminClient
     .from('personnel')
-    .insert({ email, first_name: '', last_name: '', auth_user_id: authData.user.id, signup_status: 'temp_password', is_sys_admin: false })
+    .insert({ email, first_name, last_name, auth_user_id: authData.user.id, signup_status: 'temp_password', is_sys_admin: false })
     .select('id')
     .single()
 
@@ -315,12 +408,16 @@ export async function createDeptMember(formData: FormData) {
     return { error: deptError.message }
   }
 
-  const { error: emailErr } = await adminClient.functions.invoke('send-welcome-email', {
-    body: { personnel_id: personnel.id },
-  })
-  if (emailErr) await logError(emailErr, '/dept-admin/personnel', { metadata: { email, report_type: 'welcome_email' } })
+  let emailSent = false
+  if (sendWelcome) {
+    const { error: emailErr } = await sendWelcomeEmail({
+      email, firstName: first_name, departmentName: ctx.departmentName ?? 'your department', departmentType: ctx.departmentType, tempPassword: password,
+    })
+    if (emailErr) await logError(emailErr, '/dept-admin/personnel', { metadata: { email, report_type: 'welcome_email' } })
+    else emailSent = true
+  }
 
   revalidatePath('/dept-admin/personnel')
   revalidatePath('/dept-admin/setup')
-  return { success: true }
+  return { success: true, emailSent, tempPassword: emailSent ? undefined : password }
 }

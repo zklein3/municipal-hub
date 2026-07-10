@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { submitContactRequest } from '@/app/actions/contact'
 
-export default function RequestAccessModal() {
+export default function RequestAccessModal({ source = 'muniops' }: { source?: 'muniops' | 'fire' }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +88,8 @@ export default function RequestAccessModal() {
                     {error}
                   </div>
                 )}
+
+                <input type="hidden" name="source" value={source} />
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-zinc-300">Name <span className="text-red-500">*</span></label>
