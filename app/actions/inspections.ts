@@ -771,21 +771,6 @@ export async function resetVehicleCheckItemsToDefaults(department_id: string) {
   return { success: true }
 }
 
-// ─── Apparatus: Toggle air brakes ─────────────────────────────────────────────
-export async function updateApparatusAirBrakes(apparatus_id: string, has_air_brakes: boolean) {
-  const ctx = await getContext()
-  if (!ctx?.isAdmin) return { error: 'Only admins can update apparatus settings.' }
-  const adminClient = createAdminClient()
-  const { error: dbErr } = await adminClient
-    .from('apparatus')
-    .update({ has_air_brakes })
-    .eq('id', apparatus_id)
-  if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
-  revalidatePath('/apparatus')
-  revalidatePath(`/apparatus/${apparatus_id}`)
-  return { success: true }
-}
-
 // ─── Close Session (officer/admin) ────────────────────────────────────────────
 export async function closeInspectionSession(session_id: string) {
   const ctx = await getContext()

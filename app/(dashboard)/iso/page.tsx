@@ -5,7 +5,7 @@ import HubCard from '@/components/HubCard'
 export default async function IsoHubPage() {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (!ctx.departmentId || ctx.systemRole !== 'admin') redirect('/dashboard')
+  if (!ctx.departmentId || (ctx.systemRole !== 'admin' && ctx.systemRole !== 'officer' && !ctx.isSysAdmin)) redirect('/dashboard')
 
   return (
     <div>

@@ -586,6 +586,7 @@ export default function SysAdminDeptClient({
           moduleMedical={dept.module_medical}
           moduleFuelStorage={dept.module_fuel_storage}
           publicSiteEnabled={dept.public_site_enabled}
+          nerisEntityId={dept.neris_entity_id}
         />
       )}
     </div>

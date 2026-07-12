@@ -91,7 +91,7 @@ export default async function InboxPage({
 
   if (isOfficerOrAbove && department_id) {
     const [deptRes, permitsRes, recordsRes, feedbackRes] = await Promise.all([
-      adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions, module_medical').eq('id', department_id).single(),
+      adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions, module_medical, public_site_enabled').eq('id', department_id).single(),
       adminClient.from('burn_permits')
         .select('id, confirmation_code, contact_name, contact_email, contact_phone, burn_address, burn_date, burn_description, status, reviewer_notes, permit_expiry_date, issued_date, approved_by_personnel_id, officer_signed_at, applicant_signed_at, applicant_acknowledged_at, created_at')
         .eq('department_id', department_id).order('created_at', { ascending: false }),
@@ -214,8 +214,15 @@ export default async function InboxPage({
   }
 
   const moduleMedical = deptConfig?.module_medical ?? false
-  const validTabs = ['permits', 'records', 'signatures', 'feedback', ...(moduleMedical && isOfficerOrAbove ? ['restock'] : [])]
-  const initialTab = validTabs.includes(tab ?? '') ? tab! : (isOfficerOrAbove ? 'permits' : 'signatures')
+  const publicSiteEnabled = deptConfig?.public_site_enabled ?? false
+  const validTabs = [
+    'signatures', 'feedback',
+    ...(publicSiteEnabled && isOfficerOrAbove ? ['permits', 'records'] : []),
+    ...(moduleMedical && isOfficerOrAbove ? ['restock'] : []),
+  ]
+  const initialTab = validTabs.includes(tab ?? '')
+    ? tab!
+    : (publicSiteEnabled && isOfficerOrAbove ? 'permits' : 'signatures')
 
   return (
     <InboxClient
@@ -229,6 +236,7 @@ export default async function InboxPage({
       initialTab={initialTab as any}
       isOfficerOrAbove={isOfficerOrAbove}
       moduleMedical={moduleMedical}
+      publicSiteEnabled={publicSiteEnabled}
       deptName={deptConfig?.name ?? null}
       burnPermitCountyInfo={deptConfig?.burn_permit_county_info ?? null}
       burnPermitRestrictions={deptConfig?.burn_permit_restrictions ?? null}

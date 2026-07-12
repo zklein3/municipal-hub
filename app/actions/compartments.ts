@@ -53,11 +53,10 @@ export async function createCompartmentName(formData: FormData) {
   })
 
   if (error) {
-    await logError(error, '/dept-admin/compartments')
+    await logError(error, '/dept-admin/setup')
     return { error: error.message }
   }
 
-  revalidatePath('/dept-admin/compartments')
   revalidatePath('/dept-admin/setup')
   return { success: true }
 }
@@ -86,11 +85,10 @@ export async function updateCompartmentName(formData: FormData) {
   }).eq('id', id)
 
   if (error) {
-    await logError(error, '/dept-admin/compartments')
+    await logError(error, '/dept-admin/setup')
     return { error: error.message }
   }
 
-  revalidatePath('/dept-admin/compartments')
   revalidatePath('/apparatus')
   revalidatePath('/dept-admin/setup')
   return { success: true }
@@ -173,7 +171,7 @@ export async function bulkSetCompartmentApparatus(
     const { error } = await adminClient.from('apparatus_compartments').insert(
       toAdd.map(apparatus_id => ({ apparatus_id, compartment_name_id, active: true }))
     )
-    if (error) { await logError(error, '/dept-admin/compartments'); return { error: error.message } }
+    if (error) { await logError(error, '/dept-admin/setup'); return { error: error.message } }
   }
 
   if (toRemove.length > 0) {
@@ -181,10 +179,9 @@ export async function bulkSetCompartmentApparatus(
       .from('apparatus_compartments')
       .delete()
       .in('id', toRemove.map(r => r.id))
-    if (error) { await logError(error, '/dept-admin/compartments'); return { error: error.message } }
+    if (error) { await logError(error, '/dept-admin/setup'); return { error: error.message } }
   }
 
-  revalidatePath('/dept-admin/compartments')
   revalidatePath('/apparatus')
   revalidatePath('/dept-admin/setup')
   const allAffected = new Set([...toAdd, ...toRemove.map(r => r.apparatus_id)])

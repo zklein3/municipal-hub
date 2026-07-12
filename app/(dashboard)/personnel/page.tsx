@@ -162,12 +162,14 @@ export default async function PersonnelPage() {
               {empNum && <span className="text-zinc-400">#{empNum}</span>}
             </div>
 
-            <Link
-              href={`/personnel/${personnelId}`}
-              className="mt-auto text-xs font-semibold text-red-600 hover:text-red-800"
-            >
-              View Profile →
-            </Link>
+            {isOfficerOrAbove && (
+              <Link
+                href={`/personnel/${personnelId}`}
+                className="mt-auto text-xs font-semibold text-red-600 hover:text-red-800"
+              >
+                View Profile →
+              </Link>
+            )}
           </div>
         ))}
       </div>

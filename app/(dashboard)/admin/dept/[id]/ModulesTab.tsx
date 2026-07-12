@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updateDepartmentModules } from '@/app/actions/departments'
+import { updateDepartmentModules, saveNerisEntityId } from '@/app/actions/departments'
 
 interface Bundle {
   key: 'module_operations' | 'module_iso' | 'module_neris' | 'module_medical' | 'module_fuel_storage' | 'public_site_enabled'
@@ -19,6 +19,7 @@ export default function ModulesTab({
   moduleMedical,
   moduleFuelStorage,
   publicSiteEnabled,
+  nerisEntityId,
 }: {
   departmentId: string
   moduleOperations: boolean
@@ -27,6 +28,7 @@ export default function ModulesTab({
   moduleMedical: boolean
   moduleFuelStorage: boolean
   publicSiteEnabled: boolean
+  nerisEntityId: string | null
 }) {
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +40,9 @@ export default function ModulesTab({
     module_fuel_storage: moduleFuelStorage,
     public_site_enabled: publicSiteEnabled,
   })
+  const [entityId, setEntityId] = useState(nerisEntityId ?? '')
+  const [savingEntityId, setSavingEntityId] = useState(false)
+  const [entityIdSaved, setEntityIdSaved] = useState(false)
 
   async function handleToggle(key: Bundle['key']) {
     setSaving(key)
@@ -50,6 +55,20 @@ export default function ModulesTab({
       setState(prev => ({ ...prev, [key]: newValue }))
     }
     setSaving(null)
+  }
+
+  async function handleSaveEntityId() {
+    setSavingEntityId(true)
+    setError(null)
+    setEntityIdSaved(false)
+    const result = await saveNerisEntityId(departmentId, entityId.trim())
+    if (result?.error) {
+      setError(result.error)
+    } else {
+      setEntityIdSaved(true)
+      setTimeout(() => setEntityIdSaved(false), 2500)
+    }
+    setSavingEntityId(false)
   }
 
   const bundles: Bundle[] = [
@@ -166,6 +185,29 @@ export default function ModulesTab({
               </button>
             </div>
           </div>
+          {bundle.key === 'module_neris' && (
+            <div className="mt-4 pt-4 border-t border-zinc-100">
+              <label className="block text-xs font-medium text-zinc-600 mb-1">NERIS Entity ID (FDID)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={entityId}
+                  onChange={e => setEntityId(e.target.value)}
+                  placeholder="e.g. FD12345678"
+                  className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+                <button
+                  onClick={handleSaveEntityId}
+                  disabled={savingEntityId}
+                  className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 transition-colors"
+                >
+                  {savingEntityId ? 'Saving…' : 'Save'}
+                </button>
+                {entityIdSaved && <span className="text-xs font-medium text-green-600">✓ Saved</span>}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">Required before this department can submit to NERIS.</p>
+            </div>
+          )}
         </div>
       ))}
     </div>

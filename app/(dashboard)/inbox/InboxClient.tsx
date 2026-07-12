@@ -58,6 +58,7 @@ export default function InboxClient({
   initialTab,
   isOfficerOrAbove,
   moduleMedical,
+  publicSiteEnabled,
   deptName,
   burnPermitCountyInfo,
   burnPermitRestrictions,
@@ -73,6 +74,7 @@ export default function InboxClient({
   initialTab: Tab
   isOfficerOrAbove: boolean
   moduleMedical: boolean
+  publicSiteEnabled: boolean
   deptName: string | null
   burnPermitCountyInfo: string | null
   burnPermitRestrictions: string | null
@@ -126,36 +128,40 @@ export default function InboxClient({
         {/* Officer+ tabs */}
         {isOfficerOrAbove && (
           <>
-            <button
-              onClick={() => setTab('permits')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                tab === 'permits' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
-              }`}
-            >
-              Burn Permits
-              {pendingPermits > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-                  tab === 'permits' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
-                }`}>
-                  {pendingPermits}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setTab('records')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                tab === 'records' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
-              }`}
-            >
-              Records Requests
-              {pendingRequests > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
-                  tab === 'records' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
-                }`}>
-                  {pendingRequests}
-                </span>
-              )}
-            </button>
+            {publicSiteEnabled && (
+              <>
+                <button
+                  onClick={() => setTab('permits')}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    tab === 'permits' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+                  }`}
+                >
+                  Burn Permits
+                  {pendingPermits > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                      tab === 'permits' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {pendingPermits}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setTab('records')}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    tab === 'records' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+                  }`}
+                >
+                  Records Requests
+                  {pendingRequests > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                      tab === 'records' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {pendingRequests}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
             <button
               onClick={() => setTab('feedback')}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
