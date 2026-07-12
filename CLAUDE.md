@@ -74,6 +74,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ k
 - Start: `npm run dev` | Build: `npm run build` (always before pushing)
 - `git add . && git commit -m "message" && git push`
 
+## Browser Testing (Playwright) — added 2026-07-12
+Claude can drive the actual app in a real headless browser — log in, click through pages, screenshot, read console errors — instead of only reading source. Used for navigation/UX audits (see `audit_session6_navigation.md`) where the bug only shows up by actually clicking a link and seeing where it lands.
+
+**Setup (one-time, already done):** `playwright` is a real `devDependency` (not ad hoc) + Chromium binary installed via `npx playwright install chromium`. Both persist across sessions on this machine — no reinstall needed unless `node_modules` gets wiped.
+
+**Reusable driver:** `scripts/playwright-drive.mjs` — exports `launch()`, `login(page, email, password, profile?)`, `shot(page, name)`, `BASE`. Handles the temp-password → change-password → profile-setup chain automatically (sets a new password `AuditWalk2026!` if it hits `/change-password`, fills blank first/last name if it hits `/profile-setup`). Write throwaway walkthrough scripts that import this rather than re-deriving login/screenshot logic each time — keep the one-off scripts local (not committed), only the driver is a real project asset.
+
+**Known gotchas, all handled by the driver's `settle()` helper — don't re-debug these:**
+- **Turbopack dev shows a "Compiling…" badge** while lazily building a route on first hit — can take 30s+ for heavy pages (dashboard, etc). A short fixed sleep produces false "stuck on this page" failures; `settle()` polls for the badge to disappear (60s timeout) instead.
+- **Dev server port varies** (3000/3001/3002) depending on what else is running — check `npm run dev`'s actual output, don't assume 3000. Set `PW_BASE_URL` env var if it's not 3000.
+- **"An unexpected response was received from the server"** on a Server Action submit (login, etc.) — this is a stale action-ID from Turbopack HMR after editing a file mid-session, not an app bug. Fix: kill *all* stray `next dev` processes (Windows: `nohup npm run dev &` backgrounds the **npm** PID, not the actual Next.js child — `kill $npm_pid` doesn't touch it; use `taskkill //PID <actual-pid> //F`, the actual PID is printed in the "Another next dev server is already running" error) and start one clean instance. If it happens on an account that worked moments ago on a fresh browser context, it's this — not a login/credentials bug.
+- **Test accounts' passwords get changed** by walking through the temp-password flow — `sysAdminForcePasswordReset` (`/admin/users`) resets an account back to `Hello1!` if needed for the next session.
+
 ## Test Accounts
 - `zklein3@outlook.com` — sys admin | `test.winfire@fireops7.com` — Winslow admin
 - `member.winfire@fireops7.com` — Winslow member | `test.admin@fireops7.com` — Fremont admin

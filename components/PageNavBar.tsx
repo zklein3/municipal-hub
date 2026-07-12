@@ -18,8 +18,6 @@ function getParentHub(pathname: string): { label: string; href: string } | null 
     pathname.startsWith('/incidents') ||
     pathname.startsWith('/announcements') ||
     pathname.startsWith('/accountability') ||
-    pathname === '/fuel' ||
-    pathname.startsWith('/fuel') ||
     pathname === '/inbox'
   ) return { label: 'Operations', href: '/operations' }
 
@@ -28,7 +26,7 @@ function getParentHub(pathname: string): { label: string; href: string } | null 
     return { label: 'Training', href: '/training' }
 
   // Inventory sub-pages
-  if (pathname.startsWith('/equipment') || pathname.startsWith('/inspections'))
+  if (pathname.startsWith('/equipment') || pathname.startsWith('/inspections') || pathname.startsWith('/fuel'))
     return { label: 'Inventory', href: '/equipment' }
 
   // Personnel sub-pages
