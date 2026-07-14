@@ -510,6 +510,11 @@ export default function EventsAdminClient({
                           {editingId === event.id ? 'Cancel Edit' : 'Edit'}
                         </button>
                       )}
+                      <button
+                        onClick={() => window.open(`/print/event-run-sheet?id=${event.id}`, '_blank')}
+                        className="text-xs text-zinc-400 hover:text-zinc-700">
+                        Print Run Sheet
+                      </button>
                       {!cancelled && !completed && (
                         <button onClick={() => handleCancel(event.id)} className="text-xs text-zinc-400 hover:text-red-600">
                           Cancel
