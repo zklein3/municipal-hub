@@ -356,13 +356,16 @@ export async function createDeptMember(formData: FormData) {
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) return { error: 'Session expired.' }
-  if (!ctx.departmentId) return { error: 'Could not verify your department.' }
 
   if (ctx.systemRole !== 'admin' && ctx.systemRole !== 'officer' && !ctx.isSysAdmin) {
     return { error: 'You do not have permission to add personnel.' }
   }
 
-  const department_id = ctx.departmentId
+  // Sys admin has no department_personnel row of their own, so their department comes
+  // from the form (SysAdminDeptClient passes it explicitly); everyone else's comes from
+  // their own session context, which can't be spoofed via the form.
+  const department_id = ctx.isSysAdmin ? (formData.get('department_id') as string | null) : ctx.departmentId
+  if (!department_id) return { error: 'Could not verify your department.' }
 
   const { data: existing } = await adminClient
     .from('personnel')
