@@ -282,7 +282,33 @@ export async function createDeptAdmin(formData: FormData) {
     .eq('email', email)
     .single()
 
-  if (existing) return { error: 'A user with this email already exists.' }
+  // A person can belong to more than one department — link the existing account
+  // instead of blocking, unless they're already in this exact department.
+  if (existing) {
+    const { data: existingLink } = await adminClient
+      .from('department_personnel')
+      .select('id')
+      .eq('personnel_id', existing.id)
+      .eq('department_id', department_id)
+      .single()
+
+    if (existingLink) {
+      await logError('Attempted to add existing member who is already part of this department', '/admin/users', { metadata: { email, department_id } })
+      return { error: 'This person is already part of this department.' }
+    }
+
+    const { error: linkError } = await adminClient
+      .from('department_personnel')
+      .insert({ personnel_id: existing.id, department_id, system_role: 'admin', signup_status: 'active', active: true })
+
+    if (linkError) {
+      await logError(linkError, '/admin/users', { metadata: { email, department_id } })
+      return { error: linkError.message }
+    }
+
+    revalidatePath('/admin/users')
+    return { success: true, existingUser: true }
+  }
 
   const { data: dept } = await adminClient
     .from('departments')
@@ -373,7 +399,44 @@ export async function createDeptMember(formData: FormData) {
     .eq('email', email)
     .single()
 
-  if (existing) return { error: 'A user with this email already exists.' }
+  // A person can belong to more than one department (e.g. a member who's also an
+  // officer at a neighboring department) — link the existing account instead of
+  // blocking, unless they're already in this exact department.
+  if (existing) {
+    const { data: existingLink } = await adminClient
+      .from('department_personnel')
+      .select('id')
+      .eq('personnel_id', existing.id)
+      .eq('department_id', department_id)
+      .single()
+
+    if (existingLink) {
+      await logError('Attempted to add existing member who is already part of this department', '/dept-admin/personnel', { metadata: { email, department_id } })
+      return { error: 'This person is already part of this department.' }
+    }
+
+    const { error: linkError } = await adminClient
+      .from('department_personnel')
+      .insert({
+        personnel_id: existing.id,
+        department_id,
+        system_role,
+        role_id: role_id || null,
+        employee_number: employee_number || null,
+        hire_date: hire_date || null,
+        signup_status: 'active',
+        active: true,
+      })
+
+    if (linkError) {
+      await logError(linkError, '/dept-admin/personnel', { metadata: { email, department_id } })
+      return { error: linkError.message }
+    }
+
+    revalidatePath('/dept-admin/personnel')
+    revalidatePath('/dept-admin/setup')
+    return { success: true, existingUser: true }
+  }
 
   const password = sendWelcome ? generateTempPassword() : TEMP_PASSWORD
 
