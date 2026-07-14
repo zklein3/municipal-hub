@@ -169,7 +169,7 @@ export async function submitUserReport(formData: FormData) {
       personnel_id: me?.id ?? null,
     })
 
-  if (error) return { error: 'Failed to submit report. Please try again.' }
+  if (error) { await logError(error.message, page || 'unknown', { personnel_id: me?.id, metadata: { report_type } }); return { error: 'Failed to submit report. Please try again.' } }
 
   return { success: true }
 }

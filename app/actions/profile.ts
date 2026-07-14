@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { logError } from '@/lib/logger'
 
 export async function saveProfile(formData: FormData) {
   const supabase = await createClient()
@@ -43,7 +44,7 @@ export async function saveProfile(formData: FormData) {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/profile-setup', { metadata: { auth_user_id: user.id } }); return { error: error.message } }
 
   // Update department_personnel status to active
   if (personnel) {

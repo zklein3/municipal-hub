@@ -480,14 +480,14 @@ export async function savePermitApplicantSignature(formData: FormData) {
   const { error: uploadErr } = await adminClient.storage
     .from('signatures')
     .upload(path, blob, { contentType: 'image/png', upsert: true })
-  if (uploadErr) return { error: uploadErr.message }
+  if (uploadErr) { await logError(uploadErr, '/dept/burn-permit', { metadata: { permit_id: permit.id } }); return { error: uploadErr.message } }
 
   const signed_at = new Date().toISOString()
   const { error: dbErr } = await adminClient
     .from('burn_permits')
     .update({ applicant_signature_url: path, applicant_signed_at: signed_at })
     .eq('id', permit.id)
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr, '/dept/burn-permit', { metadata: { permit_id: permit.id } }); return { error: dbErr.message } }
 
   return { success: true, signedAt: signed_at }
 }
@@ -515,7 +515,7 @@ export async function acknowledgePermitPrintAndSign(formData: FormData) {
     .from('burn_permits')
     .update({ applicant_acknowledged_at: new Date().toISOString() })
     .eq('id', permit.id)
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr, '/dept/burn-permit', { metadata: { permit_id: permit.id } }); return { error: dbErr.message } }
 
   return { success: true }
 }

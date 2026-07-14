@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { logError } from '@/lib/logger'
 
 async function assertSysAdmin(): Promise<string | null> {
   const supabase = await createClient()
@@ -20,7 +21,7 @@ export async function deleteDebugScan(id: string) {
 
   const adminClient = createAdminClient()
   const { error } = await adminClient.from('qr_debug_scans').delete().eq('id', id)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/qr-debug-scans', { metadata: { id } }); return { error: error.message } }
 
   revalidatePath('/admin/qr-debug-scans')
   return { success: true }
@@ -32,7 +33,7 @@ export async function clearAllDebugScans() {
 
   const adminClient = createAdminClient()
   const { error } = await adminClient.from('qr_debug_scans').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/qr-debug-scans'); return { error: error.message } }
 
   revalidatePath('/admin/qr-debug-scans')
   return { success: true }

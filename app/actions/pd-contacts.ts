@@ -438,12 +438,12 @@ function actionTypeIdsFromForm(formData: FormData): string[] {
 
 async function syncContactActions(adminClient: ReturnType<typeof createAdminClient>, contactId: string, actionTypeIds: string[]) {
   const { error: deleteErr } = await adminClient.from('pd_contact_actions').delete().eq('contact_id', contactId)
-  if (deleteErr) return { error: deleteErr.message }
+  if (deleteErr) { await logError(deleteErr.message, '/police', { metadata: { contactId } }); return { error: deleteErr.message } }
   if (actionTypeIds.length > 0) {
     const { error: insertErr } = await adminClient.from('pd_contact_actions').insert(
       actionTypeIds.map(action_type_id => ({ contact_id: contactId, action_type_id }))
     )
-    if (insertErr) return { error: insertErr.message }
+    if (insertErr) { await logError(insertErr.message, '/police', { metadata: { contactId } }); return { error: insertErr.message } }
   }
   return {}
 }

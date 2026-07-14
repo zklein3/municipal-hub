@@ -247,7 +247,7 @@ export async function removeBiometricCredential(id: string) {
     .eq('id', id)
     .eq('personnel_id', personnel.id)
 
-  if (error) return { error: 'Could not remove this device.' }
+  if (error) { await logError(error.message, '/profile', { personnel_id: personnel.id, metadata: { id } }); return { error: 'Could not remove this device.' } }
   return { success: true }
 }
 

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { revalidatePath } from 'next/cache'
 import { nerisCheckEntityExists } from '@/lib/neris-api'
+import { logError } from '@/lib/logger'
 
 async function assertSysAdmin(): Promise<string | null> {
   const supabase = await createClient()
@@ -30,7 +31,7 @@ export async function createDepartment(formData: FormData) {
     .from('departments')
     .insert({ name, code: code || null, active: true })
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/departments'); return { error: error.message } }
 
   revalidatePath('/admin/departments')
   return { success: true }
@@ -46,7 +47,7 @@ export async function toggleDepartment(id: string, active: boolean) {
     .update({ active })
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/departments', { metadata: { department_id: id } }); return { error: error.message } }
   revalidatePath('/admin/departments')
   return { success: true }
 }
@@ -66,7 +67,7 @@ export async function saveDeptInspectionSettings(formData: FormData) {
     .from('departments')
     .update({ inspection_session_duration_hours: hours })
     .eq('id', ctx.departmentId)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin/inspections', { department_id: ctx.departmentId }); return { error: error.message } }
 
   revalidatePath('/dept-admin/inspections')
   return { success: true }
@@ -85,7 +86,7 @@ export async function updateDepartmentModules(
     .update(modules)
     .eq('id', departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/dept', { department_id: departmentId }); return { error: error.message } }
   revalidatePath(`/admin/dept/${departmentId}`)
   revalidatePath('/dept-admin')
   revalidatePath('/dashboard')
@@ -104,7 +105,7 @@ export async function setFuelStorageModule(enabled: boolean) {
     .update({ module_fuel_storage: enabled })
     .eq('id', ctx.departmentId)
 
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr.message, '/dept-admin', { department_id: ctx.departmentId }); return { error: dbErr.message } }
   revalidatePath('/dept-admin')
   revalidatePath('/fuel')
   return { success: true }
@@ -120,7 +121,7 @@ export async function saveNerisEntityId(departmentId: string, nerisEntityId: str
     .update({ neris_entity_id: nerisEntityId || null })
     .eq('id', departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/dept', { department_id: departmentId }); return { error: error.message } }
   revalidatePath(`/admin/dept/${departmentId}`)
   return { success: true }
 }
@@ -135,7 +136,7 @@ export async function setNerisIssueDismissed(incidentNerisId: string, dismissed:
     .update({ neris_issue_dismissed: dismissed })
     .eq('id', incidentNerisId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/admin/neris', { metadata: { incident_neris_id: incidentNerisId } }); return { error: error.message } }
   revalidatePath('/admin/neris')
   return { success: true }
 }
@@ -156,7 +157,7 @@ export async function saveDeptAdminNerisEntityId(departmentId: string, nerisEnti
     .update({ neris_entity_id: nerisEntityId || null })
     .eq('id', departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin/neris', { department_id: departmentId }); return { error: error.message } }
   revalidatePath('/dept-admin/neris')
   return { success: true }
 }
@@ -175,7 +176,7 @@ export async function saveDeptTimezone(departmentId: string, timezone: string) {
     .update({ timezone })
     .eq('id', departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin/settings', { department_id: departmentId }); return { error: error.message } }
   revalidatePath('/dept-admin/settings')
   return { success: true }
 }
@@ -203,7 +204,7 @@ export async function saveIsoReportSettings(departmentId: string, settings: {
     })
     .eq('id', departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/iso/report/print', { department_id: departmentId }); return { error: error.message } }
   revalidatePath('/iso/report/print')
   return { success: true }
 }

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { logError } from '@/lib/logger'
 
 // ─── Check bottle status ──────────────────────────────────────────────────────
 export async function checkBottle(bottleId: string) {
@@ -72,7 +73,7 @@ export async function logFill(bottleId: string, notes?: string) {
     })
     .select('id')
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/fire-school', { metadata: { bottleId } }); return { error: error.message } }
 
   return { success: true, fillId: data?.[0]?.id as string ?? null }
 }
@@ -116,7 +117,7 @@ export async function addFireSchoolBottle(formData: FormData) {
       active: true,
     })
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/fire-school/bottles', { metadata: { bottle_id } }); return { error: error.message } }
 
   revalidatePath('/fire-school/bottles')
   return { success: true }
@@ -141,14 +142,14 @@ export async function reassignBottleId(currentId: string, newId: string) {
     .from('fire_school_bottles')
     .update({ bottle_id: nextId, updated_at: new Date().toISOString() })
     .eq('bottle_id', oldId)
-  if (bottleErr) return { error: bottleErr.message }
+  if (bottleErr) { await logError(bottleErr.message, '/fire-school/bottles', { metadata: { oldId, nextId } }); return { error: bottleErr.message } }
 
   // Update all fill logs so history carries over
   const { error: logsErr } = await adminClient
     .from('fire_school_fill_logs')
     .update({ bottle_id: nextId })
     .eq('bottle_id', oldId)
-  if (logsErr) return { error: logsErr.message }
+  if (logsErr) { await logError(logsErr.message, '/fire-school/bottles', { metadata: { oldId, nextId } }); return { error: logsErr.message } }
 
   revalidatePath('/fire-school/bottles')
   revalidatePath('/fire-school/fill-log')
@@ -162,7 +163,7 @@ export async function verifyFill(fillId: string) {
     .from('fire_school_fill_logs')
     .update({ verified_at: new Date().toISOString() })
     .eq('id', fillId)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/fire-school/fill-log', { metadata: { fillId } }); return { error: error.message } }
   return { success: true }
 }
 
@@ -195,7 +196,7 @@ export async function updateFireSchoolBottle(bottleId: string, formData: FormDat
     })
     .eq('bottle_id', bottleId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/fire-school/bottles', { metadata: { bottleId } }); return { error: error.message } }
 
   revalidatePath('/fire-school/bottles')
   revalidatePath('/fire-school')

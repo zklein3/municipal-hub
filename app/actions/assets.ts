@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { revalidatePath } from 'next/cache'
+import { logError } from '@/lib/logger'
 
 // ─── Custom Field Definitions ─────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ export async function saveCustomFieldDefinitions(
     .eq('item_id', itemId)
     .eq('department_id', departmentId)
 
-  if (delErr) return { error: delErr.message }
+  if (delErr) { await logError(delErr.message, '/dept-admin/setup', { department_id: departmentId, metadata: { item_id: itemId } }); return { error: delErr.message } }
 
   const trimmed = labels.filter(l => l.trim())
   if (trimmed.length > 0) {
@@ -32,7 +33,7 @@ export async function saveCustomFieldDefinitions(
     const { error: insErr } = await admin
       .from('item_custom_field_definitions')
       .insert(rows)
-    if (insErr) return { error: insErr.message }
+    if (insErr) { await logError(insErr.message, '/dept-admin/setup', { department_id: departmentId, metadata: { item_id: itemId } }); return { error: insErr.message } }
   }
 
   revalidatePath('/dept-admin/setup')
@@ -82,7 +83,7 @@ export async function addServiceLog(formData: FormData): Promise<{ error?: strin
     const { error: uploadErr } = await admin.storage
       .from('asset-documents')
       .upload(path, buffer, { contentType: file.type, upsert: false })
-    if (uploadErr) return { error: `Upload failed: ${uploadErr.message}` }
+    if (uploadErr) { await logError(uploadErr.message, '/equipment/assets', { department_id: ctx.departmentId, metadata: { asset_id: assetId } }); return { error: `Upload failed: ${uploadErr.message}` } }
     documentPath = path
   }
 
@@ -101,7 +102,7 @@ export async function addServiceLog(formData: FormData): Promise<{ error?: strin
       logged_by: ctx.personnelId,
     })
 
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr.message, '/equipment/assets', { department_id: ctx.departmentId, metadata: { asset_id: assetId } }); return { error: dbErr.message } }
 
   // Also save the document to asset_documents so it appears in the Documents section
   if (documentPath && file) {
@@ -139,7 +140,7 @@ export async function updateAssetCustomFieldsDirect(
     .from('item_assets')
     .update({ custom_field_values: values })
     .eq('id', assetId)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin/setup', { metadata: { asset_id: assetId } }); return { error: error.message } }
   revalidatePath('/dept-admin/setup')
   return {}
 }
@@ -149,7 +150,7 @@ export async function getAssetDocumentUrl(path: string): Promise<{ url?: string;
   const { data, error } = await admin.storage
     .from('asset-documents')
     .createSignedUrl(path, 3600)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/equipment/assets', { metadata: { path } }); return { error: error.message } }
   return { url: data.signedUrl }
 }
 
@@ -178,7 +179,7 @@ export async function uploadAssetDocument(formData: FormData): Promise<{ error?:
   const { error: uploadErr } = await admin.storage
     .from('asset-documents')
     .upload(path, buffer, { contentType: file.type, upsert: false })
-  if (uploadErr) return { error: `Upload failed: ${uploadErr.message}` }
+  if (uploadErr) { await logError(uploadErr.message, '/equipment/assets', { department_id: ctx.departmentId, metadata: { asset_id: assetId } }); return { error: `Upload failed: ${uploadErr.message}` } }
 
   const documentName = (formData.get('document_name') as string)?.trim() || file.name
 
@@ -189,7 +190,7 @@ export async function uploadAssetDocument(formData: FormData): Promise<{ error?:
     document_path: path,
     uploaded_by: ctx.personnelId,
   })
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr.message, '/equipment/assets', { department_id: ctx.departmentId, metadata: { asset_id: assetId } }); return { error: dbErr.message } }
 
   revalidatePath(`/equipment/assets/${assetId}`)
   return {}
@@ -208,7 +209,7 @@ export async function deleteAssetDocument(docId: string, assetId: string): Promi
   }
 
   const { error } = await admin.from('asset_documents').delete().eq('id', docId)
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/equipment/assets', { metadata: { asset_id: assetId, doc_id: docId } }); return { error: error.message } }
 
   revalidatePath(`/equipment/assets/${assetId}`)
   return {}

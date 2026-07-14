@@ -113,13 +113,13 @@ export async function sysAdminUpdateEmail(personnelId: string, newEmail: string)
       person.auth_user_id,
       { email: newEmail.trim() }
     )
-    if (authErr) return { error: authErr.message }
+    if (authErr) { await logError(authErr.message, '/admin/users', { metadata: { personnelId } }); return { error: authErr.message } }
 
     const { error: dbErr } = await adminClient
       .from('personnel')
       .update({ email: newEmail.trim() })
       .eq('id', personnelId)
-    if (dbErr) return { error: dbErr.message }
+    if (dbErr) { await logError(dbErr.message, '/admin/users', { metadata: { personnelId } }); return { error: dbErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -146,13 +146,13 @@ export async function sysAdminForcePasswordReset(personnelId: string) {
       person.auth_user_id,
       { password: TEMP_PASSWORD }
     )
-    if (authErr) return { error: authErr.message }
+    if (authErr) { await logError(authErr.message, '/admin/users', { metadata: { personnelId } }); return { error: authErr.message } }
 
     const { error: dbErr } = await adminClient
       .from('personnel')
       .update({ signup_status: 'temp_password' })
       .eq('id', personnelId)
-    if (dbErr) return { error: dbErr.message }
+    if (dbErr) { await logError(dbErr.message, '/admin/users', { metadata: { personnelId } }); return { error: dbErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -174,7 +174,7 @@ export async function sysAdminSetRole(personnelId: string, newRole: string) {
       .from('department_personnel')
       .update({ system_role: newRole })
       .eq('personnel_id', personnelId)
-    if (dbErr) return { error: dbErr.message }
+    if (dbErr) { await logError(dbErr.message, '/admin/users', { metadata: { personnelId } }); return { error: dbErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -195,7 +195,7 @@ export async function sysAdminMoveDepartment(personnelId: string, newDeptId: str
       .from('department_personnel')
       .update({ department_id: newDeptId })
       .eq('personnel_id', personnelId)
-    if (dbErr) return { error: dbErr.message }
+    if (dbErr) { await logError(dbErr.message, '/admin/users', { metadata: { personnelId, newDeptId } }); return { error: dbErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -215,13 +215,13 @@ export async function sysAdminDeactivateUser(personnelId: string) {
       .from('department_personnel')
       .update({ active: false })
       .eq('personnel_id', personnelId)
-    if (dpErr) return { error: dpErr.message }
+    if (dpErr) { await logError(dpErr.message, '/admin/users', { metadata: { personnelId } }); return { error: dpErr.message } }
 
     const { error: pErr } = await adminClient
       .from('personnel')
       .update({ signup_status: 'denied' })
       .eq('id', personnelId)
-    if (pErr) return { error: pErr.message }
+    if (pErr) { await logError(pErr.message, '/admin/users', { metadata: { personnelId } }); return { error: pErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }
@@ -241,13 +241,13 @@ export async function sysAdminReactivateUser(personnelId: string) {
       .from('department_personnel')
       .update({ active: true })
       .eq('personnel_id', personnelId)
-    if (dpErr) return { error: dpErr.message }
+    if (dpErr) { await logError(dpErr.message, '/admin/users', { metadata: { personnelId } }); return { error: dpErr.message } }
 
     const { error: pErr } = await adminClient
       .from('personnel')
       .update({ signup_status: 'active' })
       .eq('id', personnelId)
-    if (pErr) return { error: pErr.message }
+    if (pErr) { await logError(pErr.message, '/admin/users', { metadata: { personnelId } }); return { error: pErr.message } }
 
     revalidatePath('/admin/users')
     return { success: true }

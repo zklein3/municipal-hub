@@ -24,7 +24,7 @@ export async function setSystemSetting(key: string, value: string) {
   const { error: dbErr } = await admin
     .from('system_settings')
     .upsert({ key, value, updated_at: new Date().toISOString() })
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) { await logError(dbErr.message, '/admin/departments', { metadata: { key } }); return { error: dbErr.message } }
   revalidatePath('/admin/departments')
   revalidatePath('/fire-school')
   return { success: true }
@@ -47,7 +47,7 @@ export async function submitFireSchoolInquiry(formData: FormData) {
       resolved: false,
     })
 
-  if (dbErr) return { error: 'Failed to submit. Please try again.' }
+  if (dbErr) { await logError(dbErr.message, '/fire-school', { metadata: { name, email } }); return { error: 'Failed to submit. Please try again.' } }
   return { success: true }
 }
 

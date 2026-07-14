@@ -28,7 +28,7 @@ export async function createKioskDevice(deviceName: string) {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin', { department_id: ctx.departmentId }); return { error: error.message } }
   revalidatePath('/dept-admin')
   return { success: true, deviceId: data.id, secret }
 }
@@ -45,7 +45,7 @@ export async function listKioskDevices() {
     .eq('department_id', ctx.departmentId)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin', { department_id: ctx.departmentId }); return { error: error.message } }
   return { devices: data ?? [] }
 }
 
@@ -61,7 +61,7 @@ export async function revokeKioskDevice(deviceId: string) {
     .eq('id', deviceId)
     .eq('department_id', ctx.departmentId)
 
-  if (error) return { error: error.message }
+  if (error) { await logError(error.message, '/dept-admin', { department_id: ctx.departmentId, metadata: { deviceId } }); return { error: error.message } }
   revalidatePath('/dept-admin')
   return { success: true }
 }
@@ -227,11 +227,11 @@ export async function kioskManualEntry(deviceId: string, secret: string, personn
   if (existing) {
     action = 'checked_out'
     const { error } = await adminClient.from('station_presence').update({ checked_out_at: new Date().toISOString() }).eq('id', existing.id)
-    if (error) return { error: error.message }
+    if (error) { await logError(error.message, '/kiosk', { department_id: departmentId, metadata: { personnelId } }); return { error: error.message } }
   } else {
     action = 'checked_in'
     const { error } = await adminClient.from('station_presence').insert({ department_id: departmentId, personnel_id: personnelId, kiosk_device_id: deviceId })
-    if (error) return { error: error.message }
+    if (error) { await logError(error.message, '/kiosk', { department_id: departmentId, metadata: { personnelId } }); return { error: error.message } }
   }
 
   const roster = await fetchRoster(adminClient, departmentId)

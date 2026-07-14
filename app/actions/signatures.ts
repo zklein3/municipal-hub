@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { logError } from '@/lib/logger'
 
 async function getMe() {
   const supabase = await createClient()
@@ -45,7 +46,7 @@ export async function saveIncidentSignature(formData: FormData) {
     .update({ signature_data: dataUrl, signed_at: new Date().toISOString() })
     .eq('id', sig_id)
 
-  if (updErr) return { error: updErr.message }
+  if (updErr) { await logError(updErr.message, '/incidents', { personnel_id: me.id, metadata: { sig_id } }); return { error: updErr.message } }
 
   revalidatePath('/inbox')
   revalidatePath(`/incidents/${existing.incident_id}`)
@@ -84,7 +85,7 @@ export async function saveEventAttendanceSignature(formData: FormData) {
     .update({ signature_data: dataUrl, signed_at: new Date().toISOString() })
     .eq('id', sig_id)
 
-  if (updErr) return { error: updErr.message }
+  if (updErr) { await logError(updErr.message, '/events', { personnel_id: me.id, metadata: { sig_id } }); return { error: updErr.message } }
 
   revalidatePath('/inbox')
   return { success: true }
