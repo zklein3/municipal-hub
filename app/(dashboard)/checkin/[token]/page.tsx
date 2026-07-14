@@ -44,7 +44,7 @@ export default async function CheckinPage({ params }: { params: Promise<{ token:
   if (payload.type === 'event_instance') {
     const { data: instance } = await adminClient
       .from('event_instances')
-      .select('id, event_date, series_id')
+      .select('id, event_date, series_id, title_override')
       .eq('id', payload.id)
       .single()
     if (!instance) return <ErrorCard message="This event no longer exists." />
@@ -56,7 +56,7 @@ export default async function CheckinPage({ params }: { params: Promise<{ token:
       .single()
     if (!series || series.department_id !== ctx.departmentId) return <ErrorCard message="This event isn't part of your department." />
 
-    title = series.title
+    title = instance.title_override ?? series.title
     subtitle = formatEventDate(instance.event_date)
 
     const { data: existing } = await adminClient

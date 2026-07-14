@@ -67,19 +67,19 @@ export default async function TrainingPage() {
   // For linked events, fetch the parent event series title flat
   const linkedInstanceIds = (allTrainingEvents ?? []).filter(e => e.event_instance_id).map(e => e.event_instance_id as string)
   const { data: linkedInstances } = linkedInstanceIds.length > 0
-    ? await adminClient.from('event_instances').select('id, series_id').in('id', linkedInstanceIds)
+    ? await adminClient.from('event_instances').select('id, series_id, title_override').in('id', linkedInstanceIds)
     : { data: [] }
   const linkedSeriesIds = (linkedInstances ?? []).map(i => i.series_id)
   const { data: linkedSeries } = linkedSeriesIds.length > 0
     ? await adminClient.from('event_series').select('id, title').in('id', linkedSeriesIds)
     : { data: [] }
   const seriesTitleMap = Object.fromEntries((linkedSeries ?? []).map(s => [s.id, s.title]))
-  const instanceSeriesMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i.series_id]))
+  const instanceMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i]))
   const linkedEventTitles: Record<string, string> = {}
   for (const e of allTrainingEvents ?? []) {
     if (e.event_instance_id) {
-      const seriesId = instanceSeriesMap[e.event_instance_id]
-      if (seriesId) linkedEventTitles[e.id] = seriesTitleMap[seriesId] ?? ''
+      const inst = instanceMap[e.event_instance_id]
+      if (inst) linkedEventTitles[e.id] = inst.title_override ?? seriesTitleMap[inst.series_id] ?? ''
     }
   }
 

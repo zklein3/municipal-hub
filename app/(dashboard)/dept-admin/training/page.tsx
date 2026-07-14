@@ -100,19 +100,19 @@ export default async function TrainingAdminPage() {
   // Linked event titles for training events attached to dept events
   const linkedInstanceIds = (trainingEvents ?? []).filter(e => e.event_instance_id).map(e => e.event_instance_id as string)
   const { data: linkedInstances } = linkedInstanceIds.length > 0
-    ? await adminClient.from('event_instances').select('id, series_id').in('id', linkedInstanceIds)
+    ? await adminClient.from('event_instances').select('id, series_id, title_override').in('id', linkedInstanceIds)
     : { data: [] }
   const linkedSeriesIds = (linkedInstances ?? []).map(i => i.series_id)
   const { data: linkedSeries } = linkedSeriesIds.length > 0
     ? await adminClient.from('event_series').select('id, title').in('id', linkedSeriesIds)
     : { data: [] }
   const adminSeriesTitleMap = Object.fromEntries((linkedSeries ?? []).map(s => [s.id, s.title]))
-  const adminInstanceSeriesMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i.series_id]))
+  const adminInstanceMap = Object.fromEntries((linkedInstances ?? []).map(i => [i.id, i]))
   const adminLinkedEventTitles: Record<string, string> = {}
   for (const e of trainingEvents ?? []) {
     if (e.event_instance_id) {
-      const seriesId = adminInstanceSeriesMap[e.event_instance_id]
-      if (seriesId) adminLinkedEventTitles[e.id] = adminSeriesTitleMap[seriesId] ?? ''
+      const inst = adminInstanceMap[e.event_instance_id]
+      if (inst) adminLinkedEventTitles[e.id] = inst.title_override ?? adminSeriesTitleMap[inst.series_id] ?? ''
     }
   }
 

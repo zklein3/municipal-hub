@@ -52,7 +52,7 @@ export default async function InboxPage({
     const instanceIds = (pendingEventSigs ?? []).map(s => s.instance_id)
     const { data: eventInstances } = await adminClient
       .from('event_instances')
-      .select('id, event_date, location, series_id')
+      .select('id, event_date, location, series_id, title_override')
       .in('id', instanceIds)
     const seriesIds = [...new Set((eventInstances ?? []).map(i => i.series_id))]
     const { data: seriesData } = seriesIds.length > 0
@@ -69,7 +69,7 @@ export default async function InboxPage({
         instance_id: s.instance_id,
         created_at: s.created_at,
         event: inst && series ? {
-          title: series.title,
+          title: inst.title_override ?? series.title,
           event_type: series.event_type,
           event_date: inst.event_date,
           location: inst.location,

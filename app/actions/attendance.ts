@@ -195,6 +195,8 @@ export async function updateEventInstance(formData: FormData) {
   const event_date = formData.get('event_date') as string
   const requires_verification = formData.get('requires_verification') !== 'false'
   const requires_signature = formData.get('requires_signature') === 'true'
+  const title = formData.get('title') as string | null
+  const description = formData.get('description') as string | null
 
   const updatePayload: Record<string, unknown> = {
     location: location || null,
@@ -206,6 +208,19 @@ export async function updateEventInstance(formData: FormData) {
     updated_at: new Date().toISOString(),
   }
   if (event_date) updatePayload.event_date = event_date
+
+  // Title/description are series-wide by default — only store an override on this
+  // instance if it actually diverges from the series' current value.
+  if (title !== null) {
+    const { data: instRow } = await adminClient.from('event_instances').select('series_id').eq('id', id).single()
+    const { data: seriesRow } = instRow
+      ? await adminClient.from('event_series').select('title, description').eq('id', instRow.series_id).single()
+      : { data: null }
+    const trimmedTitle = title.trim()
+    const trimmedDescription = (description ?? '').trim()
+    updatePayload.title_override = trimmedTitle && trimmedTitle !== seriesRow?.title?.trim() ? trimmedTitle : null
+    updatePayload.description_override = trimmedDescription && trimmedDescription !== (seriesRow?.description ?? '').trim() ? trimmedDescription : null
+  }
 
   const { error } = await adminClient.from('event_instances').update(updatePayload).eq('id', id)
 

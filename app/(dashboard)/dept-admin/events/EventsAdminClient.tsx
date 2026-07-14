@@ -229,6 +229,8 @@ export default function EventsAdminClient({
       if (result?.error) { setError(result.error); setLoading(false); return }
     } else {
       fd.set('id', event.id)
+      fd.set('title', editForm.title)
+      fd.set('description', editForm.description)
       fd.set('location', editForm.location)
       fd.set('start_time', editForm.start_time)
       fd.set('event_date', editForm.event_date)
@@ -546,35 +548,40 @@ export default function EventsAdminClient({
                             ))}
                           </div>
                         )}
-                        {(editScope === 'series' || event.recurrence_type === 'one_time') && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                              <label className="block text-xs font-medium text-zinc-700 mb-1">Title</label>
-                              <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-700 mb-1">Type</label>
-                              <select value={editForm.event_type} onChange={e => setEditForm(f => ({ ...f, event_type: e.target.value }))}
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                                <option value="meeting">Meeting</option>
-                                <option value="training">Training</option>
-                                <option value="special">Special Event</option>
-                                <option value="incident">Incident</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-zinc-700 mb-1">Duration (min)</label>
-                              <input type="number" min="1" value={editForm.duration_minutes} onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                            </div>
-                            <div className="col-span-2">
-                              <label className="block text-xs font-medium text-zinc-700 mb-1">Description</label>
-                              <input type="text" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                            </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <label className="block text-xs font-medium text-zinc-700 mb-1">Title</label>
+                            <input type="text" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            {editScope === 'instance' && event.recurrence_type !== 'one_time' && (
+                              <p className="text-xs text-zinc-400 mt-1">Renames just this occurrence. Clear the field to revert to the series title.</p>
+                            )}
                           </div>
-                        )}
+                          {(editScope === 'series' || event.recurrence_type === 'one_time') && (
+                            <>
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1">Type</label>
+                                <select value={editForm.event_type} onChange={e => setEditForm(f => ({ ...f, event_type: e.target.value }))}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                  <option value="meeting">Meeting</option>
+                                  <option value="training">Training</option>
+                                  <option value="special">Special Event</option>
+                                  <option value="incident">Incident</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-zinc-700 mb-1">Duration (min)</label>
+                                <input type="number" min="1" value={editForm.duration_minutes} onChange={e => setEditForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              </div>
+                            </>
+                          )}
+                          <div className="col-span-2">
+                            <label className="block text-xs font-medium text-zinc-700 mb-1">Description</label>
+                            <input type="text" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                           {(editScope === 'instance' || event.recurrence_type === 'one_time') && (
                             <div>

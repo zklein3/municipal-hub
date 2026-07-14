@@ -69,7 +69,7 @@ async function getDashboardData(departmentId: string, personnelId: string) {
 
   const { data: instanceData } = deptSeriesIds.length > 0
     ? await adminClient.from('event_instances')
-      .select('id, series_id, event_date, start_time, location, status')
+      .select('id, series_id, event_date, start_time, location, status, title_override')
       .in('series_id', deptSeriesIds)
       .gte('event_date', today)
       .lte('event_date', next365str)
@@ -102,7 +102,7 @@ async function getDashboardData(departmentId: string, personnelId: string) {
     pendingSetup: pendingSetup.data ?? [],
     upcomingEvents: deptInstances.map(i => ({
       id: i.id,
-      title: seriesMap[i.series_id]?.title ?? '—',
+      title: i.title_override ?? seriesMap[i.series_id]?.title ?? '—',
       event_type: seriesMap[i.series_id]?.event_type ?? 'training',
       event_date: i.event_date,
       start_time: i.start_time,

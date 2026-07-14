@@ -42,7 +42,7 @@ export default async function EventsPage() {
   const { data: instances } = seriesIds.length > 0
     ? await adminClient
         .from('event_instances')
-        .select('id, series_id, event_date, start_time, location, status, notes, requires_verification, requires_signature')
+        .select('id, series_id, event_date, start_time, location, status, notes, requires_verification, requires_signature, title_override, description_override')
         .in('series_id', seriesIds)
         .gte('event_date', past30.toISOString().split('T')[0])
         .lte('event_date', future365.toISOString().split('T')[0])
@@ -84,9 +84,9 @@ export default async function EventsPage() {
   const events = deptInstances.map(i => ({
     id: i.id,
     series_id: i.series_id,
-    title: seriesMap[i.series_id]?.title ?? '—',
+    title: i.title_override ?? seriesMap[i.series_id]?.title ?? '—',
     event_type: seriesMap[i.series_id]?.event_type ?? 'meeting',
-    description: seriesMap[i.series_id]?.description ?? null,
+    description: i.description_override ?? seriesMap[i.series_id]?.description ?? null,
     duration_minutes: seriesMap[i.series_id]?.duration_minutes ?? null,
     is_training: seriesMap[i.series_id]?.is_training ?? false,
     training_hours: seriesMap[i.series_id]?.training_hours ?? null,
