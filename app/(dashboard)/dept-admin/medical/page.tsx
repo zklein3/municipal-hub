@@ -10,7 +10,7 @@ export default async function MedicalAdminPage() {
   if (!ctx) redirect('/login')
   if (!ctx.departmentId || ctx.systemRole !== 'admin') redirect('/dashboard')
 
-  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical, module_medical_controlled').eq('id', ctx.departmentId).single()
   if (!deptRow?.module_medical) redirect('/dept-admin')
 
   const department_id = ctx.departmentId
@@ -108,6 +108,7 @@ export default async function MedicalAdminPage() {
       templateItems={templateItems ?? []}
       bagDeployments={bagDeployments ?? []}
       departmentId={department_id}
+      moduleMedicalControlled={deptRow?.module_medical_controlled ?? false}
     />
   )
 }

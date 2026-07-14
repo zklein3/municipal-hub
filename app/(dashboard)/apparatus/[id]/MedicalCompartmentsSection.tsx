@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { dispenseStock, wasteStock, transferStock } from '@/app/actions/medical'
+import SignatureCapture, { SignatureCaptureHandle } from '../../medical/SignatureCapture'
 
 interface CompStoreroom { id: string; name: string; compartment_id: string; compartment_code: string; compartment_name: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -54,6 +55,9 @@ export default function MedicalCompartmentsSection({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Shared across the use/waste modals — only one is ever open at a time
+  const signer1PadRef = useRef<SignatureCaptureHandle>(null)
+  const signer2PadRef = useRef<SignatureCaptureHandle>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(compartmentStorerooms[0]?.id ?? null)
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
@@ -155,10 +159,17 @@ export default function MedicalCompartmentsSection({
     if (!useForm) return
     const qty = parseInt(useForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (useForm.requiredSigs >= 1 && !useForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (useForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (useForm.requiredSigs >= 2 && !useForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (useForm.requiredSigs >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
     setError(null); setLoading(true)
     const r = await dispenseStock({
       storeroom_inventory_id: useForm.invId, lot_id: useForm.lotId, quantity: qty,
       notes: useForm.notes || null, signer_1_id: useForm.signer1Id || null, signer_2_id: useForm.signer2Id || null,
+      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
     })
     if (r?.error) setError(r.error)
     else { setSuccess(`Used ${qty} ${useForm.unitOfMeasure} of ${useForm.supplyName}.`); setUseForm(null); router.refresh() }
@@ -171,11 +182,18 @@ export default function MedicalCompartmentsSection({
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} available in this lot.`); return }
     if (!wasteForm.wasteReason) { setError('Waste reason is required.'); return }
+    if (wasteForm.requiredSigs >= 1 && !wasteForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (wasteForm.requiredSigs >= 2 && !wasteForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSigs >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
     setError(null); setLoading(true)
     const r = await wasteStock({
       storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty,
       waste_reason: wasteForm.wasteReason, notes: wasteForm.notes || null,
       signer_1_id: wasteForm.signer1Id || null, signer_2_id: wasteForm.signer2Id || null,
+      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
     })
     if (r?.error) setError(r.error)
     else { setSuccess(`Wasted ${qty} ${wasteForm.unitOfMeasure} of ${wasteForm.supplyName}.`); setWasteForm(null); router.refresh() }
@@ -231,13 +249,14 @@ export default function MedicalCompartmentsSection({
   }
 
   const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-  const signerSelect = (val: string, onChange: (v: string) => void, label: string) => (
+  const signerSelect = (val: string, onChange: (v: string) => void, label: string, padRef: React.RefObject<SignatureCaptureHandle | null>, padLabel: string) => (
     <div>
       <label className="mb-1 block text-xs font-medium text-zinc-700">{label}</label>
       <select value={val} onChange={e => onChange(e.target.value)} className={inputCls}>
         <option value="">Select person…</option>
         {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
+      <div className="mt-2"><SignatureCapture ref={padRef} label={padLabel} /></div>
     </div>
   )
 
@@ -393,8 +412,8 @@ export default function MedicalCompartmentsSection({
                   onChange={e => setUseForm(f => f ? { ...f, quantity: e.target.value } : f)}
                   className={inputCls} />
               </div>
-              {useForm.requiredSigs >= 1 && signerSelect(useForm.signer1Id, v => setUseForm(f => f ? { ...f, signer1Id: v } : f), 'Signer 1 *')}
-              {useForm.requiredSigs >= 2 && signerSelect(useForm.signer2Id, v => setUseForm(f => f ? { ...f, signer2Id: v } : f), 'Signer 2 *')}
+              {useForm.requiredSigs >= 1 && signerSelect(useForm.signer1Id, v => setUseForm(f => f ? { ...f, signer1Id: v } : f), 'Signer 1 *', signer1PadRef, 'Signer 1 Signature')}
+              {useForm.requiredSigs >= 2 && signerSelect(useForm.signer2Id, v => setUseForm(f => f ? { ...f, signer2Id: v } : f), 'Signer 2 *', signer2PadRef, 'Signer 2 Signature')}
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
                 <input type="text" value={useForm.notes} placeholder="Optional"
@@ -440,8 +459,8 @@ export default function MedicalCompartmentsSection({
                 <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
                   onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)} className={inputCls} />
               </div>
-              {wasteForm.requiredSigs >= 1 && signerSelect(wasteForm.signer1Id, v => setWasteForm(f => f ? { ...f, signer1Id: v } : f), 'Witness 1 *')}
-              {wasteForm.requiredSigs >= 2 && signerSelect(wasteForm.signer2Id, v => setWasteForm(f => f ? { ...f, signer2Id: v } : f), 'Witness 2 *')}
+              {wasteForm.requiredSigs >= 1 && signerSelect(wasteForm.signer1Id, v => setWasteForm(f => f ? { ...f, signer1Id: v } : f), 'Witness 1 *', signer1PadRef, 'Witness 1 Signature')}
+              {wasteForm.requiredSigs >= 2 && signerSelect(wasteForm.signer2Id, v => setWasteForm(f => f ? { ...f, signer2Id: v } : f), 'Witness 2 *', signer2PadRef, 'Witness 2 Signature')}
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
                 <input type="text" value={wasteForm.notes} placeholder="Optional"

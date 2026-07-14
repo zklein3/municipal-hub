@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { dispenseStock, receiveStock, wasteStock, transferStock, updateBagInventoryMode } from '@/app/actions/medical'
+import SignatureCapture, { SignatureCaptureHandle } from '../../medical/SignatureCapture'
 
 interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -59,6 +60,9 @@ export default function MedicalBagsSection({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [expandedBagId, setExpandedBagId] = useState<string | null>(bags[0]?.id ?? null)
+  // Shared across the use/waste/receive modals — only one is ever open at a time
+  const signer1PadRef = useRef<SignatureCaptureHandle>(null)
+  const signer2PadRef = useRef<SignatureCaptureHandle>(null)
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
 
   type UseForm = { invId: string; lotId: string; supplyName: string; unitOfMeasure: string; isControlled: boolean; requiredSigs: number; quantity: string; notes: string; signer1Id: string; signer2Id: string }
@@ -152,11 +156,18 @@ export default function MedicalBagsSection({
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} available in this lot.`); return }
     if (!wasteForm.wasteReason) { setError('Waste reason is required.'); return }
+    if (wasteForm.requiredSigs >= 1 && !wasteForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (wasteForm.requiredSigs >= 2 && !wasteForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSigs >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
     setError(null); setLoading(true)
     const r = await wasteStock({
       storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty,
       waste_reason: wasteForm.wasteReason, notes: wasteForm.notes || null,
       signer_1_id: wasteForm.signer1Id || null, signer_2_id: wasteForm.signer2Id || null,
+      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
     })
     if (r?.error) setError(r.error)
     else { setSuccess(`Wasted ${qty} ${wasteForm.unitOfMeasure} of ${wasteForm.supplyName}.`); setWasteForm(null); router.refresh() }
@@ -167,8 +178,18 @@ export default function MedicalBagsSection({
     if (!useForm) return
     const qty = parseInt(useForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (useForm.requiredSigs >= 1 && !useForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (useForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (useForm.requiredSigs >= 2 && !useForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (useForm.requiredSigs >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
     setError(null); setLoading(true)
-    const r = await dispenseStock({ storeroom_inventory_id: useForm.invId, lot_id: useForm.lotId, quantity: qty, notes: useForm.notes || null, signer_1_id: useForm.signer1Id || null, signer_2_id: useForm.signer2Id || null })
+    const r = await dispenseStock({
+      storeroom_inventory_id: useForm.invId, lot_id: useForm.lotId, quantity: qty, notes: useForm.notes || null,
+      signer_1_id: useForm.signer1Id || null, signer_2_id: useForm.signer2Id || null,
+      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
+    })
     if (r?.error) setError(r.error)
     else { setSuccess(`Used ${qty} ${useForm.unitOfMeasure} of ${useForm.supplyName}.`); setUseForm(null); router.refresh() }
     setLoading(false)
@@ -179,8 +200,19 @@ export default function MedicalBagsSection({
     const qty = parseInt(receiveForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (receiveForm.tracksExp && !receiveForm.expirationDate) { setError('Expiration date required.'); return }
+    if (receiveForm.requiredSigs >= 1 && !receiveForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (receiveForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (receiveForm.requiredSigs >= 2 && !receiveForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (receiveForm.requiredSigs >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
     setError(null); setLoading(true)
-    const r = await receiveStock({ storeroom_inventory_id: receiveForm.invId, lot_number: receiveForm.lotNumber || null, expiration_date: receiveForm.expirationDate || null, quantity_received: qty, notes: receiveForm.notes || null, signer_1_id: receiveForm.signer1Id || null, signer_2_id: receiveForm.signer2Id || null })
+    const r = await receiveStock({
+      storeroom_inventory_id: receiveForm.invId, lot_number: receiveForm.lotNumber || null, expiration_date: receiveForm.expirationDate || null,
+      quantity_received: qty, notes: receiveForm.notes || null,
+      signer_1_id: receiveForm.signer1Id || null, signer_2_id: receiveForm.signer2Id || null,
+      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
+    })
     if (r?.error) setError(r.error)
     else { setSuccess(`Received ${qty} ${receiveForm.supplyName}.`); setReceiveForm(null); router.refresh() }
     setLoading(false)
@@ -415,6 +447,7 @@ export default function MedicalBagsSection({
                     <option value="">Select...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2"><SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" /></div>
                 </div>
               )}
               {useForm.requiredSigs >= 2 && (
@@ -424,6 +457,7 @@ export default function MedicalBagsSection({
                     <option value="">Select...</option>
                     {personnel.filter(p => p.id !== useForm.signer1Id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2"><SignatureCapture ref={signer2PadRef} label="Witness Signature" /></div>
                 </div>
               )}
             </div>
@@ -463,6 +497,26 @@ export default function MedicalBagsSection({
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
                 <input type="text" value={receiveForm.notes} placeholder="Optional" onChange={e => setReceiveForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
               </div>
+              {receiveForm.requiredSigs >= 1 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Received By <span className="text-red-500">*</span></label>
+                  <select value={receiveForm.signer1Id} onChange={e => setReceiveForm(f => f ? { ...f, signer1Id: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select...</option>
+                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <div className="mt-2"><SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" /></div>
+                </div>
+              )}
+              {receiveForm.requiredSigs >= 2 && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Witness <span className="text-red-500">*</span> <span className="text-amber-600 font-normal">(controlled)</span></label>
+                  <select value={receiveForm.signer2Id} onChange={e => setReceiveForm(f => f ? { ...f, signer2Id: e.target.value } : f)} className={inputCls}>
+                    <option value="">Select...</option>
+                    {personnel.filter(p => p.id !== receiveForm.signer1Id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <div className="mt-2"><SignatureCapture ref={signer2PadRef} label="Witness Signature" /></div>
+                </div>
+              )}
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={handleReceiveSubmit} disabled={loading} className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? 'Saving...' : 'Confirm Receipt'}</button>
@@ -560,6 +614,7 @@ export default function MedicalBagsSection({
                     <option value="">Select...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2"><SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" /></div>
                 </div>
               )}
               {wasteForm.requiredSigs >= 2 && (
@@ -569,6 +624,7 @@ export default function MedicalBagsSection({
                     <option value="">Select...</option>
                     {personnel.filter(p => p.id !== wasteForm.signer1Id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2"><SignatureCapture ref={signer2PadRef} label="Witness Signature" /></div>
                 </div>
               )}
             </div>

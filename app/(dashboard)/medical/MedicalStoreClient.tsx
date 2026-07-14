@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
 import { formatLocalDate } from '@/lib/format-datetime'
+import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -198,6 +199,10 @@ export default function MedicalStoreClient({
   const [wasteExpiredForm, setWasteExpiredForm] = useState<WasteExpiredForm | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Shared across the receive/dispense/waste/wasteExpired modals — only one is ever open
+  // at a time, so each modal mount gets a fresh pad instance via these refs.
+  const signer1PadRef = useRef<SignatureCaptureHandle>(null)
+  const signer2PadRef = useRef<SignatureCaptureHandle>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
   const supplyMap = Object.fromEntries(supplyTypes.map(s => [s.id, s]))
@@ -248,7 +253,11 @@ export default function MedicalStoreClient({
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (receiveForm.tracksExpiration && !receiveForm.expirationDate) { setError('Expiration date is required for this supply type.'); return }
     if (receiveForm.requiredSignatures >= 1 && !receiveForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (receiveForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
     if (receiveForm.requiredSignatures >= 2 && !receiveForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (receiveForm.requiredSignatures >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
 
     setError(null); setLoading(true)
     const result = await receiveStock({
@@ -259,6 +268,8 @@ export default function MedicalStoreClient({
       notes: receiveForm.notes || null,
       signer_1_id: receiveForm.signer1Id || null,
       signer_2_id: receiveForm.signer2Id || null,
+      signer_1_signature: signer1Signature,
+      signer_2_signature: signer2Signature,
     })
     if (result?.error) { setError(result.error) }
     else {
@@ -295,7 +306,11 @@ export default function MedicalStoreClient({
     const qty = parseInt(dispenseForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (dispenseForm.requiredSignatures >= 1 && !dispenseForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (dispenseForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
     if (dispenseForm.requiredSignatures >= 2 && !dispenseForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (dispenseForm.requiredSignatures >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
 
     setError(null); setLoading(true)
     const result = await dispenseStock({
@@ -305,6 +320,8 @@ export default function MedicalStoreClient({
       notes: dispenseForm.notes || null,
       signer_1_id: dispenseForm.signer1Id || null,
       signer_2_id: dispenseForm.signer2Id || null,
+      signer_1_signature: signer1Signature,
+      signer_2_signature: signer2Signature,
     })
     if (result?.error) { setError(result.error) }
     else {
@@ -342,7 +359,11 @@ export default function MedicalStoreClient({
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} units available.`); return }
     if (wasteForm.requiredSignatures >= 1 && !wasteForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
     if (wasteForm.requiredSignatures >= 2 && !wasteForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (wasteForm.requiredSignatures >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
 
     setError(null); setLoading(true)
     const result = await wasteStock({
@@ -353,6 +374,8 @@ export default function MedicalStoreClient({
       notes: wasteForm.notes || null,
       signer_1_id: wasteForm.signer1Id || null,
       signer_2_id: wasteForm.signer2Id || null,
+      signer_1_signature: signer1Signature,
+      signer_2_signature: signer2Signature,
     })
     if (result?.error) { setError(result.error) }
     else {
@@ -522,13 +545,19 @@ export default function MedicalStoreClient({
   async function handleWasteExpiredSubmit() {
     if (!wasteExpiredForm) return
     if (wasteExpiredForm.requiredSignatures >= 1 && !wasteExpiredForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (wasteExpiredForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
     if (wasteExpiredForm.requiredSignatures >= 2 && !wasteExpiredForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (wasteExpiredForm.requiredSignatures >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
     setError(null); setLoading(true)
     const result = await wasteExpiredLots({
       storeroom_inventory_id: wasteExpiredForm.inventoryId,
       waste_reason: wasteExpiredForm.wasteReason,
       notes: wasteExpiredForm.notes || null,
       signer_1_id: wasteExpiredForm.signer1Id || null,
+      signer_1_signature: signer1Signature,
+      signer_2_signature: signer2Signature,
       signer_2_id: wasteExpiredForm.signer2Id || null,
     })
     if (result?.error) { setError(result.error) }
@@ -957,6 +986,9 @@ export default function MedicalStoreClient({
                     <option value="">Select person...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
+                  </div>
                 </div>
               )}
 
@@ -974,6 +1006,9 @@ export default function MedicalStoreClient({
                       .filter(p => p.id !== receiveForm.signer1Id)
                       .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
+                  </div>
                 </div>
               )}
             </div>
@@ -1232,6 +1267,9 @@ export default function MedicalStoreClient({
                     <option value="">Select person...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
+                  </div>
                 </div>
               )}
 
@@ -1249,6 +1287,9 @@ export default function MedicalStoreClient({
                       .filter(p => p.id !== wasteForm.signer1Id)
                       .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
+                  </div>
                 </div>
               )}
             </div>
@@ -1357,6 +1398,9 @@ export default function MedicalStoreClient({
                     <option value="">Select person...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
+                  </div>
                 </div>
               )}
               {wasteExpiredForm.requiredSignatures >= 2 && (
@@ -1373,6 +1417,9 @@ export default function MedicalStoreClient({
                       .filter(p => p.id !== wasteExpiredForm.signer1Id)
                       .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
+                  </div>
                 </div>
               )}
             </div>
@@ -1455,6 +1502,9 @@ export default function MedicalStoreClient({
                     <option value="">Select person...</option>
                     {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
+                  </div>
                 </div>
               )}
 
@@ -1472,6 +1522,9 @@ export default function MedicalStoreClient({
                       .filter(p => p.id !== dispenseForm.signer1Id)
                       .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                  <div className="mt-2">
+                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
+                  </div>
                 </div>
               )}
             </div>

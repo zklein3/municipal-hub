@@ -115,7 +115,7 @@ export default async function EventRunSheetPrintPage({
   const col3 = allPersonnel.slice(colSize * 2)
 
   const S: Record<string, React.CSSProperties> = {
-    page:      { fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#000', background: '#fff', padding: '0.35in 0.5in', maxWidth: '8.5in', margin: '0 auto' },
+    page:      { fontFamily: 'Arial, sans-serif', fontSize: '10pt', color: '#000', background: '#fff', padding: '0.35in 0.5in', maxWidth: '8.5in', minHeight: '11in', boxSizing: 'border-box', margin: '0 auto' },
     label:     { fontWeight: 700, marginRight: '0.1in', whiteSpace: 'nowrap' },
     line:      { borderBottom: '1px solid #000', display: 'inline-block', minWidth: '2.5in', verticalAlign: 'bottom' },
     shortLine: { borderBottom: '1px solid #000', display: 'inline-block', minWidth: '1in', verticalAlign: 'bottom' },
@@ -185,15 +185,13 @@ export default async function EventRunSheetPrintPage({
           ))}
         </div>
 
-        {description && (
-          <>
-            <div style={S.divider} />
-            <div style={{ marginBottom: '0.12in' }}>
-              <div style={S.secHdr}>Narrative / Notes</div>
-              <p style={{ margin: 0, fontSize: '9.5pt', lineHeight: 1.4 }}>{description}</p>
-            </div>
-          </>
-        )}
+        <div style={S.divider} />
+        <div style={{ marginBottom: '0.12in' }}>
+          <div style={S.secHdr}>Narrative / Notes</div>
+          <div style={{ border: '1px solid #000', minHeight: '3in', padding: '0.1in', fontSize: '9.5pt', lineHeight: 1.4 }}>
+            {description}
+          </div>
+        </div>
 
         <div style={S.divider} />
 

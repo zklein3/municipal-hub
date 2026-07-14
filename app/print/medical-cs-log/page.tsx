@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
+import PrintButton from '../training-signin/PrintButton'
 
 const TX_LABELS: Record<string, string> = {
   received: 'Received',
@@ -72,7 +73,7 @@ export default async function MedicalCSLogPrintPage({
   // Transactions — controlled supplies only, filtered by date + optional storeroom/supply
   let query = adminClient
     .from('medical_stock_transactions')
-    .select('id, storeroom_id, supply_type_id, lot_id, transaction_type, quantity, performed_by, signer_1_id, signer_2_id, notes, created_at')
+    .select('id, storeroom_id, supply_type_id, lot_id, transaction_type, quantity, performed_by, signer_1_id, signer_1_signature_data, signer_2_id, signer_2_signature_data, notes, created_at')
     .in('storeroom_id', storeroomIds)
     .in('supply_type_id', csTypeIds)
     .gte('created_at', fromDate)
@@ -124,12 +125,7 @@ export default async function MedicalCSLogPrintPage({
         td { font-size: 10pt; }
       `}</style>
 
-      <div className="no-print" style={{ padding: '1rem', background: '#fef3c7', borderBottom: '2px solid #d97706', fontFamily: 'sans-serif', fontSize: '13px' }}>
-        <strong>Print preview</strong> — use your browser's Print function (Ctrl+P / ⌘+P).
-        <button onClick={() => window.print()} style={{ marginLeft: '1rem', padding: '4px 12px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}>
-          Print
-        </button>
-      </div>
+      <PrintButton jobName="Controlled Substance Log" />
 
       <div style={{ padding: '0.5in' }}>
         {/* Header */}
@@ -175,8 +171,18 @@ export default async function MedicalCSLogPrintPage({
                   <td>{tx.lot_id ? (lotMap[tx.lot_id] ?? 'No lot #') : '—'}</td>
                   <td>{storeroomMap[tx.storeroom_id] ?? '—'}</td>
                   <td>{tx.performed_by ? (personnelMap[tx.performed_by] ?? '—') : '—'}</td>
-                  <td>{tx.signer_1_id ? (personnelMap[tx.signer_1_id] ?? '—') : '—'}</td>
-                  <td>{tx.signer_2_id ? (personnelMap[tx.signer_2_id] ?? '—') : '—'}</td>
+                  <td>
+                    {tx.signer_1_id ? (personnelMap[tx.signer_1_id] ?? '—') : '—'}
+                    {tx.signer_1_signature_data && (
+                      <img src={tx.signer_1_signature_data} alt="Signature" style={{ display: 'block', maxHeight: '24px', maxWidth: '90px', marginTop: '2px' }} />
+                    )}
+                  </td>
+                  <td>
+                    {tx.signer_2_id ? (personnelMap[tx.signer_2_id] ?? '—') : '—'}
+                    {tx.signer_2_signature_data && (
+                      <img src={tx.signer_2_signature_data} alt="Signature" style={{ display: 'block', maxHeight: '24px', maxWidth: '90px', marginTop: '2px' }} />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

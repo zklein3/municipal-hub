@@ -38,7 +38,7 @@ type Tab = 'supplies' | 'storerooms' | 'templates'
 
 export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory,
-  bagTemplates, templateItems, bagDeployments, departmentId,
+  bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled,
 }: {
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
@@ -50,6 +50,7 @@ export default function MedicalAdminClient({
   templateItems: TemplateItem[]
   bagDeployments: BagDeployment[]
   departmentId: string
+  moduleMedicalControlled: boolean
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('supplies')
@@ -264,14 +265,18 @@ export default function MedicalAdminClient({
                 </div>
 
                 <div className="flex flex-col gap-2 pt-1">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" checked={isControlled} onChange={e => { setIsControlled(e.target.checked); if (e.target.checked) setRequiredSigs(s => Math.max(s, 2)) }}
-                      className="mt-0.5 rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                    <div>
-                      <p className="text-sm font-medium text-zinc-800">Controlled substance</p>
-                      <p className="text-xs text-zinc-500">Enforces minimum 2-signature verification on all transactions</p>
-                    </div>
-                  </label>
+                  {(moduleMedicalControlled || isControlled) ? (
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="checkbox" checked={isControlled} onChange={e => { setIsControlled(e.target.checked); if (e.target.checked) setRequiredSigs(s => Math.max(s, 2)) }}
+                        className="mt-0.5 rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-800">Controlled substance</p>
+                        <p className="text-xs text-zinc-500">Enforces minimum 2-signature verification on all transactions</p>
+                      </div>
+                    </label>
+                  ) : (
+                    <p className="text-xs text-zinc-400 italic">Controlled substance tracking isn't enabled for your department yet — ask your FireOps7 admin to turn it on.</p>
+                  )}
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" checked={tracksExpiration} onChange={e => setTracksExpiration(e.target.checked)}
                       className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />

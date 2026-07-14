@@ -314,6 +314,8 @@ export async function receiveStock(data: {
   notes: string | null
   signer_1_id: string | null
   signer_2_id: string | null
+  signer_1_signature: string | null
+  signer_2_signature: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
@@ -339,7 +341,9 @@ export async function receiveStock(data: {
 
   const sigsRequired = supplyType?.required_signatures ?? 0
   if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required for this supply type.' }
+  if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
   if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A second signer is required for controlled substances.' }
+  if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The second signer must sign.' }
 
   const now = new Date().toISOString()
 
@@ -370,8 +374,10 @@ export async function receiveStock(data: {
     performed_by: ctx.me.id,
     signer_1_id: data.signer_1_id || null,
     signer_1_at: data.signer_1_id ? now : null,
+    signer_1_signature_data: data.signer_1_signature || null,
     signer_2_id: data.signer_2_id || null,
     signer_2_at: data.signer_2_id ? now : null,
+    signer_2_signature_data: data.signer_2_signature || null,
     notes: data.notes || null,
   })
 
@@ -388,6 +394,8 @@ export async function dispenseStock(data: {
   notes: string | null
   signer_1_id: string | null
   signer_2_id: string | null
+  signer_1_signature: string | null
+  signer_2_signature: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.department_id) return { error: 'Not authorized.' }
@@ -423,7 +431,9 @@ export async function dispenseStock(data: {
 
   const sigsRequired = supplyType?.required_signatures ?? 0
   if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required for this supply type.' }
+  if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
   if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A second signer is required for controlled substances.' }
+  if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The second signer must sign.' }
 
   const now = new Date().toISOString()
   const newQty = lot.quantity_remaining - data.quantity
@@ -446,8 +456,10 @@ export async function dispenseStock(data: {
     performed_by: ctx.me.id,
     signer_1_id: data.signer_1_id || null,
     signer_1_at: data.signer_1_id ? now : null,
+    signer_1_signature_data: data.signer_1_signature || null,
     signer_2_id: data.signer_2_id || null,
     signer_2_at: data.signer_2_id ? now : null,
+    signer_2_signature_data: data.signer_2_signature || null,
     notes: data.notes || null,
   })
   if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
@@ -464,6 +476,8 @@ export async function wasteStock(data: {
   notes: string | null
   signer_1_id: string | null
   signer_2_id: string | null
+  signer_1_signature: string | null
+  signer_2_signature: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
@@ -496,7 +510,9 @@ export async function wasteStock(data: {
 
   const sigsRequired = supplyType?.required_signatures ?? 0
   if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required.' }
+  if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
   if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A witness is required for controlled substance waste.' }
+  if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The witness must sign.' }
 
   const now = new Date().toISOString()
   const newQty = lot.quantity_remaining - data.quantity
@@ -518,8 +534,10 @@ export async function wasteStock(data: {
     performed_by: ctx.me.id,
     signer_1_id: data.signer_1_id || null,
     signer_1_at: data.signer_1_id ? now : null,
+    signer_1_signature_data: data.signer_1_signature || null,
     signer_2_id: data.signer_2_id || null,
     signer_2_at: data.signer_2_id ? now : null,
+    signer_2_signature_data: data.signer_2_signature || null,
     notes: noteText || null,
   })
   if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
@@ -896,6 +914,8 @@ export async function wasteExpiredLots(data: {
   notes: string | null
   signer_1_id: string | null
   signer_2_id: string | null
+  signer_1_signature: string | null
+  signer_2_signature: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
@@ -907,6 +927,18 @@ export async function wasteExpiredLots(data: {
     .eq('id', data.storeroom_inventory_id)
     .single()
   if (!invRow) return { error: 'Inventory record not found.' }
+
+  const { data: supplyType } = await adminClient
+    .from('medical_supply_types')
+    .select('required_signatures')
+    .eq('id', invRow.supply_type_id)
+    .single()
+
+  const sigsRequired = supplyType?.required_signatures ?? 0
+  if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required.' }
+  if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
+  if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A witness is required for controlled substance waste.' }
+  if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The witness must sign.' }
 
   const now = new Date()
   const { data: expiredLots } = await adminClient
@@ -938,7 +970,11 @@ export async function wasteExpiredLots(data: {
       quantity: lot.quantity_remaining,
       performed_by: ctx.me.id,
       signer_1_id: data.signer_1_id || null,
+      signer_1_at: data.signer_1_id ? now.toISOString() : null,
+      signer_1_signature_data: data.signer_1_signature || null,
       signer_2_id: data.signer_2_id || null,
+      signer_2_at: data.signer_2_id ? now.toISOString() : null,
+      signer_2_signature_data: data.signer_2_signature || null,
       notes: noteText || null,
     })
     if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }

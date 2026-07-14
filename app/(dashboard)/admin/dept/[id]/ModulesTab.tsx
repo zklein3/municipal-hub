@@ -17,6 +17,7 @@ export default function ModulesTab({
   moduleIso,
   moduleNeris,
   moduleMedical,
+  moduleMedicalControlled,
   moduleFuelStorage,
   publicSiteEnabled,
   nerisEntityId,
@@ -26,6 +27,7 @@ export default function ModulesTab({
   moduleIso: boolean
   moduleNeris: boolean
   moduleMedical: boolean
+  moduleMedicalControlled: boolean
   moduleFuelStorage: boolean
   publicSiteEnabled: boolean
   nerisEntityId: string | null
@@ -37,6 +39,7 @@ export default function ModulesTab({
     module_iso: moduleIso,
     module_neris: moduleNeris,
     module_medical: moduleMedical,
+    module_medical_controlled: moduleMedicalControlled,
     module_fuel_storage: moduleFuelStorage,
     public_site_enabled: publicSiteEnabled,
   })
@@ -44,7 +47,7 @@ export default function ModulesTab({
   const [savingEntityId, setSavingEntityId] = useState(false)
   const [entityIdSaved, setEntityIdSaved] = useState(false)
 
-  async function handleToggle(key: Bundle['key']) {
+  async function handleToggle(key: keyof typeof state) {
     setSaving(key)
     setError(null)
     const newValue = !state[key]
@@ -206,6 +209,34 @@ export default function ModulesTab({
                 {entityIdSaved && <span className="text-xs font-medium text-green-600">✓ Saved</span>}
               </div>
               <p className="text-xs text-zinc-400 mt-1">Required before this department can submit to NERIS.</p>
+            </div>
+          )}
+          {bundle.key === 'module_medical' && bundle.enabled && (
+            <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-zinc-800">Controlled Substance Tracking</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Lets this department mark a supply type "Controlled" — enforces dual signature capture on receive/dispense/waste. Off by default; enable per department for testing or rollout.
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  state.module_medical_controlled ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'
+                }`}>
+                  {state.module_medical_controlled ? 'Enabled' : 'Disabled'}
+                </span>
+                <button
+                  onClick={() => handleToggle('module_medical_controlled')}
+                  disabled={saving === 'module_medical_controlled'}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    state.module_medical_controlled
+                      ? 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      : 'bg-red-700 text-white hover:bg-red-800'
+                  }`}
+                >
+                  {saving === 'module_medical_controlled' ? 'Saving…' : state.module_medical_controlled ? 'Disable' : 'Enable'}
+                </button>
+              </div>
             </div>
           )}
         </div>

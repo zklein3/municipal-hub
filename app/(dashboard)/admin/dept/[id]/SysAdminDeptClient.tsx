@@ -34,7 +34,7 @@ interface Dept {
   public_phone: string | null; public_email: string | null; public_address: string | null
   public_tagline: string | null; public_about: string | null
   burn_permit_restrictions: string | null; burn_permit_county_info: string | null
-  module_operations: boolean; module_iso: boolean; module_neris: boolean; module_medical: boolean; module_fuel_storage: boolean
+  module_operations: boolean; module_iso: boolean; module_neris: boolean; module_medical: boolean; module_medical_controlled: boolean; module_fuel_storage: boolean
   neris_entity_id: string | null
 }
 interface EventSeries { id: string; title: string; event_type: string | null; is_public: boolean; active: boolean }
@@ -584,6 +584,7 @@ export default function SysAdminDeptClient({
           moduleIso={dept.module_iso}
           moduleNeris={dept.module_neris}
           moduleMedical={dept.module_medical}
+          moduleMedicalControlled={dept.module_medical_controlled}
           moduleFuelStorage={dept.module_fuel_storage}
           publicSiteEnabled={dept.public_site_enabled}
           nerisEntityId={dept.neris_entity_id}
