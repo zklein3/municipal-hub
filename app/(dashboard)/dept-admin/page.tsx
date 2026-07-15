@@ -96,8 +96,8 @@ export default async function DeptAdminPage() {
           href="/dept-admin/kiosk"
         />
         <HubCard
-          title="Equipment Setup"
-          description="Item types, categories, and dept configuration"
+          title="Dept Setup"
+          description="Stations, apparatus, personnel roles, and equipment items"
           href="/dept-admin/setup"
         />
         <HubCard
