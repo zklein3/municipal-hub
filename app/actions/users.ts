@@ -387,10 +387,17 @@ export async function createDeptMember(formData: FormData) {
     return { error: 'You do not have permission to add personnel.' }
   }
 
-  // Sys admin has no department_personnel row of their own, so their department comes
-  // from the form (SysAdminDeptClient passes it explicitly); everyone else's comes from
-  // their own session context, which can't be spoofed via the form.
-  const department_id = ctx.isSysAdmin ? (formData.get('department_id') as string | null) : ctx.departmentId
+  // SysAdminDeptClient (the sys-admin-only per-department panel) explicitly passes
+  // department_id in the form, since sys admin has no department_personnel row of
+  // their own there. But a sys-admin-flagged account can *also* be a real member of
+  // a department and use the ordinary dept-admin self-service pages (DeptPersonnelClient,
+  // the Dept Setup wizard) — those forms never include department_id at all, so a
+  // sys admin using their own department's normal tools must fall back to their
+  // currently-selected department context, same as everyone else. Only trust the
+  // form value when it's actually present; a non-sys-admin can't reach this branch
+  // at all since isSysAdmin gates it, so this can't be spoofed to another department.
+  const formDeptId = formData.get('department_id') as string | null
+  const department_id = (ctx.isSysAdmin && formDeptId) ? formDeptId : ctx.departmentId
   if (!department_id) {
     await logError('Department could not be resolved when adding personnel', '/dept-admin/personnel', {
       personnel_id: ctx.personnelId,
