@@ -391,7 +391,13 @@ export async function createDeptMember(formData: FormData) {
   // from the form (SysAdminDeptClient passes it explicitly); everyone else's comes from
   // their own session context, which can't be spoofed via the form.
   const department_id = ctx.isSysAdmin ? (formData.get('department_id') as string | null) : ctx.departmentId
-  if (!department_id) return { error: 'Could not verify your department. Please refresh the page and try again — if you belong to more than one department, your selection may have expired.' }
+  if (!department_id) {
+    await logError('Department could not be resolved when adding personnel', '/dept-admin/personnel', {
+      personnel_id: ctx.personnelId,
+      metadata: { hasMultipleDepartments: ctx.hasMultipleDepartments, selectionPending: ctx.selectionPending, isSysAdmin: ctx.isSysAdmin },
+    })
+    return { error: 'Could not verify your department. Please refresh the page and try again — if you belong to more than one department, your selection may have expired.' }
+  }
 
   const { data: existing } = await adminClient
     .from('personnel')
