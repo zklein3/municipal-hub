@@ -190,7 +190,7 @@ export default function MedicalCompartmentsSection({
     if (wasteForm.requiredSigs >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
     setError(null); setLoading(true)
     const r = await wasteStock({
-      storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty,
+      storeroom_inventory_id: wasteForm.invId, lot_id: wasteForm.lotId, quantity: qty, unit_ids: null,
       waste_reason: wasteForm.wasteReason, notes: wasteForm.notes || null,
       signer_1_id: wasteForm.signer1Id || null, signer_2_id: wasteForm.signer2Id || null,
       signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,

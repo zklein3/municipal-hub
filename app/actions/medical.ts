@@ -320,6 +320,7 @@ export async function receiveStock(data: {
   concentration_unit: string | null
   volume_per_unit: number | null
   volume_unit: string | null
+  control_numbers: string[] | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
@@ -339,7 +340,7 @@ export async function receiveStock(data: {
   // Verify supply type signature requirements are satisfied
   const { data: supplyType } = await adminClient
     .from('medical_supply_types')
-    .select('required_signatures, name')
+    .select('required_signatures, name, is_controlled')
     .eq('id', invRow.supply_type_id)
     .single()
 
@@ -348,6 +349,16 @@ export async function receiveStock(data: {
   if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
   if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A second signer is required for controlled substances.' }
   if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The second signer must sign.' }
+
+  // Controlled substances get one control number per vial — checked here rather than left
+  // to the DB unique constraint alone so a typo'd duplicate surfaces as a clear error.
+  if (supplyType?.is_controlled) {
+    const numbers = (data.control_numbers ?? []).map(n => n.trim())
+    if (numbers.length !== data.quantity_received || numbers.some(n => !n))
+      return { error: 'A control number is required for every vial.' }
+    if (new Set(numbers).size !== numbers.length)
+      return { error: 'Control numbers must be unique — two vials have the same number.' }
+  }
 
   const now = new Date().toISOString()
 
@@ -370,6 +381,22 @@ export async function receiveStock(data: {
   }).select('id').single()
 
   if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
+
+  if (supplyType?.is_controlled) {
+    const { error: unitsErr } = await adminClient.from('medical_stock_units').insert(
+      (data.control_numbers ?? []).map(control_number => ({
+        lot_id: lot.id,
+        department_id: invRow.department_id,
+        control_number: control_number.trim(),
+        status: 'available' as const,
+      }))
+    )
+    if (unitsErr) {
+      await logError(unitsErr.message, '/medical', { metadata: { lot_id: lot.id } })
+      const dup = unitsErr.code === '23505'
+      return { error: dup ? 'One of these control numbers is already in use in this department.' : unitsErr.message }
+    }
+  }
 
   // Create the transaction record
   const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
@@ -480,7 +507,7 @@ export async function dispenseStock(data: {
 
 export async function administerStock(data: {
   storeroom_inventory_id: string
-  lot_id: string
+  unit_id: string
   administered_amount: number
   notes: string | null
   signer_1_id: string | null
@@ -492,15 +519,24 @@ export async function administerStock(data: {
   if (!ctx?.department_id) return { error: 'Not authorized.' }
   const adminClient = createAdminClient()
 
-  if (!data.lot_id || !data.administered_amount || data.administered_amount <= 0)
-    return { error: 'Administered amount is required.' }
+  if (!data.unit_id || !data.administered_amount || data.administered_amount <= 0)
+    return { error: 'Select a vial and enter the amount administered.' }
+
+  const { data: unit } = await adminClient
+    .from('medical_stock_units')
+    .select('id, lot_id, status, control_number')
+    .eq('id', data.unit_id)
+    .single()
+  if (!unit) return { error: 'Vial not found.' }
+  if (unit.status !== 'available') return { error: `Vial ${unit.control_number} has already been ${unit.status}.` }
 
   const { data: lot } = await adminClient
     .from('medical_stock_lots')
-    .select('quantity_remaining, volume_per_unit, volume_unit')
-    .eq('id', data.lot_id)
+    .select('quantity_remaining, volume_per_unit, volume_unit, storeroom_inventory_id')
+    .eq('id', unit.lot_id)
     .single()
   if (!lot) return { error: 'Lot not found.' }
+  if (lot.storeroom_inventory_id !== data.storeroom_inventory_id) return { error: 'Vial does not belong to this storeroom.' }
   if (lot.quantity_remaining < 1) return { error: 'No vials remaining in this lot.' }
   if (!lot.volume_per_unit) return { error: 'This lot has no volume per unit on file — cannot log administration.' }
   if (data.administered_amount > lot.volume_per_unit)
@@ -532,14 +568,14 @@ export async function administerStock(data: {
   const { error: lotErr } = await adminClient
     .from('medical_stock_lots')
     .update({ quantity_remaining: newQty, active: newQty > 0, updated_at: now })
-    .eq('id', data.lot_id)
+    .eq('id', unit.lot_id)
   if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
 
-  const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+  const { data: tx, error: txErr } = await adminClient.from('medical_stock_transactions').insert({
     department_id: invRow.department_id,
     storeroom_id: invRow.storeroom_id,
     supply_type_id: invRow.supply_type_id,
-    lot_id: data.lot_id,
+    lot_id: unit.lot_id,
     transaction_type: 'administered',
     quantity: 1,
     administered_amount: data.administered_amount,
@@ -553,8 +589,14 @@ export async function administerStock(data: {
     signer_2_at: data.signer_2_id ? now : null,
     signer_2_signature_data: data.signer_2_signature || null,
     notes: data.notes || null,
-  })
+  }).select('id').single()
   if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+  const { error: unitErr } = await adminClient
+    .from('medical_stock_units')
+    .update({ status: 'administered', transaction_id: tx.id })
+    .eq('id', unit.id)
+  if (unitErr) await logError(unitErr.message, '/medical', { metadata: { unit_id: unit.id, transaction_id: tx.id } })
 
   revalidatePath('/medical')
   return { success: true, wasteAmount }
@@ -564,6 +606,7 @@ export async function wasteStock(data: {
   storeroom_inventory_id: string
   lot_id: string
   quantity: number
+  unit_ids: string[] | null
   waste_reason: string
   notes: string | null
   signer_1_id: string | null
@@ -606,6 +649,22 @@ export async function wasteStock(data: {
   if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A witness is required for controlled substance waste.' }
   if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The witness must sign.' }
 
+  // Controlled substances are wasted by specific vial, not a raw count — verify the
+  // selected vials are actually available and belong to this lot before touching anything.
+  let units: { id: string; control_number: string }[] = []
+  if (supplyType?.is_controlled) {
+    const unitIds = data.unit_ids ?? []
+    if (unitIds.length !== data.quantity) return { error: 'Select which vials are being wasted.' }
+    const { data: fetchedUnits } = await adminClient
+      .from('medical_stock_units')
+      .select('id, control_number, status, lot_id')
+      .in('id', unitIds)
+    if (!fetchedUnits || fetchedUnits.length !== unitIds.length) return { error: 'One or more selected vials could not be found.' }
+    const badUnit = fetchedUnits.find(u => u.lot_id !== data.lot_id || u.status !== 'available')
+    if (badUnit) return { error: `Vial ${badUnit.control_number} is not available in this lot.` }
+    units = fetchedUnits
+  }
+
   const now = new Date().toISOString()
   const newQty = lot.quantity_remaining - data.quantity
 
@@ -616,7 +675,7 @@ export async function wasteStock(data: {
   if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
 
   const noteText = [data.waste_reason, data.notes].filter(Boolean).join(' — ')
-  const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+  const { data: tx, error: txErr } = await adminClient.from('medical_stock_transactions').insert({
     department_id: invRow.department_id,
     storeroom_id: invRow.storeroom_id,
     supply_type_id: invRow.supply_type_id,
@@ -631,8 +690,16 @@ export async function wasteStock(data: {
     signer_2_at: data.signer_2_id ? now : null,
     signer_2_signature_data: data.signer_2_signature || null,
     notes: noteText || null,
-  })
+  }).select('id').single()
   if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+  if (units.length > 0) {
+    const { error: unitsErr } = await adminClient
+      .from('medical_stock_units')
+      .update({ status: 'wasted', transaction_id: tx.id })
+      .in('id', units.map(u => u.id))
+    if (unitsErr) await logError(unitsErr.message, '/medical', { metadata: { transaction_id: tx.id } })
+  }
 
   revalidatePath('/medical')
   return { success: true }
@@ -655,7 +722,7 @@ export async function transferStock(data: {
   // Fetch source lot
   const { data: lot } = await adminClient
     .from('medical_stock_lots')
-    .select('quantity_remaining, lot_number, expiration_date, received_date')
+    .select('quantity_remaining, lot_number, expiration_date, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit')
     .eq('id', data.lot_id)
     .single()
   if (!lot) return { error: 'Lot not found.' }
@@ -714,10 +781,33 @@ export async function transferStock(data: {
       received_by: ctx.me.id,
       notes: data.notes || null,
       active: true,
+      concentration_amount: lot.concentration_amount,
+      concentration_unit: lot.concentration_unit,
+      volume_per_unit: lot.volume_per_unit,
+      volume_unit: lot.volume_unit,
     })
     .select('id')
     .single()
   if (newLotErr) { await logError(newLotErr.message, '/medical'); return { error: newLotErr.message } }
+
+  // Controlled substances carry their physical vial identity with them — move the oldest
+  // available control-numbered units from the source lot onto the new destination lot.
+  if (supplyTypeRow?.is_controlled) {
+    const { data: movableUnits } = await adminClient
+      .from('medical_stock_units')
+      .select('id')
+      .eq('lot_id', data.lot_id)
+      .eq('status', 'available')
+      .order('created_at', { ascending: true })
+      .limit(data.quantity)
+    if (movableUnits && movableUnits.length > 0) {
+      const { error: moveErr } = await adminClient
+        .from('medical_stock_units')
+        .update({ lot_id: newLot.id })
+        .in('id', movableUnits.map(u => u.id))
+      if (moveErr) await logError(moveErr.message, '/medical', { metadata: { lot_id: data.lot_id, new_lot_id: newLot.id } })
+    }
+  }
 
   // transferred_out transaction
   const { error: txOutErr } = await adminClient.from('medical_stock_transactions').insert({
@@ -878,6 +968,16 @@ export async function adjustStock(data: {
     .eq('id', data.lot_id)
     .single()
   if (!lot) return { error: 'Lot not found.' }
+
+  // Controlled substances are vial-tracked by control number — a blind count adjustment
+  // can't tell which physical vial it's supposedly adding or removing. Use Waste/Administer
+  // instead so the specific vial stays accounted for.
+  const { count: unitCount } = await adminClient
+    .from('medical_stock_units')
+    .select('id', { count: 'exact', head: true })
+    .eq('lot_id', data.lot_id)
+  if (unitCount && unitCount > 0)
+    return { error: 'This lot is tracked by control number — use Waste to remove a specific vial instead of adjusting the count.' }
 
   const delta = data.new_quantity - lot.quantity_remaining
   if (delta === 0) return { error: 'New quantity is the same as current quantity.' }
@@ -1053,7 +1153,7 @@ export async function wasteExpiredLots(data: {
       .eq('id', lot.id)
     if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
 
-    const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+    const { data: tx, error: txErr } = await adminClient.from('medical_stock_transactions').insert({
       department_id: invRow.department_id,
       storeroom_id: invRow.storeroom_id,
       supply_type_id: invRow.supply_type_id,
@@ -1068,8 +1168,15 @@ export async function wasteExpiredLots(data: {
       signer_2_at: data.signer_2_id ? now.toISOString() : null,
       signer_2_signature_data: data.signer_2_signature || null,
       notes: noteText || null,
-    })
+    }).select('id').single()
     if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+    const { error: unitsErr } = await adminClient
+      .from('medical_stock_units')
+      .update({ status: 'wasted', transaction_id: tx.id })
+      .eq('lot_id', lot.id)
+      .eq('status', 'available')
+    if (unitsErr) await logError(unitsErr.message, '/medical', { metadata: { lot_id: lot.id, transaction_id: tx.id } })
   }
 
   revalidatePath('/medical')

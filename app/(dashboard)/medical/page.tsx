@@ -77,6 +77,17 @@ export default async function MedicalPage() {
         .order('expiration_date', { ascending: true, nullsFirst: false })
     : { data: [] }
 
+  // Control-numbered vials for controlled-substance lots
+  const lotIds = (lots ?? []).map(l => l.id)
+  const { data: units } = lotIds.length > 0
+    ? await adminClient
+        .from('medical_stock_units')
+        .select('id, lot_id, control_number, status')
+        .in('lot_id', lotIds)
+        .eq('status', 'available')
+        .order('created_at', { ascending: true })
+    : { data: [] }
+
   // Personnel for signer dropdowns
   const { data: deptPersonnel } = await adminClient
     .from('department_personnel')
@@ -180,6 +191,7 @@ export default async function MedicalPage() {
       allTransferInventory={allInventory ?? []}
       supplyTypes={supplyTypes ?? []}
       lots={lots ?? []}
+      units={units ?? []}
       personnel={personnel}
       stations={stations ?? []}
       apparatusMap={apparatusMap}

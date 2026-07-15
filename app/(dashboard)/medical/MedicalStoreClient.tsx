@@ -15,6 +15,7 @@ interface Lot {
   concentration_amount: number | null; concentration_unit: string | null
   volume_per_unit: number | null; volume_unit: string | null
 }
+interface ControlUnit { id: string; lot_id: string; control_number: string; status: string }
 interface Personnel { id: string; name: string }
 interface Station { id: string; station_name: string; station_number: string | null }
 interface Transaction {
@@ -51,12 +52,14 @@ interface ReceiveForm {
   concentrationUnit: string
   volumePerUnit: string
   volumeUnit: string
+  controlNumbers: string[]
+  controlNumberStart: string
 }
 
 interface AdministerForm {
   inventoryId: string
-  lotId: string
-  supplyName: string
+  unitId: string
+  availableUnits: ControlUnit[]
   volumePerUnit: number
   volumeUnit: string
   concentrationAmount: number | null
@@ -64,6 +67,7 @@ interface AdministerForm {
   requiredSignatures: number
   lotQuantityRemaining: number
   administeredAmount: string
+  supplyName: string
   notes: string
   signer1Id: string
   signer2Id: string
@@ -96,6 +100,8 @@ interface WasteForm {
   notes: string
   signer1Id: string
   signer2Id: string
+  availableUnits: ControlUnit[]
+  selectedUnitIds: string[]
 }
 
 interface AdjustForm {
@@ -197,8 +203,28 @@ function administeredDoseToVolume(form: AdministerForm, entered: number): number
   return entered
 }
 
+// Bumps the trailing numeric run in a control number ("F100234" -> "F100235"), preserving
+// leading zeros. Non-numeric or unparseable values are left blank for manual entry.
+function nextControlNumber(prev: string): string {
+  const m = prev.match(/^(.*?)(\d+)$/)
+  if (!m) return ''
+  const [, prefix, digits] = m
+  const next = (parseInt(digits, 10) + 1).toString().padStart(digits.length, '0')
+  return prefix + next
+}
+
+function generateControlNumbers(start: string, count: number): string[] {
+  const result: string[] = []
+  let current = start
+  for (let i = 0; i < count; i++) {
+    result.push(current)
+    current = current ? nextControlNumber(current) : ''
+  }
+  return result
+}
+
 export default function MedicalStoreClient({
-  storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, personnel, stations, apparatusMap,
+  storerooms, inventory, allTransferStorerooms, allTransferInventory, supplyTypes, lots, units, personnel, stations, apparatusMap,
   allApparatus, allCompartments,
   isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap, departmentTimezone,
@@ -209,6 +235,7 @@ export default function MedicalStoreClient({
   allTransferInventory: InventoryRow[]
   supplyTypes: SupplyType[]
   lots: Lot[]
+  units: ControlUnit[]
   personnel: Personnel[]
   stations: Station[]
   apparatusMap: Record<string, { unit_number: string; type_name: string | null }>
@@ -292,6 +319,8 @@ export default function MedicalStoreClient({
       concentrationUnit: '',
       volumePerUnit: '',
       volumeUnit: '',
+      controlNumbers: [],
+      controlNumberStart: '',
     })
   }
 
@@ -300,6 +329,11 @@ export default function MedicalStoreClient({
     const qty = parseInt(receiveForm.quantity)
     if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
     if (receiveForm.tracksExpiration && !receiveForm.expirationDate) { setError('Expiration date is required for this supply type.'); return }
+    if (receiveForm.isControlled) {
+      const numbers = receiveForm.controlNumbers.map(n => n.trim())
+      if (numbers.length !== qty || numbers.some(n => !n)) { setError('A control number is required for every vial.'); return }
+      if (new Set(numbers).size !== numbers.length) { setError('Control numbers must be unique — two vials have the same number.'); return }
+    }
     if (receiveForm.requiredSignatures >= 1 && !receiveForm.signer1Id) { setError('Signer 1 is required.'); return }
     const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
     if (receiveForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
@@ -322,6 +356,7 @@ export default function MedicalStoreClient({
       concentration_unit: receiveForm.concentrationUnit || null,
       volume_per_unit: receiveForm.volumePerUnit ? parseFloat(receiveForm.volumePerUnit) : null,
       volume_unit: receiveForm.volumeUnit || null,
+      control_numbers: receiveForm.isControlled ? receiveForm.controlNumbers.map(n => n.trim()) : null,
     })
     if (result?.error) { setError(result.error) }
     else {
@@ -387,27 +422,26 @@ export default function MedicalStoreClient({
   function openAdminister(inv: InventoryRow) {
     const supply = supplyMap[inv.supply_type_id]
     if (!supply) return
-    const activeLots = lots.filter(l => l.storeroom_inventory_id === inv.id && l.quantity_remaining > 0)
-    if (activeLots.length === 0) { setError('No stock available to administer.'); return }
-    const oldestLot = activeLots.sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
-    if (!oldestLot.volume_per_unit) {
-      setError('This lot has no volume per unit on file. Edit the lot or receive a new one with volume/concentration set.')
+    const activeLotIds = new Set(
+      lots.filter(l => l.storeroom_inventory_id === inv.id && l.quantity_remaining > 0 && l.volume_per_unit).map(l => l.id)
+    )
+    const availableUnits = units.filter(u => activeLotIds.has(u.lot_id) && u.status === 'available')
+    if (availableUnits.length === 0) {
+      setError('No vials available to administer. Receive stock (with volume per vial set) first.')
       return
     }
     setError(null)
-    const doseUnit = oldestLot.concentration_amount && oldestLot.concentration_unit
-      ? oldestLot.concentration_unit.split('/')[0].trim() || null
-      : null
     setAdministerForm({
       inventoryId: inv.id,
-      lotId: oldestLot.id,
+      unitId: '',
+      availableUnits,
       supplyName: supply.name,
-      volumePerUnit: oldestLot.volume_per_unit,
-      volumeUnit: oldestLot.volume_unit ?? '',
-      concentrationAmount: oldestLot.concentration_amount,
-      doseUnit,
+      volumePerUnit: 0,
+      volumeUnit: '',
+      concentrationAmount: null,
+      doseUnit: null,
       requiredSignatures: supply.required_signatures,
-      lotQuantityRemaining: oldestLot.quantity_remaining,
+      lotQuantityRemaining: 0,
       administeredAmount: '',
       notes: '',
       signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
@@ -415,8 +449,31 @@ export default function MedicalStoreClient({
     })
   }
 
+  function selectAdministerUnit(unitId: string) {
+    setAdministerForm(f => {
+      if (!f) return f
+      const unit = f.availableUnits.find(u => u.id === unitId)
+      const lot = unit ? lots.find(l => l.id === unit.lot_id) : null
+      if (!unit || !lot || !lot.volume_per_unit) return { ...f, unitId: '' }
+      const doseUnit = lot.concentration_amount && lot.concentration_unit
+        ? lot.concentration_unit.split('/')[0].trim() || null
+        : null
+      return {
+        ...f,
+        unitId,
+        volumePerUnit: lot.volume_per_unit,
+        volumeUnit: lot.volume_unit ?? '',
+        concentrationAmount: lot.concentration_amount,
+        doseUnit,
+        lotQuantityRemaining: lot.quantity_remaining,
+        administeredAmount: '',
+      }
+    })
+  }
+
   async function handleAdministerSubmit() {
     if (!administerForm) return
+    if (!administerForm.unitId) { setError('Select which vial is being administered.'); return }
     const entered = parseFloat(administerForm.administeredAmount)
     if (!entered || entered <= 0) { setError('Enter the amount administered.'); return }
     const administered = Math.round(administeredDoseToVolume(administerForm, entered) * 1000) / 1000
@@ -437,7 +494,7 @@ export default function MedicalStoreClient({
     setError(null); setLoading(true)
     const result = await administerStock({
       storeroom_inventory_id: administerForm.inventoryId,
-      lot_id: administerForm.lotId,
+      unit_id: administerForm.unitId,
       administered_amount: administered,
       notes: administerForm.notes || null,
       signer_1_id: administerForm.signer1Id || null,
@@ -463,6 +520,7 @@ export default function MedicalStoreClient({
     const supply = supplyMap[inv.supply_type_id]
     if (!supply) return
     setError(null)
+    const availableUnits = units.filter(u => u.lot_id === lot.id && u.status === 'available')
     setWasteForm({
       inventoryId: inv.id,
       lotId: lot.id,
@@ -472,7 +530,9 @@ export default function MedicalStoreClient({
       requiredSignatures: supply.required_signatures,
       lotNumber: lot.lot_number,
       maxQty: lot.quantity_remaining,
-      quantity: String(lot.quantity_remaining),
+      quantity: supply.is_controlled ? '0' : String(lot.quantity_remaining),
+      availableUnits,
+      selectedUnitIds: [],
       wasteReason: 'expired',
       notes: '',
       signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
@@ -480,10 +540,20 @@ export default function MedicalStoreClient({
     })
   }
 
+  function toggleWasteUnit(unitId: string) {
+    setWasteForm(f => {
+      if (!f) return f
+      const selected = f.selectedUnitIds.includes(unitId)
+        ? f.selectedUnitIds.filter(id => id !== unitId)
+        : [...f.selectedUnitIds, unitId]
+      return { ...f, selectedUnitIds: selected, quantity: String(selected.length) }
+    })
+  }
+
   async function handleWasteSubmit() {
     if (!wasteForm) return
     const qty = parseInt(wasteForm.quantity)
-    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
+    if (!qty || qty < 1) { setError(wasteForm.isControlled ? 'Select which vials are being wasted.' : 'Quantity must be at least 1.'); return }
     if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} units available.`); return }
     if (wasteForm.requiredSignatures >= 1 && !wasteForm.signer1Id) { setError('Signer 1 is required.'); return }
     const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
@@ -497,6 +567,7 @@ export default function MedicalStoreClient({
       storeroom_inventory_id: wasteForm.inventoryId,
       lot_id: wasteForm.lotId,
       quantity: qty,
+      unit_ids: wasteForm.isControlled ? wasteForm.selectedUnitIds : null,
       waste_reason: wasteForm.wasteReason,
       notes: wasteForm.notes || null,
       signer_1_id: wasteForm.signer1Id || null,
@@ -1095,7 +1166,16 @@ export default function MedicalStoreClient({
                     Quantity <span className="text-red-500">*</span>
                   </label>
                   <input type="number" min="1" value={receiveForm.quantity} placeholder="0"
-                    onChange={e => setReceiveForm(f => f ? { ...f, quantity: e.target.value } : f)}
+                    onChange={e => {
+                      const val = e.target.value
+                      setReceiveForm(f => {
+                        if (!f) return f
+                        if (!f.isControlled) return { ...f, quantity: val }
+                        const n = parseInt(val) || 0
+                        const numbers = f.controlNumberStart ? generateControlNumbers(f.controlNumberStart, n) : Array(n).fill('')
+                        return { ...f, quantity: val, controlNumbers: numbers }
+                      })
+                    }}
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
                 </div>
               </div>
@@ -1155,6 +1235,36 @@ export default function MedicalStoreClient({
                     </div>
                   </div>
                   <p className="text-xs text-zinc-500 mt-2">Set this so you can later log administration by volume (amount given + auto-calculated waste).</p>
+                </div>
+              )}
+
+              {receiveForm.isControlled && parseInt(receiveForm.quantity) > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-2">Control number per vial</p>
+                  <div className="flex gap-1 mb-2">
+                    <input type="text" value={receiveForm.controlNumberStart} placeholder="Starting control # (optional)"
+                      onChange={e => setReceiveForm(f => f ? { ...f, controlNumberStart: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                    <button type="button"
+                      onClick={() => setReceiveForm(f => f ? { ...f, controlNumbers: generateControlNumbers(f.controlNumberStart, parseInt(f.quantity) || 0) } : f)}
+                      disabled={!receiveForm.controlNumberStart}
+                      className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                      Fill Sequential
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                    {receiveForm.controlNumbers.map((num, i) => (
+                      <input key={i} type="text" value={num} placeholder={`Vial ${i + 1} control #`}
+                        onChange={e => setReceiveForm(f => {
+                          if (!f) return f
+                          const numbers = [...f.controlNumbers]
+                          numbers[i] = e.target.value
+                          return { ...f, controlNumbers: numbers }
+                        })}
+                        className="w-full rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-2">Each vial needs its own control number — edit any field to match what's printed on the physical vial.</p>
                 </div>
               )}
 
@@ -1431,15 +1541,36 @@ export default function MedicalStoreClient({
                 </select>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">
-                  Quantity to Waste <span className="text-red-500">*</span>
-                  <span className="ml-1 text-zinc-400 font-normal">({wasteForm.maxQty} available)</span>
-                </label>
-                <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
-                  onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-              </div>
+              {wasteForm.isControlled ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Vials to Waste <span className="text-red-500">*</span>
+                    <span className="ml-1 text-zinc-400 font-normal">({wasteForm.selectedUnitIds.length} selected)</span>
+                  </label>
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 p-2">
+                    {wasteForm.availableUnits.length === 0 && (
+                      <p className="text-xs text-zinc-400 px-1 py-1">No vials on file for this lot.</p>
+                    )}
+                    {wasteForm.availableUnits.map(u => (
+                      <label key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm text-zinc-700 hover:bg-zinc-50 rounded cursor-pointer">
+                        <input type="checkbox" checked={wasteForm.selectedUnitIds.includes(u.id)}
+                          onChange={() => toggleWasteUnit(u.id)} />
+                        {u.control_number}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Quantity to Waste <span className="text-red-500">*</span>
+                    <span className="ml-1 text-zinc-400 font-normal">({wasteForm.maxQty} available)</span>
+                  </label>
+                  <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
+                    onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
@@ -1742,7 +1873,7 @@ export default function MedicalStoreClient({
         const enteredNum = parseFloat(entered)
         const hasEntry = entered !== '' && !isNaN(enteredNum)
         const volumeGiven = hasEntry ? administeredDoseToVolume(administerForm, enteredNum) : null
-        const validAmount = volumeGiven !== null && enteredNum > 0 && volumeGiven <= administerForm.volumePerUnit + 0.0001
+        const validAmount = !!administerForm.unitId && volumeGiven !== null && enteredNum > 0 && volumeGiven <= administerForm.volumePerUnit + 0.0001
         const waste = validAmount && volumeGiven !== null ? Math.round((administerForm.volumePerUnit - volumeGiven) * 1000) / 1000 : null
         const wasteDisplay = waste !== null
           ? (administerForm.doseUnit && administerForm.concentrationAmount
@@ -1764,9 +1895,30 @@ export default function MedicalStoreClient({
               {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
               <div className="flex flex-col gap-3">
-                <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
-                  This vial: {administerForm.doseUnit ? `${maxEntry} ${administerForm.doseUnit} (${administerForm.volumePerUnit} ${administerForm.volumeUnit})` : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Vial (Control #) <span className="text-red-500">*</span>
+                  </label>
+                  <select value={administerForm.unitId}
+                    onChange={e => selectAdministerUnit(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                    <option value="">Select the vial in hand...</option>
+                    {administerForm.availableUnits.map(u => {
+                      const unitLot = lots.find(l => l.id === u.lot_id)
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.control_number}{unitLot?.lot_number ? ` — Lot ${unitLot.lot_number}` : ''}{unitLot?.expiration_date ? ` (Exp ${fmtDate(unitLot.expiration_date)})` : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
                 </div>
+
+                {administerForm.unitId && (
+                  <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
+                    This vial: {administerForm.doseUnit ? `${maxEntry} ${administerForm.doseUnit} (${administerForm.volumePerUnit} ${administerForm.volumeUnit})` : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">
@@ -1774,8 +1926,9 @@ export default function MedicalStoreClient({
                   </label>
                   <div className="flex items-center gap-2">
                     <input type="number" step="any" min="0" max={maxEntry} value={administerForm.administeredAmount}
+                      disabled={!administerForm.unitId}
                       onChange={e => setAdministerForm(f => f ? { ...f, administeredAmount: e.target.value } : f)}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:bg-zinc-50 disabled:text-zinc-400" />
                     <span className="text-sm text-zinc-500 shrink-0">{entryUnit}</span>
                   </div>
                   {amountHint && <p className="mt-1 text-xs text-red-600">{amountHint}</p>}
