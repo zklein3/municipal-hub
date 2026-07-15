@@ -59,6 +59,8 @@ interface AdministerForm {
   supplyName: string
   volumePerUnit: number
   volumeUnit: string
+  concentrationAmount: number | null
+  doseUnit: string | null
   requiredSignatures: number
   lotQuantityRemaining: number
   administeredAmount: string
@@ -179,9 +181,20 @@ function getInventoryStatus(total: number, par: number, lots: Lot[]): 'expired' 
 
 const STATUS_LABELS = { expired: 'Expired Stock', expiring: 'Expiring Soon', low: 'Below PAR', good: 'Good', empty: 'No Stock' }
 
+const CONCENTRATION_UNITS = ['mcg/mL', 'mg/mL', 'units/mL', '%']
+
 function fmtDate(d: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// Converts an entered "Amount Administered" value to the volume (in volumeUnit) the backend
+// stores. When the lot has concentration data, the field collects a dose (e.g. mcg) since
+// that's how a dose is actually documented — mL is not something anyone administering a
+// controlled substance is thinking in.
+function administeredDoseToVolume(form: AdministerForm, entered: number): number {
+  if (form.doseUnit && form.concentrationAmount) return entered / form.concentrationAmount
+  return entered
 }
 
 export default function MedicalStoreClient({
@@ -215,6 +228,7 @@ export default function MedicalStoreClient({
   const [selectedStoreroomId, setSelectedStoreroomId] = useState<string>(storerooms[0]?.id ?? '')
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
   const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
+  const [concUnitOther, setConcUnitOther] = useState(false)
   const [historyStoreroomId, setHistoryStoreroomId] = useState<string>('all')
   const [historySupplyId, setHistorySupplyId] = useState<string>('all')
   const [historyTxType, setHistoryTxType] = useState<string>('all')
@@ -260,6 +274,7 @@ export default function MedicalStoreClient({
     const supply = supplyMap[inv.supply_type_id]
     if (!supply) return
     setError(null)
+    setConcUnitOther(false)
     setReceiveForm({
       inventoryId: inv.id,
       supplyName: supply.name,
@@ -380,12 +395,17 @@ export default function MedicalStoreClient({
       return
     }
     setError(null)
+    const doseUnit = oldestLot.concentration_amount && oldestLot.concentration_unit
+      ? oldestLot.concentration_unit.split('/')[0].trim() || null
+      : null
     setAdministerForm({
       inventoryId: inv.id,
       lotId: oldestLot.id,
       supplyName: supply.name,
       volumePerUnit: oldestLot.volume_per_unit,
       volumeUnit: oldestLot.volume_unit ?? '',
+      concentrationAmount: oldestLot.concentration_amount,
+      doseUnit,
       requiredSignatures: supply.required_signatures,
       lotQuantityRemaining: oldestLot.quantity_remaining,
       administeredAmount: '',
@@ -397,10 +417,14 @@ export default function MedicalStoreClient({
 
   async function handleAdministerSubmit() {
     if (!administerForm) return
-    const administered = parseFloat(administerForm.administeredAmount)
-    if (!administered || administered <= 0) { setError('Enter the amount administered.'); return }
+    const entered = parseFloat(administerForm.administeredAmount)
+    if (!entered || entered <= 0) { setError('Enter the amount administered.'); return }
+    const administered = Math.round(administeredDoseToVolume(administerForm, entered) * 1000) / 1000
     if (administered > administerForm.volumePerUnit) {
-      setError(`Cannot exceed ${administerForm.volumePerUnit} ${administerForm.volumeUnit} per vial.`)
+      const maxDose = administerForm.doseUnit && administerForm.concentrationAmount
+        ? `${Math.round(administerForm.volumePerUnit * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
+        : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`
+      setError(`Cannot exceed ${maxDose} per vial.`)
       return
     }
     if (administerForm.requiredSignatures >= 1 && !administerForm.signer1Id) { setError('Signer 1 is required.'); return }
@@ -424,7 +448,11 @@ export default function MedicalStoreClient({
     if (result?.error) { setError(result.error) }
     else {
       const waste = Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000
-      setSuccess(`Administered ${administered} ${administerForm.volumeUnit} of ${administerForm.supplyName} — ${waste} ${administerForm.volumeUnit} wasted.`)
+      const givenLabel = administerForm.doseUnit ? `${entered} ${administerForm.doseUnit}` : `${administered} ${administerForm.volumeUnit}`
+      const wasteLabel = administerForm.doseUnit && administerForm.concentrationAmount
+        ? `${Math.round(waste * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
+        : `${waste} ${administerForm.volumeUnit}`
+      setSuccess(`Administered ${givenLabel} of ${administerForm.supplyName} — ${wasteLabel} wasted.`)
       setAdministerForm(null)
       router.refresh()
     }
@@ -1093,10 +1121,24 @@ export default function MedicalStoreClient({
                         <input type="number" step="any" min="0" value={receiveForm.concentrationAmount} placeholder="100"
                           onChange={e => setReceiveForm(f => f ? { ...f, concentrationAmount: e.target.value } : f)}
                           className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                        <input type="text" value={receiveForm.concentrationUnit} placeholder="mcg/mL"
-                          onChange={e => setReceiveForm(f => f ? { ...f, concentrationUnit: e.target.value } : f)}
-                          className="w-24 rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                        <select
+                          value={concUnitOther ? 'Other' : receiveForm.concentrationUnit}
+                          onChange={e => {
+                            const val = e.target.value
+                            if (val === 'Other') { setConcUnitOther(true); setReceiveForm(f => f ? { ...f, concentrationUnit: '' } : f) }
+                            else { setConcUnitOther(false); setReceiveForm(f => f ? { ...f, concentrationUnit: val } : f) }
+                          }}
+                          className="w-28 shrink-0 rounded-lg border border-zinc-300 px-1.5 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                          <option value="">Unit...</option>
+                          {CONCENTRATION_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                          <option value="Other">Other</option>
+                        </select>
                       </div>
+                      {concUnitOther && (
+                        <input type="text" value={receiveForm.concentrationUnit} placeholder="e.g. mEq/mL"
+                          onChange={e => setReceiveForm(f => f ? { ...f, concentrationUnit: e.target.value } : f)}
+                          className="mt-1 w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                      )}
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-zinc-700">
@@ -1692,9 +1734,24 @@ export default function MedicalStoreClient({
       )}
 
       {administerForm && (() => {
-        const administered = parseFloat(administerForm.administeredAmount)
-        const validAmount = !isNaN(administered) && administered > 0 && administered <= administerForm.volumePerUnit
-        const waste = validAmount ? Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000 : null
+        const entryUnit = administerForm.doseUnit ?? administerForm.volumeUnit
+        const maxEntry = administerForm.doseUnit && administerForm.concentrationAmount
+          ? Math.round(administerForm.volumePerUnit * administerForm.concentrationAmount * 1000) / 1000
+          : administerForm.volumePerUnit
+        const entered = administerForm.administeredAmount.trim()
+        const enteredNum = parseFloat(entered)
+        const hasEntry = entered !== '' && !isNaN(enteredNum)
+        const volumeGiven = hasEntry ? administeredDoseToVolume(administerForm, enteredNum) : null
+        const validAmount = volumeGiven !== null && enteredNum > 0 && volumeGiven <= administerForm.volumePerUnit + 0.0001
+        const waste = validAmount && volumeGiven !== null ? Math.round((administerForm.volumePerUnit - volumeGiven) * 1000) / 1000 : null
+        const wasteDisplay = waste !== null
+          ? (administerForm.doseUnit && administerForm.concentrationAmount
+              ? `${Math.round(waste * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
+              : `${waste} ${administerForm.volumeUnit}`)
+          : `— ${entryUnit}`
+        const amountHint = hasEntry && !validAmount
+          ? (enteredNum <= 0 ? 'Enter an amount greater than 0.' : `Cannot exceed ${maxEntry} ${entryUnit} per vial.`)
+          : null
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
             <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
@@ -1708,7 +1765,7 @@ export default function MedicalStoreClient({
 
               <div className="flex flex-col gap-3">
                 <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
-                  This vial: {administerForm.volumePerUnit} {administerForm.volumeUnit} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
+                  This vial: {administerForm.doseUnit ? `${maxEntry} ${administerForm.doseUnit} (${administerForm.volumePerUnit} ${administerForm.volumeUnit})` : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
                 </div>
 
                 <div>
@@ -1716,15 +1773,16 @@ export default function MedicalStoreClient({
                     Amount Administered <span className="text-red-500">*</span>
                   </label>
                   <div className="flex items-center gap-2">
-                    <input type="number" step="any" min="0" max={administerForm.volumePerUnit} value={administerForm.administeredAmount}
+                    <input type="number" step="any" min="0" max={maxEntry} value={administerForm.administeredAmount}
                       onChange={e => setAdministerForm(f => f ? { ...f, administeredAmount: e.target.value } : f)}
                       className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                    <span className="text-sm text-zinc-500 shrink-0">{administerForm.volumeUnit}</span>
+                    <span className="text-sm text-zinc-500 shrink-0">{entryUnit}</span>
                   </div>
+                  {amountHint && <p className="mt-1 text-xs text-red-600">{amountHint}</p>}
                 </div>
 
                 <div className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${waste !== null ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
-                  Waste: {waste !== null ? `${waste} ${administerForm.volumeUnit}` : `— ${administerForm.volumeUnit}`}
+                  Waste: {wasteDisplay}
                 </div>
 
                 <div>
