@@ -400,8 +400,8 @@ export default function MedicalCompartmentsSection({
 
       {/* Use Modal */}
       {useForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Use Supply</h2>
             <p className="text-sm text-zinc-500 mb-5">{useForm.supplyName}</p>
             {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
@@ -436,8 +436,8 @@ export default function MedicalCompartmentsSection({
 
       {/* Waste Modal */}
       {wasteForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Waste / Dispose</h2>
             <p className="text-sm text-zinc-500 mb-5">
               {wasteForm.supplyName}
@@ -488,8 +488,8 @@ export default function MedicalCompartmentsSection({
         const lotsForSrcInv = srcLots.filter(l => l.storeroom_inventory_id === restockForm.srcInvId && l.quantity_remaining > 0)
         const selectedLot = srcLots.find(l => l.id === restockForm.srcLotId)
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
               <h2 className="text-base font-bold text-zinc-900 mb-1">Restock from Storeroom</h2>
               <p className="text-sm text-zinc-500 mb-5">{restockForm.supplyName}</p>
               {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
@@ -552,8 +552,8 @@ export default function MedicalCompartmentsSection({
         const selectedLot = compLots.find(l => l.id === transferOutForm.srcLotId)
         const validDests = deptStorerooms.filter(s => srcInventory.some(i => i.storeroom_id === s.id && i.supply_type_id === transferOutForm.supplyTypeId))
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
               <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer to Storeroom</h2>
               <p className="text-sm text-zinc-500 mb-5">
                 {transferOutForm.supplyName}

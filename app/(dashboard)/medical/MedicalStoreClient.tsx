@@ -1047,8 +1047,8 @@ export default function MedicalStoreClient({
 
       {/* Receive Stock Modal */}
       {receiveForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Receive Stock</h2>
             <p className="text-sm text-zinc-500 mb-5">{receiveForm.supplyName}</p>
 
@@ -1177,8 +1177,8 @@ export default function MedicalStoreClient({
 
       {/* Adjust Modal */}
       {adjustForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Adjust Quantity</h2>
             <p className="text-sm text-zinc-500 mb-1">{adjustForm.supplyName}{adjustForm.lotNumber && <span className="text-zinc-400"> · Lot {adjustForm.lotNumber}</span>}</p>
             <p className="text-xs text-zinc-400 mb-5">Current: <span className="font-semibold text-zinc-700">{adjustForm.currentQty} {adjustForm.unitOfMeasure}</span></p>
@@ -1245,8 +1245,8 @@ export default function MedicalStoreClient({
         const validDests = allTransferStorerooms.filter(s => validDestIds.has(s.id))
         const compartmentsForApparatus = allCompartments.filter(c => c.apparatus_id === transferForm.destinationApparatusId)
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
               <h2 className="text-base font-bold text-zinc-900 mb-1">Transfer Stock</h2>
               <p className="text-sm text-zinc-500 mb-4">
                 {transferForm.supplyName}
@@ -1364,8 +1364,8 @@ export default function MedicalStoreClient({
 
       {/* Waste Modal */}
       {wasteForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Log Waste / Disposal</h2>
             <p className="text-sm text-zinc-500 mb-5">
               {wasteForm.supplyName}
@@ -1458,8 +1458,8 @@ export default function MedicalStoreClient({
 
       {/* Edit Lot Modal */}
       {editLotForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Edit Lot</h2>
             <p className="text-sm text-zinc-500 mb-5">{editLotForm.supplyName}</p>
 
@@ -1498,8 +1498,8 @@ export default function MedicalStoreClient({
 
       {/* Waste All Expired Modal */}
       {wasteExpiredForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Waste Expired Lots</h2>
             <p className="text-sm text-zinc-500 mb-1">{wasteExpiredForm.supplyName}</p>
             {wasteExpiredForm.isControlled && (
@@ -1588,8 +1588,8 @@ export default function MedicalStoreClient({
 
       {/* Dispense Modal */}
       {dispenseForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
             <h2 className="text-base font-bold text-zinc-900 mb-1">Use / Dispense</h2>
             <p className="text-sm text-zinc-500 mb-5">
               {dispenseForm.supplyName}
@@ -1696,8 +1696,8 @@ export default function MedicalStoreClient({
         const validAmount = !isNaN(administered) && administered > 0 && administered <= administerForm.volumePerUnit
         const waste = validAmount ? Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000 : null
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
               <h2 className="text-base font-bold text-zinc-900 mb-1">Administer</h2>
               <p className="text-sm text-zinc-500 mb-5">
                 {administerForm.supplyName}
