@@ -6,6 +6,7 @@ import PrintButton from '../training-signin/PrintButton'
 const TX_LABELS: Record<string, string> = {
   received: 'Received',
   dispensed: 'Dispensed',
+  administered: 'Administered',
   wasted: 'Wasted',
   transferred_out: 'Transfer Out',
   transferred_in: 'Transfer In',
@@ -73,7 +74,7 @@ export default async function MedicalCSLogPrintPage({
   // Transactions — controlled supplies only, filtered by date + optional storeroom/supply
   let query = adminClient
     .from('medical_stock_transactions')
-    .select('id, storeroom_id, supply_type_id, lot_id, transaction_type, quantity, performed_by, signer_1_id, signer_1_signature_data, signer_2_id, signer_2_signature_data, notes, created_at')
+    .select('id, storeroom_id, supply_type_id, lot_id, transaction_type, quantity, administered_amount, waste_amount, volume_unit, performed_by, signer_1_id, signer_1_signature_data, signer_2_id, signer_2_signature_data, notes, created_at')
     .in('storeroom_id', storeroomIds)
     .in('supply_type_id', csTypeIds)
     .gte('created_at', fromDate)
@@ -167,7 +168,11 @@ export default async function MedicalCSLogPrintPage({
                   <td>{fmtDate(tx.created_at)}</td>
                   <td>{supplyMap[tx.supply_type_id] ?? '—'}</td>
                   <td>{TX_LABELS[tx.transaction_type] ?? tx.transaction_type}</td>
-                  <td style={{ textAlign: 'center' }}>{tx.quantity}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {tx.transaction_type === 'administered'
+                      ? `Given ${tx.administered_amount} / Waste ${tx.waste_amount} ${tx.volume_unit ?? ''}`
+                      : tx.quantity}
+                  </td>
                   <td>{tx.lot_id ? (lotMap[tx.lot_id] ?? 'No lot #') : '—'}</td>
                   <td>{storeroomMap[tx.storeroom_id] ?? '—'}</td>
                   <td>{tx.performed_by ? (personnelMap[tx.performed_by] ?? '—') : '—'}</td>

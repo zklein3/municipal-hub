@@ -212,6 +212,7 @@ export default function MedicalBagsSection({
       quantity_received: qty, notes: receiveForm.notes || null,
       signer_1_id: receiveForm.signer1Id || null, signer_2_id: receiveForm.signer2Id || null,
       signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
+      concentration_amount: null, concentration_unit: null, volume_per_unit: null, volume_unit: null,
     })
     if (r?.error) setError(r.error)
     else { setSuccess(`Received ${qty} ${receiveForm.supplyName}.`); setReceiveForm(null); router.refresh() }

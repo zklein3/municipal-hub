@@ -2,14 +2,19 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { receiveStock, dispenseStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
+import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
 import { formatLocalDate } from '@/lib/format-datetime'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface SupplyType { id: string; name: string; category: string; unit_of_measure: string; is_controlled: boolean; tracks_expiration: boolean; required_signatures: number }
-interface Lot { id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null; quantity_received: number; quantity_remaining: number; received_date: string }
+interface Lot {
+  id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null
+  quantity_received: number; quantity_remaining: number; received_date: string
+  concentration_amount: number | null; concentration_unit: string | null
+  volume_per_unit: number | null; volume_unit: string | null
+}
 interface Personnel { id: string; name: string }
 interface Station { id: string; station_name: string; station_number: string | null }
 interface Transaction {
@@ -19,6 +24,9 @@ interface Transaction {
   lot_id: string | null
   transaction_type: string
   quantity: number
+  administered_amount: number | null
+  waste_amount: number | null
+  volume_unit: string | null
   performed_by: string | null
   signer_1_id: string | null
   signer_2_id: string | null
@@ -30,6 +38,7 @@ interface ReceiveForm {
   inventoryId: string
   supplyName: string
   tracksExpiration: boolean
+  isControlled: boolean
   requiredSignatures: number
   lotNumber: string
   expirationDate: string
@@ -38,6 +47,24 @@ interface ReceiveForm {
   signer1Id: string
   signer2Id: string
   step: 'form' | 'sign'
+  concentrationAmount: string
+  concentrationUnit: string
+  volumePerUnit: string
+  volumeUnit: string
+}
+
+interface AdministerForm {
+  inventoryId: string
+  lotId: string
+  supplyName: string
+  volumePerUnit: number
+  volumeUnit: string
+  requiredSignatures: number
+  lotQuantityRemaining: number
+  administeredAmount: string
+  notes: string
+  signer1Id: string
+  signer2Id: string
 }
 
 interface DispenseForm {
@@ -192,6 +219,7 @@ export default function MedicalStoreClient({
   const [historySupplyId, setHistorySupplyId] = useState<string>('all')
   const [historyTxType, setHistoryTxType] = useState<string>('all')
   const [dispenseForm, setDispenseForm] = useState<DispenseForm | null>(null)
+  const [administerForm, setAdministerForm] = useState<AdministerForm | null>(null)
   const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
   const [transferForm, setTransferForm] = useState<TransferForm | null>(null)
   const [adjustForm, setAdjustForm] = useState<AdjustForm | null>(null)
@@ -236,6 +264,7 @@ export default function MedicalStoreClient({
       inventoryId: inv.id,
       supplyName: supply.name,
       tracksExpiration: supply.tracks_expiration,
+      isControlled: supply.is_controlled,
       requiredSignatures: supply.required_signatures,
       lotNumber: '',
       expirationDate: '',
@@ -244,6 +273,10 @@ export default function MedicalStoreClient({
       signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
       signer2Id: '',
       step: 'form',
+      concentrationAmount: '',
+      concentrationUnit: '',
+      volumePerUnit: '',
+      volumeUnit: '',
     })
   }
 
@@ -270,6 +303,10 @@ export default function MedicalStoreClient({
       signer_2_id: receiveForm.signer2Id || null,
       signer_1_signature: signer1Signature,
       signer_2_signature: signer2Signature,
+      concentration_amount: receiveForm.concentrationAmount ? parseFloat(receiveForm.concentrationAmount) : null,
+      concentration_unit: receiveForm.concentrationUnit || null,
+      volume_per_unit: receiveForm.volumePerUnit ? parseFloat(receiveForm.volumePerUnit) : null,
+      volume_unit: receiveForm.volumeUnit || null,
     })
     if (result?.error) { setError(result.error) }
     else {
@@ -327,6 +364,68 @@ export default function MedicalStoreClient({
     else {
       setSuccess(`Dispensed ${qty} ${dispenseForm.unitOfMeasure} of ${dispenseForm.supplyName}.`)
       setDispenseForm(null)
+      router.refresh()
+    }
+    setLoading(false)
+  }
+
+  function openAdminister(inv: InventoryRow) {
+    const supply = supplyMap[inv.supply_type_id]
+    if (!supply) return
+    const activeLots = lots.filter(l => l.storeroom_inventory_id === inv.id && l.quantity_remaining > 0)
+    if (activeLots.length === 0) { setError('No stock available to administer.'); return }
+    const oldestLot = activeLots.sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
+    if (!oldestLot.volume_per_unit) {
+      setError('This lot has no volume per unit on file. Edit the lot or receive a new one with volume/concentration set.')
+      return
+    }
+    setError(null)
+    setAdministerForm({
+      inventoryId: inv.id,
+      lotId: oldestLot.id,
+      supplyName: supply.name,
+      volumePerUnit: oldestLot.volume_per_unit,
+      volumeUnit: oldestLot.volume_unit ?? '',
+      requiredSignatures: supply.required_signatures,
+      lotQuantityRemaining: oldestLot.quantity_remaining,
+      administeredAmount: '',
+      notes: '',
+      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
+      signer2Id: '',
+    })
+  }
+
+  async function handleAdministerSubmit() {
+    if (!administerForm) return
+    const administered = parseFloat(administerForm.administeredAmount)
+    if (!administered || administered <= 0) { setError('Enter the amount administered.'); return }
+    if (administered > administerForm.volumePerUnit) {
+      setError(`Cannot exceed ${administerForm.volumePerUnit} ${administerForm.volumeUnit} per vial.`)
+      return
+    }
+    if (administerForm.requiredSignatures >= 1 && !administerForm.signer1Id) { setError('Signer 1 is required.'); return }
+    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
+    if (administerForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
+    if (administerForm.requiredSignatures >= 2 && !administerForm.signer2Id) { setError('A witness is required for controlled substance administration.'); return }
+    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
+    if (administerForm.requiredSignatures >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
+
+    setError(null); setLoading(true)
+    const result = await administerStock({
+      storeroom_inventory_id: administerForm.inventoryId,
+      lot_id: administerForm.lotId,
+      administered_amount: administered,
+      notes: administerForm.notes || null,
+      signer_1_id: administerForm.signer1Id || null,
+      signer_2_id: administerForm.signer2Id || null,
+      signer_1_signature: signer1Signature,
+      signer_2_signature: signer2Signature,
+    })
+    if (result?.error) { setError(result.error) }
+    else {
+      const waste = Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000
+      setSuccess(`Administered ${administered} ${administerForm.volumeUnit} of ${administerForm.supplyName} — ${waste} ${administerForm.volumeUnit} wasted.`)
+      setAdministerForm(null)
       router.refresh()
     }
     setLoading(false)
@@ -603,7 +702,7 @@ export default function MedicalStoreClient({
   }
 
   const TX_TYPE_LABELS: Record<string, string> = {
-    received: 'Received', dispensed: 'Used', wasted: 'Wasted',
+    received: 'Received', dispensed: 'Used', wasted: 'Wasted', administered: 'Administered',
     transferred_out: 'Transferred Out', transferred_in: 'Transferred In',
     adjusted: 'Adjusted',
   }
@@ -611,6 +710,7 @@ export default function MedicalStoreClient({
     received: 'bg-green-100 text-green-700',
     dispensed: 'bg-blue-100 text-blue-700',
     wasted: 'bg-red-100 text-red-700',
+    administered: 'bg-amber-100 text-amber-700',
     transferred_out: 'bg-orange-100 text-orange-700',
     transferred_in: 'bg-teal-100 text-teal-700',
     adjusted: 'bg-purple-100 text-purple-700',
@@ -666,6 +766,7 @@ export default function MedicalStoreClient({
               <option value="all">All Types</option>
               <option value="received">Received</option>
               <option value="dispensed">Used</option>
+              <option value="administered">Administered</option>
               <option value="wasted">Wasted</option>
               <option value="transferred_out">Transferred Out</option>
               <option value="transferred_in">Transferred In</option>
@@ -699,7 +800,7 @@ export default function MedicalStoreClient({
                 const performedBy = tx.performed_by ? personnelMap[tx.performed_by] : null
                 const signer1 = tx.signer_1_id ? personnelMap[tx.signer_1_id] : null
                 const signer2 = tx.signer_2_id ? personnelMap[tx.signer_2_id] : null
-                const isOut = ['dispensed', 'wasted', 'transferred_out'].includes(tx.transaction_type)
+                const isOut = ['dispensed', 'wasted', 'transferred_out', 'administered'].includes(tx.transaction_type)
                 return (
                   <div key={tx.id} className="rounded-xl bg-white border border-zinc-200 px-4 py-3 flex items-start gap-3">
                     <div className="flex-1 min-w-0">
@@ -720,9 +821,15 @@ export default function MedicalStoreClient({
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className={`text-base font-bold ${isOut ? 'text-red-600' : 'text-green-700'}`}>
-                        {isOut ? '−' : '+'}{tx.quantity} {supply?.unit_of_measure ?? ''}
-                      </p>
+                      {tx.transaction_type === 'administered' ? (
+                        <p className="text-sm font-bold text-amber-700">
+                          Given {tx.administered_amount} / Waste {tx.waste_amount} {tx.volume_unit ?? ''}
+                        </p>
+                      ) : (
+                        <p className={`text-base font-bold ${isOut ? 'text-red-600' : 'text-green-700'}`}>
+                          {isOut ? '−' : '+'}{tx.quantity} {supply?.unit_of_measure ?? ''}
+                        </p>
+                      )}
                       <p className="text-xs text-zinc-400">
                         {formatLocalDate(tx.created_at, departmentTimezone, { year: undefined })}
                       </p>
@@ -843,11 +950,19 @@ export default function MedicalStoreClient({
                           Request Restock
                         </button>
                     )}
-                    <button onClick={() => openDispense(inv)}
-                      disabled={total === 0}
-                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                      Use
-                    </button>
+                    {supply.is_controlled ? (
+                      <button onClick={() => openAdminister(inv)}
+                        disabled={total === 0}
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Administer
+                      </button>
+                    ) : (
+                      <button onClick={() => openDispense(inv)}
+                        disabled={total === 0}
+                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Use
+                      </button>
+                    )}
                     {isOfficerOrAbove && (
                       <button onClick={() => openReceive(inv)}
                         className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
@@ -965,6 +1080,39 @@ export default function MedicalStoreClient({
                   <input type="date" value={receiveForm.expirationDate}
                     onChange={e => setReceiveForm(f => f ? { ...f, expirationDate: e.target.value } : f)}
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+              )}
+
+              {receiveForm.isControlled && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-2">Per-vial concentration &amp; volume</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-700">Concentration</label>
+                      <div className="flex gap-1">
+                        <input type="number" step="any" min="0" value={receiveForm.concentrationAmount} placeholder="100"
+                          onChange={e => setReceiveForm(f => f ? { ...f, concentrationAmount: e.target.value } : f)}
+                          className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                        <input type="text" value={receiveForm.concentrationUnit} placeholder="mcg/mL"
+                          onChange={e => setReceiveForm(f => f ? { ...f, concentrationUnit: e.target.value } : f)}
+                          className="w-24 rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-700">
+                        Volume per Vial <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex gap-1">
+                        <input type="number" step="any" min="0" value={receiveForm.volumePerUnit} placeholder="2"
+                          onChange={e => setReceiveForm(f => f ? { ...f, volumePerUnit: e.target.value } : f)}
+                          className="w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                        <input type="text" value={receiveForm.volumeUnit} placeholder="mL"
+                          onChange={e => setReceiveForm(f => f ? { ...f, volumeUnit: e.target.value } : f)}
+                          className="w-24 rounded-lg border border-zinc-300 px-2 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-2">Set this so you can later log administration by volume (amount given + auto-calculated waste).</p>
                 </div>
               )}
 
@@ -1542,6 +1690,100 @@ export default function MedicalStoreClient({
           </div>
         </div>
       )}
+
+      {administerForm && (() => {
+        const administered = parseFloat(administerForm.administeredAmount)
+        const validAmount = !isNaN(administered) && administered > 0 && administered <= administerForm.volumePerUnit
+        const waste = validAmount ? Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000 : null
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6">
+              <h2 className="text-base font-bold text-zinc-900 mb-1">Administer</h2>
+              <p className="text-sm text-zinc-500 mb-5">
+                {administerForm.supplyName}
+                <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>
+              </p>
+
+              {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
+
+              <div className="flex flex-col gap-3">
+                <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
+                  This vial: {administerForm.volumePerUnit} {administerForm.volumeUnit} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">
+                    Amount Administered <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" step="any" min="0" max={administerForm.volumePerUnit} value={administerForm.administeredAmount}
+                      onChange={e => setAdministerForm(f => f ? { ...f, administeredAmount: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                    <span className="text-sm text-zinc-500 shrink-0">{administerForm.volumeUnit}</span>
+                  </div>
+                </div>
+
+                <div className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${waste !== null ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
+                  Waste: {waste !== null ? `${waste} ${administerForm.volumeUnit}` : `— ${administerForm.volumeUnit}`}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+                  <input type="text" value={administerForm.notes} placeholder="Optional — e.g. patient/run reference"
+                    onChange={e => setAdministerForm(f => f ? { ...f, notes: e.target.value } : f)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                </div>
+
+                {administerForm.requiredSignatures >= 1 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Administered By <span className="text-red-500">*</span></label>
+                    <select value={administerForm.signer1Id}
+                      onChange={e => setAdministerForm(f => f ? { ...f, signer1Id: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                      <option value="">Select person...</option>
+                      {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <div className="mt-2">
+                      <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
+                    </div>
+                  </div>
+                )}
+
+                {administerForm.requiredSignatures >= 2 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">
+                      Witness / Second Signer <span className="text-red-500">*</span>
+                      <span className="ml-1 text-amber-600 font-normal">(controlled substance)</span>
+                    </label>
+                    <select value={administerForm.signer2Id}
+                      onChange={e => setAdministerForm(f => f ? { ...f, signer2Id: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
+                      <option value="">Select witness...</option>
+                      {personnel
+                        .filter(p => p.id !== administerForm.signer1Id)
+                        .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <div className="mt-2">
+                      <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button onClick={handleAdministerSubmit} disabled={loading || !validAmount}
+                  className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
+                  {loading ? 'Saving...' : 'Confirm Administration'}
+                </button>
+                <button onClick={() => { setAdministerForm(null); setError(null) }}
+                  className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

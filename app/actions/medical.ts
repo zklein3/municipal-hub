@@ -316,6 +316,10 @@ export async function receiveStock(data: {
   signer_2_id: string | null
   signer_1_signature: string | null
   signer_2_signature: string | null
+  concentration_amount: number | null
+  concentration_unit: string | null
+  volume_per_unit: number | null
+  volume_unit: string | null
 }) {
   const ctx = await getContext()
   if (!ctx?.isOfficerOrAbove) return { error: 'Officers and admins only.' }
@@ -359,6 +363,10 @@ export async function receiveStock(data: {
     received_by: ctx.me.id,
     notes: data.notes || null,
     active: true,
+    concentration_amount: data.concentration_amount || null,
+    concentration_unit: data.concentration_unit || null,
+    volume_per_unit: data.volume_per_unit || null,
+    volume_unit: data.volume_unit || null,
   }).select('id').single()
 
   if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
@@ -466,6 +474,90 @@ export async function dispenseStock(data: {
 
   revalidatePath('/medical')
   return { success: true }
+}
+
+// ─── Administer (per-vial: amount given, remainder auto-wasted) ──────────────
+
+export async function administerStock(data: {
+  storeroom_inventory_id: string
+  lot_id: string
+  administered_amount: number
+  notes: string | null
+  signer_1_id: string | null
+  signer_2_id: string | null
+  signer_1_signature: string | null
+  signer_2_signature: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authorized.' }
+  const adminClient = createAdminClient()
+
+  if (!data.lot_id || !data.administered_amount || data.administered_amount <= 0)
+    return { error: 'Administered amount is required.' }
+
+  const { data: lot } = await adminClient
+    .from('medical_stock_lots')
+    .select('quantity_remaining, volume_per_unit, volume_unit')
+    .eq('id', data.lot_id)
+    .single()
+  if (!lot) return { error: 'Lot not found.' }
+  if (lot.quantity_remaining < 1) return { error: 'No vials remaining in this lot.' }
+  if (!lot.volume_per_unit) return { error: 'This lot has no volume per unit on file — cannot log administration.' }
+  if (data.administered_amount > lot.volume_per_unit)
+    return { error: `Administered amount cannot exceed ${lot.volume_per_unit} ${lot.volume_unit ?? ''} per vial.` }
+
+  const { data: invRow } = await adminClient
+    .from('medical_storeroom_inventory')
+    .select('storeroom_id, supply_type_id, department_id')
+    .eq('id', data.storeroom_inventory_id)
+    .single()
+  if (!invRow) return { error: 'Inventory record not found.' }
+
+  const { data: supplyType } = await adminClient
+    .from('medical_supply_types')
+    .select('required_signatures')
+    .eq('id', invRow.supply_type_id)
+    .single()
+
+  const sigsRequired = supplyType?.required_signatures ?? 0
+  if (sigsRequired >= 1 && !data.signer_1_id) return { error: 'Signer 1 is required.' }
+  if (sigsRequired >= 1 && !data.signer_1_signature) return { error: 'Signer 1 must sign.' }
+  if (sigsRequired >= 2 && !data.signer_2_id) return { error: 'A witness is required for controlled substance administration.' }
+  if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The witness must sign.' }
+
+  const wasteAmount = Math.round((lot.volume_per_unit - data.administered_amount) * 1000) / 1000
+  const now = new Date().toISOString()
+  const newQty = lot.quantity_remaining - 1
+
+  const { error: lotErr } = await adminClient
+    .from('medical_stock_lots')
+    .update({ quantity_remaining: newQty, active: newQty > 0, updated_at: now })
+    .eq('id', data.lot_id)
+  if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
+
+  const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+    department_id: invRow.department_id,
+    storeroom_id: invRow.storeroom_id,
+    supply_type_id: invRow.supply_type_id,
+    lot_id: data.lot_id,
+    transaction_type: 'administered',
+    quantity: 1,
+    administered_amount: data.administered_amount,
+    waste_amount: wasteAmount,
+    volume_unit: lot.volume_unit,
+    performed_by: ctx.me.id,
+    signer_1_id: data.signer_1_id || null,
+    signer_1_at: data.signer_1_id ? now : null,
+    signer_1_signature_data: data.signer_1_signature || null,
+    signer_2_id: data.signer_2_id || null,
+    signer_2_at: data.signer_2_id ? now : null,
+    signer_2_signature_data: data.signer_2_signature || null,
+    notes: data.notes || null,
+  })
+  if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+  revalidatePath('/medical')
+  return { success: true, wasteAmount }
 }
 
 export async function wasteStock(data: {
