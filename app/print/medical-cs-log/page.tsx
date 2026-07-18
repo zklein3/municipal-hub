@@ -93,6 +93,19 @@ export default async function MedicalCSLogPrintPage({
     : { data: [] }
   const lotMap = Object.fromEntries((lots ?? []).map(l => [l.id, l.lot_number]))
 
+  // Control number lookup — administered/wasted vials are tied to the transaction that
+  // touched them; received vials aren't (a lot can receive many vials in one transaction),
+  // so those fall back to every control number issued with that lot.
+  const { data: units } = lotIds.length > 0
+    ? await adminClient.from('medical_stock_units').select('lot_id, control_number, transaction_id').in('lot_id', lotIds)
+    : { data: [] }
+  const controlNumbersByTx: Record<string, string[]> = {}
+  const controlNumbersByLot: Record<string, string[]> = {}
+  for (const u of units ?? []) {
+    if (u.transaction_id) { (controlNumbersByTx[u.transaction_id] ??= []).push(u.control_number) }
+    (controlNumbersByLot[u.lot_id] ??= []).push(u.control_number)
+  }
+
   // Personnel lookup
   const personnelIds = [...new Set([
     ...(transactions ?? []).map(t => t.performed_by),
@@ -151,15 +164,16 @@ export default async function MedicalCSLogPrintPage({
           <table>
             <thead>
               <tr>
-                <th style={{ width: '14%' }}>Date / Time</th>
-                <th style={{ width: '16%' }}>Supply</th>
-                <th style={{ width: '8%' }}>Type</th>
+                <th style={{ width: '12%' }}>Date / Time</th>
+                <th style={{ width: '14%' }}>Supply</th>
+                <th style={{ width: '7%' }}>Type</th>
                 <th style={{ width: '6%' }}>Qty</th>
-                <th style={{ width: '10%' }}>Lot #</th>
-                <th style={{ width: '13%' }}>Storeroom</th>
-                <th style={{ width: '13%' }}>Performed By</th>
+                <th style={{ width: '8%' }}>Lot #</th>
+                <th style={{ width: '10%' }}>Control #</th>
+                <th style={{ width: '11%' }}>Storeroom</th>
+                <th style={{ width: '11%' }}>Performed By</th>
                 <th style={{ width: '10%' }}>Signer 1</th>
-                <th style={{ width: '10%' }}>Signer 2</th>
+                <th style={{ width: '11%' }}>Signer 2</th>
               </tr>
             </thead>
             <tbody>
@@ -174,6 +188,9 @@ export default async function MedicalCSLogPrintPage({
                       : tx.quantity}
                   </td>
                   <td>{tx.lot_id ? (lotMap[tx.lot_id] ?? 'No lot #') : '—'}</td>
+                  <td>
+                    {(controlNumbersByTx[tx.id] ?? (tx.lot_id ? controlNumbersByLot[tx.lot_id] : null))?.join(', ') || '—'}
+                  </td>
                   <td>{storeroomMap[tx.storeroom_id] ?? '—'}</td>
                   <td>{tx.performed_by ? (personnelMap[tx.performed_by] ?? '—') : '—'}</td>
                   <td>

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
 import { formatLocalDate } from '@/lib/format-datetime'
+import { administeredDoseToVolume } from '@/lib/medical-dose'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
@@ -192,15 +193,6 @@ const CONCENTRATION_UNITS = ['mcg/mL', 'mg/mL', 'units/mL', '%']
 function fmtDate(d: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-// Converts an entered "Amount Administered" value to the volume (in volumeUnit) the backend
-// stores. When the lot has concentration data, the field collects a dose (e.g. mcg) since
-// that's how a dose is actually documented — mL is not something anyone administering a
-// controlled substance is thinking in.
-function administeredDoseToVolume(form: AdministerForm, entered: number): number {
-  if (form.doseUnit && form.concentrationAmount) return entered / form.concentrationAmount
-  return entered
 }
 
 // Bumps the trailing numeric run in a control number ("F100234" -> "F100235"), preserving

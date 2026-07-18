@@ -135,11 +135,17 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   let medicalBagData: {
     bags: { id: string; name: string; template_id: string | null; inventory_mode: string | null }[]
     bagInventory: { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[]
-    bagLots: { id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null; quantity_received: number; quantity_remaining: number; received_date: string }[]
+    bagLots: {
+      id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null
+      quantity_received: number; quantity_remaining: number; received_date: string
+      concentration_amount: number | null; concentration_unit: string | null
+      volume_per_unit: number | null; volume_unit: string | null
+    }[]
     supplyTypes: { id: string; name: string; category: string; unit_of_measure: string; is_controlled: boolean; tracks_expiration: boolean; required_signatures: number }[]
     deptStorerooms: { id: string; name: string }[]
     storeroomInventory: { id: string; storeroom_id: string; supply_type_id: string }[]
     storeroomLots: { id: string; storeroom_inventory_id: string; lot_number: string | null; quantity_remaining: number; expiration_date: string | null }[]
+    units: { id: string; lot_id: string; control_number: string; status: string }[]
     personnel: { id: string; name: string }[]
     bagTemplates: { id: string; name: string }[]
     apparatusId: string
@@ -168,12 +174,17 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
 
     const [{ data: bagLots }, { data: supplyTypes }] = await Promise.all([
       bagInvIds.length > 0
-        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date').in('storeroom_inventory_id', bagInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
+        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit').in('storeroom_inventory_id', bagInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
         : Promise.resolve({ data: [] }),
       supplyTypeIds.length > 0
         ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', supplyTypeIds)
         : Promise.resolve({ data: [] }),
     ])
+
+    const bagLotIds = (bagLots ?? []).map(l => l.id)
+    const { data: units } = bagLotIds.length > 0
+      ? await adminClient.from('medical_stock_units').select('id, lot_id, control_number, status').in('lot_id', bagLotIds)
+      : { data: [] }
 
     const storeroomIds = (deptStorerooms ?? []).map(s => s.id)
     const { data: storeroomInventory } = storeroomIds.length > 0 && supplyTypeIds.length > 0
@@ -196,6 +207,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
       deptStorerooms: deptStorerooms ?? [],
       storeroomInventory: storeroomInventory ?? [],
       storeroomLots: storeroomLots ?? [],
+      units: units ?? [],
       personnel,
       bagTemplates: bagTemplates ?? [],
       apparatusId: id,

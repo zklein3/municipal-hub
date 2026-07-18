@@ -382,24 +382,10 @@ export async function receiveStock(data: {
 
   if (lotErr) { await logError(lotErr.message, '/medical'); return { error: lotErr.message } }
 
-  if (supplyType?.is_controlled) {
-    const { error: unitsErr } = await adminClient.from('medical_stock_units').insert(
-      (data.control_numbers ?? []).map(control_number => ({
-        lot_id: lot.id,
-        department_id: invRow.department_id,
-        control_number: control_number.trim(),
-        status: 'available' as const,
-      }))
-    )
-    if (unitsErr) {
-      await logError(unitsErr.message, '/medical', { metadata: { lot_id: lot.id } })
-      const dup = unitsErr.code === '23505'
-      return { error: dup ? 'One of these control numbers is already in use in this department.' : unitsErr.message }
-    }
-  }
-
-  // Create the transaction record
-  const { error: txErr } = await adminClient.from('medical_stock_transactions').insert({
+  // Create the transaction record first so controlled-substance vials can be tagged with it
+  // below — that's what lets the CS log resolve a "Received" line back to its control numbers
+  // even after the vials are later transferred to a different lot (which reassigns lot_id).
+  const { data: tx, error: txErr } = await adminClient.from('medical_stock_transactions').insert({
     department_id: invRow.department_id,
     storeroom_id: invRow.storeroom_id,
     supply_type_id: invRow.supply_type_id,
@@ -414,9 +400,26 @@ export async function receiveStock(data: {
     signer_2_at: data.signer_2_id ? now : null,
     signer_2_signature_data: data.signer_2_signature || null,
     notes: data.notes || null,
-  })
+  }).select('id').single()
 
   if (txErr) { await logError(txErr.message, '/medical'); return { error: txErr.message } }
+
+  if (supplyType?.is_controlled) {
+    const { error: unitsErr } = await adminClient.from('medical_stock_units').insert(
+      (data.control_numbers ?? []).map(control_number => ({
+        lot_id: lot.id,
+        department_id: invRow.department_id,
+        control_number: control_number.trim(),
+        status: 'available' as const,
+        transaction_id: tx.id,
+      }))
+    )
+    if (unitsErr) {
+      await logError(unitsErr.message, '/medical', { metadata: { lot_id: lot.id } })
+      const dup = unitsErr.code === '23505'
+      return { error: dup ? 'One of these control numbers is already in use in this department.' : unitsErr.message }
+    }
+  }
 
   revalidatePath('/medical')
   return { success: true }

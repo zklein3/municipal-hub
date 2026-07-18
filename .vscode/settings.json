@@ -3,5 +3,9 @@
         "git add": true,
         "git commit": true,
         "git push": true
-    }
+    },
+    // Android builds happen via the separate Android Studio agent (see AGENTS.md), not this
+    // VS Code window — disable Java's Gradle auto-import so it stops trying (and failing) to
+    // sync android/ in the background.
+    "java.import.gradle.enabled": false
 }

@@ -125,15 +125,17 @@ export default async function MedicalReportsPage({
         .from('medical_stock_transactions')
         .select('supply_type_id, storeroom_id, transaction_type, quantity')
         .in('storeroom_id', storeroomIds)
-        .in('transaction_type', ['dispensed', 'wasted'])
+        .in('transaction_type', ['dispensed', 'administered', 'wasted'])
         .gte('created_at', since)
     : { data: [] }
 
   // ── Build consumption summary ──────────────────────────────────────────────
+  // 'administered' (controlled substances, one vial per transaction) counts as Used
+  // alongside 'dispensed' — both represent whole units leaving stock via legitimate use.
   const consumptionBySupply: Record<string, { dispensed: number; wasted: number }> = {}
   for (const tx of transactions ?? []) {
     if (!consumptionBySupply[tx.supply_type_id]) consumptionBySupply[tx.supply_type_id] = { dispensed: 0, wasted: 0 }
-    if (tx.transaction_type === 'dispensed') consumptionBySupply[tx.supply_type_id]!.dispensed += tx.quantity
+    if (tx.transaction_type === 'dispensed' || tx.transaction_type === 'administered') consumptionBySupply[tx.supply_type_id]!.dispensed += tx.quantity
     if (tx.transaction_type === 'wasted') consumptionBySupply[tx.supply_type_id]!.wasted += tx.quantity
   }
   const consumptionRows = Object.entries(consumptionBySupply)

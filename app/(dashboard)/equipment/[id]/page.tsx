@@ -218,12 +218,17 @@ export default async function EquipmentDetailPage({
 
     const [{ data: bagLots }, { data: supplyTypes }] = await Promise.all([
       bagInvIds.length > 0
-        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date').in('storeroom_inventory_id', bagInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
+        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit').in('storeroom_inventory_id', bagInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
         : Promise.resolve({ data: [] }),
       supplyTypeIds.length > 0
         ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', supplyTypeIds)
         : Promise.resolve({ data: [] }),
     ])
+
+    const bagLotIds = (bagLots ?? []).map((l: any) => l.id)
+    const { data: bagUnits } = bagLotIds.length > 0
+      ? await adminClient.from('medical_stock_units').select('id, lot_id, control_number, status').in('lot_id', bagLotIds)
+      : { data: [] }
 
     const storeroomIds = (deptStorerooms ?? []).map((s: any) => s.id)
     const { data: storeroomInventory } = storeroomIds.length > 0 && supplyTypeIds.length > 0
@@ -242,6 +247,7 @@ export default async function EquipmentDetailPage({
       bags: bags ?? [], bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
       supplyTypes: supplyTypes ?? [], deptStorerooms: deptStorerooms ?? [],
       storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
+      units: bagUnits ?? [],
       personnel, bagTemplates: bagTemplates ?? [], apparatusId: id,
     }
 
@@ -263,12 +269,17 @@ export default async function EquipmentDetailPage({
 
     const [{ data: compLots }, { data: compSupplyTypes }] = await Promise.all([
       compInvIds.length > 0
-        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date').in('storeroom_inventory_id', compInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
+        ? adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit').in('storeroom_inventory_id', compInvIds).eq('active', true).gt('quantity_remaining', 0).order('expiration_date', { ascending: true, nullsFirst: false })
         : Promise.resolve({ data: [] }),
       compSupplyTypeIds.length > 0
         ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', compSupplyTypeIds)
         : Promise.resolve({ data: [] }),
     ])
+
+    const compLotIds = (compLots ?? []).map((l: any) => l.id)
+    const { data: compUnits } = compLotIds.length > 0
+      ? await adminClient.from('medical_stock_units').select('id, lot_id, control_number, status').in('lot_id', compLotIds)
+      : { data: [] }
 
     // Source storerooms for Transfer In (station storerooms that have matching supply types)
     const srcStoreroomIds = (deptStorerooms ?? []).map((s: any) => s.id)
@@ -298,6 +309,7 @@ export default async function EquipmentDetailPage({
       deptStorerooms: deptStorerooms ?? [],
       srcInventory: srcInv ?? [],
       srcLots: srcLots ?? [],
+      units: compUnits ?? [],
       personnel,
       apparatusId: id,
     }
@@ -325,6 +337,7 @@ export default async function EquipmentDetailPage({
             deptStorerooms={medicalCompartmentData.deptStorerooms}
             srcInventory={medicalCompartmentData.srcInventory}
             srcLots={medicalCompartmentData.srcLots}
+            units={medicalCompartmentData.units}
             personnel={medicalCompartmentData.personnel}
             apparatusId={medicalCompartmentData.apparatusId}
             isAdmin={isAdmin}
@@ -343,6 +356,7 @@ export default async function EquipmentDetailPage({
             deptStorerooms={medicalBagData.deptStorerooms}
             storeroomInventory={medicalBagData.storeroomInventory}
             storeroomLots={medicalBagData.storeroomLots}
+            units={medicalBagData.units}
             personnel={medicalBagData.personnel}
             bagTemplates={medicalBagData.bagTemplates}
             apparatusId={medicalBagData.apparatusId}

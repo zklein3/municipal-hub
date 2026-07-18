@@ -397,6 +397,7 @@ export default function ApparatusDetailClient({
           deptStorerooms={medicalBagData.deptStorerooms}
           storeroomInventory={medicalBagData.storeroomInventory}
           storeroomLots={medicalBagData.storeroomLots}
+          units={medicalBagData.units}
           personnel={medicalBagData.personnel}
           bagTemplates={medicalBagData.bagTemplates}
           apparatusId={medicalBagData.apparatusId}
