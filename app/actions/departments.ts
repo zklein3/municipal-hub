@@ -181,6 +181,24 @@ export async function saveDeptTimezone(departmentId: string, timezone: string) {
   return { success: true }
 }
 
+export async function saveWeeklyDigestEnabled(departmentId: string, enabled: boolean) {
+  const adminClient = createAdminClient()
+
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx) return { error: 'Not authenticated.' }
+  if (ctx.systemRole !== 'admin' && !ctx.isSysAdmin) return { error: 'Only admins can update department settings.' }
+  if (ctx.departmentId !== departmentId && !ctx.isSysAdmin) return { error: 'Department mismatch.' }
+
+  const { error } = await adminClient
+    .from('departments')
+    .update({ weekly_digest_enabled: enabled })
+    .eq('id', departmentId)
+
+  if (error) { await logError(error.message, '/dept-admin/settings', { department_id: departmentId }); return { error: error.message } }
+  revalidatePath('/dept-admin/settings')
+  return { success: true }
+}
+
 export async function saveIsoReportSettings(departmentId: string, settings: {
   auditDate: string | null
   auditorName: string | null

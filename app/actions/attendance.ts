@@ -85,6 +85,25 @@ export async function createEventSeries(formData: FormData) {
 
   if (!title || !event_type || !recurrence_type) return { error: 'Title, type, and recurrence are required.' }
 
+  // Guard against double-submit (double-click, HMR resetting client state mid-request, etc.) —
+  // if the same person just created an identical series in the last 10 seconds, treat this as
+  // a resubmit of that request rather than a genuine second event.
+  const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString()
+  const { data: recentDupe } = await adminClient
+    .from('event_series')
+    .select('id')
+    .eq('department_id', department_id)
+    .eq('created_by', ctx.me.id)
+    .eq('title', title)
+    .eq('event_type', event_type)
+    .eq('recurrence_type', recurrence_type)
+    .gte('created_at', tenSecondsAgo)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (recentDupe) return { success: true, series_id: recentDupe.id }
+
   const oneYearOut = new Date()
   oneYearOut.setFullYear(oneYearOut.getFullYear() + 1)
 

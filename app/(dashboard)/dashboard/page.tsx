@@ -42,8 +42,11 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const adminClient = createAdminClient()
 
   const today = new Date().toISOString().split('T')[0]
-  const next7 = new Date(); next7.setDate(next7.getDate() + 7)
-  const next7str = next7.toISOString().split('T')[0]
+  // 8 days, not 7 — a plain 7-day window sits exactly on the Monday-to-Monday boundary, so a
+  // recurring Monday event viewed on a Monday would flicker in/out depending on rounding. 8
+  // days guarantees "next Monday" is always inside the window.
+  const next8 = new Date(); next8.setDate(next8.getDate() + 8)
+  const next8str = next8.toISOString().split('T')[0]
   const next365 = new Date(); next365.setDate(next365.getDate() + 365)
   const next365str = next365.toISOString().split('T')[0]
 
@@ -56,10 +59,10 @@ async function getDashboardData(departmentId: string, personnelId: string) {
       .select('id, title, event_type')
       .eq('department_id', departmentId),
     adminClient.from('training_events')
-      .select('id, event_date, start_time, topic, hours, location')
+      .select('id, event_date, start_time, topic, hours, location, event_instance_id')
       .eq('department_id', departmentId)
       .gte('event_date', today)
-      .lte('event_date', next7str)
+      .lte('event_date', next8str)
       .order('event_date', { ascending: true })
       .limit(5),
   ])
@@ -81,7 +84,7 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const deptInstances = (instanceData ?? [])
     .filter(i => {
       const isSpecial = seriesMap[i.series_id]?.event_type === 'special'
-      if (!isSpecial && i.event_date > next7str) return false
+      if (!isSpecial && i.event_date > next8str) return false
       return true
     })
     .slice(0, 5)
@@ -92,7 +95,14 @@ async function getDashboardData(departmentId: string, personnelId: string) {
     : { data: [] }
   const myAttendanceMap = Object.fromEntries((myAttendance ?? []).map(a => [a.instance_id, a.status]))
 
-  const trainingEventIds = (trainingEvents.data ?? []).map(e => e.id)
+  // Training events linked to an event instance already shown above are the same event, just
+  // fetched from a different table — drop them here so it doesn't appear twice in this ticker.
+  const shownInstanceIds = new Set(instanceIds)
+  const standaloneTrainingEvents = (trainingEvents.data ?? []).filter(
+    e => !e.event_instance_id || !shownInstanceIds.has(e.event_instance_id)
+  )
+
+  const trainingEventIds = standaloneTrainingEvents.map(e => e.id)
   const { data: myTrainingAttendance } = trainingEventIds.length > 0
     ? await adminClient.from('training_event_attendance').select('event_id, status').eq('personnel_id', personnelId).in('event_id', trainingEventIds)
     : { data: [] }
@@ -109,7 +119,7 @@ async function getDashboardData(departmentId: string, personnelId: string) {
       location: i.location,
       my_status: myAttendanceMap[i.id] ?? null,
     })),
-    upcomingTraining: (trainingEvents.data ?? []).map(e => ({
+    upcomingTraining: standaloneTrainingEvents.map(e => ({
       id: e.id,
       topic: e.topic,
       event_date: e.event_date,
