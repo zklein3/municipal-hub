@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentPath } from '@/lib/current-path'
 import { redirect, notFound } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import IncidentDetailClient from './IncidentDetailClient'
@@ -10,7 +11,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
   if (ctx.departmentType !== 'fire') redirect('/dashboard')
   const me = { id: ctx.personnelId }

@@ -133,3 +133,18 @@
 - How ImageTrend maps personnel IDs (need a sync step or manual mapping per dept)
 
 **Do not build** a full ePCR/PCR module — the state provides that for free. Integration only.
+
+### State Controlled-Burn Database — Burn Info Sheet + Export
+**Status:** Future research — not started (flagged 2026-07-20)
+**Context:** The state is building a database for controlled burn / burn permit data. FireOps7 already has a burn permit workflow (`burn_permits` table + `/dept/[slug]/burn-permit` public form + officer approval in Inbox), but that only captures the *permit* — applicant, requested address/date/description, approval, signatures. It has no record of what actually happened at the burn itself.
+
+**Concept:** Add a burn "info sheet" — an after-action record captured alongside (linked to) the existing permit — so the department has structured burn-event data on file. Once the state's database and interaction point exist, build an export from this data to their system (same shape as the NERIS integration: FireOps7 as the source of truth, push/export to the state).
+
+**What's missing today (gap vs. a state DB's likely needs):** actual burn date/time (vs. requested), duration, material/fuel type, acreage or pile size, weather conditions (wind speed/direction, humidity), supervising officer/personnel on scene, any incidents or complaints during the burn, extinguish/all-clear time. Exact field list still needs to come from Zach or from the state's eventual data spec.
+
+**Path to build:**
+1. Get the state's field requirements (or best guess if their spec isn't public yet) — determines the info sheet schema
+2. New table (e.g. `burn_permit_records`) linked to `burn_permits`, filled in by the officer after the burn (mirrors the permit's own officer-signs-off pattern)
+3. Build the export once the state publishes their database/API — format unknown until then
+
+**Key unknowns:** state's data spec/format, submission mechanism (API vs. file upload vs. manual portal entry), timeline for when their system goes live.

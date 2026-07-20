@@ -84,6 +84,7 @@ export async function selectDepartment(formData: FormData) {
   const departmentId = formData.get('department_id') as string
   const rawNext = formData.get('next') as string | null
   const next = rawNext?.startsWith('/') ? rawNext : '/dashboard'
+  const nextParam = next !== '/dashboard' ? `?next=${encodeURIComponent(next)}` : ''
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -100,7 +101,7 @@ export async function selectDepartment(formData: FormData) {
   if (departmentId === SYS_ADMIN_SENTINEL) {
     if (!personnel.is_sys_admin) {
       await logError('Attempted to select sys admin view without sys admin flag', '/select-department', { personnel_id: personnel.id })
-      redirect('/select-department')
+      redirect(`/select-department${nextParam}`)
     }
   } else {
     const { data: membership } = await adminClient
@@ -113,7 +114,7 @@ export async function selectDepartment(formData: FormData) {
 
     if (!membership) {
       await logError('Attempted to select a department not assigned to this user', '/select-department', { personnel_id: personnel.id, metadata: { departmentId } })
-      redirect('/select-department')
+      redirect(`/select-department${nextParam}`)
     }
   }
 

@@ -6,6 +6,11 @@ const FIRST_LOGIN_ROUTES = ['/change-password', '/profile-setup']
 const AUTH_FLOW_ROUTES = [...PUBLIC_ROUTES, ...FIRST_LOGIN_ROUTES]
 
 export async function middleware(request: NextRequest) {
+  // Stamped on every request so Server Components can recover "where was the user
+  // headed" via lib/current-path.ts — used to build a ?next= param when a page or
+  // layout has to bounce someone to /login or /select-department mid-route.
+  request.headers.set('x-pathname', request.nextUrl.pathname + request.nextUrl.search)
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -41,7 +46,9 @@ export async function middleware(request: NextRequest) {
       return supabaseResponse
     }
     const url = request.nextUrl.clone()
+    const dest = pathname + request.nextUrl.search
     url.pathname = '/login'
+    url.search = dest !== '/' ? `?next=${encodeURIComponent(dest)}` : ''
     return NextResponse.redirect(url)
   }
 

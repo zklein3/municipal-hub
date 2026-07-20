@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentPath } from '@/lib/current-path'
 import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import MedicalStoreClient from './MedicalStoreClient'
@@ -8,7 +9,7 @@ export default async function MedicalPage() {
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
   const me = { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }
 

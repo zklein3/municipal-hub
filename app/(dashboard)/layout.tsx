@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentPath } from '@/lib/current-path'
 import { redirect } from 'next/navigation'
 import { signOut } from '@/app/actions/auth'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
@@ -18,7 +19,7 @@ async function getUserContext() {
   if (!ctx) return null
 
   if (ctx.selectionPending) {
-    redirect('/select-department')
+    redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   }
 
   return {

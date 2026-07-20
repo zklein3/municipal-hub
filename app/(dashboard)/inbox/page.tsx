@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCurrentPath } from '@/lib/current-path'
 import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import InboxClient from './InboxClient'
@@ -13,7 +14,7 @@ export default async function InboxPage({
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
 
   // Sys admin has no dept record — allow through with signatures-only view
   if (!ctx.departmentId && !ctx.isSysAdmin) redirect('/dashboard')

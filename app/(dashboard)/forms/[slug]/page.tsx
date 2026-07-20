@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { getCurrentPath } from '@/lib/current-path'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import BackButton from '@/components/BackButton'
 
@@ -26,7 +27,7 @@ export default async function PlaceholderFormPage({
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (ctx.selectionPending) redirect('/select-department')
+  if (ctx.selectionPending) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
 
   const form = FORM_LABELS[slug] ?? {

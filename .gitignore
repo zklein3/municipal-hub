@@ -50,3 +50,6 @@ next-env.d.ts
 # Android Studio local project config (machine-specific)
 /android/.idea/
 .scratch-playwright/
+
+# Playwright driver screenshots (scripts/playwright-drive.mjs) — throwaway, not project assets
+/shots/

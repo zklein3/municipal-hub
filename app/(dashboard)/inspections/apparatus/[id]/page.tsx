@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { getCurrentPath } from '@/lib/current-path'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getOrCreateInspectionSession } from '@/app/actions/inspections'
@@ -15,7 +16,7 @@ export default async function InspectionSessionPage({
 
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) redirect('/login')
-  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect('/select-department')
+  if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
   const me = { id: ctx.personnelId }
 
