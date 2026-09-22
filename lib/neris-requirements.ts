@@ -35,6 +35,7 @@ export type NerisRecordInput = {
   actions_taken?: string[] | null
   no_action_reason?: string | null
   no_patient_contact?: boolean | null
+  no_victims?: boolean | null
   displaced_persons?: number | null
   outside_fire_acres?: number | null
   fire_condition_arrival?: string | null
@@ -599,14 +600,20 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
 
   if (modules.casualty) {
     const victimCount = (neris.incident_persons ?? []).filter(p => p.record_type === 'casualty' || (!p.record_type && p.rescue_performed_by)).length
+    // Every fire triggers this module, but most fires have no victims at all —
+    // a garage fire with nobody hurt, say. Declaring that explicitly satisfies
+    // the requirement, mirroring modules.medical's no_patient_contact below.
+    const noVictims = neris.no_victims === true
     add({
       id: 'casualty.victims',
       section: 'casualty',
       label: 'At least one casualty/victim record',
       severity: 'required',
-      status: completeIf(victimCount > 0),
+      status: completeIf(victimCount > 0 || noVictims),
       source: 'neris_report',
-      detail: victimCount > 0 ? `${victimCount} victim${victimCount === 1 ? '' : 's'} recorded` : undefined,
+      detail: victimCount > 0
+        ? `${victimCount} victim${victimCount === 1 ? '' : 's'} recorded`
+        : noVictims ? 'Declared no victims' : undefined,
     })
   }
 

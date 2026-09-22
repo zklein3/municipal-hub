@@ -188,6 +188,7 @@ export default function NerisReportClient({
   const [actionsTaken, setActionsTaken] = useState<string[]>(nerisRecord?.actions_taken ?? [])
   const [noActionReason, setNoActionReason] = useState<string>(nerisRecord?.no_action_reason ?? '')
   const [noPatientContact, setNoPatientContact] = useState<boolean>(nerisRecord?.no_patient_contact ?? false)
+  const [noVictims, setNoVictims] = useState<boolean>(nerisRecord?.no_victims ?? false)
 
   // Mutual aid
   const toDatetimeLocal = (iso: string | null) => iso ? iso.slice(0, 16) : ''
@@ -317,6 +318,8 @@ export default function NerisReportClient({
       no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
       // Only meaningful while there are no patient records to describe.
       no_patient_contact: incidentPatients.length === 0 ? noPatientContact : false,
+      // Only meaningful while there are no victim/casualty records to describe.
+      no_victims: incidentCasualties.length === 0 ? noVictims : false,
       displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
       outside_fire_acres: outsideFireAcres !== '' ? parseFloat(outsideFireAcres) : null,
       fire_condition_arrival: fireCondition || null,
@@ -1308,7 +1311,26 @@ export default function NerisReportClient({
             </div>
 
             {incidentCasualties.length === 0 && (
-              <p className="text-sm text-zinc-400 italic">No victims added yet.</p>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-2">
+                <p className="text-sm text-zinc-400 italic">No victims added yet.</p>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={noVictims}
+                    onChange={e => setNoVictims(e.target.checked)}
+                    disabled={isSubmitted}
+                    className="mt-0.5 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-zinc-700">
+                    No victims on this incident
+                    <span className="block text-xs text-zinc-400">
+                      For a fire with no one injured or requiring rescue — a garage or outbuilding
+                      fire with nobody hurt, for instance. Leave unchecked if a victim record is
+                      simply still to be entered.
+                    </span>
+                  </span>
+                </label>
+              </div>
             )}
 
             <div className="space-y-4">

@@ -102,6 +102,7 @@ export async function saveNerisReport(incident_id: string, data: {
   actions_taken?: string[]
   no_action_reason?: string | null
   no_patient_contact?: boolean
+  no_victims?: boolean
   displaced_persons?: number | null
   outside_fire_acres?: number | null
   fire_condition_arrival?: string | null
