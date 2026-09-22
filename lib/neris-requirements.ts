@@ -34,6 +34,7 @@ export type NerisRecordInput = {
   property_use?: string | null
   actions_taken?: string[] | null
   no_action_reason?: string | null
+  no_patient_contact?: boolean | null
   displaced_persons?: number | null
   outside_fire_acres?: number | null
   fire_condition_arrival?: string | null
@@ -558,14 +559,21 @@ export function evaluateNerisRequirements(context: NerisRequirementContext): Ner
 
   if (modules.medical) {
     const patientCount = (neris.incident_persons ?? []).filter(p => p.record_type === 'patient' || (!p.record_type && p.evaluation_care)).length
+    // A medical-coded run can legitimately have nobody to describe — an EMS
+    // standby the crew was never assigned a patient on, for instance. Declaring
+    // that explicitly satisfies the requirement; leaving it blank does not, so
+    // a genuinely forgotten patient record still blocks.
+    const noPatientContact = neris.no_patient_contact === true
     add({
       id: 'medical.patients',
       section: 'medical',
       label: 'At least one patient record',
       severity: 'required',
-      status: completeIf(patientCount > 0),
+      status: completeIf(patientCount > 0 || noPatientContact),
       source: 'neris_report',
-      detail: patientCount > 0 ? `${patientCount} patient${patientCount === 1 ? '' : 's'} recorded` : undefined,
+      detail: patientCount > 0
+        ? `${patientCount} patient${patientCount === 1 ? '' : 's'} recorded`
+        : noPatientContact ? 'Declared no patient contact' : undefined,
     })
   }
 
