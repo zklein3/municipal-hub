@@ -580,7 +580,7 @@ export async function submitToNeris(incident_id: string) {
     validation = await nerisValidateIncident(nerisEntityId, payload)
   } catch (err: any) {
     await logError(err.message, '/incidents/neris/validate', { metadata: { incident_id } })
-    return { error: `NERIS connection failed: ${err.message}` }
+    return { error: 'Could not reach the NERIS API. The full response was recorded in the system log for review — the report stays ready and can be resubmitted.' }
   }
   if (!validation.ok) {
     await Promise.all([
@@ -591,7 +591,7 @@ export async function submitToNeris(incident_id: string) {
       }).eq('incident_id', incident_id),
       logError(`NERIS validation failed: ${validation.error}`, '/incidents/neris/validate', { metadata: { incident_id } }),
     ])
-    return { error: `NERIS validation failed: ${validation.error}` }
+    return { error: 'NERIS rejected this report during validation. The full response was recorded in the system log for review — the report stays ready and can be resubmitted once corrected.' }
   }
 
   // Submit
@@ -606,7 +606,7 @@ export async function submitToNeris(incident_id: string) {
       neris_last_error: err.message,
       updated_at: new Date().toISOString(),
     }).eq('incident_id', incident_id)
-    return { error: err.message }
+    return { error: 'NERIS rejected this submission. The full response was recorded in the system log for review — the report stays ready and can be resubmitted once corrected.' }
   }
 
   // Update local record
@@ -620,7 +620,7 @@ export async function submitToNeris(incident_id: string) {
       updated_at: new Date().toISOString(),
     })
     .eq('incident_id', incident_id)
-  if (dbErr) { await logError(dbErr.message, '/incidents/neris/submit', { metadata: { incident_id } }); return { error: dbErr.message } }
+  if (dbErr) { await logError(dbErr.message, '/incidents/neris/submit', { metadata: { incident_id } }); return { error: 'Submitted to NERIS, but the local record could not be updated. The details were recorded in the system log for review.' } }
 
   // Submission succeeded — auto-resolve any earlier NERIS error logs tied to this incident
   // so the sys-admin Error Logs list doesn't keep flagging a problem that's now fixed.

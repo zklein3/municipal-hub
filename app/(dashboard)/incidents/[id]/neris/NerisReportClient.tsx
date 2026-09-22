@@ -132,17 +132,15 @@ export default function NerisReportClient({
     return `${baseSectionCls} ${hasIssue ? 'border-red-400' : 'border-zinc-200'}`
   }
 
-  // Testing mode (admin only) — forces all sections visible
-  const [testingMode, setTestingMode] = useState(false)
   const [involvesMutualAid, setInvolvesMutualAid] = useState<boolean>(nerisRecord?.involves_mutual_aid ?? false)
 
   const coverType = incident.incident_type
   const isOutsideFire = ['grass', 'wildland', 'other_fire'].includes(incident.fire_subtype ?? '')
-  const hasMutualAid  = testingMode || involvesMutualAid || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
+  const hasMutualAid  = involvesMutualAid || mutualAidRows.length > 0 || !!(incident.mutual_aid_direction || incident.mutual_aid_department)
   const hasOpenUnitsWork = requirementSummary.sections.some(section => section.section === 'units' && !!section.firstOpenRequirement)
   const hasOpenPersonnelWork = requirementSummary.sections.some(section => section.section === 'personnel' && !!section.firstOpenRequirement)
-  const showUnitsSection = testingMode || incidentApparatus.length > 0 || hasOpenUnitsWork
-  const showPersonnelSection = testingMode || incidentPersonnel.length > 0 || hasOpenPersonnelWork
+  const showUnitsSection = incidentApparatus.length > 0 || hasOpenUnitsWork
+  const showPersonnelSection = incidentPersonnel.length > 0 || hasOpenPersonnelWork
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -165,12 +163,12 @@ export default function NerisReportClient({
 
   // Module visibility — mirrors getNerisActiveModules, also driven by selected NERIS code
   const codeMatchesAny = (markers: string[]) => markers.some(m => nerisType.includes(m))
-  const isFireType          = testingMode || coverType === 'fire'    || nerisType.startsWith('FIRE||')
+  const isFireType          = coverType === 'fire'    || nerisType.startsWith('FIRE||')
   const isTransportationFire = nerisType.includes('TRANSPORTATION_FIRE') || (coverType === 'fire' && incident.fire_subtype === 'vehicle')
-  const isMedicalType  = testingMode || codeMatchesAny(MEDICAL_MARKERS)
-  const isHazmatType   = testingMode || coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
-  const isCasualtyType = testingMode || nerisType.startsWith('FIRE||') || codeMatchesAny(RESCUE_MARKERS)
-  const isMotorVehicle = testingMode || nerisType.includes('MOTOR_VEHICLE') || nerisType.includes('EXTRICATION')
+  const isMedicalType  = codeMatchesAny(MEDICAL_MARKERS)
+  const isHazmatType   = coverType === 'special' || codeMatchesAny(HAZMAT_MARKERS)
+  const isCasualtyType = nerisType.startsWith('FIRE||') || codeMatchesAny(RESCUE_MARKERS)
+  const isMotorVehicle = nerisType.includes('MOTOR_VEHICLE') || nerisType.includes('EXTRICATION')
 
   // Which rescue types show vehicle fields vs entrapment-only vs neither
   const FF_RESCUE_TYPES = new Set(['RESCUED_BY_FIREFIGHTER', 'RESCUED_BY_FF_RIT', 'EVAC_ASSISTED_BY_FIREFIGHTER'])
@@ -411,27 +409,8 @@ export default function NerisReportClient({
         </button>
       </div>
 
-      {/* Testing mode banner — admin only */}
+      {/* Payload preview — sys-admin/NERIS-admin troubleshooting aid */}
       {isAdmin && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-amber-800">Testing Mode <span className="text-xs font-normal">(admin only)</span></p>
-            <p className="text-xs text-amber-600">Show all modules and readiness sections regardless of incident type — toggle off for adaptive behavior.</p>
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer shrink-0">
-            <input
-              type="checkbox"
-              checked={testingMode}
-              onChange={e => setTestingMode(e.target.checked)}
-              className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
-            />
-            <span className="text-sm font-semibold text-amber-800">Show All</span>
-          </label>
-        </div>
-      )}
-
-      {/* Payload preview — admin / testing mode */}
-      {(isAdmin || testingMode) && (
         <div className="mb-4 rounded-lg border border-zinc-200 bg-white overflow-hidden">
           <button
             type="button"
@@ -807,9 +786,6 @@ export default function NerisReportClient({
           <section id="neris-section-mutual-aid" className={`${getSectionCls('mutual_aid')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Mutual Aid</h2>
-              {testingMode && mutualAidRows.length === 0 && !incident.mutual_aid_direction && (
-                <span className="text-xs text-amber-600 font-medium">Testing — no mutual aid on cover sheet</span>
-              )}
             </div>
 
             {/* Cover sheet mutual aid rows — read-only reference */}
@@ -1016,9 +992,6 @@ export default function NerisReportClient({
           <section id="neris-section-fire" className={`${getSectionCls('fire')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Fire Module</h2>
-              {testingMode && incident.incident_type !== 'fire' && (
-                <span className="text-xs text-amber-600 font-medium">Testing — not a fire incident</span>
-              )}
             </div>
 
             {!isTransportationFire && !isOutsideFire && (
@@ -1197,9 +1170,6 @@ export default function NerisReportClient({
           <section id="neris-section-medical" className={`${getSectionCls('medical')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Medical — Patients</h2>
-              {testingMode && !codeMatchesAny(MEDICAL_MARKERS) && (
-                <span className="text-xs text-amber-600 font-medium">Testing — not a medical incident</span>
-              )}
             </div>
             <p className="text-xs text-zinc-400 -mt-1">One card per patient.</p>
 
@@ -1273,9 +1243,6 @@ export default function NerisReportClient({
           <section id="neris-section-casualty" className={`${getSectionCls('casualty')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Casualty — Victims</h2>
-              {testingMode && !nerisType.startsWith('FIRE||') && !codeMatchesAny(RESCUE_MARKERS) && (
-                <span className="text-xs text-amber-600 font-medium">Testing — not a fire/rescue incident</span>
-              )}
             </div>
             <p className="text-xs text-zinc-400 -mt-1">One card per victim. Applies to fires, extrications, and technical rescue incidents.</p>
 
@@ -1478,9 +1445,6 @@ export default function NerisReportClient({
           <section id="neris-section-hazmat" className={`${getSectionCls('hazmat')} scroll-mt-6`}>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-zinc-900">Hazmat Module</h2>
-              {testingMode && coverType !== 'special' && (
-                <span className="text-xs text-amber-600 font-medium">Testing — not a hazmat incident</span>
-              )}
             </div>
             <div>
               <label className={labelCls}>Hazmat Disposition</label>
