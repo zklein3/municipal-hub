@@ -298,12 +298,12 @@ export default function NerisReportClient({
   )
   const [responseModeSaving, setResponseModeSaving] = useState<string | null>(null)
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setSaved(false)
-    const result = await saveNerisReport(incident.id, {
+  // Single source of truth for what a save writes. Mark Ready to Submit used to
+  // build its own shorter payload, which silently dropped the alarm,
+  // investigation and mutual-aid fields — edits to those never reached the DB,
+  // so readiness was then judged against a stale row.
+  function buildReportPayload() {
+    return {
       neris_incident_type: nerisType || null,
       property_use: propertyUse || null,
       property_normal_use: propertyNormalUse || null,
@@ -342,10 +342,28 @@ export default function NerisReportClient({
       chemical_dot_class: chemicalDotClass || null,
       chemical_release_occurred: chemicalReleaseOccurred,
       vehicles_involved: vehiclesInvolved !== '' ? parseInt(vehiclesInvolved) : null,
-    })
-    if (result?.error) { setError(result.error); setLoading(false); return }
-    setSaved(true)
-    setLoading(false)
+    }
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const result = await saveNerisReport(incident.id, buildReportPayload())
+      if (result?.error) { setError(result.error); return }
+      setSaved(true)
+      // Readiness is computed server-side, so it stays stale until the server
+      // component re-runs — without this the counters never move off their
+      // page-load values.
+      router.refresh()
+    } catch {
+      setError('Could not save the report — the connection may have dropped. Your entries are still on screen; try Save again.')
+    } finally {
+      // Always clears, so a failed action can never strand the button on "Saving…".
+      setLoading(false)
+    }
   }
 
   async function handleResponseModeChange(apparatusIncidentId: string, mode: string) {
@@ -373,6 +391,11 @@ export default function NerisReportClient({
   const fireCauseCodes = (isOutsideFire || isTransportationFire) ? NERIS_FIRE_CAUSE_OUT : NERIS_FIRE_CAUSE_IN
   const localOpenRequirements = requirementSummary.requirements.filter(req =>
     req.status === 'missing' && ['required', 'conditional'].includes(req.severity)
+  )
+  // First section still holding an open item — drives the "Go to first" jump
+  // on the readiness box that sits next to Mark Ready to Submit.
+  const firstOpenSection = requirementSummary.sections.find(
+    section => !!section.firstOpenRequirement && !!SECTION_ANCHORS[section.section]
   )
 
   return (
@@ -1520,46 +1543,61 @@ export default function NerisReportClient({
                   setLoading(true)
                   setError(null)
                   setReadyGuardOpen(false)
-                  // Save current state first, then mark complete
-                  const saveResult = await saveNerisReport(incident.id, {
-                    neris_incident_type: nerisType || null,
-                    property_use: propertyUse || null,
-      property_normal_use: propertyNormalUse || null,
-      neris_narrative: nerisNarrative || null,
-      impediment_narrative: impedimentNarrative || null,
-                    actions_taken: actionsTaken,
-                    no_action_reason: actionsTaken.length === 0 ? noActionReason.trim() || null : null,
-                    displaced_persons: displacedPersons !== '' ? parseInt(displacedPersons) : null,
-                    outside_fire_acres: outsideFireAcres !== '' ? parseFloat(outsideFireAcres) : null,
-                    fire_condition_arrival: fireCondition || null,
-                    building_damage: buildingDamage || null,
-                    suppression_appliance: suppressionAppliances,
-                    floor_of_origin: floorOfOrigin !== '' ? parseInt(floorOfOrigin) : null,
-                    room_of_origin: roomOfOrigin || null,
-                    fire_cause_code: fireCauseCode || null,
-                    aid_type: aidType || null,
-                    aid_direction: aidDirection || null,
-                    incident_persons: [
-        ...incidentPatients.map(p => ({ record_type: 'patient', person_type: '', rescue_performed_by: '', rescue_mode: '', rescue_actions: [] as string[], rescue_impediments: [] as string[], presence_known: '', entrapped: false, vehicle_type: '', safety_device: '', casualty_type: '', casualty_cause: '', evaluation_care: p.evaluation_care, improved_status: p.improved_status, disposition: p.disposition })),
-        ...incidentCasualties.map(c => ({ record_type: 'casualty', person_type: c.person_type, rescue_performed_by: c.rescue_performed_by, rescue_mode: c.rescue_mode, rescue_actions: c.rescue_actions, rescue_impediments: c.rescue_impediments, presence_known: c.presence_known, entrapped: c.entrapped, vehicle_type: c.vehicle_type, safety_device: c.safety_device, casualty_type: c.casualty_type, casualty_cause: c.casualty_cause, evaluation_care: '', improved_status: '', disposition: '' })),
-      ],
-                    hazsit_disposition: hazsitDisposition || null,
-                    hazsit_evacuated: hazsitEvacuated !== '' ? parseInt(hazsitEvacuated) : null,
-                    chemical_name: chemicalName || null,
-                    chemical_dot_class: chemicalDotClass || null,
-                    chemical_release_occurred: chemicalReleaseOccurred,
-                    vehicles_involved: vehiclesInvolved !== '' ? parseInt(vehiclesInvolved) : null,
-                  })
-                  if (saveResult?.error) { setError(saveResult.error); setLoading(false); return }
-                  const markResult = await markNerisComplete(incident.id)
-                  if (markResult?.error) { setError(markResult.error); setLoading(false); return }
-                  router.refresh()
-                  setLoading(false)
+                  try {
+                    // Same payload as Save — see buildReportPayload.
+                    const saveResult = await saveNerisReport(incident.id, buildReportPayload())
+                    if (saveResult?.error) { setError(saveResult.error); return }
+                    const markResult = await markNerisComplete(incident.id)
+                    if (markResult?.error) { setError(markResult.error); return }
+                    router.refresh()
+                  } catch {
+                    setError('Could not mark the report ready — the connection may have dropped. Your entries are still on screen; try again.')
+                  } finally {
+                    setLoading(false)
+                  }
                 }}
                 className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Saving…' : 'Mark Ready to Submit'}
               </button>
+            )}
+            {/* Readiness status, mirrored down here so it's readable without
+                scrolling back to the panel at the top of the form. Reflects the
+                last saved state — Save refreshes it. */}
+            {isOfficerOrAbove && nerisRecord && !nerisRecord.completed_at && (
+              requirementSummary.readyForLocalCompletion ? (
+                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5">
+                  <span className="text-sm font-semibold text-green-800">
+                    ✓ All required fields complete — ready to mark for submission.
+                  </span>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-sm font-semibold text-red-800">
+                      {localOpenRequirements.length} required field{localOpenRequirements.length === 1 ? '' : 's'} still missing above.
+                    </span>
+                    {firstOpenSection && (
+                      <a
+                        href={`#${SECTION_ANCHORS[firstOpenSection.section]}`}
+                        className="text-xs font-semibold text-red-700 underline underline-offset-2 hover:text-red-900"
+                      >
+                        Go to {firstOpenSection.label} ↑
+                      </a>
+                    )}
+                  </div>
+                  {readyGuardOpen && (
+                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-red-700">
+                      {localOpenRequirements.slice(0, 6).map(req => (
+                        <li key={req.id}>{req.label}</li>
+                      ))}
+                      {localOpenRequirements.length > 6 && (
+                        <li>And {localOpenRequirements.length - 6} more.</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              )
             )}
             {nerisRecord?.completed_at && !isSubmitted && isAdmin && (
               <button
@@ -1569,10 +1607,15 @@ export default function NerisReportClient({
                   if (!confirm('Submit this incident to NERIS? This cannot be undone.')) return
                   setLoading(true)
                   setError(null)
-                  const result = await submitToNeris(incident.id)
-                  if (result?.error) { setError(result.error); setLoading(false); return }
-                  router.refresh()
-                  setLoading(false)
+                  try {
+                    const result = await submitToNeris(incident.id)
+                    if (result?.error) { setError(result.error); return }
+                    router.refresh()
+                  } catch {
+                    setError('The submission did not complete — the connection may have dropped. Check the NERIS status above before retrying.')
+                  } finally {
+                    setLoading(false)
+                  }
                 }}
                 className="rounded-lg bg-green-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
               >
