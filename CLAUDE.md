@@ -539,6 +539,8 @@ V1 Compatible badge earned. Production Client ID + Secret set in Vercel + .env.l
 - **Medical module** (`medical_details[]`) — field names confirmed 2026-05-22:
   - `patient_care_evaluation` (required), `patient_status`, `transport_disposition`
   - `transport_disposition` values: TRANSPORT_BY_EMS_UNIT | OTHER_AGENCY_TRANSPORT | NONPATIENT_TRANSPORT | PATIENT_REFUSED_TRANSPORT | NO_TRANSPORT
+  - **`medical_details` may be omitted entirely on a medical-coded incident — confirmed accepted by live NERIS 2026-09-22.** An EMS crew that stands by and is released without ever being assigned a patient has no patient to describe, and there is no "no patient contact" code in `NERIS_PATIENT_EVALUATION_CARE` (every value presupposes a patient). `buildNerisPayload` already guards the block with `if (medicalPersons.length > 0)`, so it simply drops the module. Do **not** invent a placeholder patient record to satisfy it.
+  - Our own readiness check was the thing blocking this, not NERIS. `incident_neris.no_patient_contact` (migration `add_incident_neris_no_patient_contact`) is a checkbox offered in the Medical section only while the patient list is empty; it satisfies the `medical.patients` requirement in `lib/neris-requirements.ts`. Unchecked still blocks, so an outstanding patient record is not waved through.
 - **Hazmat module**: top-level key is `hazsit_detail` (not `hazardous_situation`) — sub-fields still TODO(api-review)
 
 **Confirmed clean payloads (preview verified 2026-05-22):**
