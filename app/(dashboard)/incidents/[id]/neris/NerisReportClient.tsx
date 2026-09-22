@@ -144,6 +144,9 @@ export default function NerisReportClient({
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Which action produced `error`, so the bottom banner can name it —
+  // the same state is shared by Save, Mark Ready and Submit.
+  const [errorAction, setErrorAction] = useState<'save' | 'ready' | 'submit' | null>(null)
   const [saved, setSaved] = useState(false)
   const [readyGuardOpen, setReadyGuardOpen] = useState(false)
 
@@ -349,10 +352,11 @@ export default function NerisReportClient({
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setErrorAction(null)
     setSaved(false)
     try {
       const result = await saveNerisReport(incident.id, buildReportPayload())
-      if (result?.error) { setError(result.error); return }
+      if (result?.error) { setError(result.error); setErrorAction('save'); return }
       setSaved(true)
       // Readiness is computed server-side, so it stays stale until the server
       // component re-runs — without this the counters never move off their
@@ -360,6 +364,7 @@ export default function NerisReportClient({
       router.refresh()
     } catch {
       setError('Could not save the report — the connection may have dropped. Your entries are still on screen; try Save again.')
+      setErrorAction('save')
     } finally {
       // Always clears, so a failed action can never strand the button on "Saving…".
       setLoading(false)
@@ -1519,6 +1524,32 @@ export default function NerisReportClient({
           </section>
         )}
 
+        {/* Outcome of the last Save or Submit, mirrored down here so the result
+            is visible from the buttons that caused it. The banners at the top
+            of the form stay as they are. A successful submit removes the whole
+            button row below, so this block sits outside it. */}
+        {isSubmitted ? (
+          <div className="mb-8 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+            <p className="text-sm font-semibold text-green-800">
+              ✓ Submitted to NERIS — ID: {nerisRecord?.neris_submission_id ?? '—'}
+            </p>
+            <p className="mt-0.5 text-xs text-green-700">This report is locked and can no longer be edited.</p>
+          </div>
+        ) : error ? (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm font-semibold text-red-800">
+              {errorAction === 'submit' ? 'Submission did not go through'
+                : errorAction === 'ready' ? 'Could not mark ready to submit'
+                : 'Could not save'}
+            </p>
+            <p className="mt-0.5 text-sm text-red-700">{error}</p>
+          </div>
+        ) : saved ? (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+            ✓ Saved successfully.
+          </div>
+        ) : null}
+
         {/* Save / Mark Ready */}
         {!isSubmitted && (
           <div className="flex flex-wrap gap-3 pb-8">
@@ -1542,16 +1573,18 @@ export default function NerisReportClient({
                   }
                   setLoading(true)
                   setError(null)
+                  setErrorAction(null)
                   setReadyGuardOpen(false)
                   try {
                     // Same payload as Save — see buildReportPayload.
                     const saveResult = await saveNerisReport(incident.id, buildReportPayload())
-                    if (saveResult?.error) { setError(saveResult.error); return }
+                    if (saveResult?.error) { setError(saveResult.error); setErrorAction('ready'); return }
                     const markResult = await markNerisComplete(incident.id)
-                    if (markResult?.error) { setError(markResult.error); return }
+                    if (markResult?.error) { setError(markResult.error); setErrorAction('ready'); return }
                     router.refresh()
                   } catch {
                     setError('Could not mark the report ready — the connection may have dropped. Your entries are still on screen; try again.')
+                    setErrorAction('ready')
                   } finally {
                     setLoading(false)
                   }
@@ -1607,12 +1640,14 @@ export default function NerisReportClient({
                   if (!confirm('Submit this incident to NERIS? This cannot be undone.')) return
                   setLoading(true)
                   setError(null)
+                  setErrorAction(null)
                   try {
                     const result = await submitToNeris(incident.id)
-                    if (result?.error) { setError(result.error); return }
+                    if (result?.error) { setError(result.error); setErrorAction('submit'); return }
                     router.refresh()
                   } catch {
                     setError('The submission did not complete — the connection may have dropped. Check the NERIS status above before retrying.')
+                    setErrorAction('submit')
                   } finally {
                     setLoading(false)
                   }
