@@ -45,6 +45,7 @@ export default async function HosesPage() {
         .select('id, hose_id, test_date, tested_by, tested_by_name, test_pressure_psi, duration_min, passed, failure_reason, notes')
         .in('hose_id', hoseIds)
         .order('test_date', { ascending: false })
+        .order('created_at', { ascending: false })
     : { data: [] as any[] }
 
   // Fetch tester names

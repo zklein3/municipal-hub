@@ -64,7 +64,8 @@ export default async function HoseTestingReportPage({
       .eq('department_id', ctx.departmentId)
       .gte('test_date', dateFrom)
       .lte('test_date', dateTo)
-      .order('test_date', { ascending: true }),
+      .order('test_date', { ascending: true })
+      .order('created_at', { ascending: true }),
   ])
 
   const hoses = (hosesRaw ?? []).filter(h => h.status !== 'retired')

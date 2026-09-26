@@ -5,6 +5,7 @@ import { addPublicHose, claimHose, claimHoses, editPublicHose, releaseHose, rele
 import { startHoseTestSession, openHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
 import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
+import { matchesHoseSearch } from '@/lib/hose-search'
 
 const TESTER_NAME_KEY = 'fireops7_hose_testing_tester_name'
 const SESSION_TOKEN_KEY = 'fireops7_hose_testing_session_token'
@@ -111,12 +112,21 @@ export default function HoseTestingClient({
     const stored = localStorage.getItem(TESTER_NAME_KEY)
     if (stored) setTesterName(stored)
 
+    // A fresh page load starts with nothing selected, so this browser's own
+    // leftover selection locks (from before the reload) are released rather than
+    // left blocking other testers. Locks that belong to an open test are kept.
+    const releaseStaleOwnLocks = () => {
+      const own = initialLocks.filter(l => l.session_token === sessionToken).map(l => l.hose_id)
+      if (own.length) releaseHoses(slug, own, sessionToken)
+    }
+
     // Pick up a test left in progress in this browser (reload, closed tab).
     const draftId = localStorage.getItem(draftKey(slug))
-    if (!draftId) return
+    if (!draftId) { releaseStaleOwnLocks(); return }
     openHoseTestSession(slug, draftId, sessionToken).then(res => {
       if ('error' in res || res.session.status !== 'draft') {
         localStorage.removeItem(draftKey(slug))
+        releaseStaleOwnLocks()
         return
       }
       setDraft(res.session)
@@ -240,7 +250,7 @@ export default function HoseTestingClient({
   const uniqueSizes = Array.from(new Set(visibleHoses.map(h => h.diameter_in))).sort((a, b) => a - b)
   const filteredHoses = visibleHoses
     .filter(h => sizeFilter === null || h.diameter_in === sizeFilter)
-    .filter(h => h.hose_identifier.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter(h => matchesHoseSearch(h.hose_identifier, search))
   const groupedHoses = uniqueSizes
     .filter(size => sizeFilter === null || size === sizeFilter)
     .map(size => ({ size, hoses: filteredHoses.filter(h => h.diameter_in === size) }))

@@ -9,6 +9,7 @@ import {
   type OpenedSession,
   type DraftItem,
 } from '@/app/actions/hose-test-sessions'
+import { matchesHoseSearch } from '@/lib/hose-search'
 
 // NFPA 1962: attack hose (1"-3") tests at 300 PSI, supply hose (4"-6") at 200 PSI.
 function requiredPsi(diameter_in: number): number {
@@ -97,12 +98,8 @@ export default function HoseTestDraftScreen({
   const failed = all.filter(i => i.result === 'fail')
   const pending = all.length - failed.length
   const missingNotes = failed.filter(i => !i.failure_reason.trim()).length
-  // Ignore case, dashes and spaces so "231", "23-1" and "23 1" all find 23-10 … 23-19.
-  const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const term = squash(search)
   const visible = all.filter(i =>
-    (!failedOnly || i.result === 'fail') &&
-    (!term || squash(i.hose_identifier).includes(term)))
+    (!failedOnly || i.result === 'fail') && matchesHoseSearch(i.hose_identifier, search))
 
   function requestFinalize() {
     setError(null)

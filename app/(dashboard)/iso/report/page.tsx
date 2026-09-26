@@ -77,6 +77,7 @@ export default async function IsoReportPage() {
     .eq('department_id', department_id)
     .gte('test_date', oneYearAgoStr)
     .order('test_date', { ascending: false })
+    .order('created_at', { ascending: false })
 
   // A hose's status is its most recent test in the window (rows are newest-first):
   // latest passed = Tested, latest failed = Failed. A fail never counts as tested,

@@ -7,6 +7,7 @@ import { claimHoseInApp, claimHosesInApp, releaseHoseInApp, releaseHosesInApp, f
 import { startHoseTestSession, openHoseTestSession, abandonHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
 import HoseTestDraftScreen from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
+import { matchesHoseSearch } from '@/lib/hose-search'
 
 type Hose = {
   id: string
@@ -50,6 +51,8 @@ export default function HoseTestSessionClient({
   const today = new Date().toISOString().slice(0, 10)
 
   const [draft, setDraft] = useState<OpenedSession | null>(null)
+  const [held, setHeld] = useState<HeldSelection[]>(heldSelections)
+  const [clearingToken, setClearingToken] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [sizeFilter, setSizeFilter] = useState<number | null>(null)
@@ -149,6 +152,16 @@ export default function HoseTestSessionClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId])
 
+  // A fresh page load starts with nothing selected, so this browser's own
+  // leftover selection locks (not part of an open test) are released instead of
+  // blocking other testers for 30 minutes.
+  useEffect(() => {
+    if (!initialLocks.some(l => l.session_token === sessionToken)) return
+    setHeld(prev => prev.filter(g => g.sessionToken !== sessionToken))
+    releaseHeldSelection(sessionToken)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [clearingId, setClearingId] = useState<string | null>(null)
 
   async function handleForceRelease(hoseId: string) {
@@ -179,7 +192,7 @@ export default function HoseTestSessionClient({
   const uniqueSizes = Array.from(new Set(hoses.map(h => h.diameter_in))).sort((a, b) => a - b)
   const filteredHoses = hoses
     .filter(h => sizeFilter === null || h.diameter_in === sizeFilter)
-    .filter(h => h.hose_identifier.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter(h => matchesHoseSearch(h.hose_identifier, search))
   const groupedHoses = uniqueSizes
     .filter(size => sizeFilter === null || size === sizeFilter)
     .map(size => ({ size, hoses: filteredHoses.filter(h => h.diameter_in === size) }))
@@ -234,10 +247,11 @@ export default function HoseTestSessionClient({
   }
 
   async function handleClearHeld(token: string) {
-    setLoading(true)
+    setClearingToken(token)
     const res = await releaseHeldSelection(token)
-    setLoading(false)
+    setClearingToken(null)
     if (res && 'error' in res && res.error) { setError(res.error); return }
+    setHeld(prev => prev.filter(g => g.sessionToken !== token))
     if (token === sessionToken) setSelected(new Set())
     router.refresh()
   }
@@ -300,18 +314,20 @@ export default function HoseTestSessionClient({
           </div>
         )}
 
-        {heldSelections.length > 0 && (
+        {held.length > 0 && (
           <div className="mb-5 rounded-xl bg-zinc-50 border border-zinc-200 p-4">
             <h2 className="text-sm font-semibold text-zinc-800 mb-1">Hoses selected but not in a test</h2>
             <p className="text-xs text-zinc-500 mb-3">Someone picked these hoses and never started (or left). They stay locked for 30 minutes unless cleared.</p>
             <div className="flex flex-col gap-2">
-              {heldSelections.map(g => (
+              {held.map(g => (
                 <div key={g.sessionToken} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-zinc-200 px-3 py-2">
                   <span className="text-xs text-zinc-700">
                     <span className="font-semibold">{g.testerName || 'Unknown'}</span>
                     <span className="text-zinc-400 ml-2">{g.count} hose{g.count !== 1 ? 's' : ''}{g.sessionToken === sessionToken ? ' · this browser' : ''}</span>
                   </span>
-                  <button onClick={() => handleClearHeld(g.sessionToken)} disabled={loading} className="shrink-0 text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">Clear all</button>
+                  <button onClick={() => handleClearHeld(g.sessionToken)} disabled={clearingToken !== null} className="shrink-0 text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
+                    {clearingToken === g.sessionToken ? 'Clearing…' : 'Clear all'}
+                  </button>
                 </div>
               ))}
             </div>

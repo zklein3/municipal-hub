@@ -76,7 +76,7 @@ export default async function PrintReportPage({
   const { data: recentHoseTests } = await adminClient
     .from('hose_tests').select('hose_id, test_date, passed')
     .eq('department_id', department_id).gte('test_date', cutoffStr)
-    .order('test_date', { ascending: false })
+    .order('test_date', { ascending: false }).order('created_at', { ascending: false })
 
   // Latest test per hose decides: passed = tested, failed = failed (a fail never counts as tested).
   const latestHoseResult: Record<string, boolean> = {}
