@@ -335,7 +335,7 @@ export default function PrintReportClient({
               <thead>
                 <tr className="bg-zinc-100">
                   <th className="px-2 py-1.5 font-semibold text-left">Diameter</th>
-                  <th className="px-2 py-1.5 font-semibold text-right">Total Owned</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Owned (in service)</th>
                   <th className="px-2 py-1.5 font-semibold text-right">On Trucks</th>
                   <th className="px-2 py-1.5 font-semibold text-right">In Storage</th>
                   <th className="px-2 py-1.5 font-semibold text-right">Out of Service</th>
@@ -350,7 +350,7 @@ export default function PrintReportClient({
                     <td className="px-2 py-1.5 text-right">{h.onTruck > 0 ? `${h.onTruck} ft` : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{h.gap ? '—' : `${h.inStorage} ft`}</td>
                     <td className="px-2 py-1.5 text-right">{h.outOfService > 0 ? `${h.outOfService} ft` : '—'}</td>
-                    <td className="px-2 py-1.5 text-center">{h.gap ? <span className="text-amber-700 font-semibold">Incomplete</span> : 'OK'}</td>
+                    <td className="px-2 py-1.5 text-center">{h.gap ? <span className="text-amber-700 font-semibold">Incomplete</span> : h.outOfService > 0 ? <span className="text-amber-700 font-semibold">OK · {h.outOfService} ft out of service</span> : 'OK'}</td>
                   </tr>
                 ))}
               </tbody>

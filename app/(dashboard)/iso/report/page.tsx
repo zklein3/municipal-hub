@@ -420,7 +420,7 @@ export default async function IsoReportPage() {
                 <thead>
                   <tr className="text-left text-zinc-400 border-b border-zinc-100">
                     <th className="pb-2 font-medium pr-4">Diameter</th>
-                    <th className="pb-2 font-medium pr-4 text-right">Total Owned</th>
+                    <th className="pb-2 font-medium pr-4 text-right">Owned (in service)</th>
                     <th className="pb-2 font-medium pr-4 text-right">On Trucks</th>
                     <th className="pb-2 font-medium pr-4 text-right">In Storage</th>
                     <th className="pb-2 font-medium pr-4 text-right">Out of Service</th>
@@ -448,6 +448,8 @@ export default async function IsoReportPage() {
                           <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Inventory incomplete</span>
                         ) : h.owned === 0 ? (
                           <span className="rounded-full bg-zinc-100 text-zinc-400 px-2 py-0.5 font-medium">No inventory</span>
+                        ) : h.outOfService > 0 ? (
+                          <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">OK · {h.outOfService} ft out of service</span>
                         ) : (
                           <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 font-medium">OK</span>
                         )}
