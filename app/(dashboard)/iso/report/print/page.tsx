@@ -87,9 +87,14 @@ export default async function PrintReportPage({
 
   // Hose inventory summary
   type HoseLoad = { diameter_in: number; length_ft: number }
+  // Only in-service hose counts as owned/usable; out-of-service hose is shown separately.
+  const oosHoses = (hoses ?? []).filter(h => h.status === 'out_of_service')
   const ownedByDiam = new Map<number, number>()
+  const oosByDiam = new Map<number, number>()
   for (const h of hoses ?? []) {
-    if (h.diameter_in && h.length_ft) ownedByDiam.set(h.diameter_in, (ownedByDiam.get(h.diameter_in) ?? 0) + h.length_ft)
+    if (!h.diameter_in || !h.length_ft) continue
+    if (h.status === 'in_service') ownedByDiam.set(h.diameter_in, (ownedByDiam.get(h.diameter_in) ?? 0) + h.length_ft)
+    else if (h.status === 'out_of_service') oosByDiam.set(h.diameter_in, (oosByDiam.get(h.diameter_in) ?? 0) + h.length_ft)
   }
   const onTruckByDiam = new Map<number, number>()
   for (const spec of isoSpecs ?? []) {
@@ -97,11 +102,11 @@ export default async function PrintReportPage({
       if (load.diameter_in && load.length_ft) onTruckByDiam.set(load.diameter_in, (onTruckByDiam.get(load.diameter_in) ?? 0) + load.length_ft)
     }
   }
-  const allDiameters = [...new Set([...ownedByDiam.keys(), ...onTruckByDiam.keys()])].sort((a, b) => a - b)
+  const allDiameters = [...new Set([...ownedByDiam.keys(), ...onTruckByDiam.keys(), ...oosByDiam.keys()])].sort((a, b) => a - b)
   const hoseInventory = allDiameters.map(d => {
     const owned = ownedByDiam.get(d) ?? 0
     const onTruck = onTruckByDiam.get(d) ?? 0
-    return { diameter: d, owned, onTruck, inStorage: owned - onTruck, gap: owned - onTruck < 0 }
+    return { diameter: d, owned, onTruck, inStorage: owned - onTruck, outOfService: oosByDiam.get(d) ?? 0, gap: owned - onTruck < 0 }
   })
 
   // ── Hydrants ──────────────────────────────────────────────────────────────
@@ -224,6 +229,14 @@ export default async function PrintReportPage({
       apparatus={isoApparatus}
       staffing={staffing}
       hoseInventory={hoseInventory}
+      outOfServiceHoses={oosHoses.map(h => ({
+        id: h.id,
+        hose_identifier: h.hose_identifier,
+        hose_type: h.hose_type,
+        diameter_in: h.diameter_in,
+        length_ft: h.length_ft,
+        failed: failedHoseIds.has(h.id),
+      }))}
       activeHoses={activeHoses.map(h => ({
         id: h.id,
         hose_identifier: h.hose_identifier,

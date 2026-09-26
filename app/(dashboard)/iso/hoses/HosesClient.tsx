@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createHose, updateHose, addHoseTest, removeHose, updateHoseTest, deleteHoseTest, setHoseStatus } from '@/app/actions/iso'
@@ -56,7 +56,7 @@ function formatDate(d: string) {
 }
 
 export default function HosesClient({
-  hoses,
+  hoses: serverHoses,
   deptApparatus,
   isOfficerOrAbove,
 }: {
@@ -79,14 +79,24 @@ export default function HosesClient({
   const [testPassed, setTestPassed] = useState('true')
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [attentionOnly, setAttentionOnly] = useState(false)
-  const [statusBusyId, setStatusBusyId] = useState<string | null>(null)
   const [returningId, setReturningId] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
+
+  // Show a status change immediately; the server refresh can take several seconds.
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
+  useEffect(() => { setStatusOverrides({}) }, [serverHoses])
+  const hoses = serverHoses.map(h => (statusOverrides[h.id] ? { ...h, status: statusOverrides[h.id] } : h))
 
   function handleReturnToService(hoseId: string) {
-    setStatusBusyId(hoseId)
+    setStatusError(null)
+    setStatusOverrides(prev => ({ ...prev, [hoseId]: 'in_service' }))
     startTransition(async () => {
-      await setHoseStatus(hoseId, 'in_service')
-      setStatusBusyId(null)
+      const res = await setHoseStatus(hoseId, 'in_service')
+      if (res && 'error' in res && res.error) {
+        setStatusOverrides(prev => { const next = { ...prev }; delete next[hoseId]; return next })
+        setStatusError(res.error)
+        return
+      }
       router.refresh()
     })
   }
@@ -282,6 +292,9 @@ export default function HosesClient({
           </button>
         </div>
       )}
+      {statusError && (
+        <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{statusError}</div>
+      )}
       {attentionOnly && visibleHoses.length === 0 && (
         <div className="rounded-xl bg-white border border-zinc-200 p-6 text-center text-sm text-zinc-400 mb-3">
           No failed or out-of-service hoses.
@@ -394,8 +407,8 @@ export default function HosesClient({
                             returningId === hose.id ? (
                               <>
                                 <span className="text-xs text-zinc-600">Return {hose.hose_identifier} to service?</span>
-                                <button onClick={() => { setReturningId(null); handleReturnToService(hose.id) }} disabled={statusBusyId === hose.id} className="text-xs font-semibold text-green-700 hover:underline disabled:opacity-50">
-                                  {statusBusyId === hose.id ? 'Returning…' : 'Yes'}
+                                <button onClick={() => { setReturningId(null); handleReturnToService(hose.id) }} className="text-xs font-semibold text-green-700 hover:underline">
+                                  Yes
                                 </button>
                                 <button onClick={() => setReturningId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
                               </>

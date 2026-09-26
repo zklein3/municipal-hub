@@ -12,7 +12,8 @@ type Apparatus = {
   spec: { pump_rating_gpm: number | null; tank_capacity_gal: number | null; foam_capacity_gal: number | null; aerial_length_ft: number | null; turning_radius_ft: number | null; gvwr_lbs: number | null; hose_loads: unknown } | null
   pumpTest: { test_date: string; passed: boolean } | null
 }
-type HoseRow = { diameter: number; owned: number; onTruck: number; inStorage: number; gap: boolean }
+type HoseRow = { diameter: number; owned: number; onTruck: number; inStorage: number; outOfService: number; gap: boolean }
+type OutOfServiceHose = { id: string; hose_identifier: string; hose_type: string; diameter_in: number; length_ft: number; failed: boolean }
 type ActiveHose = { id: string; hose_identifier: string; hose_type: string; diameter_in: number; length_ft: number; tested: boolean; failed: boolean }
 type Hydrant = { id: string; hydrant_number: string; location_description: string | null; out_of_service: boolean; tested: boolean; last_flow: { test_date: string; flow_gpm: number | null } | null }
 type MutualAidApp = { identifier: string; pump_gpm: number | null; tank_gal: number | null; hose_loads: { diameter_in: number; length_ft: number }[] }
@@ -40,7 +41,7 @@ const DEFAULT_SECTIONS = {
 
 export default function PrintReportClient({
   deptName, months, generatedAt,
-  apparatus, staffing, hoseInventory, activeHoses,
+  apparatus, staffing, hoseInventory, outOfServiceHoses, activeHoses,
   hydrants, training, certSummary, preplans, mutualAid, responseTimes,
   departmentTimezone, departmentId, isAdmin, defaultAuditDate, defaultAuditorName, defaultSections,
 }: {
@@ -50,6 +51,7 @@ export default function PrintReportClient({
   apparatus: Apparatus[]
   staffing: { total: number; admin: number; officer: number; member: number }
   hoseInventory: HoseRow[]
+  outOfServiceHoses: OutOfServiceHose[]
   activeHoses: ActiveHose[]
   hydrants: Hydrant[]
   training: { events: number; hours: number; roster: { name: string; hours: number }[] }
@@ -336,6 +338,7 @@ export default function PrintReportClient({
                   <th className="px-2 py-1.5 font-semibold text-right">Total Owned</th>
                   <th className="px-2 py-1.5 font-semibold text-right">On Trucks</th>
                   <th className="px-2 py-1.5 font-semibold text-right">In Storage</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Out of Service</th>
                   <th className="px-2 py-1.5 font-semibold text-center">Status</th>
                 </tr>
               </thead>
@@ -346,6 +349,7 @@ export default function PrintReportClient({
                     <td className="px-2 py-1.5 text-right">{h.owned > 0 ? `${h.owned} ft` : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{h.onTruck > 0 ? `${h.onTruck} ft` : '—'}</td>
                     <td className="px-2 py-1.5 text-right">{h.gap ? '—' : `${h.inStorage} ft`}</td>
+                    <td className="px-2 py-1.5 text-right">{h.outOfService > 0 ? `${h.outOfService} ft` : '—'}</td>
                     <td className="px-2 py-1.5 text-center">{h.gap ? <span className="text-amber-700 font-semibold">Incomplete</span> : 'OK'}</td>
                   </tr>
                 ))}
@@ -381,6 +385,38 @@ export default function PrintReportClient({
                     <td className="px-2 py-1.5 text-right">{h.length_ft} ft</td>
                     <td className="px-2 py-1.5 text-center font-semibold">
                       {h.failed ? <span className="text-red-700">Failed</span> : h.tested ? <span className="text-green-700">Tested</span> : <span className="text-amber-700">Overdue</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Out-of-service hose — not counted in the compliance figures above */}
+        {sections.hoseTesting && outOfServiceHoses.length > 0 && (
+          <div className="print:break-inside-avoid">
+            <SectionHeading>Hose Out of Service ({outOfServiceHoses.length})</SectionHeading>
+            <p className="text-xs text-zinc-500 mb-2">Removed from service and not counted in the inventory or test compliance above.</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-zinc-100">
+                  <th className="px-2 py-1.5 font-semibold text-left">ID</th>
+                  <th className="px-2 py-1.5 font-semibold text-left">Type</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Diameter</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Length</th>
+                  <th className="px-2 py-1.5 font-semibold text-center">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outOfServiceHoses.map((h, i) => (
+                  <tr key={h.id} className={i % 2 === 0 ? 'bg-white' : 'bg-zinc-50'}>
+                    <td className="px-2 py-1.5 font-mono font-bold">{h.hose_identifier}</td>
+                    <td className="px-2 py-1.5 capitalize">{h.hose_type.replace('_', ' ')}</td>
+                    <td className="px-2 py-1.5 text-right">{h.diameter_in}&quot;</td>
+                    <td className="px-2 py-1.5 text-right">{h.length_ft} ft</td>
+                    <td className="px-2 py-1.5 text-center font-semibold">
+                      {h.failed ? <span className="text-red-700">Failed test</span> : <span className="text-zinc-600">Out of service</span>}
                     </td>
                   </tr>
                 ))}

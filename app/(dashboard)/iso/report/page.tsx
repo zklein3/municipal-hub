@@ -177,11 +177,13 @@ export default async function IsoReportPage() {
 
   // Hose inventory summary — total owned from hoses table, on-truck from hose_loads
   type HoseLoad = { diameter_in: number; length_ft: number }
+  // Only in-service hose counts as owned/usable; out-of-service hose is shown on its own.
   const ownedByDiameter = new Map<number, number>()
+  const oosByDiameter = new Map<number, number>()
   for (const h of hoses ?? []) {
-    if (h.diameter_in && h.length_ft) {
-      ownedByDiameter.set(h.diameter_in, (ownedByDiameter.get(h.diameter_in) ?? 0) + h.length_ft)
-    }
+    if (!h.diameter_in || !h.length_ft) continue
+    if (h.status === 'in_service') ownedByDiameter.set(h.diameter_in, (ownedByDiameter.get(h.diameter_in) ?? 0) + h.length_ft)
+    else if (h.status === 'out_of_service') oosByDiameter.set(h.diameter_in, (oosByDiameter.get(h.diameter_in) ?? 0) + h.length_ft)
   }
   const onTruckByDiameter = new Map<number, number>()
   for (const spec of isoSpecs ?? []) {
@@ -192,12 +194,12 @@ export default async function IsoReportPage() {
       }
     }
   }
-  const allDiameters = [...new Set([...ownedByDiameter.keys(), ...onTruckByDiameter.keys()])].sort((a, b) => a - b)
+  const allDiameters = [...new Set([...ownedByDiameter.keys(), ...onTruckByDiameter.keys(), ...oosByDiameter.keys()])].sort((a, b) => a - b)
   const hoseInventory = allDiameters.map(d => {
     const owned = ownedByDiameter.get(d) ?? 0
     const onTruck = onTruckByDiameter.get(d) ?? 0
     const inStorage = owned - onTruck
-    return { diameter: d, owned, onTruck, inStorage, gap: inStorage < 0 }
+    return { diameter: d, owned, onTruck, inStorage, outOfService: oosByDiameter.get(d) ?? 0, gap: inStorage < 0 }
   })
 
   // Training summary calculations
@@ -421,6 +423,7 @@ export default async function IsoReportPage() {
                     <th className="pb-2 font-medium pr-4 text-right">Total Owned</th>
                     <th className="pb-2 font-medium pr-4 text-right">On Trucks</th>
                     <th className="pb-2 font-medium pr-4 text-right">In Storage</th>
+                    <th className="pb-2 font-medium pr-4 text-right">Out of Service</th>
                     <th className="pb-2 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -436,6 +439,9 @@ export default async function IsoReportPage() {
                         ) : (
                           <span className="text-zinc-600">{h.inStorage > 0 ? `${h.inStorage} ft` : '0 ft'}</span>
                         )}
+                      </td>
+                      <td className="py-2 pr-4 text-right">
+                        {h.outOfService > 0 ? <span className="text-red-600 font-medium">{h.outOfService} ft</span> : <span className="text-zinc-300">—</span>}
                       </td>
                       <td className="py-2">
                         {h.gap ? (
