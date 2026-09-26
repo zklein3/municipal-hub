@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { addPublicHose, claimHose, editPublicHose, releaseHose, setPublicHoseStatus } from '@/app/actions/hose-testing'
+import { addPublicHose, claimHose, claimHoses, editPublicHose, releaseHose, releaseHoses, setPublicHoseStatus } from '@/app/actions/hose-testing'
 import { startHoseTestSession, openHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
 import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
@@ -86,8 +86,10 @@ export default function HoseTestingClient({
     sessionStorage.setItem(SESSION_TOKEN_KEY, fresh)
     return fresh
   })
+  // Locks held under this browser's own token are not "someone else's" — after a
+  // reload they must stay selectable rather than showing as In progress.
   const [lockedByOthers, setLockedByOthers] = useState<Record<string, string | null>>(() =>
-    Object.fromEntries(initialLocks.map(l => [l.hose_id, l.tester_name]))
+    Object.fromEntries(initialLocks.filter(l => l.session_token !== sessionToken).map(l => [l.hose_id, l.tester_name]))
   )
   // Realtime DELETE payloads only ever carry the row's own primary key (`id`),
   // never other columns, even with replica identity full — that's a hard
@@ -218,14 +220,16 @@ export default function HoseTestingClient({
   async function handleSelectAllToggle() {
     const filteredIds = filteredHoses.map(h => h.id)
     const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selected.has(id))
+    setError(null)
     if (allFilteredSelected) {
-      await Promise.all(filteredIds.map(id => releaseHose(slug, id, sessionToken)))
       setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
+      await releaseHoses(slug, filteredIds, sessionToken)
     } else {
       const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
-      const results = await Promise.all(toClaim.map(id => claimHose(slug, id, sessionToken, testerName)))
-      const succeededIds = toClaim.filter((id, i) => !results[i]?.error)
-      setSelected(prev => { const next = new Set(prev); succeededIds.forEach(id => next.add(id)); return next })
+      const res = await claimHoses(slug, toClaim, sessionToken, testerName)
+      if ('error' in res && res.error) { setError(res.error); return }
+      const claimed = 'claimed' in res ? res.claimed : []
+      setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
     }
   }
 

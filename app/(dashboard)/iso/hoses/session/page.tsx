@@ -41,8 +41,18 @@ export default async function HoseTestSessionPage() {
     .order('created_at', { ascending: false })
   const draftIds = (draftsRaw ?? []).map(d => d.id)
   const { data: draftItems } = draftIds.length
-    ? await adminClient.from('hose_test_session_items').select('session_id, result').in('session_id', draftIds)
-    : { data: [] as { session_id: string; result: string }[] }
+    ? await adminClient.from('hose_test_session_items').select('session_id, hose_id, result').in('session_id', draftIds)
+    : { data: [] as { session_id: string; hose_id: string; result: string }[] }
+
+  // Selections held by someone who hasn't started a test (locks not tied to a draft).
+  const inDraft = new Set((draftItems ?? []).map(i => i.hose_id))
+  const heldMap: Record<string, { sessionToken: string; testerName: string; count: number }> = {}
+  for (const l of locksRaw ?? []) {
+    if (inDraft.has(l.hose_id)) continue
+    const g = (heldMap[l.session_token] ??= { sessionToken: l.session_token, testerName: l.tester_name ?? '', count: 0 })
+    g.count++
+  }
+  const heldSelections = Object.values(heldMap)
   const openDrafts = (draftsRaw ?? []).map(d => {
     const mine = (draftItems ?? []).filter(i => i.session_id === d.id)
     return {
@@ -61,6 +71,7 @@ export default async function HoseTestSessionPage() {
       departmentId={ctx.departmentId}
       initialLocks={locksRaw ?? []}
       openDrafts={openDrafts}
+      heldSelections={heldSelections}
     />
   )
 }

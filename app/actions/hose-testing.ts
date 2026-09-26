@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { prepareSlug } from '@/lib/public-slug'
+import { claimHosesBulk, releaseHosesBulk } from '@/lib/hose-locks'
 import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
@@ -140,6 +141,20 @@ export async function claimHose(slug: string, hoseId: string, sessionToken: stri
     )
 
   if (dbErr) { await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { hose_id: hoseId } }); return { error: dbErr.message } }
+  return { success: true }
+}
+
+export async function claimHoses(slug: string, hoseIds: string[], sessionToken: string, testerName: string) {
+  const dept = await resolveDeptBySlug(slug)
+  if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
+  const result = await claimHosesBulk(createAdminClient(), dept.id, hoseIds, sessionToken, testerName)
+  return { success: true, ...result }
+}
+
+export async function releaseHoses(slug: string, hoseIds: string[], sessionToken: string) {
+  const dept = await resolveDeptBySlug(slug)
+  if (!dept) return { error: 'Not found.' }
+  await releaseHosesBulk(createAdminClient(), dept.id, hoseIds, sessionToken)
   return { success: true }
 }
 

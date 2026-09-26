@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { claimHoseInApp, releaseHoseInApp, forceReleaseHoseInApp } from '@/app/actions/iso'
+import { claimHoseInApp, claimHosesInApp, releaseHoseInApp, releaseHosesInApp, forceReleaseHoseInApp, releaseHeldSelection } from '@/app/actions/iso'
 import { startHoseTestSession, openHoseTestSession, abandonHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
 import HoseTestDraftScreen from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,8 @@ type Hose = {
   length_ft: number
   status: string
 }
+
+export type HeldSelection = { sessionToken: string; testerName: string; count: number }
 
 export type OpenDraft = {
   id: string
@@ -35,12 +37,14 @@ export default function HoseTestSessionClient({
   departmentId,
   initialLocks,
   openDrafts,
+  heldSelections,
 }: {
   hoses: Hose[]
   testerName: string
   departmentId: string
   initialLocks: Lock[]
   openDrafts: OpenDraft[]
+  heldSelections: HeldSelection[]
 }) {
   const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
@@ -73,7 +77,7 @@ export default function HoseTestSessionClient({
     return fresh
   })
   const [lockedByOthers, setLockedByOthers] = useState<Record<string, string | null>>(() =>
-    Object.fromEntries(initialLocks.map(l => [l.hose_id, l.tester_name]))
+    Object.fromEntries(initialLocks.filter(l => l.session_token !== sessionToken).map(l => [l.hose_id, l.tester_name]))
   )
   // Realtime DELETE payloads only ever carry the row's own primary key (`id`),
   // never other columns, even with replica identity full — a hard Realtime+RLS
@@ -185,14 +189,16 @@ export default function HoseTestSessionClient({
   async function handleSelectAllToggle() {
     const filteredIds = filteredHoses.map(h => h.id)
     const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selected.has(id))
+    setError(null)
     if (allFilteredSelected) {
-      await Promise.all(filteredIds.map(id => releaseHoseInApp(id, sessionToken)))
       setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
+      await releaseHosesInApp(filteredIds, sessionToken)
     } else {
       const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
-      const claimResults = await Promise.all(toClaim.map(id => claimHoseInApp(id, sessionToken, testerName)))
-      const succeededIds = toClaim.filter((id, i) => !claimResults[i]?.error)
-      setSelected(prev => { const next = new Set(prev); succeededIds.forEach(id => next.add(id)); return next })
+      const res = await claimHosesInApp(toClaim, sessionToken, testerName)
+      if ('error' in res && res.error) { setError(res.error); return }
+      const claimed = 'claimed' in res ? res.claimed : []
+      setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
     }
   }
 
@@ -225,6 +231,15 @@ export default function HoseTestSessionClient({
     if ('error' in res) { setError(res.error); return }
     if (res.session.status !== 'draft') { setError('That test was already finalized or discarded.'); router.refresh(); return }
     setDraft(res.session)
+  }
+
+  async function handleClearHeld(token: string) {
+    setLoading(true)
+    const res = await releaseHeldSelection(token)
+    setLoading(false)
+    if (res && 'error' in res && res.error) { setError(res.error); return }
+    if (token === sessionToken) setSelected(new Set())
+    router.refresh()
   }
 
   async function handleDiscardOpen(id: string) {
@@ -279,6 +294,24 @@ export default function HoseTestSessionClient({
                     <button onClick={() => handleResume(d.id)} disabled={loading} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">Resume</button>
                     <button onClick={() => handleDiscardOpen(d.id)} className="text-xs font-semibold text-zinc-400 hover:text-red-700">Discard</button>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {heldSelections.length > 0 && (
+          <div className="mb-5 rounded-xl bg-zinc-50 border border-zinc-200 p-4">
+            <h2 className="text-sm font-semibold text-zinc-800 mb-1">Hoses selected but not in a test</h2>
+            <p className="text-xs text-zinc-500 mb-3">Someone picked these hoses and never started (or left). They stay locked for 30 minutes unless cleared.</p>
+            <div className="flex flex-col gap-2">
+              {heldSelections.map(g => (
+                <div key={g.sessionToken} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-zinc-200 px-3 py-2">
+                  <span className="text-xs text-zinc-700">
+                    <span className="font-semibold">{g.testerName || 'Unknown'}</span>
+                    <span className="text-zinc-400 ml-2">{g.count} hose{g.count !== 1 ? 's' : ''}{g.sessionToken === sessionToken ? ' · this browser' : ''}</span>
+                  </span>
+                  <button onClick={() => handleClearHeld(g.sessionToken)} disabled={loading} className="shrink-0 text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">Clear all</button>
                 </div>
               ))}
             </div>

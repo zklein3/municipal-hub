@@ -141,6 +141,16 @@ export async function startHoseTestSession(
     .in('id', hoseIds)
   if ((hoses?.length ?? 0) !== hoseIds.length) return { error: 'One or more selected hoses are not in service for this department.' }
 
+  // A hose can only be in one open test at a time, even for the same browser.
+  const { data: openDrafts } = await adminClient
+    .from('hose_test_sessions').select('id').eq('department_id', access.departmentId).eq('status', 'draft')
+  const openIds = (openDrafts ?? []).map(d => d.id)
+  if (openIds.length) {
+    const { data: taken } = await adminClient
+      .from('hose_test_session_items').select('hose_id').in('session_id', openIds).in('hose_id', hoseIds).limit(1)
+    if (taken?.length) return { error: 'A selected hose is already in another open test. Finish or discard that test first.' }
+  }
+
   const { data: locks } = await adminClient.from('hose_testing_locks').select('hose_id, session_token, tester_name').in('hose_id', hoseIds)
   const blocked = (locks ?? []).find(l => l.session_token !== input.lockToken)
   if (blocked) return { error: `A selected hose is already in a test by ${blocked.tester_name || 'another tester'}.` }

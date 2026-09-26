@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { logError, logEvent } from '@/lib/logger'
+import { claimHosesBulk, releaseHosesBulk } from '@/lib/hose-locks'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
@@ -92,6 +93,45 @@ export async function claimHoseInApp(hoseId: string, sessionToken: string, teste
     return { error: dbErr.message }
   }
   return { success: true }
+}
+
+export async function claimHosesInApp(hoseIds: string[], sessionToken: string, testerName: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  const result = await claimHosesBulk(createAdminClient(), ctx.department_id, hoseIds, sessionToken, testerName)
+  return { success: true, ...result }
+}
+
+export async function releaseHosesInApp(hoseIds: string[], sessionToken: string) {
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Unauthorized' }
+  await releaseHosesBulk(createAdminClient(), ctx.department_id, hoseIds, sessionToken)
+  return { success: true }
+}
+
+// Clears every selection lock held under one session token — for a selection
+// left behind by a tester who walked away. Draft tests are discarded from
+// "Open tests" instead, so locks belonging to a draft are left alone here.
+export async function releaseHeldSelection(sessionToken: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const adminClient = createAdminClient()
+  const { data: drafts } = await adminClient
+    .from('hose_test_sessions').select('id').eq('department_id', ctx.department_id).eq('status', 'draft')
+  const draftIds = (drafts ?? []).map(d => d.id)
+  const { data: inDraft } = draftIds.length
+    ? await adminClient.from('hose_test_session_items').select('hose_id').in('session_id', draftIds)
+    : { data: [] as { hose_id: string }[] }
+  const keep = new Set((inDraft ?? []).map(i => i.hose_id))
+
+  const { data: locks } = await adminClient
+    .from('hose_testing_locks').select('hose_id').eq('department_id', ctx.department_id).eq('session_token', sessionToken)
+  const toClear = (locks ?? []).map(l => l.hose_id).filter(id => !keep.has(id))
+  if (toClear.length) {
+    await adminClient.from('hose_testing_locks').delete().eq('department_id', ctx.department_id).in('hose_id', toClear)
+  }
+  return { success: true, cleared: toClear.length }
 }
 
 export async function releaseHoseInApp(hoseId: string, sessionToken: string) {
