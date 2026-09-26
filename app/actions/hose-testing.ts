@@ -214,7 +214,11 @@ export async function addPublicHose(slug: string, formData: FormData) {
     .select('id, hose_identifier, hose_type, diameter_in, length_ft, status')
     .single()
 
-  if (dbErr) { await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { hose_identifier } }); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: `Hose ${hose_identifier} (${diameter_in}") already exists.` }
+    await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { hose_identifier } })
+    return { error: dbErr.message }
+  }
 
   revalidatePath(`/hose-testing/${slug}`)
   return { success: true, hose }
@@ -259,7 +263,11 @@ export async function editPublicHose(slug: string, hoseId: string, formData: For
     .select('id, hose_identifier, hose_type, diameter_in, length_ft, status')
     .single()
 
-  if (dbErr) { await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { hose_id: hoseId, hose_identifier } }); return { error: dbErr.message } }
+  if (dbErr) {
+    if (dbErr.code === '23505') return { error: `Hose ${hose_identifier} (${diameter_in}") already exists.` }
+    await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { hose_id: hoseId, hose_identifier } })
+    return { error: dbErr.message }
+  }
 
   revalidatePath(`/hose-testing/${slug}`)
   return { success: true, hose }

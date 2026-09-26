@@ -400,6 +400,9 @@ export async function createHose(formData: FormData) {
   })
 
   if (dbErr) {
+    if (dbErr.code === '23505') {
+      return { error: `A ${formData.get('diameter_in')}" hose with ID ${(formData.get('hose_identifier') as string)?.trim()} already exists.` }
+    }
     await logError(dbErr.message, 'createHose', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
@@ -429,6 +432,9 @@ export async function updateHose(formData: FormData) {
   }).eq('id', hose_id).eq('department_id', ctx.department_id)
 
   if (dbErr) {
+    if (dbErr.code === '23505') {
+      return { error: `A ${formData.get('diameter_in')}" hose with ID ${(formData.get('hose_identifier') as string)?.trim()} already exists.` }
+    }
     await logError(dbErr.message, 'updateHose', { personnel_id: ctx.me.id })
     return { error: dbErr.message }
   }
