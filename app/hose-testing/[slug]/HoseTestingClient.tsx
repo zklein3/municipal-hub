@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { addPublicHose, claimHose, claimHoses, editPublicHose, releaseHose, releaseHoses, setPublicHoseStatus } from '@/app/actions/hose-testing'
 import { startHoseTestSession, openHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
+import { unlockHoseManagement } from '@/app/actions/hose-testing-pin'
 import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
 import { matchesHoseSearch } from '@/lib/hose-search'
@@ -62,6 +63,15 @@ export default function HoseTestingClient({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  const pinKey = `fireops7_hose_pin_${slug}`
+  const [pinToken, setPinToken] = useState<string | null>(null)
+  const [showPin, setShowPin] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [pinBusy, setPinBusy] = useState(false)
+  const pendingAfterUnlock = useRef<null | (() => void)>(null)
+  const [selectingAll, setSelectingAll] = useState(false)
+
   const [showAddHose, setShowAddHose] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -111,6 +121,12 @@ export default function HoseTestingClient({
   useEffect(() => {
     const stored = localStorage.getItem(TESTER_NAME_KEY)
     if (stored) setTesterName(stored)
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(pinKey) ?? 'null') as { token: string; exp: number } | null
+      if (saved && saved.exp > Date.now()) setPinToken(saved.token)
+      else if (saved) localStorage.removeItem(pinKey)
+    } catch { localStorage.removeItem(pinKey) }
 
     // A fresh page load starts with nothing selected, so this browser's own
     // leftover selection locks (from before the reload) are released rather than
@@ -231,15 +247,20 @@ export default function HoseTestingClient({
     const filteredIds = filteredHoses.map(h => h.id)
     const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selected.has(id))
     setError(null)
-    if (allFilteredSelected) {
-      setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
-      await releaseHoses(slug, filteredIds, sessionToken)
-    } else {
-      const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
-      const res = await claimHoses(slug, toClaim, sessionToken, testerName)
-      if ('error' in res && res.error) { setError(res.error); return }
-      const claimed = 'claimed' in res ? res.claimed : []
-      setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
+    setSelectingAll(true)
+    try {
+      if (allFilteredSelected) {
+        setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
+        await releaseHoses(slug, filteredIds, sessionToken)
+      } else {
+        const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
+        const res = await claimHoses(slug, toClaim, sessionToken, testerName)
+        if ('error' in res && res.error) { setError(res.error); return }
+        const claimed = 'claimed' in res ? res.claimed : []
+        setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
+      }
+    } finally {
+      setSelectingAll(false)
     }
   }
 
@@ -302,10 +323,44 @@ export default function HoseTestingClient({
     leaveDraft()
   }
 
+  // ── Officer PIN: unlocks "+ Add Hose" / "Manage Hoses" only; testing needs no PIN.
+  function requireUnlock(then: () => void) {
+    if (pinToken) { then(); return }
+    pendingAfterUnlock.current = then
+    setPinError(null)
+    setPinInput('')
+    setShowPin(true)
+  }
+
+  function handlePinRequired() {
+    localStorage.removeItem(pinKey)
+    setPinToken(null)
+    setPinInput('')
+    setPinError('The PIN unlock expired or was changed. Enter the PIN again.')
+    setShowPin(true)
+  }
+
+  async function submitPin() {
+    setPinBusy(true)
+    setPinError(null)
+    const res = await unlockHoseManagement(slug, pinInput.trim())
+    setPinBusy(false)
+    if ('error' in res) { setPinError(res.error); return }
+    localStorage.setItem(pinKey, JSON.stringify(res))
+    setPinToken(res.token)
+    setShowPin(false)
+    setPinInput('')
+    const next = pendingAfterUnlock.current
+    pendingAfterUnlock.current = null
+    next?.()
+  }
+
   async function handleAddHose(formData: FormData) {
     setAddError(null)
     setAdding(true)
+    formData.set('pin_token', pinToken ?? '')
     const result = await addPublicHose(slug, formData)
+    if (result?.pinRequired) { setAdding(false); handlePinRequired(); return }
     if (result?.error || !result.hose) {
       setAddError(result?.error ?? 'Failed to add hose.')
       setAdding(false)
@@ -321,7 +376,9 @@ export default function HoseTestingClient({
   async function handleEditHose(hoseId: string, formData: FormData) {
     setEditError(null)
     setEditing(true)
+    formData.set('pin_token', pinToken ?? '')
     const result = await editPublicHose(slug, hoseId, formData)
+    if (result?.pinRequired) { setEditing(false); handlePinRequired(); return }
     if (result?.error || !result.hose) {
       setEditError(result?.error ?? 'Failed to update hose.')
       setEditing(false)
@@ -340,8 +397,9 @@ export default function HoseTestingClient({
   async function handleRetire(hoseId: string) {
     if (!confirm('Take this hose out of service? It will no longer show up here for testing.')) return
     setRetiringId(hoseId)
-    const result = await setPublicHoseStatus(slug, hoseId, 'out_of_service')
+    const result = await setPublicHoseStatus(slug, hoseId, 'out_of_service', pinToken)
     setRetiringId(null)
+    if (result?.pinRequired) { handlePinRequired(); return }
     if (result?.error) { setError(result.error); return }
     setHoses(prev => prev.filter(h => h.id !== hoseId))
     setSelected(prev => { const next = new Set(prev); next.delete(hoseId); return next })
@@ -354,6 +412,32 @@ export default function HoseTestingClient({
       )}
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {showPin && (
+        <div className="mb-4 rounded-xl border-2 border-zinc-300 bg-white p-4">
+          <p className="text-sm font-semibold text-zinc-900 mb-1">Officer PIN required</p>
+          <p className="text-xs text-zinc-500 mb-3">Adding or editing hoses needs the officer PIN. Testing does not.</p>
+          <form onSubmit={e => { e.preventDefault(); if (pinInput.trim()) submitPin() }} className="flex gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              autoFocus
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+              placeholder="PIN"
+              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            <button type="submit" disabled={pinBusy || !pinInput.trim()} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+              {pinBusy ? 'Checking…' : 'Unlock'}
+            </button>
+            <button type="button" onClick={() => { setShowPin(false); pendingAfterUnlock.current = null }} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+              Cancel
+            </button>
+          </form>
+          {pinError && <p className="mt-2 text-xs text-red-600">{pinError}</p>}
+        </div>
       )}
 
       {/* Test parameters — set before selecting; once a test starts they live on the draft screen */}
@@ -409,19 +493,23 @@ export default function HoseTestingClient({
               {step === 'select' && visibleHoses.length > 0 && (
                 <button
                   onClick={handleSelectAllToggle}
-                  className="text-xs font-semibold text-red-700 hover:text-red-900"
+                  disabled={selectingAll}
+                  className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-60"
                 >
-                  {filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
+                  {selectingAll ? 'Selecting…' : filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
                 </button>
               )}
               {step === 'select' && (
-                <button onClick={() => setShowAddHose(v => !v)}
+                <button onClick={() => (showAddHose ? setShowAddHose(false) : requireUnlock(() => setShowAddHose(true)))}
                   className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
                   {showAddHose ? 'Cancel' : '+ Add Hose'}
                 </button>
               )}
               <button
-                onClick={() => { setStep(step === 'manage' ? 'select' : 'manage'); setEditingId(null); setEditError(null) }}
+                onClick={() => {
+                  if (step === 'manage') { setStep('select'); setEditingId(null); setEditError(null); return }
+                  requireUnlock(() => { setStep('manage'); setEditingId(null); setEditError(null) })
+                }}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
               >
                 {step === 'manage' ? '← Back to Testing' : 'Manage Hoses'}

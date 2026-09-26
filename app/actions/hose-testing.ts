@@ -5,6 +5,7 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { prepareSlug } from '@/lib/public-slug'
 import { claimHosesBulk, releaseHosesBulk } from '@/lib/hose-locks'
+import { canManageHoses } from '@/lib/hose-pin'
 import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
@@ -172,9 +173,12 @@ export async function releaseHose(slug: string, hoseId: string, sessionToken: st
   return { success: true }
 }
 
+const PIN_MESSAGE = 'Enter the officer PIN to change hoses.'
+
 export async function addPublicHose(slug: string, formData: FormData) {
   const dept = await resolveDeptBySlug(slug)
   if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
+  if (!(await canManageHoses(dept.id, formData.get('pin_token') as string | null))) return { error: PIN_MESSAGE, pinRequired: true as const }
 
   const hose_identifier = (formData.get('hose_identifier') as string)?.trim()
   const hose_type = formData.get('hose_type') as string
@@ -219,6 +223,7 @@ export async function addPublicHose(slug: string, formData: FormData) {
 export async function editPublicHose(slug: string, hoseId: string, formData: FormData) {
   const dept = await resolveDeptBySlug(slug)
   if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
+  if (!(await canManageHoses(dept.id, formData.get('pin_token') as string | null))) return { error: PIN_MESSAGE, pinRequired: true as const }
 
   const hose_identifier = (formData.get('hose_identifier') as string)?.trim()
   const hose_type = formData.get('hose_type') as string
@@ -260,9 +265,10 @@ export async function editPublicHose(slug: string, hoseId: string, formData: For
   return { success: true, hose }
 }
 
-export async function setPublicHoseStatus(slug: string, hoseId: string, status: 'in_service' | 'out_of_service' | 'retired') {
+export async function setPublicHoseStatus(slug: string, hoseId: string, status: 'in_service' | 'out_of_service' | 'retired', pinToken?: string | null) {
   const dept = await resolveDeptBySlug(slug)
   if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
+  if (!(await canManageHoses(dept.id, pinToken))) return { error: PIN_MESSAGE, pinRequired: true as const }
 
   const adminClient = createAdminClient()
   const { error: dbErr } = await adminClient

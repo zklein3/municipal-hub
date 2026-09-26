@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createHose, updateHose, addHoseTest, removeHose, updateHoseTest, deleteHoseTest } from '@/app/actions/iso'
+import { createHose, updateHose, addHoseTest, removeHose, updateHoseTest, deleteHoseTest, setHoseStatus } from '@/app/actions/iso'
 import HelpText from '@/components/HelpText'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -78,6 +78,17 @@ export default function HosesClient({
   const [testError, setTestError] = useState<string | null>(null)
   const [testPassed, setTestPassed] = useState('true')
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [attentionOnly, setAttentionOnly] = useState(false)
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null)
+
+  function handleReturnToService(hoseId: string) {
+    setStatusBusyId(hoseId)
+    startTransition(async () => {
+      await setHoseStatus(hoseId, 'in_service')
+      setStatusBusyId(null)
+      router.refresh()
+    })
+  }
 
   const [editingTestId, setEditingTestId] = useState<string | null>(null)
   const [editTestPassed, setEditTestPassed] = useState('true')
@@ -152,6 +163,11 @@ export default function HosesClient({
   const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().slice(0, 10)
   // Latest test only, and it must have passed — a failed hose is not "tested".
   const testedThisYear = hoses.filter(h => h.tests[0] && h.tests[0].passed && h.tests[0].test_date >= oneYearAgo).length
+
+  // Needs attention: out of service, or still in service with a failing latest test.
+  const needsAttention = (h: Hose) => h.status === 'out_of_service' || (h.status === 'in_service' && !!h.tests[0] && !h.tests[0].passed)
+  const attentionCount = hoses.filter(needsAttention).length
+  const visibleHoses = attentionOnly ? hoses.filter(needsAttention) : hoses
 
   return (
     <div className="max-w-3xl">
@@ -249,8 +265,30 @@ export default function HosesClient({
         </div>
       )}
 
+      {hoses.length > 0 && (
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => setAttentionOnly(false)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${!attentionOnly ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
+          >
+            All ({hoses.length})
+          </button>
+          <button
+            onClick={() => setAttentionOnly(true)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${attentionOnly ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
+          >
+            Failed / Out of Service ({attentionCount})
+          </button>
+        </div>
+      )}
+      {attentionOnly && visibleHoses.length === 0 && (
+        <div className="rounded-xl bg-white border border-zinc-200 p-6 text-center text-sm text-zinc-400 mb-3">
+          No failed or out-of-service hoses.
+        </div>
+      )}
+
       <div className="flex flex-col gap-3">
-        {hoses.map(hose => {
+        {visibleHoses.map(hose => {
           const lastTest = hose.tests[0] ?? null
           const isExpanded = expandedId === hose.id
           const isEditing = editingId === hose.id
@@ -351,6 +389,11 @@ export default function HosesClient({
                     <div className="flex items-center gap-2 shrink-0">
                       {isOfficerOrAbove && (
                         <>
+                          {hose.status === 'out_of_service' && (
+                            <button onClick={() => handleReturnToService(hose.id)} disabled={statusBusyId === hose.id} className="text-xs font-semibold text-green-700 hover:underline disabled:opacity-50">
+                              {statusBusyId === hose.id ? 'Returning…' : 'Return to service'}
+                            </button>
+                          )}
                           <button onClick={() => { setEditingId(hose.id); setEditError(null) }} className="text-xs text-zinc-500 hover:text-zinc-700 font-medium">Edit</button>
                           <button onClick={() => { setLoggingTestId(isLoggingTest ? null : hose.id); setExpandedId(hose.id); setTestError(null); setTestPassed('true') }} className="text-xs text-red-700 hover:underline font-medium">Log Test</button>
                           {removingId === hose.id ? (

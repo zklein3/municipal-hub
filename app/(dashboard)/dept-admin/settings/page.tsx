@@ -19,6 +19,9 @@ export default async function DeptSettingsPage() {
     .eq('id', ctx.departmentId)
     .single()
 
+  const { data: pinRow } = await adminClient
+    .from('hose_testing_pins').select('set_at').eq('department_id', ctx.departmentId).maybeSingle()
+
   // Only prefill when no slug is set yet; an existing slug is never touched.
   const suggestedSlug = deptData?.public_slug || !deptData?.name
     ? ''
@@ -35,6 +38,7 @@ export default async function DeptSettingsPage() {
         fuelStorageEnabled={deptData?.module_fuel_storage ?? false}
         publicSlug={deptData?.public_slug ?? null}
         suggestedSlug={suggestedSlug}
+        hosePinSetAt={pinRow?.set_at ?? null}
       />
     </div>
   )

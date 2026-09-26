@@ -53,6 +53,7 @@ export default function HoseTestSessionClient({
   const [draft, setDraft] = useState<OpenedSession | null>(null)
   const [held, setHeld] = useState<HeldSelection[]>(heldSelections)
   const [clearingToken, setClearingToken] = useState<string | null>(null)
+  const [selectingAll, setSelectingAll] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [sizeFilter, setSizeFilter] = useState<number | null>(null)
@@ -203,15 +204,20 @@ export default function HoseTestSessionClient({
     const filteredIds = filteredHoses.map(h => h.id)
     const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selected.has(id))
     setError(null)
-    if (allFilteredSelected) {
-      setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
-      await releaseHosesInApp(filteredIds, sessionToken)
-    } else {
-      const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
-      const res = await claimHosesInApp(toClaim, sessionToken, testerName)
-      if ('error' in res && res.error) { setError(res.error); return }
-      const claimed = 'claimed' in res ? res.claimed : []
-      setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
+    setSelectingAll(true)
+    try {
+      if (allFilteredSelected) {
+        setSelected(prev => { const next = new Set(prev); filteredIds.forEach(id => next.delete(id)); return next })
+        await releaseHosesInApp(filteredIds, sessionToken)
+      } else {
+        const toClaim = filteredIds.filter(id => !selected.has(id) && !(id in lockedByOthers))
+        const res = await claimHosesInApp(toClaim, sessionToken, testerName)
+        if ('error' in res && res.error) { setError(res.error); return }
+        const claimed = 'claimed' in res ? res.claimed : []
+        setSelected(prev => { const next = new Set(prev); claimed.forEach(id => next.add(id)); return next })
+      }
+    } finally {
+      setSelectingAll(false)
     }
   }
 
@@ -369,8 +375,8 @@ export default function HoseTestSessionClient({
           <h2 className="text-sm font-semibold text-zinc-700">
             Select Hoses to Test — {selected.size}/{hoses.length} selected
           </h2>
-          <button onClick={handleSelectAllToggle} className="text-xs font-semibold text-red-700 hover:text-red-900">
-            {filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
+          <button onClick={handleSelectAllToggle} disabled={selectingAll} className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-60">
+            {selectingAll ? 'Selecting…' : filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
           </button>
         </div>
 

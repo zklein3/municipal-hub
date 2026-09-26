@@ -688,6 +688,26 @@ export async function removeMutualAid(mutualAidId: string, incidentId: string) {
 }
 
 // ─── Remove Hose ──────────────────────────────────────────────────────────────
+// Quick status change from Hose Inventory, mainly "Return to service" for a
+// hose that was taken out of service after failing a test.
+export async function setHoseStatus(hoseId: string, status: 'in_service' | 'out_of_service') {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient
+    .from('hoses')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', hoseId)
+    .eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, '/iso/hoses', { personnel_id: ctx.me.id }); return { error: dbErr.message } }
+  if (status !== 'in_service') {
+    await adminClient.from('hose_testing_locks').delete().eq('hose_id', hoseId).eq('department_id', ctx.department_id)
+  }
+  revalidatePath('/iso/hoses')
+  revalidatePath('/iso/report')
+  return { success: true }
+}
+
 export async function removeHose(hoseId: string) {
   const ctx = await getContext()
   if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }

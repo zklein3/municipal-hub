@@ -209,7 +209,7 @@ export default function HoseTestDraftScreen({
                     <button onClick={() => update(item.hose_id, { result: 'pending', failure_reason: '', retire_on_finalize: false })}
                       className="text-xs font-semibold text-zinc-500 hover:text-zinc-800">Undo</button>
                   ) : (
-                    <button onClick={() => update(item.hose_id, { result: 'fail' })}
+                    <button onClick={() => update(item.hose_id, { result: 'fail', retire_on_finalize: true })}
                       className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Mark Fail</button>
                   )}
                 </div>

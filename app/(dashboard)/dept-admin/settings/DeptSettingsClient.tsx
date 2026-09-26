@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { saveDeptTimezone, saveWeeklyDigestEnabled, setFuelStorageModule } from '@/app/actions/departments'
 import { setHoseTestingConfig } from '@/app/actions/hose-testing'
+import { setHoseTestingPin } from '@/app/actions/hose-testing-pin'
 import { setPublicSiteEnabled } from '@/app/actions/public-site'
 import { slugify } from '@/lib/slug'
 import { TIMEZONES } from '@/lib/format-datetime'
@@ -18,6 +19,7 @@ export default function DeptSettingsClient({
   fuelStorageEnabled: initialFuelStorageEnabled,
   publicSlug: initialPublicSlug,
   suggestedSlug,
+  hosePinSetAt: initialPinSetAt,
 }: {
   departmentId: string
   timezone: string
@@ -27,6 +29,7 @@ export default function DeptSettingsClient({
   fuelStorageEnabled: boolean
   publicSlug: string | null
   suggestedSlug: string
+  hosePinSetAt: string | null
 }) {
   const [timezone, setTimezone] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -48,6 +51,23 @@ export default function DeptSettingsClient({
   const [hoseTestingSaving, setHoseTestingSaving] = useState(false)
   const [hoseTestingError, setHoseTestingError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+
+  const [pinSetAt, setPinSetAt] = useState(initialPinSetAt)
+  const [pinValue, setPinValue] = useState('')
+  const [pinSaving, setPinSaving] = useState(false)
+  const [pinMessage, setPinMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function handleSavePin() {
+    setPinSaving(true); setPinMessage(null)
+    const result = await setHoseTestingPin(pinValue.trim())
+    if ('error' in result) setPinMessage({ ok: false, text: result.error })
+    else {
+      setPinSetAt(result.setAt)
+      setPinValue('')
+      setPinMessage({ ok: true, text: 'PIN saved. Every device that was unlocked has been locked again.' })
+    }
+    setPinSaving(false)
+  }
 
   const [publicSiteEnabled, setPublicSiteEnabledState] = useState(initialPublicSiteEnabled)
   const [publicSiteSaving, setPublicSiteSaving] = useState(false)
@@ -229,6 +249,36 @@ export default function DeptSettingsClient({
             </p>
           </div>
         )}
+
+        <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-3">
+          <p className="text-xs font-medium text-zinc-700 mb-0.5">Officer PIN for adding or editing hoses</p>
+          <p className="text-xs text-zinc-500 mb-2">
+            Testing on the public link never needs a PIN. Only &quot;+ Add Hose&quot; and &quot;Manage Hoses&quot; ask for it.
+            {pinSetAt
+              ? ` A PIN was set ${new Date(pinSetAt).toLocaleDateString()}. Devices stay unlocked for 12 hours; changing the PIN locks them all again.`
+              : ' No PIN is set yet, so those two buttons are locked for everyone on the public link.'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={pinValue}
+              onChange={e => { setPinValue(e.target.value.replace(/\D/g, '').slice(0, 8)); setPinMessage(null) }}
+              placeholder={pinSetAt ? 'New PIN (4–8 digits)' : 'Set a PIN (4–8 digits)'}
+              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            <button
+              type="button"
+              onClick={handleSavePin}
+              disabled={pinSaving || pinValue.length < 4}
+              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {pinSaving ? 'Saving…' : pinSetAt ? 'Change PIN' : 'Set PIN'}
+            </button>
+          </div>
+          {pinMessage && <p className={`mt-2 text-xs ${pinMessage.ok ? 'text-green-700' : 'text-red-600'}`}>{pinMessage.text}</p>}
+        </div>
 
         <label className="flex items-center gap-3 cursor-pointer">
           <input
