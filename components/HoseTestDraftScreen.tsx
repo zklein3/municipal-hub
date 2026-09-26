@@ -97,10 +97,12 @@ export default function HoseTestDraftScreen({
   const failed = all.filter(i => i.result === 'fail')
   const pending = all.length - failed.length
   const missingNotes = failed.filter(i => !i.failure_reason.trim()).length
-  const term = search.trim().toLowerCase()
+  // Ignore case, dashes and spaces so "231", "23-1" and "23 1" all find 23-10 … 23-19.
+  const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const term = squash(search)
   const visible = all.filter(i =>
     (!failedOnly || i.result === 'fail') &&
-    (!term || i.hose_identifier.toLowerCase().includes(term)))
+    (!term || squash(i.hose_identifier).includes(term)))
 
   function requestFinalize() {
     setError(null)
@@ -219,6 +221,7 @@ export default function HoseTestDraftScreen({
                 <div className="mt-2 flex flex-col gap-2">
                   <input
                     type="text"
+                    autoFocus={!item.failure_reason}
                     value={item.failure_reason}
                     onChange={e => update(item.hose_id, { failure_reason: e.target.value }, true)}
                     onBlur={() => flushNow(item.hose_id)}

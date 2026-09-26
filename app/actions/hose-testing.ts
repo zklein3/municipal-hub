@@ -172,13 +172,15 @@ export async function addPublicHose(slug: string, formData: FormData) {
 
   const adminClient = createAdminClient()
 
+  // The same ID is allowed at different diameters (e.g. 1-16 in 1.75" and 2.5").
   const { data: existing } = await adminClient
     .from('hoses')
     .select('id')
     .eq('department_id', dept.id)
     .eq('hose_identifier', hose_identifier)
-    .maybeSingle()
-  if (existing) return { error: `Hose ${hose_identifier} already exists.` }
+    .eq('diameter_in', parseFloat(diameter_in))
+    .limit(1)
+  if (existing?.length) return { error: `Hose ${hose_identifier} (${diameter_in}") already exists.` }
 
   const { data: hose, error: dbErr } = await adminClient
     .from('hoses')
@@ -219,9 +221,10 @@ export async function editPublicHose(slug: string, hoseId: string, formData: For
     .select('id')
     .eq('department_id', dept.id)
     .eq('hose_identifier', hose_identifier)
+    .eq('diameter_in', parseFloat(diameter_in))
     .neq('id', hoseId)
-    .maybeSingle()
-  if (existing) return { error: `Hose ${hose_identifier} already exists.` }
+    .limit(1)
+  if (existing?.length) return { error: `Hose ${hose_identifier} (${diameter_in}") already exists.` }
 
   const { data: hose, error: dbErr } = await adminClient
     .from('hoses')
