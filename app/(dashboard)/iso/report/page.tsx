@@ -223,6 +223,7 @@ export default async function IsoReportPage() {
   const specsComplete = isoApparatus.filter(a => isoSpecMap[a.id]).length
 
   const activeHoses = (hoses ?? []).filter(h => h.status === 'in_service')
+  const oosHoses = (hoses ?? []).filter(h => h.status === 'out_of_service')
   const hosesTestedPct = activeHoses.length > 0
     ? Math.round((activeHoses.filter(h => testedHoseIds.has(h.id)).length / activeHoses.length) * 100)
     : null
@@ -482,6 +483,23 @@ export default async function IsoReportPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+        {oosHoses.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-zinc-100">
+            <p className="text-xs font-semibold text-zinc-600 mb-1.5">Out of service ({oosHoses.length}) — not counted above</p>
+            <div className="flex flex-col gap-1.5">
+              {oosHoses.map(h => (
+                <div key={h.id} className="flex items-center gap-3 text-xs py-1 border-b border-zinc-50 last:border-0">
+                  <span className="font-mono font-medium text-zinc-800 w-20 shrink-0">{h.hose_identifier}</span>
+                  <span className="text-zinc-500 w-16 shrink-0 capitalize">{h.hose_type.replace('_', ' ')}</span>
+                  <span className="text-zinc-400">{h.diameter_in}" × {h.length_ft}ft</span>
+                  <span className={`ml-auto rounded-full px-2 py-0.5 font-medium shrink-0 ${hosesFailed.has(h.id) ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                    {hosesFailed.has(h.id) ? 'Failed test — removed from service' : 'Out of service'}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>

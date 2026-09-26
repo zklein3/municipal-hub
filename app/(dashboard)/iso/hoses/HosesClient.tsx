@@ -80,6 +80,7 @@ export default function HosesClient({
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [attentionOnly, setAttentionOnly] = useState(false)
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null)
+  const [returningId, setReturningId] = useState<string | null>(null)
 
   function handleReturnToService(hoseId: string) {
     setStatusBusyId(hoseId)
@@ -390,9 +391,19 @@ export default function HosesClient({
                       {isOfficerOrAbove && (
                         <>
                           {hose.status === 'out_of_service' && (
-                            <button onClick={() => handleReturnToService(hose.id)} disabled={statusBusyId === hose.id} className="text-xs font-semibold text-green-700 hover:underline disabled:opacity-50">
-                              {statusBusyId === hose.id ? 'Returning…' : 'Return to service'}
-                            </button>
+                            returningId === hose.id ? (
+                              <>
+                                <span className="text-xs text-zinc-600">Return {hose.hose_identifier} to service?</span>
+                                <button onClick={() => { setReturningId(null); handleReturnToService(hose.id) }} disabled={statusBusyId === hose.id} className="text-xs font-semibold text-green-700 hover:underline disabled:opacity-50">
+                                  {statusBusyId === hose.id ? 'Returning…' : 'Yes'}
+                                </button>
+                                <button onClick={() => setReturningId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
+                              </>
+                            ) : (
+                              <button onClick={() => setReturningId(hose.id)} className="text-xs font-semibold text-green-700 hover:underline">
+                                Return to service
+                              </button>
+                            )
                           )}
                           <button onClick={() => { setEditingId(hose.id); setEditError(null) }} className="text-xs text-zinc-500 hover:text-zinc-700 font-medium">Edit</button>
                           <button onClick={() => { setLoggingTestId(isLoggingTest ? null : hose.id); setExpandedId(hose.id); setTestError(null); setTestPassed('true') }} className="text-xs text-red-700 hover:underline font-medium">Log Test</button>

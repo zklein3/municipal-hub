@@ -244,7 +244,10 @@ export default function HoseTestDraftScreen({
           <p className="text-sm text-red-800">
             <strong>{pending}</strong> hose{pending !== 1 ? 's' : ''} still pending will be recorded as <strong>PASSED</strong>.
             <br />
-            <strong>{failed.length}</strong> hose{failed.length !== 1 ? 's' : ''} will be recorded as <strong>FAILED</strong>.
+            <strong>{failed.length}</strong> hose{failed.length !== 1 ? 's' : ''} will be recorded as <strong>FAILED</strong>
+            {failed.some(i => i.retire_on_finalize) && (
+              <> and <strong>{failed.filter(i => i.retire_on_finalize).length}</strong> of {failed.length === 1 ? 'it' : 'them'} taken <strong>OUT OF SERVICE</strong></>
+            )}.
           </p>
           <p className="text-xs text-red-700 mt-1 mb-3">The test is locked after this. Mistakes can be corrected by an officer in Hose Inventory.</p>
           <div className="flex gap-3">
