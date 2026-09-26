@@ -78,8 +78,13 @@ export default async function IsoReportPage() {
     .gte('test_date', oneYearAgoStr)
     .order('test_date', { ascending: false })
 
-  const testedHoseIds = new Set((recentHoseTests ?? []).map(t => t.hose_id))
-  const hosesFailed = new Set((recentHoseTests ?? []).filter(t => !t.passed).map(t => t.hose_id))
+  // A hose's status is its most recent test in the window (rows are newest-first):
+  // latest passed = Tested, latest failed = Failed. A fail never counts as tested,
+  // and a passing retest clears an earlier fail.
+  const latestHoseResult: Record<string, boolean> = {}
+  for (const t of recentHoseTests ?? []) if (!(t.hose_id in latestHoseResult)) latestHoseResult[t.hose_id] = t.passed
+  const testedHoseIds = new Set(Object.keys(latestHoseResult).filter(id => latestHoseResult[id]))
+  const hosesFailed = new Set(Object.keys(latestHoseResult).filter(id => !latestHoseResult[id]))
 
   // Hydrant stats
   const { data: hydrants } = await adminClient

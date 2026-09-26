@@ -150,7 +150,8 @@ export default function HosesClient({
   const inService = hoses.filter(h => h.status === 'in_service').length
   const now = new Date()
   const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().slice(0, 10)
-  const testedThisYear = hoses.filter(h => h.tests[0] && h.tests[0].test_date >= oneYearAgo).length
+  // Latest test only, and it must have passed — a failed hose is not "tested".
+  const testedThisYear = hoses.filter(h => h.tests[0] && h.tests[0].passed && h.tests[0].test_date >= oneYearAgo).length
 
   return (
     <div className="max-w-3xl">

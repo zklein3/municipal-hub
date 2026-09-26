@@ -50,6 +50,7 @@ export default function HoseTestDraftScreen({
     : null)
   const [busy, setBusy] = useState(false)
   const [pendingSaves, setPendingSaves] = useState(0)
+  const [confirmMode, setConfirmMode] = useState<'finalize' | 'discard' | null>(null)
 
   const [testDate, setTestDate] = useState(initial.testDate)
   const [pressurePsi, setPressurePsi] = useState(initial.pressurePsi ? String(initial.pressurePsi) : '')
@@ -101,12 +102,15 @@ export default function HoseTestDraftScreen({
     (!failedOnly || i.result === 'fail') &&
     (!term || i.hose_identifier.toLowerCase().includes(term)))
 
-  async function handleFinalize() {
+  function requestFinalize() {
     setError(null)
     if (!pressurePsi || !parseInt(pressurePsi)) { setError('Pressure is required.'); return }
     if (missingNotes > 0) { setError(`Enter a failure note for every failed hose (${missingNotes} missing).`); return }
-    const msg = `Finalize this test?\n\n${pending} hose${pending !== 1 ? 's' : ''} still pending will be recorded as PASSED.\n${failed.length} hose${failed.length !== 1 ? 's' : ''} recorded as FAILED.\n\nThe test will be locked after this.`
-    if (!confirm(msg)) return
+    setConfirmMode('finalize')
+  }
+
+  async function handleFinalize() {
+    setConfirmMode(null)
     setBusy(true)
     Object.values(timers.current).forEach(clearTimeout)
     timers.current = {}
@@ -120,7 +124,7 @@ export default function HoseTestDraftScreen({
   }
 
   async function handleDiscard() {
-    if (!confirm('Discard this test? Nothing will be logged and the hoses will be released.')) return
+    setConfirmMode(null)
     setBusy(true)
     const res = await abandonHoseTestSession(slug, sessionId)
     setBusy(false)
@@ -234,21 +238,60 @@ export default function HoseTestDraftScreen({
         })}
       </div>
 
-      <button
-        onClick={handleFinalize}
-        disabled={busy}
-        className="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors mb-3"
-      >
-        {busy ? 'Working…' : `Finalize Test (${pending} pass · ${failed.length} fail)`}
-      </button>
-      <div className="flex gap-3">
-        <button onClick={onLeave} disabled={busy} className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
-          Leave — keep draft
-        </button>
-        <button onClick={handleDiscard} disabled={busy} className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
-          Discard
-        </button>
-      </div>
+      {confirmMode === 'finalize' && (
+        <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 mb-3">
+          <p className="text-sm font-semibold text-red-900 mb-1">Finalize this test?</p>
+          <p className="text-sm text-red-800">
+            <strong>{pending}</strong> hose{pending !== 1 ? 's' : ''} still pending will be recorded as <strong>PASSED</strong>.
+            <br />
+            <strong>{failed.length}</strong> hose{failed.length !== 1 ? 's' : ''} will be recorded as <strong>FAILED</strong>.
+          </p>
+          <p className="text-xs text-red-700 mt-1 mb-3">The test is locked after this. Mistakes can be corrected by an officer in Hose Inventory.</p>
+          <div className="flex gap-3">
+            <button onClick={handleFinalize} className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800">
+              Yes, finalize
+            </button>
+            <button onClick={() => setConfirmMode(null)} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Go back
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmMode === 'discard' && (
+        <div className="rounded-xl border-2 border-zinc-300 bg-zinc-50 p-4 mb-3">
+          <p className="text-sm font-semibold text-zinc-900 mb-1">Discard this test?</p>
+          <p className="text-xs text-zinc-600 mb-3">Nothing will be logged and the hoses will be released.</p>
+          <div className="flex gap-3">
+            <button onClick={handleDiscard} className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900">
+              Yes, discard
+            </button>
+            <button onClick={() => setConfirmMode(null)} className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Go back
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmMode === null && (
+        <>
+          <button
+            onClick={requestFinalize}
+            disabled={busy}
+            className="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors mb-3"
+          >
+            {busy ? 'Working…' : `Finalize Test (${pending} pass · ${failed.length} fail)`}
+          </button>
+          <div className="flex gap-3">
+            <button onClick={onLeave} disabled={busy} className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
+              Leave — keep draft
+            </button>
+            <button onClick={() => setConfirmMode('discard')} disabled={busy} className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50">
+              Discard
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

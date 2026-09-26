@@ -78,8 +78,11 @@ export default async function PrintReportPage({
     .eq('department_id', department_id).gte('test_date', cutoffStr)
     .order('test_date', { ascending: false })
 
-  const testedHoseIds = new Set((recentHoseTests ?? []).map(t => t.hose_id))
-  const failedHoseIds = new Set((recentHoseTests ?? []).filter(t => !t.passed).map(t => t.hose_id))
+  // Latest test per hose decides: passed = tested, failed = failed (a fail never counts as tested).
+  const latestHoseResult: Record<string, boolean> = {}
+  for (const t of recentHoseTests ?? []) if (!(t.hose_id in latestHoseResult)) latestHoseResult[t.hose_id] = t.passed
+  const testedHoseIds = new Set(Object.keys(latestHoseResult).filter(id => latestHoseResult[id]))
+  const failedHoseIds = new Set(Object.keys(latestHoseResult).filter(id => !latestHoseResult[id]))
   const activeHoses = (hoses ?? []).filter(h => h.status === 'in_service')
 
   // Hose inventory summary
