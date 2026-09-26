@@ -69,6 +69,10 @@ export default function HoseTestingClient({
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
   const [pinBusy, setPinBusy] = useState(false)
+  const pinPanelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (showPin) pinPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [showPin])
   const pendingAfterUnlock = useRef<null | (() => void)>(null)
   const [selectingAll, setSelectingAll] = useState(false)
 
@@ -414,32 +418,6 @@ export default function HoseTestingClient({
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      {showPin && (
-        <div className="mb-4 rounded-xl border-2 border-zinc-300 bg-white p-4">
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Officer PIN required</p>
-          <p className="text-xs text-zinc-500 mb-3">Adding or editing hoses needs the officer PIN. Testing does not.</p>
-          <form onSubmit={e => { e.preventDefault(); if (pinInput.trim()) submitPin() }} className="flex gap-2">
-            <input
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
-              autoFocus
-              value={pinInput}
-              onChange={e => setPinInput(e.target.value)}
-              placeholder="PIN"
-              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            />
-            <button type="submit" disabled={pinBusy || !pinInput.trim()} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-              {pinBusy ? 'Checking…' : 'Unlock'}
-            </button>
-            <button type="button" onClick={() => { setShowPin(false); pendingAfterUnlock.current = null }} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
-              Cancel
-            </button>
-          </form>
-          {pinError && <p className="mt-2 text-xs text-red-600">{pinError}</p>}
-        </div>
-      )}
-
       {/* Test parameters — set before selecting; once a test starts they live on the draft screen */}
       {step !== 'draft' && (
       <div className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
@@ -481,7 +459,7 @@ export default function HoseTestingClient({
 
       {(step === 'select' || step === 'manage') && (
         <>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             {step === 'select' ? (
               <h2 className="text-sm font-semibold text-zinc-700">
                 Select Hoses to Test{visibleHoses.length > 0 ? ` — ${selected.size}/${visibleHoses.length} selected` : ''}
@@ -489,7 +467,7 @@ export default function HoseTestingClient({
             ) : (
               <h2 className="text-sm font-semibold text-zinc-700">Manage Hoses — edit ID, size, or type</h2>
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {step === 'select' && visibleHoses.length > 0 && (
                 <button
                   onClick={handleSelectAllToggle}
@@ -502,7 +480,7 @@ export default function HoseTestingClient({
               {step === 'select' && (
                 <button onClick={() => (showAddHose ? setShowAddHose(false) : requireUnlock(() => setShowAddHose(true)))}
                   className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
-                  {showAddHose ? 'Cancel' : '+ Add Hose'}
+                  {showAddHose ? 'Cancel' : `${pinToken ? '' : '🔒 '}+ Add Hose`}
                 </button>
               )}
               <button
@@ -512,10 +490,38 @@ export default function HoseTestingClient({
                 }}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
               >
-                {step === 'manage' ? '← Back to Testing' : 'Manage Hoses'}
+                {step === 'manage' ? '← Back to Testing' : `${pinToken ? '' : '🔒 '}Manage Hoses`}
               </button>
             </div>
           </div>
+
+          {showPin && (
+            <div ref={pinPanelRef} className="mb-4 rounded-xl border-2 border-zinc-300 bg-white p-4">
+              <p className="text-sm font-semibold text-zinc-900 mb-1">🔒 Officer PIN required</p>
+              <p className="text-xs text-zinc-500 mb-3">Adding or editing hoses needs the officer PIN. Testing does not.</p>
+              <form onSubmit={e => { e.preventDefault(); if (pinInput.trim()) submitPin() }} className="flex flex-col gap-2">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  autoFocus
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value)}
+                  placeholder="PIN"
+                  className="w-full min-w-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={pinBusy || !pinInput.trim()} className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                    {pinBusy ? 'Checking…' : 'Unlock'}
+                  </button>
+                  <button type="button" onClick={() => { setShowPin(false); pendingAfterUnlock.current = null }} className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+              {pinError && <p className="mt-2 text-xs text-red-600">{pinError}</p>}
+            </div>
+          )}
 
           {visibleHoses.length > 0 && (
             <div className="relative mb-3">
