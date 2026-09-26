@@ -70,6 +70,9 @@ export default async function OfficerPage() {
       <div className="mb-8">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Reports</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {moduleIso && perms.perform_iso_testing && (
+            <HubCard title="Hose Testing Report" description="Total hose and pass/fail by size — print" href="/reports/hose-testing" />
+          )}
           {perms.manage_incidents && (
             <HubCard title="Run Report" description="Incident run sheets — filter and print" href="/reports/run-report" />
           )}

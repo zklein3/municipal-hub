@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { addPublicHose, claimHose, editPublicHose, releaseHose, setPublicHoseStatus, submitPublicHoseTestSession } from '@/app/actions/hose-testing'
+import { addPublicHose, claimHose, editPublicHose, releaseHose, setPublicHoseStatus } from '@/app/actions/hose-testing'
+import { startHoseTestSession, openHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
+import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
 
 const TESTER_NAME_KEY = 'fireops7_hose_testing_tester_name'
 const SESSION_TOKEN_KEY = 'fireops7_hose_testing_session_token'
+const draftKey = (slug: string) => `fireops7_hose_testing_draft_${slug}`
 
 const HOSE_TYPES = [
   { value: 'attack', label: 'Attack' },
@@ -16,11 +19,6 @@ const HOSE_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-// NFPA 1962: attack hose (1"-3") tests at 300 PSI, supply hose (4"-6") tests at 200 PSI.
-function requiredPsi(diameter_in: number): number {
-  return diameter_in >= 4 ? 200 : 300
-}
-
 type Hose = {
   id: string
   hose_identifier: string
@@ -28,11 +26,6 @@ type Hose = {
   diameter_in: number
   length_ft: number
   status: string
-}
-
-type HoseResult = {
-  passed: boolean | null
-  failure_reason: string
 }
 
 type Lock = { id: string; hose_id: string; session_token: string; tester_name: string | null }
@@ -52,7 +45,8 @@ export default function HoseTestingClient({
 }) {
   const today = new Date().toISOString().slice(0, 10)
 
-  const [step, setStep] = useState<'select' | 'mark' | 'manage'>('select')
+  const [step, setStep] = useState<'select' | 'draft' | 'manage'>('select')
+  const [draft, setDraft] = useState<OpenedSession | null>(null)
   const [hoses, setHoses] = useState(initialHoses)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
@@ -62,7 +56,6 @@ export default function HoseTestingClient({
   const [testDate, setTestDate] = useState(today)
   const [pressurePsi, setPressurePsi] = useState('')
   const [durationMin, setDurationMin] = useState('5')
-  const [results, setResults] = useState<Record<string, HoseResult>>({})
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,9 +73,6 @@ export default function HoseTestingClient({
   // Manually forced back into the testing queue from Manage Hoses, bypassing
   // the 30-day recently-tested exclusion for this hose this session.
   const [forcedIds, setForcedIds] = useState<Set<string>>(new Set())
-  // Hoses marked Fail in the current batch that should also be taken out of
-  // service once the batch submits.
-  const [retireOnFail, setRetireOnFail] = useState<Set<string>>(new Set())
 
   // Session token identifies this browser tab so concurrent public sessions
   // can tell "my own lock" apart from "someone else's lock" on the same hose.
@@ -118,6 +108,19 @@ export default function HoseTestingClient({
   useEffect(() => {
     const stored = localStorage.getItem(TESTER_NAME_KEY)
     if (stored) setTesterName(stored)
+
+    // Pick up a test left in progress in this browser (reload, closed tab).
+    const draftId = localStorage.getItem(draftKey(slug))
+    if (!draftId) return
+    openHoseTestSession(slug, draftId, sessionToken).then(res => {
+      if ('error' in res || res.session.status !== 'draft') {
+        localStorage.removeItem(draftKey(slug))
+        return
+      }
+      setDraft(res.session)
+      setStep('draft')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Live lock state — Realtime instead of polling, so an unattended tab costs
@@ -241,40 +244,48 @@ export default function HoseTestingClient({
   const selectedHoses = hoses.filter(h => selected.has(h.id))
   const canContinue = selectedHoses.length > 0 && testerName.trim() && pressurePsi
 
-  function handleContinue() {
+  async function handleContinue() {
     setError(null)
     if (!testerName.trim() || !pressurePsi) { setError('Tester name and pressure are required.'); return }
     if (selectedHoses.length === 0) { setError('Select at least one hose to test.'); return }
-    setResults(Object.fromEntries(selectedHoses.map(h => [h.id, results[h.id] ?? { passed: null, failure_reason: '' }])))
-    setStep('mark')
-  }
-
-  const allMarked = selectedHoses.length > 0 && selectedHoses.every(h => results[h.id]?.passed !== null)
-  const markedCount = selectedHoses.filter(h => results[h.id]?.passed !== null).length
-
-  function setResult(hoseId: string, passed: boolean) {
-    setResults(prev => ({ ...prev, [hoseId]: { ...prev[hoseId], passed, failure_reason: passed ? '' : prev[hoseId]?.failure_reason ?? '' } }))
-  }
-
-  function setFailureReason(hoseId: string, reason: string) {
-    setResults(prev => ({ ...prev, [hoseId]: { ...prev[hoseId], failure_reason: reason } }))
-  }
-
-  function markAllPass() {
-    setResults(prev => {
-      const next = { ...prev }
-      for (const h of selectedHoses) next[h.id] = { passed: true, failure_reason: '' }
-      return next
+    setLoading(true)
+    const res = await startHoseTestSession(slug, {
+      testerName: testerName.trim(),
+      testDate,
+      pressurePsi: parseInt(pressurePsi),
+      durationMin: parseInt(durationMin) || 5,
+      hoseIds: selectedHoses.map(h => h.id),
+      lockToken: sessionToken,
     })
+    setLoading(false)
+    if ('error' in res) { setError(res.error); return }
+    localStorage.setItem(draftKey(slug), res.session.id)
+    setSelected(new Set())
+    setDraft(res.session)
+    setStep('draft')
   }
 
-  function toggleRetireOnFail(hoseId: string) {
-    setRetireOnFail(prev => {
-      const next = new Set(prev)
-      if (next.has(hoseId)) next.delete(hoseId)
-      else next.add(hoseId)
-      return next
-    })
+  function leaveDraft() {
+    setDraft(null)
+    setStep('select')
+  }
+
+  function handleDraftDiscarded() {
+    localStorage.removeItem(draftKey(slug))
+    leaveDraft()
+  }
+
+  function handleDraftFinished(info: FinishedInfo) {
+    localStorage.removeItem(draftKey(slug))
+    // Passed hoses drop out of the queue (recently tested); failed ones stay so
+    // they can be retested, unless they were taken out of service.
+    const gone = new Set([...info.passedHoseIds, ...info.retiredHoseIds])
+    setHoses(prev => prev.filter(h => !gone.has(h.id)))
+    setSuccess(
+      `Test finalized — ${info.passed} passed, ${info.failed} failed.` +
+      (info.retired > 0 ? ` ${info.retired} hose${info.retired !== 1 ? 's' : ''} taken out of service.` : '')
+    )
+    leaveDraft()
   }
 
   async function handleAddHose(formData: FormData) {
@@ -322,41 +333,6 @@ export default function HoseTestingClient({
     setSelected(prev => { const next = new Set(prev); next.delete(hoseId); return next })
   }
 
-  async function handleSubmit() {
-    if (!allMarked) { setError('Mark every selected hose pass or fail before submitting.'); return }
-    setError(null)
-    setSuccess(null)
-    setLoading(true)
-
-    const payload = selectedHoses.map(h => ({
-      hose_id: h.id,
-      passed: results[h.id]!.passed!,
-      failure_reason: results[h.id]!.failure_reason || null,
-    }))
-
-    const result = await submitPublicHoseTestSession(slug, testerName, testDate, parseInt(pressurePsi), parseInt(durationMin) || 5, payload)
-    if (result?.error) {
-      setError(result.error)
-      setLoading(false)
-      return
-    }
-
-    const toRetire = selectedHoses.filter(h => retireOnFail.has(h.id)).map(h => h.id)
-    if (toRetire.length > 0) {
-      await Promise.all(toRetire.map(id => setPublicHoseStatus(slug, id, 'out_of_service')))
-    }
-
-    setSuccess(`Saved ${result.count} test result${result.count !== 1 ? 's' : ''}.${toRetire.length > 0 ? ` ${toRetire.length} hose${toRetire.length !== 1 ? 's' : ''} taken out of service.` : ''}`)
-    const submittedIds = new Set(selectedHoses.map(h => h.id))
-    setHoses(prev => prev.filter(h => !submittedIds.has(h.id)))
-    setResults({})
-    setSelected(new Set())
-    setRetireOnFail(new Set())
-    setForcedIds(prev => { const next = new Set(prev); submittedIds.forEach(id => next.delete(id)); return next })
-    setStep('select')
-    setLoading(false)
-  }
-
   return (
     <div>
       {success && (
@@ -366,7 +342,8 @@ export default function HoseTestingClient({
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Test parameters — set once, carried into both steps */}
+      {/* Test parameters — set before selecting; once a test starts they live on the draft screen */}
+      {step !== 'draft' && (
       <div className="rounded-xl bg-white border border-zinc-200 p-5 mb-5">
         <h2 className="text-sm font-semibold text-zinc-700 mb-3">Test Parameters</h2>
         <p className="flex items-start gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 mb-3 text-xs leading-relaxed text-blue-700">
@@ -402,6 +379,7 @@ export default function HoseTestingClient({
           </div>
         </div>
       </div>
+      )}
 
       {(step === 'select' || step === 'manage') && (
         <>
@@ -655,103 +633,23 @@ export default function HoseTestingClient({
           {step === 'select' && hoses.length > 0 && (
             <button
               onClick={handleContinue}
-              disabled={!canContinue}
+              disabled={!canContinue || loading}
               className="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
             >
-              Continue with {selected.size} Hose{selected.size !== 1 ? 's' : ''} →
+              {loading ? 'Starting…' : `Start Test with ${selected.size} Hose${selected.size !== 1 ? 's' : ''} →`}
             </button>
           )}
         </>
       )}
 
-      {step === 'mark' && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-zinc-700">Mark Results — {markedCount}/{selectedHoses.length} marked</h2>
-            <div className="flex gap-3">
-              <button onClick={markAllPass} className="text-xs font-semibold text-green-700 hover:text-green-900">
-                Mark All Pass
-              </button>
-              <button onClick={() => setStep('select')} className="text-xs font-semibold text-zinc-500 hover:text-zinc-800">
-                ← Change Selection
-              </button>
-            </div>
-          </div>
-          <p className="text-xs text-zinc-400 mb-3">Mark All Pass, then flip any individual hose to Fail below.</p>
-
-          <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100 mb-5">
-            {selectedHoses.map(hose => {
-              const result = results[hose.id]
-              const reqPsi = requiredPsi(hose.diameter_in)
-              const psiMet = pressurePsi && parseInt(pressurePsi) >= reqPsi
-              return (
-                <div key={hose.id} className="px-4 py-4">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-semibold text-zinc-900">{hose.hose_identifier}</span>
-                        <span className="text-xs text-zinc-400">{hose.diameter_in}&quot; · {hose.length_ft} ft · {hose.hose_type}</span>
-                      </div>
-                      <p className={`text-xs mt-0.5 ${psiMet ? 'text-zinc-400' : 'text-amber-600 font-medium'}`}>
-                        Required: {reqPsi} PSI{!psiMet && pressurePsi ? ' ⚠ pressure entered is below required' : ''}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => setResult(hose.id, true)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                          result?.passed === true
-                            ? 'bg-green-600 text-white border-green-600'
-                            : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        Pass
-                      </button>
-                      <button
-                        onClick={() => setResult(hose.id, false)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                          result?.passed === false
-                            ? 'bg-red-600 text-white border-red-600'
-                            : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        Fail
-                      </button>
-                    </div>
-                  </div>
-                  {result?.passed === false && (
-                    <div className="flex flex-col gap-2">
-                      <input
-                        type="text"
-                        value={result.failure_reason}
-                        onChange={e => setFailureReason(hose.id, e.target.value)}
-                        placeholder="Failure reason (optional)"
-                        className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-zinc-700 focus:border-red-400 focus:outline-none"
-                      />
-                      <label className="flex items-center gap-2 text-xs text-red-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={retireOnFail.has(hose.id)}
-                          onChange={() => toggleRetireOnFail(hose.id)}
-                          className="w-3.5 h-3.5 rounded border-red-300 text-red-600 focus:ring-red-500"
-                        />
-                        Take this hose out of service
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !allMarked}
-            className="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Saving...' : `Submit ${selectedHoses.length} Test${selectedHoses.length !== 1 ? 's' : ''}`}
-          </button>
-        </>
+      {step === 'draft' && draft && (
+        <HoseTestDraftScreen
+          slug={slug}
+          initial={draft}
+          onLeave={leaveDraft}
+          onDiscarded={handleDraftDiscarded}
+          onFinished={handleDraftFinished}
+        />
       )}
     </div>
   )

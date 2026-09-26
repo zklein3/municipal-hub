@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission, hasPermissionForDepartment } from '@/lib/permissions'
 import { logError, logEvent } from '@/lib/logger'
+import { prepareSlug } from '@/lib/public-slug'
 import { revalidatePath } from 'next/cache'
 
 export async function savePublicSiteSettings(formData: FormData) {
@@ -20,8 +21,8 @@ export async function savePublicSiteSettings(formData: FormData) {
 
   const department_id      = formData.get('department_id') as string
   const public_site_enabled = formData.get('public_site_enabled') === 'true'
-  const public_slug        = (formData.get('public_slug') as string)?.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || null
-  const public_phone       = (formData.get('public_phone') as string)?.trim() || null
+  const rawSlug            = (formData.get('public_slug') as string) ?? ''
+  const public_phone      = (formData.get('public_phone') as string)?.trim() || null
   const public_email       = (formData.get('public_email') as string)?.trim() || null
   const public_address     = (formData.get('public_address') as string)?.trim() || null
   const public_tagline     = (formData.get('public_tagline') as string)?.trim() || null
@@ -29,6 +30,12 @@ export async function savePublicSiteSettings(formData: FormData) {
   const burn_permit_restrictions = (formData.get('burn_permit_restrictions') as string)?.trim() || null
   const burn_permit_county_info  = (formData.get('burn_permit_county_info') as string)?.trim() || null
 
+  let public_slug: string | null = null
+  if (rawSlug.trim()) {
+    const prepared = await prepareSlug(adminClient, rawSlug, department_id)
+    if ('error' in prepared) return { error: prepared.error }
+    public_slug = prepared.slug
+  }
   if (public_site_enabled && !public_slug) return { error: 'A URL slug is required to enable the public site.' }
 
   const { error: dbErr } = await adminClient
@@ -51,7 +58,10 @@ export async function savePublicSiteSettings(formData: FormData) {
 // fields and stays sys-admin only for now). This only flips the flag + sets
 // a slug if one isn't already set, same shape as setHoseTestingConfig, since
 // hose testing and the public site share the one public_slug column.
-export async function setPublicSiteEnabled(enabled: boolean, slug: string | null) {
+export async function setPublicSiteEnabled(
+  enabled: boolean,
+  slug: string | null,
+): Promise<{ error?: string; suggestion?: string; success?: boolean; slug?: string | null }> {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) return { error: 'Not authenticated.' }
   if (!(await hasPermission(ctx, 'manage_department_settings'))) return { error: 'Only admins can update department settings.' }
@@ -65,13 +75,18 @@ export async function setPublicSiteEnabled(enabled: boolean, slug: string | null
     .eq('id', ctx.departmentId)
     .single()
 
-  const cleanSlug = slug?.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || null
-  if (enabled && !current?.public_slug && !cleanSlug) {
+  let newSlug: string | undefined
+  if (!current?.public_slug && slug?.trim()) {
+    const prepared = await prepareSlug(adminClient, slug, ctx.departmentId)
+    if ('error' in prepared) return prepared
+    newSlug = prepared.slug
+  }
+  if (enabled && !current?.public_slug && !newSlug) {
     return { error: 'A URL slug is required to enable the public site.' }
   }
 
   const update: { public_site_enabled: boolean; public_slug?: string } = { public_site_enabled: enabled }
-  if (!current?.public_slug && cleanSlug) update.public_slug = cleanSlug
+  if (newSlug) update.public_slug = newSlug
 
   const { error: dbErr } = await adminClient
     .from('departments')

@@ -3,14 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { submitHoseTestSession, claimHoseInApp, releaseHoseInApp, forceReleaseHoseInApp } from '@/app/actions/iso'
+import { claimHoseInApp, releaseHoseInApp, forceReleaseHoseInApp } from '@/app/actions/iso'
+import { startHoseTestSession, openHoseTestSession, abandonHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
+import HoseTestDraftScreen from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
-
-// NFPA 1962: attack hose (1"–3") tests at 300 PSI, supply hose (4"–6") tests at 200 PSI —
-// driven purely by diameter, not the user-assigned hose_type (which can be mistagged).
-function requiredPsi(diameter_in: number): number {
-  return diameter_in >= 4 ? 200 : 300
-}
 
 type Hose = {
   id: string
@@ -21,9 +17,12 @@ type Hose = {
   status: string
 }
 
-type HoseResult = {
-  passed: boolean | null
-  failure_reason: string
+export type OpenDraft = {
+  id: string
+  testerName: string
+  testDate: string
+  hoseCount: number
+  failedCount: number
 }
 
 type Lock = { id: string; hose_id: string; session_token: string; tester_name: string | null }
@@ -35,16 +34,18 @@ export default function HoseTestSessionClient({
   testerName,
   departmentId,
   initialLocks,
+  openDrafts,
 }: {
   hoses: Hose[]
   testerName: string
   departmentId: string
   initialLocks: Lock[]
+  openDrafts: OpenDraft[]
 }) {
   const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
 
-  const [step, setStep] = useState<'select' | 'mark'>('select')
+  const [draft, setDraft] = useState<OpenedSession | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [sizeFilter, setSizeFilter] = useState<number | null>(null)
@@ -52,7 +53,6 @@ export default function HoseTestSessionClient({
   const [testDate, setTestDate] = useState(today)
   const [pressurePsi, setPressurePsi] = useState('')
   const [durationMin, setDurationMin] = useState('5')
-  const [results, setResults] = useState<Record<string, HoseResult>>({})
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -198,52 +198,38 @@ export default function HoseTestSessionClient({
 
   const canContinue = selectedHoses.length > 0 && !!pressurePsi
 
-  function handleContinue() {
+  async function handleContinue() {
     setError(null)
     if (selectedHoses.length === 0) { setError('Select at least one hose to test.'); return }
     if (!pressurePsi) { setError('Pressure is required.'); return }
-    setResults(Object.fromEntries(selectedHoses.map(h => [h.id, results[h.id] ?? { passed: null, failure_reason: '' }])))
-    setStep('mark')
-  }
-
-  const allMarked = selectedHoses.length > 0 && selectedHoses.every(h => results[h.id]?.passed !== null)
-  const markedCount = selectedHoses.filter(h => results[h.id]?.passed !== null).length
-
-  function setResult(hoseId: string, passed: boolean) {
-    setResults(prev => ({ ...prev, [hoseId]: { ...prev[hoseId], passed, failure_reason: passed ? '' : prev[hoseId]?.failure_reason ?? '' } }))
-  }
-
-  function setFailureReason(hoseId: string, reason: string) {
-    setResults(prev => ({ ...prev, [hoseId]: { ...prev[hoseId], failure_reason: reason } }))
-  }
-
-  async function handleCancelMarking() {
-    await Promise.all(selectedHoses.map(h => releaseHoseInApp(h.id, sessionToken)))
+    setLoading(true)
+    const res = await startHoseTestSession(null, {
+      testerName,
+      testDate,
+      pressurePsi: parseInt(pressurePsi),
+      durationMin: parseInt(durationMin) || 5,
+      hoseIds: selectedHoses.map(h => h.id),
+      lockToken: sessionToken,
+    })
+    setLoading(false)
+    if ('error' in res) { setError(res.error); return }
     setSelected(new Set())
-    setResults({})
-    setStep('select')
+    setDraft(res.session)
   }
 
-  async function handleSubmit() {
-    if (!pressurePsi || !testDate) { setError('Date and pressure are required.'); return }
-    if (!allMarked) { setError('Mark every selected hose pass or fail before submitting.'); return }
+  async function handleResume(id: string) {
     setError(null)
     setLoading(true)
+    const res = await openHoseTestSession(null, id, sessionToken)
+    setLoading(false)
+    if ('error' in res) { setError(res.error); return }
+    if (res.session.status !== 'draft') { setError('That test was already finalized or discarded.'); router.refresh(); return }
+    setDraft(res.session)
+  }
 
-    const payload = selectedHoses.map(h => ({
-      hose_id: h.id,
-      passed: results[h.id]!.passed!,
-      failure_reason: results[h.id]!.failure_reason || null,
-    }))
-
-    const result = await submitHoseTestSession(testDate, parseInt(pressurePsi), parseInt(durationMin) || 5, payload)
-    if (result?.error) {
-      setError(result.error)
-      setLoading(false)
-      return
-    }
-
-    router.push('/iso/hoses')
+  async function handleDiscardOpen(id: string) {
+    if (!confirm('Discard this open test? Nothing will be logged and its hoses will be released.')) return
+    await abandonHoseTestSession(null, id)
     router.refresh()
   }
 
@@ -261,7 +247,7 @@ export default function HoseTestSessionClient({
     )
   }
 
-  if (step === 'select') {
+  if (!draft) {
     return (
       <div className="max-w-2xl">
         <div className="mb-4 flex items-center gap-3">
@@ -276,6 +262,27 @@ export default function HoseTestSessionClient({
 
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+
+        {openDrafts.length > 0 && (
+          <div className="mb-5 rounded-xl bg-amber-50 border border-amber-200 p-4">
+            <h2 className="text-sm font-semibold text-amber-900 mb-2">Open tests ({openDrafts.length})</h2>
+            <p className="text-xs text-amber-700 mb-3">Started but not finalized — nothing here counts as tested yet.</p>
+            <div className="flex flex-col gap-2">
+              {openDrafts.map(d => (
+                <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-amber-200 px-3 py-2">
+                  <div className="min-w-0 text-xs text-zinc-700">
+                    <span className="font-semibold">{d.testerName || 'Unknown tester'}</span>
+                    <span className="text-zinc-400 ml-2">{d.testDate} · {d.hoseCount} hose{d.hoseCount !== 1 ? 's' : ''}{d.failedCount > 0 ? ` · ${d.failedCount} failed` : ''}</span>
+                  </div>
+                  <div className="flex gap-3 shrink-0">
+                    <button onClick={() => handleResume(d.id)} disabled={loading} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">Resume</button>
+                    <button onClick={() => handleDiscardOpen(d.id)} className="text-xs font-semibold text-zinc-400 hover:text-red-700">Discard</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Test Parameters — set before selecting, carried into marking */}
@@ -430,10 +437,10 @@ export default function HoseTestSessionClient({
 
         <button
           onClick={handleContinue}
-          disabled={!canContinue}
+          disabled={!canContinue || loading}
           className="w-full rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
         >
-          Continue with {selected.size} Hose{selected.size !== 1 ? 's' : ''} →
+          {loading ? 'Starting…' : `Start Test with ${selected.size} Hose${selected.size !== 1 ? 's' : ''} →`}
         </button>
       </div>
     )
@@ -442,92 +449,19 @@ export default function HoseTestSessionClient({
   return (
     <div className="max-w-2xl">
       <div className="mb-4 flex items-center gap-3">
-        <button onClick={handleCancelMarking} className="text-sm text-zinc-500 hover:text-red-700">← Back to selection</button>
+        <Link href="/iso/hoses" className="text-sm text-zinc-500 hover:text-red-700">← Hoses</Link>
       </div>
-      <div className="flex items-start justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900">Hose Test Session</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">NFPA 1962 · Tester: {testerName}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
-          {markedCount}/{selectedHoses.length} marked
-        </span>
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-zinc-900">Hose Test Session</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">NFPA 1962 · Tester: {testerName}</p>
       </div>
-
-      {/* Hose List */}
-      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100 mb-5">
-        {selectedHoses.map(hose => {
-          const result = results[hose.id]
-          const reqPsi = requiredPsi(hose.diameter_in)
-          const psiMet = pressurePsi && parseInt(pressurePsi) >= reqPsi
-          return (
-            <div key={hose.id} className="px-4 py-4">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono font-semibold text-zinc-900">{hose.hose_identifier}</span>
-                    <span className="text-xs text-zinc-400">{hose.diameter_in}&quot; · {hose.length_ft} ft · {hose.hose_type}</span>
-                  </div>
-                  <p className={`text-xs mt-0.5 ${psiMet ? 'text-zinc-400' : 'text-amber-600 font-medium'}`}>
-                    Required: {reqPsi} PSI{!psiMet && pressurePsi ? ' ⚠ pressure entered is below required' : ''}
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => setResult(hose.id, true)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                      result?.passed === true
-                        ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    Pass
-                  </button>
-                  <button
-                    onClick={() => setResult(hose.id, false)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                      result?.passed === false
-                        ? 'bg-red-600 text-white border-red-600'
-                        : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    Fail
-                  </button>
-                </div>
-              </div>
-              {result?.passed === false && (
-                <input
-                  type="text"
-                  value={result.failure_reason}
-                  onChange={e => setFailureReason(hose.id, e.target.value)}
-                  placeholder="Failure reason (optional)"
-                  className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-zinc-700 focus:border-red-400 focus:outline-none"
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-
-      <div className="flex gap-3">
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !allMarked || !pressurePsi}
-          className="flex-1 rounded-lg bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'Saving...' : `Submit ${selectedHoses.length} Test${selectedHoses.length !== 1 ? 's' : ''}`}
-        </button>
-        <button
-          onClick={handleCancelMarking}
-          className="rounded-lg border border-zinc-200 px-4 py-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
+      <HoseTestDraftScreen
+        slug={null}
+        initial={draft}
+        onLeave={() => { setDraft(null); router.refresh() }}
+        onDiscarded={() => { setDraft(null); router.refresh() }}
+        onFinished={() => { router.push('/iso/hoses'); router.refresh() }}
+      />
     </div>
   )
 }

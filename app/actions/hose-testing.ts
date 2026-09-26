@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
+import { prepareSlug } from '@/lib/public-slug'
 import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
@@ -96,14 +97,20 @@ export async function getHoseTestingLiveState(slug: string) {
       .eq('department_id', dept.id),
     adminClient
       .from('hose_tests')
-      .select('hose_id')
+      .select('hose_id, test_date, passed')
       .eq('department_id', dept.id)
-      .gte('test_date', cutoffStr),
+      .gte('test_date', cutoffStr)
+      .order('test_date', { ascending: true })
+      .order('created_at', { ascending: true }),
   ])
+
+  // A hose whose latest recent test failed is not "done" — it stays in the queue for retest.
+  const latestPassed: Record<string, boolean> = {}
+  for (const t of recentTests ?? []) latestPassed[t.hose_id] = t.passed
 
   return {
     locks: locks ?? [],
-    recentlyTestedHoseIds: Array.from(new Set((recentTests ?? []).map(t => t.hose_id))),
+    recentlyTestedHoseIds: Object.keys(latestPassed).filter(id => latestPassed[id]),
   }
 }
 
@@ -256,52 +263,6 @@ export async function setPublicHoseStatus(slug: string, hoseId: string, status: 
   return { success: true }
 }
 
-type HoseTestResult = {
-  hose_id: string
-  passed: boolean
-  failure_reason: string | null
-}
-
-export async function submitPublicHoseTestSession(
-  slug: string,
-  testerName: string,
-  test_date: string,
-  test_pressure_psi: number,
-  duration_min: number,
-  results: HoseTestResult[]
-) {
-  const dept = await resolveDeptBySlug(slug)
-  if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
-  if (!testerName.trim()) return { error: 'Tester name is required.' }
-  if (!results.length) return { error: 'No hoses to record.' }
-
-  const adminClient = createAdminClient()
-  const rows = results.map(r => ({
-    hose_id: r.hose_id,
-    department_id: dept.id,
-    test_date,
-    tested_by: null,
-    tested_by_name: testerName.trim(),
-    test_pressure_psi,
-    duration_min,
-    passed: r.passed,
-    failure_reason: r.failure_reason || null,
-    notes: null,
-  }))
-
-  const { error: dbErr } = await adminClient.from('hose_tests').insert(rows)
-  if (dbErr) { await logError(dbErr.message, `/hose-testing/${slug}`, { metadata: { testerName } }); return { error: dbErr.message } }
-
-  await adminClient
-    .from('hose_testing_locks')
-    .delete()
-    .eq('department_id', dept.id)
-    .in('hose_id', results.map(r => r.hose_id))
-
-  revalidatePath(`/hose-testing/${slug}`)
-  return { success: true, count: rows.length }
-}
-
 // ─── Dept Admin: self-service enable/configure ─────────────────────────────
 
 export async function getHoseTestingConfig() {
@@ -319,7 +280,10 @@ export async function getHoseTestingConfig() {
   return data
 }
 
-export async function setHoseTestingConfig(enabled: boolean, slug: string | null) {
+export async function setHoseTestingConfig(
+  enabled: boolean,
+  slug: string | null,
+): Promise<{ error?: string; suggestion?: string; success?: boolean; slug?: string | null }> {
   const ctx = await getCurrentDepartmentContext()
   if (!ctx) return { error: 'Not authenticated.' }
   if (!(await hasPermission(ctx, 'manage_department_settings'))) return { error: 'Only admins can update department settings.' }
@@ -333,16 +297,20 @@ export async function setHoseTestingConfig(enabled: boolean, slug: string | null
     .eq('id', ctx.departmentId)
     .single()
 
-  // A slug is required to enable, but never silently overwrite one already
-  // in use by the citizen-facing public site (burn permits, etc.) — that's
-  // sys-admin managed separately and shouldn't be clobbered from here.
-  const cleanSlug = slug?.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || null
-  if (enabled && !current?.public_slug && !cleanSlug) {
+  // A slug is required to enable, but an existing one is never overwritten
+  // here — printed QR codes and shared links depend on it staying put.
+  let newSlug: string | undefined
+  if (!current?.public_slug && slug?.trim()) {
+    const prepared = await prepareSlug(adminClient, slug, ctx.departmentId)
+    if ('error' in prepared) return prepared
+    newSlug = prepared.slug
+  }
+  if (enabled && !current?.public_slug && !newSlug) {
     return { error: 'A URL slug is required to enable public hose testing.' }
   }
 
   const update: { hose_testing_enabled: boolean; public_slug?: string } = { hose_testing_enabled: enabled }
-  if (!current?.public_slug && cleanSlug) update.public_slug = cleanSlug
+  if (newSlug) update.public_slug = newSlug
 
   const { error: dbErr } = await adminClient
     .from('departments')

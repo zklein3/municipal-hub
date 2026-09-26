@@ -16,8 +16,9 @@ export default async function ReportsPage() {
 
   const reportPermissions = await getPermissionSnapshot(ctx)
 
-  const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
+  const { data: deptRow } = await adminClient.from('departments').select('module_medical, module_iso').eq('id', ctx.departmentId).single()
   const moduleMedical = deptRow?.module_medical ?? false
+  const moduleIso = deptRow?.module_iso ?? false
 
   return (
     <div>
@@ -92,6 +93,13 @@ export default async function ReportsPage() {
             title="Fuel Report"
             description="Apparatus fuel usage and cost tracking"
             href="/reports/fuel"
+          />
+        )}
+        {moduleIso && reportPermissions.perform_iso_testing && (
+          <HubCard
+            title="Hose Testing"
+            description="Total hose by size, and pass/fail results by size"
+            href="/reports/hose-testing"
           />
         )}
         {moduleMedical && reportPermissions.manage_medical_inventory && (

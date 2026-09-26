@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createHose, updateHose, addHoseTest, removeHose } from '@/app/actions/iso'
+import { createHose, updateHose, addHoseTest, removeHose, updateHoseTest, deleteHoseTest } from '@/app/actions/iso'
 import HelpText from '@/components/HelpText'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -78,6 +78,35 @@ export default function HosesClient({
   const [testError, setTestError] = useState<string | null>(null)
   const [testPassed, setTestPassed] = useState('true')
   const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const [editingTestId, setEditingTestId] = useState<string | null>(null)
+  const [editTestPassed, setEditTestPassed] = useState('true')
+  const [deletingTestId, setDeletingTestId] = useState<string | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [testRowError, setTestRowError] = useState<string | null>(null)
+
+  function handleEditTest(e: React.FormEvent<HTMLFormElement>, testId: string) {
+    e.preventDefault()
+    setTestRowError(null)
+    const fd = new FormData(e.currentTarget)
+    startTransition(async () => {
+      const result = await updateHoseTest(testId, fd)
+      if (result?.error) { setTestRowError(result.error); return }
+      setEditingTestId(null)
+      router.refresh()
+    })
+  }
+
+  function handleDeleteTest(testId: string) {
+    setTestRowError(null)
+    startTransition(async () => {
+      const result = await deleteHoseTest(testId, deleteReason)
+      if (result?.error) { setTestRowError(result.error); return }
+      setDeletingTestId(null)
+      setDeleteReason('')
+      router.refresh()
+    })
+  }
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -394,19 +423,69 @@ export default function HosesClient({
                         <p className="text-xs text-zinc-400">No tests recorded.</p>
                       ) : (
                         <div className="flex flex-col gap-1.5">
+                          {testRowError && (editingTestId || deletingTestId) && hose.tests.some(x => x.id === editingTestId || x.id === deletingTestId) && (
+                            <p className="text-xs text-red-600">{testRowError}</p>
+                          )}
                           {hose.tests.map(t => (
-                            <div key={t.id} className="flex items-start gap-3 text-xs">
-                              <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${t.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {t.passed ? 'Pass' : 'Fail'}
-                              </span>
-                              <div className="min-w-0">
-                                <span className="text-zinc-700 font-medium">{formatDate(t.test_date)}</span>
-                                <span className="text-zinc-400 ml-2">{t.test_pressure_psi} PSI · {t.duration_min} min</span>
-                                {t.tested_by_name && <span className="text-zinc-400 ml-2">by {t.tested_by_name}</span>}
-                                {t.failure_reason && <p className="text-red-600 mt-0.5">{t.failure_reason}</p>}
-                                {t.notes && <p className="text-zinc-400 mt-0.5">{t.notes}</p>}
+                            editingTestId === t.id ? (
+                              <form key={t.id} onSubmit={e => handleEditTest(e, t.id)} className="rounded-lg border border-zinc-200 bg-white p-3 flex flex-col gap-2 text-xs">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <label className="flex flex-col gap-1 text-zinc-600">Date
+                                    <input type="date" name="test_date" required defaultValue={t.test_date} className="rounded border border-zinc-300 px-2 py-1 text-zinc-900" />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-zinc-600">PSI
+                                    <input type="number" name="test_pressure_psi" required defaultValue={t.test_pressure_psi ?? ''} className="rounded border border-zinc-300 px-2 py-1 text-zinc-900" />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-zinc-600">Min
+                                    <input type="number" name="duration_min" defaultValue={t.duration_min ?? 3} className="rounded border border-zinc-300 px-2 py-1 text-zinc-900" />
+                                  </label>
+                                </div>
+                                <label className="flex flex-col gap-1 text-zinc-600">Result
+                                  <select name="passed" value={editTestPassed} onChange={e => setEditTestPassed(e.target.value)} className="rounded border border-zinc-300 px-2 py-1 text-zinc-900">
+                                    <option value="true">Pass</option>
+                                    <option value="false">Fail</option>
+                                  </select>
+                                </label>
+                                {editTestPassed === 'false' && (
+                                  <input type="text" name="failure_reason" defaultValue={t.failure_reason ?? ''} placeholder="Failure reason" className="rounded border border-zinc-300 px-2 py-1 text-zinc-900" />
+                                )}
+                                <input type="text" name="notes" defaultValue={t.notes ?? ''} placeholder="Notes" className="rounded border border-zinc-300 px-2 py-1 text-zinc-900" />
+                                <div className="flex gap-2">
+                                  <button type="submit" disabled={isPending} className="rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800 disabled:opacity-50">Save</button>
+                                  <button type="button" onClick={() => { setEditingTestId(null); setTestRowError(null) }} className="rounded-lg border border-zinc-300 px-3 py-1.5 font-semibold text-zinc-600 hover:bg-zinc-100">Cancel</button>
+                                </div>
+                              </form>
+                            ) : (
+                              <div key={t.id} className="flex items-start gap-3 text-xs">
+                                <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${t.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {t.passed ? 'Pass' : 'Fail'}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-zinc-700 font-medium">{formatDate(t.test_date)}</span>
+                                  <span className="text-zinc-400 ml-2">{t.test_pressure_psi} PSI · {t.duration_min} min</span>
+                                  {t.tested_by_name && <span className="text-zinc-400 ml-2">by {t.tested_by_name}</span>}
+                                  {t.failure_reason && <p className="text-red-600 mt-0.5">{t.failure_reason}</p>}
+                                  {t.notes && <p className="text-zinc-400 mt-0.5">{t.notes}</p>}
+                                  {isOfficerOrAbove && deletingTestId === t.id && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-2">
+                                      <span className="text-amber-800 font-medium">Delete this test? It stops counting toward compliance.</span>
+                                      <input
+                                        type="text" value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Reason (required)"
+                                        className="flex-1 min-w-[10rem] rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                                      />
+                                      <button disabled={isPending} onClick={() => handleDeleteTest(t.id)} className="font-semibold text-red-600 hover:text-red-800 disabled:opacity-50">Delete</button>
+                                      <button onClick={() => { setDeletingTestId(null); setDeleteReason(''); setTestRowError(null) }} className="text-zinc-500 hover:text-zinc-700">Cancel</button>
+                                    </div>
+                                  )}
+                                </div>
+                                {isOfficerOrAbove && deletingTestId !== t.id && (
+                                  <div className="shrink-0 flex gap-2">
+                                    <button onClick={() => { setEditingTestId(t.id); setEditTestPassed(t.passed ? 'true' : 'false'); setDeletingTestId(null); setTestRowError(null) }} className="text-zinc-500 hover:text-zinc-700 font-medium">Edit</button>
+                                    <button onClick={() => { setDeletingTestId(t.id); setDeleteReason(''); setEditingTestId(null); setTestRowError(null) }} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
+                                  </div>
+                                )}
                               </div>
-                            </div>
+                            )
                           ))}
                         </div>
                       )}

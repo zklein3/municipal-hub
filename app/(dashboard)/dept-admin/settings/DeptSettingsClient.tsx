@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { saveDeptTimezone, saveWeeklyDigestEnabled, setFuelStorageModule } from '@/app/actions/departments'
 import { setHoseTestingConfig } from '@/app/actions/hose-testing'
 import { setPublicSiteEnabled } from '@/app/actions/public-site'
+import { slugify } from '@/lib/slug'
 import { TIMEZONES } from '@/lib/format-datetime'
 import HelpText from '@/components/HelpText'
 import QrPrintLabel from '@/components/QrPrintLabel'
@@ -16,6 +17,7 @@ export default function DeptSettingsClient({
   publicSiteEnabled: initialPublicSiteEnabled,
   fuelStorageEnabled: initialFuelStorageEnabled,
   publicSlug: initialPublicSlug,
+  suggestedSlug,
 }: {
   departmentId: string
   timezone: string
@@ -24,6 +26,7 @@ export default function DeptSettingsClient({
   publicSiteEnabled: boolean
   fuelStorageEnabled: boolean
   publicSlug: string | null
+  suggestedSlug: string
 }) {
   const [timezone, setTimezone] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -41,7 +44,7 @@ export default function DeptSettingsClient({
 
   const [hoseTestingEnabled, setHoseTestingEnabled] = useState(initialHoseTestingEnabled)
   const [publicSlug, setPublicSlug] = useState(initialPublicSlug)
-  const [slugInput, setSlugInput] = useState('')
+  const [slugInput, setSlugInput] = useState(suggestedSlug)
   const [hoseTestingSaving, setHoseTestingSaving] = useState(false)
   const [hoseTestingError, setHoseTestingError] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -75,6 +78,7 @@ export default function DeptSettingsClient({
     const result = await setHoseTestingConfig(next, publicSlug ? null : slugInput)
     if (result?.error) {
       setHoseTestingError(result.error)
+      if (result.suggestion) setSlugInput(result.suggestion)
     } else {
       setHoseTestingEnabled(next)
       if (result?.slug) setPublicSlug(result.slug)
@@ -87,6 +91,7 @@ export default function DeptSettingsClient({
     const result = await setPublicSiteEnabled(next, publicSlug ? null : slugInput)
     if (result?.error) {
       setPublicSiteError(result.error)
+      if (result.suggestion) setSlugInput(result.suggestion)
     } else {
       setPublicSiteEnabledState(next)
       if (result?.slug) setPublicSlug(result.slug)
@@ -215,11 +220,12 @@ export default function DeptSettingsClient({
               type="text"
               value={slugInput}
               onChange={e => setSlugInput(e.target.value)}
+              onBlur={() => setSlugInput(slugify(slugInput))}
               placeholder="your-department-name"
               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
             <p className="text-xs text-zinc-400 mt-1">
-              This becomes your link: /hose-testing/your-slug. Shared with the public site's URL if you set one up later.
+              Suggested from your department name. Once set, the slug is locked so printed QR codes and shared links keep working. This becomes your link: /hose-testing/your-slug. Shared with the public site's URL if you set one up later.
             </p>
           </div>
         )}
@@ -284,11 +290,12 @@ export default function DeptSettingsClient({
               type="text"
               value={slugInput}
               onChange={e => setSlugInput(e.target.value)}
+              onBlur={() => setSlugInput(slugify(slugInput))}
               placeholder="your-department-name"
               className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
             <p className="text-xs text-zinc-400 mt-1">
-              This becomes your link: /dept/your-slug. Shared with public hose testing's URL if you set one up later.
+              Suggested from your department name. Once set, the slug is locked so printed QR codes and shared links keep working. This becomes your link: /dept/your-slug. Shared with public hose testing's URL if you set one up later.
             </p>
           </div>
         )}

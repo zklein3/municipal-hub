@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
-import { logError } from '@/lib/logger'
+import { logError, logEvent } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
@@ -52,51 +52,7 @@ export async function upsertApparatusIsoSpecs(formData: FormData) {
 
 // ─── Hose Test Session ────────────────────────────────────────────────────────
 
-type HoseTestResult = {
-  hose_id: string
-  passed: boolean
-  failure_reason: string | null
-}
-
-export async function submitHoseTestSession(
-  test_date: string,
-  test_pressure_psi: number,
-  duration_min: number,
-  results: HoseTestResult[]
-) {
-  const ctx = await getContext()
-  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
-  if (!results.length) return { error: 'No hoses to record.' }
-
-  const adminClient = createAdminClient()
-  const rows = results.map(r => ({
-    hose_id: r.hose_id,
-    department_id: ctx.department_id!,
-    test_date,
-    tested_by: ctx.me.id,
-    test_pressure_psi,
-    duration_min,
-    passed: r.passed,
-    failure_reason: r.failure_reason || null,
-    notes: null,
-  }))
-
-  const { error: dbErr } = await adminClient.from('hose_tests').insert(rows)
-  if (dbErr) {
-    await logError(dbErr.message, 'submitHoseTestSession', { personnel_id: ctx.me.id })
-    return { error: dbErr.message }
-  }
-
-  await adminClient
-    .from('hose_testing_locks')
-    .delete()
-    .eq('department_id', ctx.department_id)
-    .in('hose_id', results.map(r => r.hose_id))
-
-  revalidatePath('/iso/hoses')
-  revalidatePath('/iso/report')
-  return { success: true, count: rows.length }
-}
+// Batch tests are now saved as drafts and finalized via app/actions/hose-test-sessions.ts.
 
 // Shares hose_testing_locks with the public /hose-testing/[slug] flow, so an
 // in-app officer and a public/mutual-aid tester can't both grab the same
@@ -467,6 +423,66 @@ export async function addHoseTest(formData: FormData) {
   return { success: true }
 }
 
+// Corrections to logged tests. Every change writes the original row to system_logs
+// (who, when, why) so a voided or edited test can always be reconstructed.
+export async function updateHoseTest(testId: string, formData: FormData) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const test_date = formData.get('test_date') as string
+  const test_pressure_psi = parseInt(formData.get('test_pressure_psi') as string)
+  const duration_min = parseInt(formData.get('duration_min') as string)
+  const passed = formData.get('passed') === 'true'
+  const failure_reason = (formData.get('failure_reason') as string)?.trim() || null
+  const notes = (formData.get('notes') as string)?.trim() || null
+
+  if (!test_date) return { error: 'Test date is required.' }
+  if (!test_pressure_psi || test_pressure_psi <= 0) return { error: 'Test pressure is required.' }
+  if (!passed && !failure_reason) return { error: 'Enter a failure reason for a failed test.' }
+
+  const adminClient = createAdminClient()
+  const { data: before } = await adminClient
+    .from('hose_tests').select('*').eq('id', testId).eq('department_id', ctx.department_id).maybeSingle()
+  if (!before) return { error: 'Test not found.' }
+
+  const after = { test_date, test_pressure_psi, duration_min: duration_min || before.duration_min, passed, failure_reason: passed ? null : failure_reason, notes }
+  const { error: dbErr } = await adminClient.from('hose_tests').update(after).eq('id', testId).eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, 'updateHoseTest', { personnel_id: ctx.me.id }); return { error: dbErr.message } }
+
+  await logEvent({
+    log_type: 'info', page: '/iso/hoses', message: 'hose_test_edited',
+    personnel_id: ctx.me.id, department_id: ctx.department_id,
+    metadata: { test_id: testId, hose_id: before.hose_id, before, after },
+  })
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
+export async function deleteHoseTest(testId: string, reason: string) {
+  const ctx = await getContext()
+  if (!ctx || !ctx.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  if (!reason?.trim()) return { error: 'A reason is required to delete a test.' }
+
+  const adminClient = createAdminClient()
+  const { data: before } = await adminClient
+    .from('hose_tests').select('*').eq('id', testId).eq('department_id', ctx.department_id).maybeSingle()
+  if (!before) return { error: 'Test not found.' }
+
+  // Log first: if the delete then fails nothing is lost, and if the log fails we don't delete.
+  const { error: logErr } = await adminClient.from('system_logs').insert({
+    log_type: 'info', page: '/iso/hoses', message: 'hose_test_voided',
+    personnel_id: ctx.me.id, department_id: ctx.department_id,
+    metadata: { test_id: testId, hose_id: before.hose_id, reason: reason.trim(), voided_at: new Date().toISOString(), original: before },
+  })
+  if (logErr) return { error: 'Could not record the audit entry, so the test was not deleted.' }
+
+  const { error: dbErr } = await adminClient.from('hose_tests').delete().eq('id', testId).eq('department_id', ctx.department_id)
+  if (dbErr) { await logError(dbErr.message, 'deleteHoseTest', { personnel_id: ctx.me.id }); return { error: dbErr.message } }
+
+  revalidatePath('/iso/hoses')
+  return { success: true }
+}
+
 // ─── Hydrants ─────────────────────────────────────────────────────────────────
 
 export async function createHydrant(formData: FormData) {
@@ -638,7 +654,7 @@ export async function removeHose(hoseId: string) {
   const adminClient = createAdminClient()
   const { error: dbErr } = await adminClient
     .from('hoses')
-    .update({ active: false })
+    .update({ status: 'retired', updated_at: new Date().toISOString() })
     .eq('id', hoseId)
     .eq('department_id', ctx.department_id)
   if (dbErr) { await logError(dbErr, '/iso/hoses'); return { error: dbErr.message } }
