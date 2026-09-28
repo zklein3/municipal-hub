@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { listBiometricCredentials } from '@/app/actions/biometric'
+import { listAgilityTestsForPersonnel } from '@/app/actions/agility-tests'
 import PersonnelProfileClient from './PersonnelProfileClient'
 
 export default async function PersonnelProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +54,7 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
     .order('linked_at')
 
   const biometricCredentials = isMe ? await listBiometricCredentials() : []
+  const agilityTests = await listAgilityTestsForPersonnel(id)
 
   return (
     <PersonnelProfileClient
@@ -61,6 +63,7 @@ export default async function PersonnelProfilePage({ params }: { params: Promise
       roles={roles ?? []}
       linkedTokens={linkedTokens ?? []}
       biometricCredentials={biometricCredentials}
+      agilityTests={agilityTests}
       isMe={isMe}
       isAdmin={isAdmin}
       isOfficerOrAbove={isOfficerOrAbove}

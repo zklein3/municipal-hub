@@ -5,6 +5,7 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import TrainingClient from './TrainingClient'
 import HubCard from '@/components/HubCard'
+import { listAgilityTestsForPersonnel } from '@/app/actions/agility-tests'
 
 export default async function TrainingPage() {
   const adminClient = createAdminClient()
@@ -133,6 +134,12 @@ export default async function TrainingPage() {
     return exp >= today && exp <= in90
   }).length
 
+  // Physical Agility Test — just enough here for visibility per personnel's
+  // own request ("worked into a training file"); the full per-evolution
+  // history lives on the Personnel Profile page (see PhysicalAgilityTestSection).
+  const myAgilityTests = await listAgilityTestsForPersonnel(me.id)
+  const latestAgilityTest = myAgilityTests[0] ?? null
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 mb-6">
@@ -156,6 +163,13 @@ export default async function TrainingPage() {
             href={`/print/member-training?personnel_id=${me.id}`}
           />
         )}
+        <HubCard
+          title="Physical Agility Test"
+          description={latestAgilityTest
+            ? `Last: ${new Date(latestAgilityTest.test_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} — ${latestAgilityTest.overall_result.toUpperCase()}`
+            : 'No test on file yet'}
+          href={`/personnel/${me.id}#agility`}
+        />
       </div>
       <TrainingClient
         enrollments={enrollments ?? []}

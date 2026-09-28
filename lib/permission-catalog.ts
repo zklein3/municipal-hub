@@ -58,6 +58,7 @@ export const PERMISSION_CATALOG: PermissionCatalogEntry[] = [
   // Training
   { key: 'manage_training_programs', label: 'Manage Training Programs', category: 'Training', legacyMinRole: 'admin' },
   { key: 'record_training_completion', label: 'Record Training Completion', category: 'Training', legacyMinRole: 'officer' },
+  { key: 'administer_agility_test', label: 'Administer Physical Agility Test', category: 'Training', legacyMinRole: 'officer', description: 'Log physical agility test results for candidates and employees' },
 
   // Events / Attendance
   { key: 'manage_events', label: 'Manage Events', category: 'Events / Attendance', legacyMinRole: 'officer' },
