@@ -45,7 +45,14 @@ export default function HoseTestingClient({
   initialLocks: Lock[]
   initialRecentlyTestedIds: string[]
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  // Local calendar date, not UTC — toISOString() shifts to UTC first, which
+  // rolls the date to "tomorrow" in the evening in any timezone behind UTC
+  // (e.g. Central after ~6-7pm). Found via the same bug in the agility test
+  // page's identical line; this one has the same fix.
+  const today = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
 
   const [step, setStep] = useState<'select' | 'draft' | 'manage'>('select')
   const [draft, setDraft] = useState<OpenedSession | null>(null)

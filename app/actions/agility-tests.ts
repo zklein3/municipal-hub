@@ -62,6 +62,7 @@ type EvolutionSubmission = {
   number: number
   timeSeconds: number
   subCheckValues: Record<string, boolean | number>
+  restBeforeSeconds?: number | null
 }
 
 export async function submitAgilityTest(
@@ -97,6 +98,7 @@ export async function submitAgilityTest(
     cutoff_seconds: number
     result: 'pass' | 'fail'
     sub_checks: Record<string, boolean | number> | null
+    rest_before_seconds: number | null
   }[] = []
 
   let overallResult: 'pass' | 'fail' = 'pass'
@@ -113,6 +115,7 @@ export async function submitAgilityTest(
       cutoff_seconds: spec.cutoffSeconds,
       result,
       sub_checks: Object.keys(ev.subCheckValues).length > 0 ? ev.subCheckValues : null,
+      rest_before_seconds: ev.restBeforeSeconds ?? null,
     })
     if (result === 'fail') {
       overallResult = 'fail'
@@ -194,7 +197,7 @@ export async function getAgilityTestForPrint(testId: string) {
 
   const { data: evolutions } = await adminClient
     .from('physical_agility_test_evolutions')
-    .select('evolution_number, evolution_name, time_seconds, cutoff_seconds, result, sub_checks')
+    .select('evolution_number, evolution_name, time_seconds, cutoff_seconds, result, sub_checks, rest_before_seconds')
     .eq('test_id', testId)
     .order('evolution_number')
 
@@ -219,7 +222,7 @@ export async function listAgilityTestsForPersonnel(personnelId: string) {
   const testIds = tests.map(t => t.id)
   const { data: evolutions } = await adminClient
     .from('physical_agility_test_evolutions')
-    .select('test_id, evolution_number, evolution_name, time_seconds, cutoff_seconds, result')
+    .select('test_id, evolution_number, evolution_name, time_seconds, cutoff_seconds, result, rest_before_seconds')
     .in('test_id', testIds)
     .order('evolution_number')
 

@@ -56,7 +56,13 @@ export default async function AgilityTestPrintPage({
       </p>
 
       {evolutions.map(ev => (
-        <div key={ev.evolution_number} style={{ border: '2px solid #18181b', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '0.75rem' }}>
+        <div key={ev.evolution_number}>
+          {ev.rest_before_seconds !== null && (
+            <p style={{ fontSize: '0.75rem', color: '#92400e', textAlign: 'center', margin: '0 0 0.35rem 0' }}>
+              Between evolution rest: {formatSeconds(ev.rest_before_seconds)}
+            </p>
+          )}
+          <div style={{ border: '2px solid #18181b', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '0.75rem' }}>
           <p style={{ fontWeight: 700, fontSize: '0.9rem', margin: '0 0 0.4rem 0' }}>
             {ev.evolution_number}. {ev.evolution_name.toUpperCase()}
           </p>
@@ -71,6 +77,7 @@ export default async function AgilityTestPrintPage({
               ))}
             </ul>
           )}
+          </div>
         </div>
       ))}
 

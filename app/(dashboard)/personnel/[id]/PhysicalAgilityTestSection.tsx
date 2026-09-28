@@ -7,6 +7,7 @@ type Evolution = {
   time_seconds: number
   cutoff_seconds: number
   result: string
+  rest_before_seconds: number | null
 }
 
 type Test = {
@@ -43,11 +44,16 @@ export default function PhysicalAgilityTestSection({ tests }: { tests: Test[] })
             </div>
             <div className="flex flex-col gap-0.5">
               {t.evolutions.map(ev => (
-                <div key={ev.evolution_number} className="flex justify-between text-xs text-zinc-500">
-                  <span>{ev.evolution_number}. {ev.evolution_name}</span>
-                  <span className={`font-mono ${ev.result === 'pass' ? 'text-green-700' : 'text-red-700'}`}>
-                    {formatSeconds(ev.time_seconds)}
-                  </span>
+                <div key={ev.evolution_number}>
+                  {ev.rest_before_seconds !== null && (
+                    <div className="text-[11px] text-amber-600">Rest: {formatSeconds(ev.rest_before_seconds)}</div>
+                  )}
+                  <div className="flex justify-between text-xs text-zinc-500">
+                    <span>{ev.evolution_number}. {ev.evolution_name}</span>
+                    <span className={`font-mono ${ev.result === 'pass' ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatSeconds(ev.time_seconds)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

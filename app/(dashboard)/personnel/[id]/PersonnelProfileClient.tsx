@@ -72,6 +72,7 @@ interface AgilityTestEvolution {
   time_seconds: number
   cutoff_seconds: number
   result: string
+  rest_before_seconds: number | null
 }
 
 interface AgilityTest {
