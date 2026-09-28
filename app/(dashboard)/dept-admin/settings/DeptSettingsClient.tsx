@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { saveDeptTimezone, saveWeeklyDigestEnabled, setFuelStorageModule } from '@/app/actions/departments'
 import { setHoseTestingConfig } from '@/app/actions/hose-testing'
 import { setHoseTestingPin } from '@/app/actions/hose-testing-pin'
+import { setAgilityTestConfig } from '@/app/actions/agility-tests'
+import { setAgilityTestPin } from '@/app/actions/agility-pin'
 import { setPublicSiteEnabled } from '@/app/actions/public-site'
 import { slugify } from '@/lib/slug'
 import { TIMEZONES } from '@/lib/format-datetime'
@@ -20,6 +22,8 @@ export default function DeptSettingsClient({
   publicSlug: initialPublicSlug,
   suggestedSlug,
   hosePinSetAt: initialPinSetAt,
+  agilityTestEnabled: initialAgilityTestEnabled,
+  agilityPinSetAt: initialAgilityPinSetAt,
 }: {
   departmentId: string
   timezone: string
@@ -30,6 +34,8 @@ export default function DeptSettingsClient({
   publicSlug: string | null
   suggestedSlug: string
   hosePinSetAt: string | null
+  agilityTestEnabled: boolean
+  agilityPinSetAt: string | null
 }) {
   const [timezone, setTimezone] = useState(initial)
   const [saving, setSaving] = useState(false)
@@ -67,6 +73,41 @@ export default function DeptSettingsClient({
       setPinMessage({ ok: true, text: 'PIN saved. Every device that was unlocked has been locked again.' })
     }
     setPinSaving(false)
+  }
+
+  const [agilityTestEnabled, setAgilityTestEnabled] = useState(initialAgilityTestEnabled)
+  const [agilityTestSaving, setAgilityTestSaving] = useState(false)
+  const [agilityTestError, setAgilityTestError] = useState<string | null>(null)
+  const [agilityLinkCopied, setAgilityLinkCopied] = useState(false)
+
+  const [agilityPinSetAt, setAgilityPinSetAt] = useState(initialAgilityPinSetAt)
+  const [agilityPinValue, setAgilityPinValue] = useState('')
+  const [agilityPinSaving, setAgilityPinSaving] = useState(false)
+  const [agilityPinMessage, setAgilityPinMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function handleSaveAgilityPin() {
+    setAgilityPinSaving(true); setAgilityPinMessage(null)
+    const result = await setAgilityTestPin(agilityPinValue.trim())
+    if ('error' in result) setAgilityPinMessage({ ok: false, text: result.error })
+    else {
+      setAgilityPinSetAt(result.setAt)
+      setAgilityPinValue('')
+      setAgilityPinMessage({ ok: true, text: 'PIN saved. Every device that was unlocked has been locked again.' })
+    }
+    setAgilityPinSaving(false)
+  }
+
+  async function handleAgilityTestToggle(next: boolean) {
+    setAgilityTestSaving(true); setAgilityTestError(null)
+    const result = await setAgilityTestConfig(next, publicSlug ? null : slugInput)
+    if (result?.error) {
+      setAgilityTestError(result.error)
+      if (result.suggestion) setSlugInput(result.suggestion)
+    } else {
+      setAgilityTestEnabled(next)
+      if (result?.slug) setPublicSlug(result.slug)
+    }
+    setAgilityTestSaving(false)
   }
 
   const [publicSiteEnabled, setPublicSiteEnabledState] = useState(initialPublicSiteEnabled)
@@ -290,6 +331,105 @@ export default function DeptSettingsClient({
           />
           <span className="text-sm text-zinc-700">
             {hoseTestingEnabled ? 'Public hose testing is on' : 'Public hose testing is off'}
+          </span>
+        </label>
+      </div>
+
+      <div className="rounded-xl bg-white border border-zinc-200 shadow-sm p-5 mt-6">
+        <h2 className="text-sm font-semibold text-zinc-900 mb-1">Physical Agility Test</h2>
+        <p className="text-xs text-zinc-500 mb-4">
+          A no-login page for logging the physical agility test — share the link with whichever officer is running it,
+          for hiring candidates or current employees, no FireOps7 account needed. Unlike hose testing, the whole page
+          needs the PIN, since this is personnel data, not just equipment. Employee results save to their profile;
+          candidate results generate a printable copy for Chief/HR.
+        </p>
+
+        {agilityTestError && (
+          <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{agilityTestError}</div>
+        )}
+
+        {publicSlug ? (
+          <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-2">
+            <p className="text-xs font-medium text-zinc-500 mb-0.5">Public link</p>
+            <p className="text-sm font-mono text-zinc-800 break-all mb-2">
+              {origin}/agility-test/{publicSlug}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${origin}/agility-test/${publicSlug}`)
+                  setAgilityLinkCopied(true)
+                  setTimeout(() => setAgilityLinkCopied(false), 2000)
+                }}
+                className="text-xs font-medium text-red-700 hover:underline"
+              >
+                {agilityLinkCopied ? 'Copied!' : 'Copy Link'}
+              </button>
+              <QrPrintLabel
+                type="agility-test"
+                code={publicSlug}
+                title="Physical Agility Test"
+                subtitle="Scan to log a physical agility test"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-zinc-600 mb-1">Choose a URL slug (required to enable)</label>
+            <input
+              type="text"
+              value={slugInput}
+              onChange={e => setSlugInput(e.target.value)}
+              onBlur={() => setSlugInput(slugify(slugInput))}
+              placeholder="your-department-name"
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            <p className="text-xs text-zinc-400 mt-1">
+              Shared with public hose testing/public site's URL if you've set one up already. This becomes your link: /agility-test/your-slug.
+            </p>
+          </div>
+        )}
+
+        <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-3">
+          <p className="text-xs font-medium text-zinc-700 mb-0.5">Officer PIN — required for the whole page</p>
+          <p className="text-xs text-zinc-500 mb-2">
+            {agilityPinSetAt
+              ? `A PIN was set ${new Date(agilityPinSetAt).toLocaleDateString()}. Devices stay unlocked for 12 hours; changing the PIN locks them all again.`
+              : 'No PIN is set yet, so the public link is locked for everyone until you set one.'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              value={agilityPinValue}
+              onChange={e => { setAgilityPinValue(e.target.value.replace(/\D/g, '').slice(0, 8)); setAgilityPinMessage(null) }}
+              placeholder={agilityPinSetAt ? 'New PIN (4–8 digits)' : 'Set a PIN (4–8 digits)'}
+              className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            <button
+              type="button"
+              onClick={handleSaveAgilityPin}
+              disabled={agilityPinSaving || agilityPinValue.length < 4}
+              className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+            >
+              {agilityPinSaving ? 'Saving…' : agilityPinSetAt ? 'Change PIN' : 'Set PIN'}
+            </button>
+          </div>
+          {agilityPinMessage && <p className={`mt-2 text-xs ${agilityPinMessage.ok ? 'text-green-700' : 'text-red-600'}`}>{agilityPinMessage.text}</p>}
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={agilityTestEnabled}
+            disabled={agilityTestSaving}
+            onChange={e => handleAgilityTestToggle(e.target.checked)}
+            className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+          />
+          <span className="text-sm text-zinc-700">
+            {agilityTestEnabled ? 'Public agility testing is on' : 'Public agility testing is off'}
           </span>
         </label>
       </div>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword, linkQrToken, deleteQrToken } from '@/app/actions/personnel'
 import BiometricSettings from '@/components/BiometricSettings'
+import PhysicalAgilityTestSection from './PhysicalAgilityTestSection'
 import QRScanner from '@/components/QRScanner'
 import { parseSalamanderCard, parseFireOps7Card, isFireOps7Card } from '@/lib/salamander'
 import type { SalamanderCard } from '@/lib/salamander'
@@ -64,12 +65,32 @@ interface BiometricCredential {
   last_used_at: string | null
 }
 
+interface AgilityTestEvolution {
+  test_id: string
+  evolution_number: number
+  evolution_name: string
+  time_seconds: number
+  cutoff_seconds: number
+  result: string
+}
+
+interface AgilityTest {
+  id: string
+  test_date: string
+  overall_result: string
+  administered_by_name: string
+  stopped_at_evolution: number | null
+  notes: string | null
+  evolutions: AgilityTestEvolution[]
+}
+
 export default function PersonnelProfileClient({
   person,
   deptRecord,
   roles,
   linkedTokens: initialLinkedTokens,
   biometricCredentials,
+  agilityTests,
   isMe,
   isAdmin,
   isOfficerOrAbove,
@@ -80,6 +101,7 @@ export default function PersonnelProfileClient({
   roles: Role[]
   linkedTokens: LinkedToken[]
   biometricCredentials: BiometricCredential[]
+  agilityTests: AgilityTest[]
   isMe: boolean
   isAdmin: boolean
   isOfficerOrAbove: boolean
@@ -481,6 +503,9 @@ export default function PersonnelProfileClient({
           )}
         </div>
       )}
+
+      {/* ── Physical Agility Tests — read-only history, empty renders nothing ── */}
+      <PhysicalAgilityTestSection tests={agilityTests} />
 
       {/* ── Biometric Unlock — own profile only ─────────────────────────── */}
       {isMe && <BiometricSettings initialCredentials={biometricCredentials} departmentTimezone={departmentTimezone} />}

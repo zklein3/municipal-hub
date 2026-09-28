@@ -15,12 +15,15 @@ export default async function DeptSettingsPage() {
   const adminClient = createAdminClient()
   const { data: deptData } = await adminClient
     .from('departments')
-    .select('name, weekly_digest_enabled, hose_testing_enabled, public_site_enabled, module_fuel_storage, public_slug')
+    .select('name, weekly_digest_enabled, hose_testing_enabled, public_site_enabled, module_fuel_storage, agility_test_enabled, public_slug')
     .eq('id', ctx.departmentId)
     .single()
 
   const { data: pinRow } = await adminClient
     .from('hose_testing_pins').select('set_at').eq('department_id', ctx.departmentId).maybeSingle()
+
+  const { data: agilityPinRow } = await adminClient
+    .from('agility_test_pins').select('set_at').eq('department_id', ctx.departmentId).maybeSingle()
 
   // Only prefill when no slug is set yet; an existing slug is never touched.
   const suggestedSlug = deptData?.public_slug || !deptData?.name
@@ -39,6 +42,8 @@ export default async function DeptSettingsPage() {
         publicSlug={deptData?.public_slug ?? null}
         suggestedSlug={suggestedSlug}
         hosePinSetAt={pinRow?.set_at ?? null}
+        agilityTestEnabled={deptData?.agility_test_enabled ?? false}
+        agilityPinSetAt={agilityPinRow?.set_at ?? null}
       />
     </div>
   )

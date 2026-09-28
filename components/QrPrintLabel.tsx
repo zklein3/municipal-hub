@@ -8,7 +8,7 @@ export default function QrPrintLabel({
   buttonClassName,
 }: {
   code: string
-  type: 'apparatus' | 'compartment' | 'bottle' | 'hose-testing'
+  type: 'apparatus' | 'compartment' | 'bottle' | 'hose-testing' | 'agility-test'
   title: string
   subtitle?: string
   buttonClassName?: string
