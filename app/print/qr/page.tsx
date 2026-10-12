@@ -21,6 +21,8 @@ function PrintContent() {
     ? `${BASE_URL}/hose-testing/${code}`
     : type === 'agility-test'
     ? `${BASE_URL}/agility-test/${code}`
+    : type === 'join'
+    ? `${BASE_URL}/dept/${code}/join`
     : `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`
 
   const displayCode = type === 'checkin' ? null : code

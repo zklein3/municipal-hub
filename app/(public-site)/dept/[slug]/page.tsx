@@ -191,6 +191,15 @@ export default async function DeptLandingPage({
           <h3 className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors mb-1">Feedback &amp; Issues</h3>
           <p className="text-xs text-zinc-400">Share feedback or report a problem with this site.</p>
         </Link>
+
+        <Link
+          href={`${base}/join`}
+          className="rounded-xl bg-white border border-zinc-200 p-6 hover:border-red-300 hover:shadow-md transition-all group"
+        >
+          <div className="text-2xl mb-2">🙋</div>
+          <h3 className="font-semibold text-zinc-900 group-hover:text-red-700 transition-colors mb-1">Join Our Department</h3>
+          <p className="text-xs text-zinc-400">Interested in volunteering? Tell us about yourself.</p>
+        </Link>
       </div>
 
       {/* Upcoming events */}

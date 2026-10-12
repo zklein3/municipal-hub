@@ -111,9 +111,10 @@ export default async function InboxPage({
   let restockRequests: any[] = []
   let expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[] = []
   let feedbackItems: any[] = []
+  let membershipApplications: any[] = []
 
   if (hasAnyOfficerInboxAccess && department_id) {
-    const [deptRes, permitsRes, recordsRes, feedbackRes] = await Promise.all([
+    const [deptRes, permitsRes, recordsRes, feedbackRes, membershipRes] = await Promise.all([
       adminClient.from('departments').select('name, burn_permit_county_info, burn_permit_restrictions, module_medical, public_site_enabled').eq('id', department_id).single(),
       canReviewPermits
         ? adminClient.from('burn_permits')
@@ -130,9 +131,15 @@ export default async function InboxPage({
             .select('id, feedback_type, contact_name, contact_email, message, page_url, status, reviewer_notes, reply_message, replied_at, replied_by_personnel_id, created_at')
             .eq('department_id', department_id).order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
+      canManageInbox
+        ? adminClient.from('membership_interest_applications')
+            .select('id, confirmation_code, full_name, phone, email, community, interests, ems_cert_level, prior_experience, availability, daytime_coverage, work_schedule, involvement_level, training_interest, additional_info, contact_preference, status, reviewer_notes, created_at')
+            .eq('department_id', department_id).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
     ])
     deptConfig = deptRes.data
     feedbackItems = feedbackRes.data ?? []
+    membershipApplications = membershipRes.data ?? []
 
     const replierIds = [...new Set(feedbackItems.map((f: any) => f.replied_by_personnel_id).filter(Boolean))]
     if (replierIds.length > 0) {
@@ -249,6 +256,7 @@ export default async function InboxPage({
     ...(canManageInbox ? ['feedback'] : []),
     ...(publicSiteEnabled && canReviewPermits ? ['permits'] : []),
     ...(publicSiteEnabled && canManageInbox ? ['records'] : []),
+    ...(publicSiteEnabled && canManageInbox ? ['membership'] : []),
     ...(moduleMedical && canManageMedical ? ['restock'] : []),
   ]
   const initialTab = validTabs.includes(tab ?? '')
@@ -264,6 +272,7 @@ export default async function InboxPage({
       restockRequests={restockRequests}
       expiredLots={expiredLots}
       feedbackItems={feedbackItems}
+      membershipApplications={membershipApplications}
       memberName={`${me.first_name} ${me.last_name}`.trim()}
       initialTab={initialTab as any}
       canReviewPermits={canReviewPermits}

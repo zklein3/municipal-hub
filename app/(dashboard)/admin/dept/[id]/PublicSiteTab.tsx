@@ -114,14 +114,24 @@ export default function PublicSiteTab({
             </div>
             <p className="mt-1 text-xs text-zinc-400">Lowercase letters, numbers, and hyphens only. Auto-cleaned on save.</p>
             {siteUrl && (
-              <a
-                href={siteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 inline-block text-xs text-red-700 hover:underline font-medium"
-              >
-                View public site ↗
-              </a>
+              <div className="mt-1 flex items-center gap-3 flex-wrap">
+                <a
+                  href={siteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-red-700 hover:underline font-medium"
+                >
+                  View public site ↗
+                </a>
+                <a
+                  href={`/print/qr?type=join&code=${encodeURIComponent(slug)}&title=${encodeURIComponent('Join Our Department')}&subtitle=${encodeURIComponent('Scan to apply')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-red-700 hover:underline font-medium"
+                >
+                  Print Join QR (for flyer) ↗
+                </a>
+              </div>
             )}
           </div>
 

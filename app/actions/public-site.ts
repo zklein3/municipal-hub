@@ -892,6 +892,114 @@ export async function replyToPublicFeedback(formData: FormData) {
   return { success: true }
 }
 
+export async function submitMembershipInterest(formData: FormData) {
+  const adminClient = createAdminClient()
+
+  const department_id   = formData.get('department_id') as string
+  const full_name        = (formData.get('full_name') as string)?.trim()
+  const phone             = (formData.get('phone') as string)?.trim()
+  const email             = (formData.get('email') as string)?.trim() || null
+  const community         = (formData.get('community') as string)?.trim() || null
+  const interests         = formData.getAll('interests').map(v => v as string).filter(Boolean)
+  const ems_cert_level    = (formData.get('ems_cert_level') as string)?.trim() || null
+  const prior_experience  = formData.getAll('prior_experience').map(v => v as string).filter(Boolean)
+  const availability      = formData.getAll('availability').map(v => v as string).filter(Boolean)
+  const daytime_coverage  = (formData.get('daytime_coverage') as string) || null
+  const work_schedule     = (formData.get('work_schedule') as string)?.trim() || null
+  const involvement_level = formData.get('involvement_level') as string
+  const training_interest = formData.get('training_interest') as string
+  const additional_info   = (formData.get('additional_info') as string)?.trim() || null
+  const contact_preference = formData.get('contact_preference') as string
+
+  if (!department_id || !full_name || !phone || interests.length === 0 || availability.length === 0
+    || !involvement_level || !training_interest || !contact_preference) {
+    return { error: 'Please fill in all required fields.' }
+  }
+
+  if (email) {
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRx.test(email)) return { error: 'Please enter a valid email address.' }
+  }
+
+  if (!['phone', 'text', 'email'].includes(contact_preference)) return { error: 'Invalid contact preference.' }
+
+  const { data, error: dbErr } = await adminClient
+    .from('membership_interest_applications')
+    .insert({
+      department_id, full_name, phone, email, community,
+      interests, ems_cert_level, prior_experience,
+      availability, daytime_coverage, work_schedule, involvement_level,
+      training_interest, additional_info, contact_preference,
+    })
+    .select('confirmation_code')
+    .single()
+
+  if (dbErr) {
+    await logError(dbErr, 'public/join')
+    return { error: 'Something went wrong. Please try again.' }
+  }
+
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name')
+    .eq('id', department_id)
+    .single()
+
+  await logEvent({
+    log_type: 'user_report',
+    page: '/dept/join',
+    department_id,
+    message: [
+      `New membership interest application submitted.`,
+      `Name: ${full_name}`,
+      `Phone: ${phone}`,
+      email ? `Email: ${email}` : null,
+      community ? `Community: ${community}` : null,
+      `Department: ${dept?.name ?? department_id}`,
+      `Interested in: ${interests.join(', ')}`,
+      `Preferred contact: ${contact_preference}`,
+      `Confirmation code: ${data.confirmation_code}`,
+      `Review at: https://www.fireops7.com/inbox`,
+    ].filter(Boolean).join('\n'),
+    metadata: { confirmation_code: data.confirmation_code, department_id },
+  })
+
+  return { confirmationCode: data.confirmation_code }
+}
+
+export async function updateMembershipInterestStatus(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx || !ctx.departmentId) return { error: 'Unauthorized.' }
+  if (!(await hasPermission(ctx, 'manage_public_inbox'))) return { error: 'Unauthorized.' }
+
+  const application_id = formData.get('application_id') as string
+  const status          = formData.get('status') as string
+  const reviewer_notes  = (formData.get('reviewer_notes') as string)?.trim() || null
+
+  if (!['contacted', 'enrolled', 'not_interested'].includes(status)) return { error: 'Invalid status.' }
+
+  const { error: dbErr } = await adminClient
+    .from('membership_interest_applications')
+    .update({ status, reviewer_notes, updated_at: new Date().toISOString() })
+    .eq('id', application_id)
+    .eq('department_id', ctx.departmentId)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true }
+}
+
 export async function submitRecordRequest(formData: FormData) {
   const adminClient = createAdminClient()
 

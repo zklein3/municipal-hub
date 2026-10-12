@@ -6,12 +6,13 @@ import BurnPermitsTab from './BurnPermitsTab'
 import RecordRequestsTab from './RecordRequestsTab'
 import RestockTab, { type RestockRequest } from './RestockTab'
 import FeedbackTab from './FeedbackTab'
+import MembershipInterestTab, { type MembershipApplication } from './MembershipInterestTab'
 import IncidentSignaturePadModal from '../signatures/IncidentSignaturePadModal'
 import EventAttendanceSignaturePadModal from '../signatures/EventAttendanceSignaturePadModal'
 import HelpText from '@/components/HelpText'
 import { markMessagesRead } from '@/app/actions/personnel'
 
-type Tab = 'permits' | 'records' | 'signatures' | 'restock' | 'feedback' | 'messages'
+type Tab = 'permits' | 'records' | 'signatures' | 'restock' | 'feedback' | 'messages' | 'membership'
 
 type MessageRow = {
   id: string
@@ -67,6 +68,7 @@ export default function InboxClient({
   restockRequests,
   expiredLots,
   feedbackItems,
+  membershipApplications,
   memberName,
   initialTab,
   canReviewPermits,
@@ -86,6 +88,7 @@ export default function InboxClient({
   restockRequests: RestockRequest[]
   expiredLots: { supply_name: string; storeroom_name: string; quantity_remaining: number; expiration_date: string; lot_number: string | null; go_to_href: string }[]
   feedbackItems: any[]
+  membershipApplications: MembershipApplication[]
   memberName: string
   initialTab: Tab
   canReviewPermits: boolean
@@ -123,6 +126,7 @@ export default function InboxClient({
   const pendingPermits  = permits.filter(p => p.status === 'pending').length
   const pendingRequests = requests.filter(r => r.status === 'pending').length
   const newFeedback     = feedbackItems.filter(f => f.status === 'new').length
+  const newMembershipApplications = membershipApplications.filter(a => a.status === 'pending').length
 
   function handleSigned(sig_id: string) {
     setPendingSigs(prev => prev.filter(r => r.sig_id !== sig_id))
@@ -231,6 +235,25 @@ export default function InboxClient({
                 tab === 'feedback' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
               }`}>
                 {newFeedback}
+              </span>
+            )}
+          </button>
+        )}
+
+        {/* Membership Interest — manage_public_inbox */}
+        {publicSiteEnabled && canManageInbox && (
+          <button
+            onClick={() => setTab('membership')}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              tab === 'membership' ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'
+            }`}
+          >
+            Membership Interest
+            {newMembershipApplications > 0 && (
+              <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold leading-none ${
+                tab === 'membership' ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+              }`}>
+                {newMembershipApplications}
               </span>
             )}
           </button>
@@ -385,6 +408,10 @@ export default function InboxClient({
 
       {tab === 'records' && canManageInbox && (
         <RecordRequestsTab requests={requests} departmentTimezone={departmentTimezone} />
+      )}
+
+      {tab === 'membership' && canManageInbox && (
+        <MembershipInterestTab applications={membershipApplications} departmentTimezone={departmentTimezone} />
       )}
 
       {tab === 'restock' && canManageMedical && moduleMedical && (
