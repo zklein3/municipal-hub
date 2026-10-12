@@ -23,6 +23,8 @@ function PrintContent() {
     ? `${BASE_URL}/agility-test/${code}`
     : type === 'join'
     ? `${BASE_URL}/dept/${code}/join`
+    : type === 'site'
+    ? `${BASE_URL}/dept/${code}`
     : `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(code)}`
 
   const displayCode = type === 'checkin' ? null : code

@@ -144,12 +144,20 @@ export async function saveDeptInboxSettings(formData: FormData) {
   if (!(await hasPermission(ctx, 'manage_public_site'))) return { error: 'Unauthorized.' }
 
   const department_id          = ctx.departmentId
+  const public_phone       = (formData.get('public_phone') as string)?.trim() || null
+  const public_email       = (formData.get('public_email') as string)?.trim() || null
+  const public_address     = (formData.get('public_address') as string)?.trim() || null
+  const public_tagline     = (formData.get('public_tagline') as string)?.trim() || null
+  const public_about       = (formData.get('public_about') as string)?.trim() || null
   const burn_permit_county_info  = (formData.get('burn_permit_county_info') as string)?.trim() || null
   const burn_permit_restrictions = (formData.get('burn_permit_restrictions') as string)?.trim() || null
 
   const { error: dbErr } = await adminClient
     .from('departments')
-    .update({ burn_permit_county_info, burn_permit_restrictions })
+    .update({
+      public_phone, public_email, public_address, public_tagline, public_about,
+      burn_permit_county_info, burn_permit_restrictions,
+    })
     .eq('id', department_id)
 
   if (dbErr) {

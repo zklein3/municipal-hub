@@ -167,7 +167,7 @@ export default async function DeptAdminPage() {
         {publicSiteEnabled && perms.manage_public_site && (
           <HubCard
             title="Public Site"
-            description="Burn permits and public records inbox"
+            description="Public info, QR codes, burn permits, and records inbox"
             href="/dept-admin/public-inbox"
           />
         )}

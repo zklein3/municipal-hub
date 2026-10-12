@@ -503,7 +503,8 @@ export default function DeptSettingsClient({
           </span>
         </label>
         <p className="text-xs text-zinc-400 mt-2">
-          Content like your tagline, contact info, and about text is still set up by FireOps7 support — reach out once you've turned this on.
+          Once this is on, set up your tagline, contact info, about text, and printable QR codes under
+          Dept Admin → Public Site.
         </p>
       </div>
 
