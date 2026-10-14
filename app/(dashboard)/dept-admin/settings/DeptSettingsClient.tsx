@@ -266,6 +266,9 @@ export default function DeptSettingsClient({
               >
                 {linkCopied ? 'Copied!' : 'Copy Link'}
               </button>
+              <a href="/reports/hose-testing" className="text-xs font-medium text-red-700 hover:underline">
+                Hose Testing Reports
+              </a>
               <QrPrintLabel
                 type="hose-testing"
                 code={publicSlug}

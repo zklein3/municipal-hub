@@ -552,6 +552,12 @@ export default function HoseTestingClient({
                   {showAddHose ? 'Cancel' : `${pinToken ? '' : '🔒 '}+ Add Hose`}
                 </button>
               )}
+              {step === 'select' && (
+                <a href={`/hose-testing/${slug}/report`}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
+                  🔒 Reports
+                </a>
+              )}
               <button
                 onClick={() => {
                   if (step === 'manage') { setStep('select'); setEditingId(null); setEditError(null); return }

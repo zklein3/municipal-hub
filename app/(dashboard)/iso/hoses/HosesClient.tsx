@@ -204,6 +204,12 @@ export default function HosesClient({
           >
             Run Test Session
           </Link>
+          <Link
+            href="/reports/hose-testing"
+            className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition-colors shadow-sm"
+          >
+            Reports
+          </Link>
         </div>
       )}
 
