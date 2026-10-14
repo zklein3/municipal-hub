@@ -273,6 +273,44 @@ export async function editPublicHose(slug: string, hoseId: string, formData: For
   return { success: true, hose }
 }
 
+// Every hose in every status (in service, out of service, retired) with its latest
+// test result, for the Manage Hoses list and its status filter. The testing list
+// itself still only shows in-service hose (listPublicHoses).
+export type ManagedHose = {
+  id: string
+  hose_identifier: string
+  hose_type: string
+  diameter_in: number
+  length_ft: number
+  status: string
+  last_test_date: string | null
+  last_test_passed: boolean | null
+}
+
+export async function listHosesForManagement(slug: string, pinToken?: string | null): Promise<{ hoses: ManagedHose[] } | { error: string; pinRequired?: true }> {
+  const dept = await resolveDeptBySlug(slug)
+  if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }
+  if (!(await canManageHoses(dept.id, pinToken))) return { error: PIN_MESSAGE, pinRequired: true as const }
+
+  const adminClient = createAdminClient()
+  const [{ data: hoses }, { data: tests }] = await Promise.all([
+    adminClient.from('hoses').select('id, hose_identifier, hose_type, diameter_in, length_ft, status').eq('department_id', dept.id).order('hose_identifier'),
+    adminClient.from('hose_tests').select('hose_id, test_date, passed').eq('department_id', dept.id)
+      .order('test_date', { ascending: true }).order('created_at', { ascending: true }),
+  ])
+  const latest: Record<string, { test_date: string; passed: boolean }> = {}
+  for (const t of tests ?? []) latest[t.hose_id] = { test_date: t.test_date, passed: t.passed }
+
+  return {
+    hoses: (hoses ?? []).map(h => ({
+      ...h,
+      diameter_in: Number(h.diameter_in),
+      last_test_date: latest[h.id]?.test_date ?? null,
+      last_test_passed: latest[h.id]?.passed ?? null,
+    })),
+  }
+}
+
 export async function setPublicHoseStatus(slug: string, hoseId: string, status: 'in_service' | 'out_of_service' | 'retired', pinToken?: string | null) {
   const dept = await resolveDeptBySlug(slug)
   if (!dept || !dept.hose_testing_enabled) return { error: 'Hose testing is not currently enabled.' }

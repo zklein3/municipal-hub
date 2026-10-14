@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createHose, updateHose, addHoseTest, removeHose, updateHoseTest, deleteHoseTest, setHoseStatus } from '@/app/actions/iso'
+import { matchesHoseSearch } from '@/lib/hose-search'
 import HelpText from '@/components/HelpText'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -78,7 +79,8 @@ export default function HosesClient({
   const [testError, setTestError] = useState<string | null>(null)
   const [testPassed, setTestPassed] = useState('true')
   const [removingId, setRemovingId] = useState<string | null>(null)
-  const [attentionOnly, setAttentionOnly] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'in_service' | 'attention' | 'retired'>('all')
+  const [search, setSearch] = useState('')
   const [returningId, setReturningId] = useState<string | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
 
@@ -178,7 +180,16 @@ export default function HosesClient({
   // Needs attention: out of service, or still in service with a failing latest test.
   const needsAttention = (h: Hose) => h.status === 'out_of_service' || (h.status === 'in_service' && !!h.tests[0] && !h.tests[0].passed)
   const attentionCount = hoses.filter(needsAttention).length
-  const visibleHoses = attentionOnly ? hoses.filter(needsAttention) : hoses
+  const retiredCount = hoses.filter(h => h.status === 'retired').length
+  const activeCount = hoses.length - retiredCount
+  // "All" leaves retired hose out; it has its own tab so history stays searchable.
+  const visibleHoses = hoses
+    .filter(h =>
+      filter === 'all' ? h.status !== 'retired'
+      : filter === 'in_service' ? h.status === 'in_service'
+      : filter === 'attention' ? needsAttention(h)
+      : h.status === 'retired')
+    .filter(h => matchesHoseSearch(h.hose_identifier, search))
 
   return (
     <div className="max-w-3xl">
@@ -283,27 +294,41 @@ export default function HosesClient({
       )}
 
       {hoses.length > 0 && (
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={() => setAttentionOnly(false)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${!attentionOnly ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
-          >
-            All ({hoses.length})
-          </button>
-          <button
-            onClick={() => setAttentionOnly(true)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${attentionOnly ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
-          >
-            Failed / Out of Service ({attentionCount})
-          </button>
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {([
+              ['all', `All (${activeCount})`],
+              ['in_service', `In Service (${inService})`],
+              ['attention', `Failed / Out of Service (${attentionCount})`],
+              ['retired', `Retired (${retiredCount})`],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${filter === key ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search hose ID..."
+            className="w-full mb-3 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+          {filter === 'retired' && (
+            <p className="mb-3 text-xs text-zinc-500">Retired hose is kept for history. Its test records stay on file; Restore puts it back in service.</p>
+          )}
+        </>
       )}
       {statusError && (
         <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{statusError}</div>
       )}
-      {attentionOnly && visibleHoses.length === 0 && (
+      {hoses.length > 0 && visibleHoses.length === 0 && (
         <div className="rounded-xl bg-white border border-zinc-200 p-6 text-center text-sm text-zinc-400 mb-3">
-          No failed or out-of-service hoses.
+          {search ? <>No hoses match &quot;{search}&quot;.</> : 'No hoses in this list.'}
         </div>
       )}
 
@@ -409,7 +434,7 @@ export default function HosesClient({
                     <div className="flex items-center gap-2 shrink-0">
                       {isOfficerOrAbove && (
                         <>
-                          {hose.status === 'out_of_service' && (
+                          {(hose.status === 'out_of_service' || hose.status === 'retired') && (
                             returningId === hose.id ? (
                               <>
                                 <span className="text-xs text-zinc-600">Return {hose.hose_identifier} to service?</span>
@@ -420,13 +445,13 @@ export default function HosesClient({
                               </>
                             ) : (
                               <button onClick={() => setReturningId(hose.id)} className="text-xs font-semibold text-green-700 hover:underline">
-                                Return to service
+                                {hose.status === 'retired' ? 'Restore' : 'Return to service'}
                               </button>
                             )
                           )}
                           <button onClick={() => { setEditingId(hose.id); setEditError(null) }} className="text-xs text-zinc-500 hover:text-zinc-700 font-medium">Edit</button>
                           <button onClick={() => { setLoggingTestId(isLoggingTest ? null : hose.id); setExpandedId(hose.id); setTestError(null); setTestPassed('true') }} className="text-xs text-red-700 hover:underline font-medium">Log Test</button>
-                          {removingId === hose.id ? (
+                          {hose.status === 'retired' ? null : removingId === hose.id ? (
                             <>
                               <button onClick={() => { startTransition(async () => { await removeHose(hose.id); setRemovingId(null); router.refresh() }) }} className="text-xs font-semibold text-red-600 hover:text-red-800">Confirm retire</button>
                               <button onClick={() => setRemovingId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>

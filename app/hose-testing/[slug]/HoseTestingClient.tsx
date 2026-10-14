@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { addPublicHose, claimHose, claimHoses, editPublicHose, releaseHose, releaseHoses, setPublicHoseStatus } from '@/app/actions/hose-testing'
+import { addPublicHose, claimHose, claimHoses, releaseHose, releaseHoses } from '@/app/actions/hose-testing'
 import { startHoseTestSession, openHoseTestSession, type OpenedSession, type OpenDraftSummary } from '@/app/actions/hose-test-sessions'
 import { unlockHoseManagement } from '@/app/actions/hose-testing-pin'
+import ManageHosesPanel from './ManageHosesPanel'
 import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
 import { matchesHoseSearch } from '@/lib/hose-search'
@@ -90,10 +91,6 @@ export default function HoseTestingClient({
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editError, setEditError] = useState<string | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [retiringId, setRetiringId] = useState<string | null>(null)
 
   // Manually forced back into the testing queue from Manage Hoses, bypassing
   // the 30-day recently-tested exclusion for this hose this session.
@@ -178,7 +175,7 @@ export default function HoseTestingClient({
     const onPop = () => {
       history.pushState({ hoseTesting: true }, '')
       if (stepRef.current === 'manage') {
-        setStep('select'); setEditingId(null); setEditError(null)
+        setStep('select')
       }
     }
     window.addEventListener('popstate', onPop)
@@ -425,36 +422,20 @@ export default function HoseTestingClient({
     setShowAddHose(false)
   }
 
-  async function handleEditHose(hoseId: string, formData: FormData) {
-    setEditError(null)
-    setEditing(true)
-    formData.set('pin_token', pinToken ?? '')
-    const result = await editPublicHose(slug, hoseId, formData)
-    if (result?.pinRequired) { setEditing(false); handlePinRequired(); return }
-    if (result?.error || !result.hose) {
-      setEditError(result?.error ?? 'Failed to update hose.')
-      setEditing(false)
-      return
-    }
-    const updated = result.hose
-    setHoses(prev => [...prev.filter(h => h.id !== hoseId), updated].sort((a, b) => a.hose_identifier.localeCompare(b.hose_identifier)))
-    setEditing(false)
-    setEditingId(null)
+  // Manage Hoses changed a hose's details or status: keep the testing list in
+  // step (only in-service hose is testable).
+  function handleHoseChanged(h: Hose) {
+    setHoses(prev => {
+      const rest = prev.filter(x => x.id !== h.id)
+      return h.status === 'in_service'
+        ? [...rest, h].sort((a, b) => a.hose_identifier.localeCompare(b.hose_identifier))
+        : rest
+    })
+    if (h.status !== 'in_service') setSelected(prev => { const next = new Set(prev); next.delete(h.id); return next })
   }
 
   function handleForceInclude(hoseId: string) {
     setForcedIds(prev => new Set(prev).add(hoseId))
-  }
-
-  async function handleRetire(hoseId: string) {
-    if (!confirm('Take this hose out of service? It will no longer show up here for testing.')) return
-    setRetiringId(hoseId)
-    const result = await setPublicHoseStatus(slug, hoseId, 'out_of_service', pinToken)
-    setRetiringId(null)
-    if (result?.pinRequired) { handlePinRequired(); return }
-    if (result?.error) { setError(result.error); return }
-    setHoses(prev => prev.filter(h => h.id !== hoseId))
-    setSelected(prev => { const next = new Set(prev); next.delete(hoseId); return next })
   }
 
   return (
@@ -560,8 +541,8 @@ export default function HoseTestingClient({
               )}
               <button
                 onClick={() => {
-                  if (step === 'manage') { setStep('select'); setEditingId(null); setEditError(null); return }
-                  requireUnlock(() => { setStep('manage'); setEditingId(null); setEditError(null) })
+                  if (step === 'manage') { setStep('select'); return }
+                  requireUnlock(() => setStep('manage'))
                 }}
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
               >
@@ -598,6 +579,18 @@ export default function HoseTestingClient({
             </div>
           )}
 
+          {step === 'manage' ? (
+            <ManageHosesPanel
+              slug={slug}
+              pinToken={pinToken}
+              hoseTypes={HOSE_TYPES}
+              recentlyTestedIds={recentlyTestedIds}
+              forcedIds={forcedIds}
+              onForceInclude={handleForceInclude}
+              onPinRequired={handlePinRequired}
+              onHoseChanged={handleHoseChanged}
+            />
+          ) : (<>
           {visibleHoses.length > 0 && (
             <div className="relative mb-3">
               <input
@@ -715,72 +708,7 @@ export default function HoseTestingClient({
                   </h3>
                   <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden divide-y divide-zinc-100">
                     {group.hoses.map(hose => (
-                      step === 'manage' && editingId === hose.id ? (
-                        <form
-                          key={hose.id}
-                          action={(formData) => handleEditHose(hose.id, formData)}
-                          className="px-4 py-3 flex flex-col gap-2 bg-zinc-50"
-                        >
-                          {editError && <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{editError}</div>}
-                          <div className="flex gap-2">
-                            <input name="hose_identifier" type="text" required defaultValue={hose.hose_identifier}
-                              className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm font-mono focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            <select name="hose_type" required defaultValue={hose.hose_type}
-                              className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                              {HOSE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
-                          </div>
-                          <div className="flex gap-2">
-                            <input name="diameter_in" type="number" step="0.25" min="0.5" required defaultValue={hose.diameter_in}
-                              placeholder="Diameter"
-                              className="w-24 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            <input name="length_ft" type="number" min="0" required defaultValue={hose.length_ft}
-                              placeholder="Length (ft)"
-                              className="w-28 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            <button type="submit" disabled={editing}
-                              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                              {editing ? 'Saving...' : 'Save'}
-                            </button>
-                            <button type="button" onClick={() => { setEditingId(null); setEditError(null) }}
-                              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50">
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      ) : step === 'manage' ? (
-                        <div key={hose.id} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50">
-                          <div className="min-w-0 flex-1">
-                            <span className="font-mono font-semibold text-zinc-900">{hose.hose_identifier}</span>
-                            <span className="text-xs text-zinc-400 ml-2">{hose.length_ft} ft · {hose.hose_type}</span>
-                            {recentlyTestedIds.has(hose.id) && !forcedIds.has(hose.id) && (
-                              <span className="text-xs text-amber-600 ml-2">· tested recently</span>
-                            )}
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            {recentlyTestedIds.has(hose.id) && !forcedIds.has(hose.id) && (
-                              <button
-                                onClick={() => handleForceInclude(hose.id)}
-                                className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-                              >
-                                Force Test
-                              </button>
-                            )}
-                            <button
-                              onClick={() => { setEditingId(hose.id); setEditError(null) }}
-                              className="text-xs font-semibold text-zinc-500 hover:text-red-700"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleRetire(hose.id)}
-                              disabled={retiringId === hose.id}
-                              className="text-xs font-semibold text-zinc-400 hover:text-red-700 disabled:opacity-50"
-                            >
-                              {retiringId === hose.id ? 'Saving...' : 'Out of Service'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : hose.id in lockedByOthers ? (
+                      hose.id in lockedByOthers ? (
                         <div key={hose.id} className="flex items-center gap-3 px-4 py-3 bg-zinc-50">
                           <input type="checkbox" checked={false} disabled className="w-4 h-4 rounded border-zinc-300" />
                           <div className="min-w-0 flex-1">
@@ -822,6 +750,7 @@ export default function HoseTestingClient({
               {loading ? 'Starting…' : `Start Test with ${selected.size} Hose${selected.size !== 1 ? 's' : ''} →`}
             </button>
           )}
+          </>)}
         </>
       )}
 
