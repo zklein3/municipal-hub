@@ -776,7 +776,7 @@ export default function HoseTestingClient({
                               disabled={retiringId === hose.id}
                               className="text-xs font-semibold text-zinc-400 hover:text-red-700 disabled:opacity-50"
                             >
-                              {retiringId === hose.id ? 'Saving...' : 'Deactivate'}
+                              {retiringId === hose.id ? 'Saving...' : 'Out of Service'}
                             </button>
                           </div>
                         </div>

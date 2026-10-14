@@ -428,11 +428,11 @@ export default function HosesClient({
                           <button onClick={() => { setLoggingTestId(isLoggingTest ? null : hose.id); setExpandedId(hose.id); setTestError(null); setTestPassed('true') }} className="text-xs text-red-700 hover:underline font-medium">Log Test</button>
                           {removingId === hose.id ? (
                             <>
-                              <button onClick={() => { startTransition(async () => { await removeHose(hose.id); setRemovingId(null); router.refresh() }) }} className="text-xs font-semibold text-red-600 hover:text-red-800">Confirm</button>
+                              <button onClick={() => { startTransition(async () => { await removeHose(hose.id); setRemovingId(null); router.refresh() }) }} className="text-xs font-semibold text-red-600 hover:text-red-800">Confirm retire</button>
                               <button onClick={() => setRemovingId(null)} className="text-xs text-zinc-400 hover:text-zinc-600">Cancel</button>
                             </>
                           ) : (
-                            <button onClick={() => setRemovingId(hose.id)} className="text-xs text-zinc-400 hover:text-red-600 font-medium">Remove</button>
+                            <button onClick={() => setRemovingId(hose.id)} title="Retire this hose. It leaves the lists and reports; its test history is kept." className="text-xs text-zinc-400 hover:text-red-600 font-medium">Retire</button>
                           )}
                         </>
                       )}
