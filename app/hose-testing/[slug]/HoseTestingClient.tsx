@@ -102,10 +102,13 @@ export default function HoseTestingClient({
   // to claims already made, instead of orphaning them under a fresh random ID.
   const [sessionToken] = useState<string>(() => {
     if (typeof window === 'undefined') return crypto.randomUUID()
-    const existing = sessionStorage.getItem(SESSION_TOKEN_KEY)
-    if (existing) return existing
+    // localStorage, not sessionStorage: a relaunched tab/home-screen app starts
+    // with empty sessionStorage, which orphaned the tester's own locks under a
+    // dead token and showed their hoses as "in progress" by someone else.
+    const existing = localStorage.getItem(SESSION_TOKEN_KEY) ?? sessionStorage.getItem(SESSION_TOKEN_KEY)
+    if (existing) { localStorage.setItem(SESSION_TOKEN_KEY, existing); return existing }
     const fresh = crypto.randomUUID()
-    sessionStorage.setItem(SESSION_TOKEN_KEY, fresh)
+    localStorage.setItem(SESSION_TOKEN_KEY, fresh)
     return fresh
   })
   // Locks held under this browser's own token are not "someone else's" — after a
