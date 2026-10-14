@@ -162,6 +162,23 @@ export default function HoseTestingClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Browser/phone Back must not leave this page mid-test. A sentinel history
+  // entry absorbs each Back press: from Manage it returns to the testing list,
+  // from the draft test it stays put (the draft has its own Discard/Finish).
+  const stepRef = useRef(step)
+  stepRef.current = step
+  useEffect(() => {
+    history.pushState({ hoseTesting: true }, '')
+    const onPop = () => {
+      history.pushState({ hoseTesting: true }, '')
+      if (stepRef.current === 'manage') {
+        setStep('select'); setEditingId(null); setEditError(null)
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
   // Live lock state — Realtime instead of polling, so an unattended tab costs
   // an idle socket instead of a query every 5s (see 2026-08-13 incident: a
   // forgotten tab polled overnight and drained the Supabase Disk IO budget).
