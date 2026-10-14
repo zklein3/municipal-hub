@@ -191,6 +191,36 @@ export async function startHoseTestSession(
   return { session: await buildOpened(session.id, session, []) }
 }
 
+export type OpenDraftSummary = { id: string; testerName: string; testDate: string; hoseCount: number; passedCount: number; failedCount: number }
+
+// Unfinished (draft) tests for a department, so a tester who lost their browser
+// state (cleared storage, different device, relaunch) can find and resume one.
+export async function listOpenHoseDrafts(slug: string | null): Promise<OpenDraftSummary[]> {
+  const access = await resolveAccess(slug)
+  if ('error' in access) return []
+  const adminClient = createAdminClient()
+  const { data: drafts } = await adminClient
+    .from('hose_test_sessions')
+    .select('id, tester_name, test_date')
+    .eq('department_id', access.departmentId)
+    .eq('status', 'draft')
+    .order('created_at', { ascending: false })
+  const ids = (drafts ?? []).map(d => d.id)
+  if (!ids.length) return []
+  const { data: items } = await adminClient.from('hose_test_session_items').select('session_id, result').in('session_id', ids)
+  return (drafts ?? []).map(d => {
+    const mine = (items ?? []).filter(i => i.session_id === d.id)
+    return {
+      id: d.id,
+      testerName: d.tester_name ?? '',
+      testDate: d.test_date,
+      hoseCount: mine.length,
+      passedCount: mine.filter(i => i.result === 'pass').length,
+      failedCount: mine.filter(i => i.result === 'fail').length,
+    }
+  })
+}
+
 // Opens a draft and takes over its hose locks for this browser, so a draft
 // started on one device (or an expired tab) can be picked up from another.
 export async function openHoseTestSession(

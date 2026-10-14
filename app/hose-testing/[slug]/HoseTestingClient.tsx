@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { addPublicHose, claimHose, claimHoses, editPublicHose, releaseHose, releaseHoses, setPublicHoseStatus } from '@/app/actions/hose-testing'
-import { startHoseTestSession, openHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
+import { startHoseTestSession, openHoseTestSession, type OpenedSession, type OpenDraftSummary } from '@/app/actions/hose-test-sessions'
 import { unlockHoseManagement } from '@/app/actions/hose-testing-pin'
 import HoseTestDraftScreen, { type FinishedInfo } from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
@@ -38,13 +38,16 @@ export default function HoseTestingClient({
   initialHoses,
   initialLocks,
   initialRecentlyTestedIds,
+  openDrafts,
 }: {
   slug: string
   departmentId: string
   initialHoses: Hose[]
   initialLocks: Lock[]
   initialRecentlyTestedIds: string[]
+  openDrafts: OpenDraftSummary[]
 }) {
+  const [drafts, setDrafts] = useState<OpenDraftSummary[]>(openDrafts)
   // Local calendar date, not UTC — toISOString() shifts to UTC first, which
   // rolls the date to "tomorrow" in the evening in any timezone behind UTC
   // (e.g. Central after ~6-7pm). Found via the same bug in the agility test
@@ -331,7 +334,25 @@ export default function HoseTestingClient({
     setStep('draft')
   }
 
+  async function handleResumeDraft(id: string) {
+    setError(null)
+    setLoading(true)
+    const res = await openHoseTestSession(slug, id, sessionToken)
+    setLoading(false)
+    if ('error' in res) { setError(res.error); return }
+    if (res.session.status !== 'draft') {
+      setDrafts(prev => prev.filter(d => d.id !== id))
+      setError('That test has already been finished.')
+      return
+    }
+    localStorage.setItem(draftKey(slug), res.session.id)
+    setDraft(res.session)
+    setStep('draft')
+  }
+
   function leaveDraft() {
+    const doneId = draft?.id
+    if (doneId) setDrafts(prev => prev.filter(d => d.id !== doneId))
     setDraft(null)
     setStep('select')
   }
@@ -443,6 +464,27 @@ export default function HoseTestingClient({
       )}
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {step === 'select' && drafts.length > 0 && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 mb-5">
+          <h2 className="text-sm font-semibold text-amber-900 mb-1">Open tests ({drafts.length})</h2>
+          <p className="text-xs text-amber-800 mb-3">Started but not finished. Tap Resume to pick up where it left off, on any device.</p>
+          <div className="flex flex-col gap-2">
+            {drafts.map(d => (
+              <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-amber-200 px-3 py-2">
+                <span className="text-xs text-zinc-700">
+                  <span className="font-semibold">{d.testerName || 'Unknown'}</span>
+                  <span className="text-zinc-400 ml-2">{d.testDate} · {d.hoseCount} hose{d.hoseCount !== 1 ? 's' : ''} · {d.passedCount} pass, {d.failedCount} fail</span>
+                </span>
+                <button onClick={() => handleResumeDraft(d.id)} disabled={loading}
+                  className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                  Resume
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Test parameters — set before selecting; once a test starts they live on the draft screen */}

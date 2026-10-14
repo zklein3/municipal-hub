@@ -1,5 +1,6 @@
 import type { Viewport } from 'next'
 import { getPublicHoseTestingContext, listPublicHoses, getHoseTestingLiveState } from '@/app/actions/hose-testing'
+import { listOpenHoseDrafts } from '@/app/actions/hose-test-sessions'
 import HoseTestingClient from './HoseTestingClient'
 import PublicFeedbackButton from '@/components/PublicFeedbackButton'
 
@@ -29,9 +30,10 @@ export default async function HoseTestingPage({ params }: { params: Promise<{ sl
     )
   }
 
-  const [hoses, { locks, recentlyTestedHoseIds }] = await Promise.all([
+  const [hoses, { locks, recentlyTestedHoseIds }, openDrafts] = await Promise.all([
     listPublicHoses(slug),
     getHoseTestingLiveState(slug),
+    listOpenHoseDrafts(slug),
   ])
 
   return (
@@ -57,6 +59,7 @@ export default async function HoseTestingPage({ params }: { params: Promise<{ sl
           initialHoses={hoses}
           initialLocks={locks}
           initialRecentlyTestedIds={recentlyTestedHoseIds}
+          openDrafts={openDrafts}
         />
       </main>
       <PublicFeedbackButton slug={slug} />
