@@ -148,6 +148,41 @@ export async function releaseHoseInApp(hoseId: string, sessionToken: string) {
   return { success: true }
 }
 
+// Bulk version of forceReleaseHoseInApp -- unlocks many hoses in one call.
+export async function forceReleaseHosesInApp(hoseIds: string[]) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+  if (!hoseIds.length) return { success: true, cleared: 0 }
+
+  await createAdminClient()
+    .from('hose_testing_locks')
+    .delete()
+    .eq('department_id', ctx.department_id)
+    .in('hose_id', hoseIds)
+
+  return { success: true, cleared: hoseIds.length }
+}
+
+// Hands someone else's selection to the caller's own session in one step, so the
+// hose is never left unselected in between (Clear + re-select leaves a gap, and
+// clearing also unticks it on the other tester's screen).
+export async function takeOverHoseInApp(hoseId: string, sessionToken: string, testerName: string) {
+  const ctx = await getContext()
+  if (!ctx?.isOfficerOrAbove || !ctx.department_id) return { error: 'Unauthorized' }
+
+  const { error: dbErr } = await createAdminClient()
+    .from('hose_testing_locks')
+    .upsert(
+      { department_id: ctx.department_id, hose_id: hoseId, session_token: sessionToken, tester_name: testerName || null, created_at: new Date().toISOString() },
+      { onConflict: 'hose_id' }
+    )
+  if (dbErr) {
+    await logError(dbErr.message, 'takeOverHoseInApp', { personnel_id: ctx.me.id, metadata: { hose_id: hoseId } })
+    return { error: dbErr.message }
+  }
+  return { success: true }
+}
+
 // Clears someone else's lock regardless of session_token -- for when the
 // original tester (public or in-app) left without finishing: device died,
 // walked away, closed the tab without releasing. Without this the only way

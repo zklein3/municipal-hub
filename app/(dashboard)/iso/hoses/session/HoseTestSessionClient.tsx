@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { claimHoseInApp, claimHosesInApp, releaseHoseInApp, releaseHosesInApp, forceReleaseHoseInApp, releaseHeldSelection } from '@/app/actions/iso'
+import { forceReleaseHosesInApp, takeOverHoseInApp,claimHoseInApp,claimHosesInApp, releaseHoseInApp, releaseHosesInApp, forceReleaseHoseInApp, releaseHeldSelection } from '@/app/actions/iso'
 import { startHoseTestSession, openHoseTestSession, abandonHoseTestSession, type OpenedSession } from '@/app/actions/hose-test-sessions'
 import HoseTestDraftScreen from '@/components/HoseTestDraftScreen'
 import { createClient } from '@/lib/supabase/client'
@@ -54,7 +54,13 @@ export default function HoseTestSessionClient({
   const [held, setHeld] = useState<HeldSelection[]>(heldSelections)
   const [clearingToken, setClearingToken] = useState<string | null>(null)
   const [selectingAll, setSelectingAll] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Selections this browser already made (reload, relaunch) stay selected
+  // instead of being thrown away, so a half-built test isn't lost.
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    const token = localStorage.getItem('fireops7_hose_testing_session_token_inapp') ?? sessionStorage.getItem('fireops7_hose_testing_session_token_inapp')
+    return new Set(initialLocks.filter(l => l.session_token === token).map(l => l.hose_id))
+  })
   const [search, setSearch] = useState('')
   const [sizeFilter, setSizeFilter] = useState<number | null>(null)
 
@@ -74,10 +80,10 @@ export default function HoseTestSessionClient({
   // made, instead of orphaning them under a fresh random ID.
   const [sessionToken] = useState<string>(() => {
     if (typeof window === 'undefined') return crypto.randomUUID()
-    const existing = sessionStorage.getItem(SESSION_TOKEN_KEY)
-    if (existing) return existing
+    const existing = localStorage.getItem(SESSION_TOKEN_KEY) ?? sessionStorage.getItem(SESSION_TOKEN_KEY)
+    if (existing) { localStorage.setItem(SESSION_TOKEN_KEY, existing); return existing }
     const fresh = crypto.randomUUID()
-    sessionStorage.setItem(SESSION_TOKEN_KEY, fresh)
+    localStorage.setItem(SESSION_TOKEN_KEY, fresh)
     return fresh
   })
   const [lockedByOthers, setLockedByOthers] = useState<Record<string, string | null>>(() =>
@@ -153,13 +159,11 @@ export default function HoseTestSessionClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId])
 
-  // A fresh page load starts with nothing selected, so this browser's own
-  // leftover selection locks (not part of an open test) are released instead of
-  // blocking other testers for 30 minutes.
+  // This browser's own locks from before a reload are adopted into `selected`
+  // above (not released), so drop them from the "held by someone else" panel.
   useEffect(() => {
     if (!initialLocks.some(l => l.session_token === sessionToken)) return
     setHeld(prev => prev.filter(g => g.sessionToken !== sessionToken))
-    releaseHeldSelection(sessionToken)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -170,6 +174,31 @@ export default function HoseTestSessionClient({
     setClearingId(hoseId)
     await forceReleaseHoseInApp(hoseId)
     setClearingId(null)
+  }
+
+  async function handleUnlockAll() {
+    const ids = hoses
+      .filter(h => sizeFilter === null || h.diameter_in === sizeFilter)
+      .filter(h => matchesHoseSearch(h.hose_identifier, search))
+      .filter(h => h.id in lockedByOthers)
+      .map(h => h.id)
+    if (!ids.length) return
+    if (!confirm(`Unlock ${ids.length} hose${ids.length === 1 ? '' : 's'}? Only do this if those testers left without finishing.`)) return
+    setClearingId('bulk')
+    const res = await forceReleaseHosesInApp(ids)
+    setClearingId(null)
+    if (res?.error) { setError(res.error); return }
+    setLockedByOthers(prev => { const next = { ...prev }; ids.forEach(id => delete next[id]); return next })
+  }
+
+  async function handleTakeOver(hoseId: string) {
+    if (!confirm('Take over this hose? It moves into your selection. Only do this if the other tester left it unfinished.')) return
+    setClearingId(hoseId)
+    const res = await takeOverHoseInApp(hoseId, sessionToken, testerName)
+    setClearingId(null)
+    if (res?.error) { setError(res.error); return }
+    setLockedByOthers(prev => { const next = { ...prev }; delete next[hoseId]; return next })
+    setSelected(prev => new Set(prev).add(hoseId))
   }
 
   async function toggleSelected(hoseId: string) {
@@ -375,9 +404,16 @@ export default function HoseTestSessionClient({
           <h2 className="text-sm font-semibold text-zinc-700">
             Select Hoses to Test — {selected.size}/{hoses.length} selected
           </h2>
-          <button onClick={handleSelectAllToggle} disabled={selectingAll} className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-60">
-            {selectingAll ? 'Selecting…' : filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
-          </button>
+          <div className="flex items-center gap-4">
+            {filteredHoses.some(h => h.id in lockedByOthers) && (
+              <button onClick={handleUnlockAll} disabled={clearingId === 'bulk'} className="text-xs font-semibold text-amber-700 hover:text-amber-900 disabled:opacity-60">
+                {clearingId === 'bulk' ? 'Unlocking…' : `Unlock ${filteredHoses.filter(h => h.id in lockedByOthers).length} locked`}
+              </button>
+            )}
+            <button onClick={handleSelectAllToggle} disabled={selectingAll} className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-60">
+              {selectingAll ? 'Selecting…' : filteredHoses.length > 0 && filteredHoses.every(h => selected.has(h.id)) ? 'Select None' : 'Select All'}
+            </button>
+          </div>
         </div>
 
         <div className="relative mb-3">
@@ -461,11 +497,18 @@ export default function HoseTestSessionClient({
                           🔒 In progress{lockedByOthers[hose.id] ? ` — ${lockedByOthers[hose.id]}` : ''}
                         </span>
                         <button
+                          onClick={() => handleTakeOver(hose.id)}
+                          disabled={clearingId === hose.id}
+                          className="shrink-0 text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                        >
+                          Take over
+                        </button>
+                        <button
                           onClick={() => handleForceRelease(hose.id)}
                           disabled={clearingId === hose.id}
                           className="shrink-0 text-xs font-semibold text-zinc-400 hover:text-red-700 disabled:opacity-50"
                         >
-                          {clearingId === hose.id ? 'Clearing...' : 'Clear'}
+                          {clearingId === hose.id ? 'Unlocking...' : 'Unlock'}
                         </button>
                       </div>
                     ) : (
