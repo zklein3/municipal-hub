@@ -81,6 +81,7 @@ export default function HosesClient({
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'in_service' | 'attention' | 'retired'>('all')
   const [search, setSearch] = useState('')
+  const [sizeFilter, setSizeFilter] = useState<number | null>(null)
   const [returningId, setReturningId] = useState<string | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
 
@@ -180,6 +181,7 @@ export default function HosesClient({
   // Needs attention: out of service, or still in service with a failing latest test.
   const needsAttention = (h: Hose) => h.status === 'out_of_service' || (h.status === 'in_service' && !!h.tests[0] && !h.tests[0].passed)
   const attentionCount = hoses.filter(needsAttention).length
+  const uniqueSizes = [...new Set(hoses.map(h => Number(h.diameter_in)))].sort((a, b) => a - b)
   const retiredCount = hoses.filter(h => h.status === 'retired').length
   const activeCount = hoses.length - retiredCount
   // "All" leaves retired hose out; it has its own tab so history stays searchable.
@@ -189,6 +191,7 @@ export default function HosesClient({
       : filter === 'in_service' ? h.status === 'in_service'
       : filter === 'attention' ? needsAttention(h)
       : h.status === 'retired')
+    .filter(h => sizeFilter === null || Number(h.diameter_in) === sizeFilter)
     .filter(h => matchesHoseSearch(h.hose_identifier, search))
 
   return (
@@ -311,6 +314,19 @@ export default function HosesClient({
               </button>
             ))}
           </div>
+          {uniqueSizes.length > 1 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {([[null, 'All Sizes'], ...uniqueSizes.map(sz => [sz, `${sz}"`] as const)] as const).map(([sz, label]) => (
+                <button
+                  key={String(sz)}
+                  onClick={() => setSizeFilter(sz)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${sizeFilter === sz ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <input
             type="text"
             value={search}
