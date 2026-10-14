@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { HoseReportData, ResultRow, TestSessionReport, TestSessionSummary } from '@/lib/hose-report'
 
 // Presentational hose report, used by the dashboard page and the PIN-gated
@@ -7,6 +8,7 @@ import type { HoseReportData, ResultRow, TestSessionReport, TestSessionSummary }
 // (URL params in the dashboard, local state on the public page).
 
 export type ReportTab = 'total' | 'passfail' | 'tests'
+export type StatusFilter = 'all' | 'in_service' | 'attention' | 'retired'
 export type ReportNav = { report?: ReportTab; from?: string; to?: string; session?: string | null }
 
 function fmtDate(d: string) {
@@ -60,7 +62,57 @@ export default function HoseReportView({
   sessionReport: TestSessionReport | null
   onNavigate: (nav: ReportNav) => void
 }) {
-  const { total, passFail } = data
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sizeFilter, setSizeFilter] = useState<number | null>(null)
+
+  // "All" leaves retired hose out; it has its own filter so history stays reachable.
+  const keep = (r: { status: string; attention: boolean }) =>
+    statusFilter === 'all' ? r.status !== 'retired'
+    : statusFilter === 'in_service' ? r.status === 'in_service'
+    : statusFilter === 'attention' ? r.attention
+    : r.status === 'retired'
+
+  const allSizes = data.total.map(g => g.diameter_in)
+  const total = data.total
+    .filter(g => sizeFilter === null || g.diameter_in === sizeFilter)
+    .map(g => ({ ...g, hoses: g.hoses.filter(keep) }))
+    .filter(g => g.hoses.length > 0)
+  const passFail = data.passFail
+    .filter(g => sizeFilter === null || g.diameter_in === sizeFilter)
+    .map(g => ({ ...g, failed: g.failed.filter(keep), passed: g.passed.filter(keep), notTested: g.notTested.filter(keep) }))
+    .filter(g => g.failed.length + g.passed.length + g.notTested.length > 0)
+
+  const filterBar = (
+    <div className="print:hidden mb-4">
+      <div className="flex flex-wrap gap-2 mb-2">
+        {([
+          ['all', 'All'],
+          ['in_service', 'In Service'],
+          ['attention', 'Failed / Out of Service'],
+          ['retired', 'Retired'],
+        ] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setStatusFilter(key)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${statusFilter === key ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {allSizes.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {([[null, 'All Sizes'], ...allSizes.map(sz => [sz, `${sz}"`] as const)] as const).map(([sz, label]) => (
+            <button key={String(sz)} onClick={() => setSizeFilter(sz)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${sizeFilter === sz ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+  const filterNote = [
+    statusFilter === 'all' ? null : statusFilter === 'in_service' ? 'In service' : statusFilter === 'attention' ? 'Failed / out of service' : 'Retired',
+    sizeFilter === null ? null : `${sizeFilter}"`,
+  ].filter(Boolean).join(' · ')
   const inputCls = 'rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 bg-white'
   const tabCls = (active: boolean) =>
     `rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${active ? 'bg-red-700 text-white' : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`
@@ -98,15 +150,18 @@ export default function HoseReportView({
         <button onClick={() => onNavigate({ report: 'tests', session: null })} className={tabCls(report === 'tests')}>By Test</button>
       </div>
 
+      {(report === 'total' || report === 'passfail') && filterBar}
+
       {report === 'total' && (
         <>
+          {total.length === 0 && <p className="rounded-xl bg-white border border-zinc-200 p-6 text-sm text-zinc-500">No hoses match this filter.</p>}
           <p className="mb-3 text-sm font-medium text-zinc-700">
-            {totalCount} hoses total — {total.map(g => `${g.hoses.length} × ${g.diameter_in}"`).join(', ')}
+            {filterNote && <span className="text-zinc-500">{filterNote}: </span>}{totalCount} hoses — {total.map(g => `${g.hoses.length} × ${g.diameter_in}"`).join(', ')}
           </p>
           {total.map(g => (
             <section key={g.diameter_in} className="mb-5 rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden print:shadow-none print:break-inside-avoid">
               <h2 className="px-4 py-3 border-b border-zinc-100 text-sm font-semibold text-zinc-900">
-                {g.diameter_in}" hose — {g.hoses.length}
+                {g.diameter_in}&quot; hose — {g.hoses.length}
               </h2>
               <table className="w-full">
                 <thead className="bg-zinc-50">
@@ -147,13 +202,14 @@ export default function HoseReportView({
           </div>
 
           <p className="mb-3 text-sm font-medium text-zinc-700">
-            {pf.f} failed · {pf.p} passed · {pf.n} not tested
+            {filterNote && <span className="text-zinc-500">{filterNote}: </span>}{pf.f} failed · {pf.p} passed · {pf.n} not tested
           </p>
+          {passFail.length === 0 && <p className="rounded-xl bg-white border border-zinc-200 p-6 text-sm text-zinc-500">No hoses match this filter.</p>}
 
           {passFail.map(g => (
             <section key={g.diameter_in} className="mb-5 rounded-xl bg-white border border-zinc-200 shadow-sm overflow-hidden print:shadow-none">
               <h2 className="px-4 py-3 border-b border-zinc-200 bg-zinc-100 text-sm font-bold text-zinc-900">
-                {g.diameter_in}" hose
+                {g.diameter_in}&quot; hose
               </h2>
 
               <h3 className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-700 bg-red-50 border-b border-red-100">

@@ -8,6 +8,7 @@ export type TotalHoseRow = {
   length_ft: number
   hose_type: string
   status: string
+  attention: boolean
 }
 export type TotalSizeGroup = { diameter_in: number; hoses: TotalHoseRow[] }
 
@@ -19,6 +20,8 @@ export type ResultRow = {
   failure_reason: string | null
   tester: string | null
   retested: boolean
+  status: string
+  attention: boolean
 }
 export type PassFailSizeGroup = {
   diameter_in: number
@@ -77,7 +80,8 @@ export async function buildHoseReport(departmentId: string, dateFrom: string, da
       .order('created_at', { ascending: true }),
   ])
 
-  const hoses = (hosesRaw ?? []).filter(h => h.status !== 'retired')
+  // Retired hose is kept so the report view can offer a Retired filter for history.
+  const hoses = hosesRaw ?? []
   const tests = testsRaw ?? []
 
   const testerIds = [...new Set(tests.map(t => t.tested_by).filter(Boolean))] as string[]
@@ -94,19 +98,22 @@ export async function buildHoseReport(departmentId: string, dateFrom: string, da
     if (!t.passed) hadFailure.add(t.hose_id)
   }
 
-  const sizes = [...new Set(hoses.map(h => h.diameter_in))].sort((a, b) => a - b)
+  const sizes = [...new Set(hoses.map(h => Number(h.diameter_in)))].sort((a, b) => a - b)
+  // Same idea as the Dept Admin list: out of service, or in service with a failing latest test.
+  const attention = (h: (typeof hoses)[number]) =>
+    h.status === 'out_of_service' || (h.status === 'in_service' && !!latest[h.id] && !latest[h.id].passed)
 
   const total: TotalSizeGroup[] = sizes.map(d => ({
     diameter_in: d,
     hoses: hoses
-      .filter(h => h.diameter_in === d)
-      .map(h => ({ hose_identifier: h.hose_identifier, length_ft: h.length_ft, hose_type: h.hose_type, status: h.status }))
+      .filter(h => Number(h.diameter_in) === d)
+      .map(h => ({ hose_identifier: h.hose_identifier, length_ft: h.length_ft, hose_type: h.hose_type, status: h.status, attention: attention(h) }))
       .sort(byIdentifier),
   }))
 
   const passFail: PassFailSizeGroup[] = sizes.map(d => {
     const group: PassFailSizeGroup = { diameter_in: d, failed: [], passed: [], notTested: [] }
-    for (const h of hoses.filter(x => x.diameter_in === d)) {
+    for (const h of hoses.filter(x => Number(x.diameter_in) === d)) {
       const l = latest[h.id]
       const row: ResultRow = {
         hose_identifier: h.hose_identifier,
@@ -116,6 +123,8 @@ export async function buildHoseReport(departmentId: string, dateFrom: string, da
         failure_reason: l && !l.passed ? l.failure_reason : null,
         tester: l ? (l.tested_by ? (testerMap[l.tested_by] ?? null) : (l.tested_by_name ?? null)) : null,
         retested: !!l?.passed && hadFailure.has(h.id),
+        status: h.status,
+        attention: attention(h),
       }
       if (!l) { if (h.status === 'in_service') group.notTested.push(row) }
       else if (l.passed) group.passed.push(row)
