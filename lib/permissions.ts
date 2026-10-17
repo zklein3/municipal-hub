@@ -68,6 +68,45 @@ export const getPermissionSnapshot = cache(async (ctx: CurrentDepartmentContext)
   return merged
 })
 
+// Resolves every active member of a department at once (one query for members, one for
+// groups) using the same group-over-legacy merge as getPermissionSnapshot. Used to decide
+// who is eligible to receive notifications. Keyed by personnel_id.
+export async function resolveDepartmentPermissions(
+  departmentId: string,
+): Promise<Map<string, { deptPersonnelId: string; snapshot: PermissionSnapshot }>> {
+  const adminClient = createAdminClient()
+  const { data: members } = await adminClient
+    .from('department_personnel')
+    .select('id, personnel_id, system_role, permission_group_id')
+    .eq('department_id', departmentId)
+    .eq('active', true)
+
+  const groupIds = [...new Set((members ?? []).map(m => m.permission_group_id).filter(Boolean))] as string[]
+  const { data: groups } = groupIds.length
+    ? await adminClient.from('department_permission_groups').select('id, permissions, active').in('id', groupIds)
+    : { data: [] as { id: string; permissions: Record<string, boolean>; active: boolean }[] }
+  const groupMap = new Map((groups ?? []).map(g => [g.id, g]))
+
+  const out = new Map<string, { deptPersonnelId: string; snapshot: PermissionSnapshot }>()
+  for (const m of members ?? []) {
+    const snapshot = legacySnapshot(m.system_role)
+    const group = m.permission_group_id ? groupMap.get(m.permission_group_id) : null
+    if (group?.active) {
+      for (const key of Object.keys(snapshot) as PermissionKey[]) {
+        if (key in group.permissions) snapshot[key] = !!group.permissions[key]
+      }
+    }
+    out.set(m.personnel_id, { deptPersonnelId: m.id, snapshot })
+  }
+  return out
+}
+
+// personnel_ids in the department who currently hold `key` via their permission group.
+export async function getPermissionHolders(departmentId: string, key: PermissionKey): Promise<Set<string>> {
+  const all = await resolveDepartmentPermissions(departmentId)
+  return new Set([...all].filter(([, v]) => v.snapshot[key]).map(([id]) => id))
+}
+
 export function checkPermission(snapshot: PermissionSnapshot, key: PermissionKey): boolean {
   return !!snapshot[key]
 }

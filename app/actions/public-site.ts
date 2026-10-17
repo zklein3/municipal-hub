@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
-import { hasPermission, hasPermissionForDepartment } from '@/lib/permissions'
+import { hasPermission, hasPermissionForDepartment, getPermissionHolders } from '@/lib/permissions'
 import { logError, logEvent } from '@/lib/logger'
 import { prepareSlug } from '@/lib/public-slug'
 import { revalidatePath } from 'next/cache'
@@ -239,9 +239,9 @@ export async function submitBurnPermit(formData: FormData) {
       .eq('department_id', department_id)
       .eq('active', true)
       .eq('burn_permit_reviewer', true)
-      .in('system_role', ['admin', 'officer'])
 
-    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id)
+    const holders = await getPermissionHolders(department_id, 'review_burn_permits')
+    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id).filter((id) => holders.has(id))
 
     if (recipientIds.length > 0) {
       const { data: recipientPersonnel } = await adminClient
@@ -702,9 +702,9 @@ export async function submitPublicFeedback(formData: FormData) {
       .eq('department_id', department_id)
       .eq('active', true)
       .eq('notify_feedback', true)
-      .in('system_role', ['admin', 'officer'])
 
-    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id)
+    const holders = await getPermissionHolders(department_id, 'manage_public_inbox')
+    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id).filter((id) => holders.has(id))
 
     if (recipientIds.length > 0) {
       const { data: recipientPersonnel } = await adminClient
@@ -972,7 +972,136 @@ export async function submitMembershipInterest(formData: FormData) {
     metadata: { confirmation_code: data.confirmation_code, department_id },
   })
 
+  // Notify opted-in officers/admins for this department via email
+  const resendKey = process.env.RESEND_API_KEY
+  if (resendKey) {
+    const { data: notifyRecipients } = await adminClient
+      .from('department_personnel')
+      .select('personnel_id')
+      .eq('department_id', department_id)
+      .eq('active', true)
+      .eq('notify_membership_interest', true)
+
+    const holders = await getPermissionHolders(department_id, 'manage_public_inbox')
+    const recipientIds = (notifyRecipients ?? []).map((r) => r.personnel_id).filter((id) => holders.has(id))
+    if (recipientIds.length > 0) {
+      const { data: recipientPersonnel } = await adminClient
+        .from('personnel').select('email').in('id', recipientIds)
+      const recipientEmails = (recipientPersonnel ?? [])
+        .map((p) => p.email)
+        .filter((e): e is string => !!e)
+
+      if (recipientEmails.length > 0) {
+        const deptName = dept?.name ?? 'FireOps7'
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <p>New membership interest application for ${escapeHtml(deptName)}.</p>
+            <p><strong>Name:</strong> ${escapeHtml(full_name)}</p>
+            <p><strong>Phone:</strong> ${escapeHtml(phone)}</p>
+            ${email ? `<p><strong>Email:</strong> ${escapeHtml(email)}</p>` : ''}
+            <p><strong>Prefers:</strong> ${escapeHtml(contact_preference)}</p>
+            <p style="margin-top:24px"><a href="https://www.fireops7.com/inbox?tab=membership">Review in FireOps7 →</a></p>
+          </div>
+        `
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'FireOps7 <noreply@fireops7.com>',
+            to: recipientEmails,
+            subject: `New membership interest — ${deptName}`,
+            html,
+          }),
+        })
+        if (!emailRes.ok) await logError(await emailRes.text(), 'public/membership-notify')
+      }
+    }
+  }
+
   return { confirmationCode: data.confirmation_code }
+}
+
+// ─── Inbox: Reply to a membership-interest applicant via email ───────────────
+export async function replyToMembershipInterest(formData: FormData) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const { data: meList } = await adminClient
+    .from('personnel').select('id, first_name, last_name, is_sys_admin').eq('auth_user_id', user.id)
+  const me = meList?.[0]
+  if (!me) return { error: 'Could not verify your account.' }
+
+  const application_id = formData.get('application_id') as string
+  const reply_message = (formData.get('reply_message') as string)?.trim()
+  if (!application_id || !reply_message) return { error: 'Please enter a reply message.' }
+
+  const { data: app } = await adminClient
+    .from('membership_interest_applications')
+    .select('id, department_id, full_name, email, status')
+    .eq('id', application_id)
+    .single()
+  if (!app) return { error: 'Application not found.' }
+  if (!app.email) return { error: 'This applicant gave no email address — a reply cannot be sent.' }
+
+  if (!(await hasPermissionForDepartment(me.id, me.is_sys_admin, app.department_id, 'manage_public_inbox'))) {
+    return { error: 'Unauthorized.' }
+  }
+
+  const resendKey = process.env.RESEND_API_KEY
+  if (!resendKey) return { error: 'Email sending is not configured.' }
+
+  const { data: dept } = await adminClient
+    .from('departments').select('name, public_email').eq('id', app.department_id).single()
+
+  const replierName = `${me.first_name ?? ''} ${me.last_name ?? ''}`.trim()
+  const deptName = dept?.name ?? 'FireOps7'
+  const signOffLines = replierName
+    ? `${escapeHtml(replierName)}<br/>${escapeHtml(deptName)}`
+    : escapeHtml(deptName)
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+      <p>Hi ${escapeHtml(app.full_name)},</p>
+      <p style="white-space:pre-line">${escapeHtml(reply_message)}</p>
+      <p style="margin-top:24px">— ${signOffLines}</p>
+    </div>
+  `
+
+  const emailRes = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `${deptName} (via FireOps7) <noreply@fireops7.com>`,
+      to: app.email,
+      ...(dept?.public_email ? { reply_to: dept.public_email } : {}),
+      subject: `Re: Your interest in joining ${deptName}`,
+      html,
+    }),
+  })
+  if (!emailRes.ok) {
+    await logError(await emailRes.text(), '/inbox/membership-reply')
+    return { error: 'Failed to send reply email. Please try again.' }
+  }
+
+  const now = new Date().toISOString()
+  const { error: dbErr } = await adminClient
+    .from('membership_interest_applications')
+    .update({
+      reply_message,
+      replied_at: now,
+      replied_by_personnel_id: me.id,
+      // A reply is contact — move brand-new applications to Contacted, leave closed ones alone
+      ...(app.status === 'pending' ? { status: 'contacted' } : {}),
+      updated_at: now,
+    })
+    .eq('id', application_id)
+  if (dbErr) { await logError(dbErr, '/inbox'); return { error: dbErr.message } }
+
+  revalidatePath('/inbox')
+  return { success: true, markedContacted: app.status === 'pending' }
 }
 
 export async function updateMembershipInterestStatus(formData: FormData) {

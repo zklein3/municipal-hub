@@ -371,22 +371,9 @@ export default function PersonnelProfileClient({
                 <option value="false">Inactive</option>
               </select>
             </div>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" name="notify_feedback" value="true" defaultChecked={deptRecord.notify_feedback}
-                className="mt-0.5 rounded" />
-              <span className="text-sm text-zinc-700">
-                Email this person when new public feedback or problem reports are submitted
-                <span className="block text-xs text-zinc-400">Only applies to Officers and Admins.</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input type="checkbox" name="burn_permit_reviewer" value="true" defaultChecked={deptRecord.burn_permit_reviewer}
-                className="mt-0.5 rounded" />
-              <span className="text-sm text-zinc-700">
-                Email this person when a new burn permit is submitted for review
-                <span className="block text-xs text-zinc-400">Only applies to Officers and Admins.</span>
-              </span>
-            </label>
+            <p className="text-xs text-zinc-400">
+              Email notification settings now live in Dept Admin → Notifications.
+            </p>
             <button type="submit" disabled={deptLoading}
               className="mt-1 w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
               {deptLoading ? 'Saving...' : 'Save Department Info'}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { updateMembershipInterestStatus } from '@/app/actions/public-site'
+import { updateMembershipInterestStatus, replyToMembershipInterest } from '@/app/actions/public-site'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 
 type Status = 'pending' | 'contacted' | 'enrolled' | 'not_interested'
@@ -25,6 +25,9 @@ export interface MembershipApplication {
   contact_preference: string
   status: Status
   reviewer_notes: string | null
+  reply_message: string | null
+  replied_at: string | null
+  replied_by_name?: string | null
   created_at: string
 }
 
@@ -90,6 +93,10 @@ export default function MembershipInterestTab({ applications: initialApplication
   const [error, setError] = useState<string | null>(null)
   const [reviewerNotes, setReviewerNotes] = useState('')
   const [confirmingAction, setConfirmingAction] = useState<{ id: string; status: 'enrolled' | 'not_interested' } | null>(null)
+  const [replyMessage, setReplyMessage] = useState('')
+  const [replying, setReplying] = useState(false)
+  const [replyError, setReplyError] = useState<string | null>(null)
+  const [replySentId, setReplySentId] = useState<string | null>(null)
 
   const filtered = applications.filter(a => {
     switch (filter) {
@@ -112,6 +119,35 @@ export default function MembershipInterestTab({ applications: initialApplication
     setError(null)
     setReviewerNotes('')
     setConfirmingAction(null)
+    setReplyMessage('')
+    setReplyError(null)
+    setReplySentId(null)
+  }
+
+  async function handleReply(app: MembershipApplication) {
+    if (!replyMessage.trim()) return
+    setReplying(true); setReplyError(null)
+    const fd = new FormData()
+    fd.set('application_id', app.id)
+    fd.set('reply_message', replyMessage.trim())
+    const result = await replyToMembershipInterest(fd)
+    if (result.error) {
+      setReplyError(result.error)
+    } else {
+      setApplications(prev => prev.map(a => a.id === app.id
+        ? {
+            ...a,
+            reply_message: replyMessage.trim(),
+            replied_at: new Date().toISOString(),
+            replied_by_name: 'You',
+            status: result.markedContacted ? 'contacted' : a.status,
+          }
+        : a
+      ))
+      setReplySentId(app.id)
+      setReplyMessage('')
+    }
+    setReplying(false)
   }
 
   async function handleAction(id: string, status: Status) {
@@ -237,6 +273,46 @@ export default function MembershipInterestTab({ applications: initialApplication
                         <p className="text-sm text-zinc-700 leading-relaxed">{app.additional_info}</p>
                       </div>
                     )}
+
+                    {/* Reply */}
+                    <div>
+                      <p className="text-xs text-zinc-400 font-semibold uppercase tracking-wide mb-1">Reply</p>
+                      {app.reply_message && (
+                        <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 mb-2">
+                          <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-line">{app.reply_message}</p>
+                          <p className="text-xs text-zinc-400 mt-1">
+                            Sent {app.replied_at ? formatLocalDateTime(app.replied_at, departmentTimezone) : ''}
+                            {app.replied_by_name ? ` by ${app.replied_by_name}` : ''}
+                          </p>
+                        </div>
+                      )}
+                      {!app.email ? (
+                        <p className="text-xs text-zinc-400 italic">No email address on file — call or text {app.phone} instead.</p>
+                      ) : (
+                        <>
+                          {replyError && (
+                            <div className="mb-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{replyError}</div>
+                          )}
+                          {replySentId === app.id && (
+                            <div className="mb-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700">Reply sent to {app.email}.</div>
+                          )}
+                          <textarea
+                            value={replyMessage}
+                            onChange={e => setReplyMessage(e.target.value)}
+                            rows={3}
+                            placeholder={`Write a reply to ${app.email}…`}
+                            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none"
+                          />
+                          <button
+                            onClick={() => handleReply(app)}
+                            disabled={replying || !replyMessage.trim()}
+                            className="mt-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+                          >
+                            {replying ? 'Sending…' : `Send reply to ${app.email}`}
+                          </button>
+                        </>
+                      )}
+                    </div>
 
                     {/* Reviewer notes (closed applications) */}
                     {app.reviewer_notes && !canAct && (

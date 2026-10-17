@@ -133,7 +133,7 @@ export default async function InboxPage({
         : Promise.resolve({ data: [] }),
       canManageInbox
         ? adminClient.from('membership_interest_applications')
-            .select('id, confirmation_code, full_name, phone, email, community, interests, ems_cert_level, prior_experience, availability, daytime_coverage, work_schedule, involvement_level, training_interest, additional_info, contact_preference, status, reviewer_notes, created_at')
+            .select('id, confirmation_code, full_name, phone, email, community, interests, ems_cert_level, prior_experience, availability, daytime_coverage, work_schedule, involvement_level, training_interest, additional_info, contact_preference, status, reviewer_notes, reply_message, replied_at, replied_by_personnel_id, created_at')
             .eq('department_id', department_id).order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
     ])
@@ -141,7 +141,7 @@ export default async function InboxPage({
     feedbackItems = feedbackRes.data ?? []
     membershipApplications = membershipRes.data ?? []
 
-    const replierIds = [...new Set(feedbackItems.map((f: any) => f.replied_by_personnel_id).filter(Boolean))]
+    const replierIds = [...new Set([...feedbackItems, ...membershipApplications].map((f: any) => f.replied_by_personnel_id).filter(Boolean))]
     if (replierIds.length > 0) {
       const { data: replierData } = await adminClient
         .from('personnel').select('id, first_name, last_name').in('id', replierIds)
@@ -151,6 +151,10 @@ export default async function InboxPage({
       feedbackItems = feedbackItems.map((f: any) => ({
         ...f,
         replied_by_name: f.replied_by_personnel_id ? (replierMap[f.replied_by_personnel_id] ?? null) : null,
+      }))
+      membershipApplications = membershipApplications.map((a: any) => ({
+        ...a,
+        replied_by_name: a.replied_by_personnel_id ? (replierMap[a.replied_by_personnel_id] ?? null) : null,
       }))
     }
 

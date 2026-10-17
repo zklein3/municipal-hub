@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { saveDeptTimezone, saveWeeklyDigestEnabled, setFuelStorageModule } from '@/app/actions/departments'
+import { saveDeptTimezone, setFuelStorageModule } from '@/app/actions/departments'
 import { setHoseTestingConfig } from '@/app/actions/hose-testing'
 import { setHoseTestingPin } from '@/app/actions/hose-testing-pin'
 import { setAgilityTestConfig } from '@/app/actions/agility-tests'
@@ -15,7 +15,6 @@ import QrPrintLabel from '@/components/QrPrintLabel'
 export default function DeptSettingsClient({
   departmentId,
   timezone: initial,
-  weeklyDigestEnabled: initialDigestEnabled,
   hoseTestingEnabled: initialHoseTestingEnabled,
   publicSiteEnabled: initialPublicSiteEnabled,
   fuelStorageEnabled: initialFuelStorageEnabled,
@@ -27,7 +26,6 @@ export default function DeptSettingsClient({
 }: {
   departmentId: string
   timezone: string
-  weeklyDigestEnabled: boolean
   hoseTestingEnabled: boolean
   publicSiteEnabled: boolean
   fuelStorageEnabled: boolean
@@ -46,10 +44,6 @@ export default function DeptSettingsClient({
   // server has no window.location, so this must never render server-side.
   const [origin, setOrigin] = useState('')
   useEffect(() => { setOrigin(window.location.origin) }, [])
-
-  const [digestEnabled, setDigestEnabled] = useState(initialDigestEnabled)
-  const [digestSaving, setDigestSaving] = useState(false)
-  const [digestError, setDigestError] = useState<string | null>(null)
 
   const [hoseTestingEnabled, setHoseTestingEnabled] = useState(initialHoseTestingEnabled)
   const [publicSlug, setPublicSlug] = useState(initialPublicSlug)
@@ -125,13 +119,6 @@ export default function DeptSettingsClient({
     if (result?.error) setSaveError(result.error)
     else setSaveSuccess(true)
     setSaving(false)
-  }
-
-  async function handleDigestToggle(next: boolean) {
-    setDigestEnabled(next); setDigestSaving(true); setDigestError(null)
-    const result = await saveWeeklyDigestEnabled(departmentId, next)
-    if (result?.error) { setDigestError(result.error); setDigestEnabled(!next) }
-    setDigestSaving(false)
   }
 
   async function handleHoseTestingToggle(next: boolean) {
@@ -213,28 +200,11 @@ export default function DeptSettingsClient({
       </div>
 
       <div className="rounded-xl bg-white border border-zinc-200 shadow-sm p-5 mt-6">
-        <h2 className="text-sm font-semibold text-zinc-900 mb-1">Event Email Reminders</h2>
-        <p className="text-xs text-zinc-500 mb-4">
-          Emails every active member: a full recap every Monday morning, a heads-up exactly one week before
-          each event, and a same-day reminder — silent on days with nothing scheduled.
+        <h2 className="text-sm font-semibold text-zinc-900 mb-1">Email Notifications</h2>
+        <p className="text-xs text-zinc-500">
+          Event reminders and who gets emailed about feedback, burn permits, and membership interest are all managed in{' '}
+          <a href="/dept-admin/notifications" className="font-semibold text-red-700 hover:underline">Dept Admin → Notifications</a>.
         </p>
-
-        {digestError && (
-          <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">{digestError}</div>
-        )}
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={digestEnabled}
-            disabled={digestSaving}
-            onChange={e => handleDigestToggle(e.target.checked)}
-            className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
-          />
-          <span className="text-sm text-zinc-700">
-            {digestEnabled ? 'Weekly digest is on' : 'Weekly digest is off'}
-          </span>
-        </label>
       </div>
 
       <div className="rounded-xl bg-white border border-zinc-200 shadow-sm p-5 mt-6">

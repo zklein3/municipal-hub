@@ -83,6 +83,13 @@ export default async function DeptAdminPage() {
             href="/dept-admin/settings"
           />
         )}
+        {perms.manage_department_settings && (
+          <HubCard
+            title="Notifications"
+            description="Who gets emailed, and for what"
+            href="/dept-admin/notifications"
+          />
+        )}
         {perms.manage_events && (
           <HubCard
             title="Events"
