@@ -23,6 +23,21 @@ Station 1 storeroom → spare Med Bag  ← checked on its own
 Member: J. Smith    → POV Jump Bag   ← checked on its own by the member
 ```
 
+## Guiding principle — no ten-page hops (Zak, 2026-10-22)
+Setup and changes must not take a tour of pages. **Fix it where you see it:** an empty or wrong
+container gets its fix on the same screen (stock it, add to it, place it), not a link to a buried
+admin tab. Every 2B–2G screen is judged against this. Running list of flow friction found in testing —
+each item gets fixed in place during the step that touches that screen:
+1. ~~Empty storeroom on `/medical` linked to the Supply Types catalog, where "+ Add Supply Type"
+   *creates* a type~~ — interim fix `ac41c4e`: deep link to the storeroom + "Stock a Medication Here".
+   **Real fix (2B):** stock a storeroom right on `/medical` (pick existing medications + PAR inline,
+   plus "Add all"), no trip to Setup.
+2. Medical setup is buried: Dept Admin → Setup → Medical (last tab) → Storerooms sub-tab → Manage.
+   Dept Admin has no Medical card. **2B:** Bags and storerooms get first-class places (a Bags area and
+   storeroom management where the storerooms are used), reachable in one step.
+3. Two different buttons share the label "+ Add Supply Type" (create a catalog type vs. stock a
+   storeroom). Labels must say what they do.
+
 ## What exists today (verified 2026-10-22)
 - **`medical_storerooms` is the container table**, polymorphic by nullable columns: station storeroom
   (`station_id`), bag (`template_id` + `apparatus_id`), compartment storage (`compartment_id`). There is
