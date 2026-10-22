@@ -95,6 +95,7 @@ export default function VehicleCheckClient({
   departmentId,
   inspectorName,
   nextPath,
+  inventory,
 }: {
   apparatus: Apparatus
   items: CheckItem[]
@@ -103,8 +104,10 @@ export default function VehicleCheckClient({
   departmentId: string
   inspectorName: string
   nextPath?: string
+  inventory: { compartmentCount: number; doneToday: boolean; lastLabel: string | null }
 }) {
   const router = useRouter()
+  const [submitted, setSubmitted] = useState(false)
   const [itemState, setItemState] = useState<Record<string, ItemState>>(() =>
     Object.fromEntries(items.map(i => [i.id, { result: null, amount_added: '', notes: '' }]))
   )
@@ -191,7 +194,41 @@ export default function VehicleCheckClient({
 
     setSubmitting(false)
     if (res.error) { setError(res.error); return }
-    router.push(nextPath ?? `/inspections?checked=${apparatus.id}`)
+    if (nextPath) { router.push(nextPath); return }
+    setSubmitted(true)
+    window.scrollTo({ top: 0 })
+  }
+
+  if (submitted) {
+    return (
+      <div className="max-w-2xl">
+        <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+          <p className="text-base font-semibold text-green-800">✅ Vehicle check saved</p>
+          <p className="text-sm text-green-700 mt-0.5">Unit {apparatus.unit_number}{apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}</p>
+          {inventory.compartmentCount > 0 && (
+            <p className="text-sm text-zinc-600 mt-3">
+              {inventory.doneToday
+                ? `Inventory inspection already done today (${inventory.lastLabel}).`
+                : inventory.lastLabel
+                  ? `Inventory inspection not done today — last one ${inventory.lastLabel}. Do it now?`
+                  : 'No inventory inspection on record for this unit. Do one now?'}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {inventory.compartmentCount > 0 && !inventory.doneToday && (
+              <Link href={`/inspections/apparatus/${apparatus.id}`}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800">
+                Inspect Inventory
+              </Link>
+            )}
+            <Link href={`/inspections?checked=${apparatus.id}`}
+              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              {inventory.compartmentCount > 0 && !inventory.doneToday ? 'Not now' : 'Back to Inspections'}
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

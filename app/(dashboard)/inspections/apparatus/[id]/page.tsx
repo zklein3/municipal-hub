@@ -5,6 +5,7 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { getOrCreateInspectionSession, getInspectionSessionById } from '@/app/actions/inspections'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { lastVehicleCheck } from '@/lib/rig-check-status'
 import InspectionSessionClient from './InspectionSessionClient'
 
 export default async function InspectionSessionPage({
@@ -47,6 +48,7 @@ export default async function InspectionSessionPage({
   const requested = requestedSessionId ? await getInspectionSessionById(requestedSessionId, apparatus_id) : null
   const result = requested && !('error' in requested) ? requested : await getOrCreateInspectionSession(apparatus_id)
   if ('error' in result) redirect('/inspections')
+  const vehicleCheck = await lastVehicleCheck(adminClient, apparatus_id, ctx.departmentTimezone)
 
   return (
     <div className="pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8 max-w-2xl">
@@ -68,6 +70,7 @@ export default async function InspectionSessionPage({
         personnel_id={personnelId}
         isOfficerOrAdmin={isOfficerOrAdmin}
         departmentTimezone={ctx.departmentTimezone}
+        vehicleCheck={vehicleCheck}
       />
     </div>
   )

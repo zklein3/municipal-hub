@@ -40,6 +40,7 @@ export default function InspectionSessionClient({
   personnel_id,
   isOfficerOrAdmin,
   departmentTimezone,
+  vehicleCheck,
 }: {
   session: Session
   compartments: SessionCompartment[]
@@ -48,6 +49,7 @@ export default function InspectionSessionClient({
   personnel_id: string
   isOfficerOrAdmin: boolean
   departmentTimezone: string
+  vehicleCheck: { doneToday: boolean; lastLabel: string | null }
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -199,10 +201,25 @@ export default function InspectionSessionClient({
           <p className="text-xs text-green-700 mt-0.5">
             {done} of {total} compartment{total !== 1 ? 's' : ''} checked. Results are on the Inspection Report.
           </p>
+          <p className="text-xs text-zinc-600 mt-2">
+            {vehicleCheck.doneToday
+              ? `Vehicle check already done today (${vehicleCheck.lastLabel}).`
+              : vehicleCheck.lastLabel
+                ? `Vehicle check not done today — last one ${vehicleCheck.lastLabel}. Do it now?`
+                : 'No vehicle check on record for this unit. Do one now?'}
+          </p>
           <div className="flex flex-wrap gap-2 mt-3">
+            {!vehicleCheck.doneToday && (
+              <button onClick={() => router.push(`/inspections/vehicle-check/${apparatus_id}`)}
+                className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800">
+                Do Vehicle Check
+              </button>
+            )}
             <button onClick={() => router.push('/inspections')}
-              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
-              Back to Inspections
+              className={vehicleCheck.doneToday
+                ? 'rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800'
+                : 'rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50'}>
+              {vehicleCheck.doneToday ? 'Back to Inspections' : 'Not now'}
             </button>
             <button onClick={() => router.push('/dashboard')}
               className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">

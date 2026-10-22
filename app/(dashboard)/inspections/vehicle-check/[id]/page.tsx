@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getVehicleCheckItems, getVehicleCheckHistory } from '@/app/actions/inspections'
 import VehicleCheckClient from './VehicleCheckClient'
+import { lastInventoryInspection } from '@/lib/rig-check-status'
 
 export default async function VehicleCheckPage({
   params,
@@ -37,6 +38,10 @@ export default async function VehicleCheckPage({
 
   const { items } = await getVehicleCheckItems(ctx.departmentId)
   const { history } = await getVehicleCheckHistory(apparatus_id, 5)
+  const [{ count: compartmentCount }, inventoryStatus] = await Promise.all([
+    adminClient.from('apparatus_compartments').select('id', { count: 'exact', head: true }).eq('apparatus_id', apparatus_id).eq('active', true),
+    lastInventoryInspection(adminClient, apparatus_id, ctx.departmentTimezone),
+  ])
 
   return (
     <div className="pt-20 px-4 pb-4 sm:pt-0 sm:p-6 lg:p-8">
@@ -55,6 +60,7 @@ export default async function VehicleCheckPage({
         departmentId={ctx.departmentId}
         inspectorName={`${me.first_name} ${me.last_name}`}
         nextPath={nextPath}
+        inventory={{ compartmentCount: compartmentCount ?? 0, ...inventoryStatus }}
       />
     </div>
   )

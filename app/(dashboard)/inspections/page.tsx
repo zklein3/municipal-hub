@@ -68,6 +68,9 @@ export default async function InspectionsPage() {
         .select('id, apparatus_id')
         .eq('department_id', ctx.departmentId)
         .eq('status', 'in_progress')
+        // An expired session is only marked 'expired' when someone next opens it; don't offer
+        // "Resume" for one that's already past its window.
+        .gt('expires_at', new Date().toISOString())
         .in('apparatus_id', appIds)
     : { data: [] }
 
