@@ -82,9 +82,11 @@ Sidebar footer: name links to own `/personnel/[id]` profile.
 ## Key Action Files
 - `app/actions/auth.ts` — signIn, changePassword, signOut
 - `app/actions/personnel.ts` — updateOwnProfile, updatePersonnelProfile, updateDeptPersonnel, changeOwnPassword
-- `app/actions/apparatus.ts` — createApparatus, updateApparatus
+- `app/actions/apparatus.ts` — createApparatus (honors `add_standard_compartments`), updateApparatus
 - `app/actions/stations.ts` — createStation, updateStation
 - `app/actions/compartments.ts` — createCompartmentName, assignCompartmentToApparatus, removeCompartmentFromApparatus, setCompartmentQrCode
+- `app/actions/presets.ts` — createPreset, updatePreset, deletePreset, setPresetItem/removePresetItem, setPresetMedication/removePresetMedication, setPresetTypes, saveCompartmentAsPreset, deployPresetToApparatus (`manage_dept_setup`); addStandardCompartmentsToApparatus (`manage_apparatus` or `manage_dept_setup`). Logic in `lib/preset-deploy.ts` (deployPreset, addStandardCompartments)
+- `app/actions/starters.ts` — addMissingStarters (`manage_dept_setup`), pushStartersToAllDepartments (sys admin). Logic in `lib/starter-seed.ts` (seedDepartmentStarters; also called by `createDepartment`)
 - `app/actions/equipment.ts` — createItemCategory, createItem, updateItem, createAsset, updateAsset, assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, assignAssetApparatus
 - `app/actions/inspections.ts` — createInspectionTemplate, addTemplateStep, updateTemplateStep, deleteTemplateStep, submitInspection, inspection session actions; vehicle check: ensureVehicleCheckItems, getVehicleCheckItems, submitVehicleCheck, getVehicleCheckHistory, addVehicleCheckItem, updateVehicleCheckItem, toggleVehicleCheckItem, resetVehicleCheckItemsToDefaults
 - `app/actions/attendance.ts` — createEventSeries, updateEventInstance, logAttendance, verifyAttendance, requestExcuse, closeEventInstance, cancelEventInstance, createExcuseType, saveParticipationRequirement

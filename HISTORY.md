@@ -106,6 +106,9 @@ Items flagged during development — address during next cleanup pass:
 - `item_asset_inspection_logs`, `item_asset_inspection_log_steps`
 - `compartment_presence_check_logs`
 - `inspection_sessions`, `inspection_session_compartments`
+- `compartment_presets` (+ `compartment_preset_items`, `compartment_preset_medications`, `compartment_preset_types`) — department-owned reusable compartment definitions; deploy copies them onto a truck (2026-10-22)
+- `starter_categories`, `starter_items`, `starter_medication_types`, `starter_compartments` (+ `_types`, `_items`, `_medications`) — **global** master starter catalog, sys-admin curated, seeded into departments (2026-10-22)
+- `department_starter_seeds` — ledger of every master row ever given to a department; seeding only adds what's never been given, so department edits/deletes are never undone. `items`/`item_categories`/`medical_supply_types`/`compartment_presets` carry `source_starter_id` (2026-10-22)
 - `vehicle_check_items` — dept-owned checklist items (`department_id`, `label`, `group_name`, `sort_order`, `has_amount_field`, `requires_air_brakes`, `instructions`, `active`); seeded from code defaults on first use
 - `vehicle_inspections` — one record per vehicle check (`apparatus_id`, `department_id`, `inspected_by`, `odometer`, `engine_hours`, `notes`, `status`, `inspected_at`)
 - `vehicle_inspection_results` — one row per item per inspection (`inspection_id`, `item_id`, `result` ok/issue/na, `amount_added`, `notes`)
@@ -181,6 +184,32 @@ Items flagged during development — address during next cleanup pass:
 ---
 
 ## Session History
+
+### 2026-10-22 — Inventory Streamlining Milestone 1: Compartment Presets + Starter Catalog + Inspection Fixes
+
+Goal: cut the time from "create the truck" to "first check run." Plans: `PLAN_INVENTORY_STREAMLINE.md`
+(M1, shipped) and `PLAN_CONTAINERS_BAGS.md` (M2, containers & nested bags, planned, not built).
+- **Compartment presets** — Setup → Presets tab (`PresetsStep.tsx`, `app/actions/presets.ts`,
+  `lib/preset-deploy.ts`): reusable compartments (items + medication type/PAR + apparatus-type tags);
+  deploy to trucks as a new compartment or into an existing one, merge-only (never overwrites a truck's
+  quantities), auto QR codes (`<unit>-<code>`); "Save as preset" from a truck compartment; rename/delete
+  never touch deployed trucks or history.
+- **"Add standard compartments for this type"** — checkbox (default on) on both new-apparatus forms,
+  and a button on `/equipment/[id]` for existing trucks; deploys every preset tagged with the truck's type.
+- **Starter catalog** — global master tables + `lib/starter-seed.ts` (ledger-driven, normalized name
+  matching adopts existing rows, medication types only with `module_medical`, fire depts only). Seeds on
+  `createDepartment`; "Add missing starters" (Setup → Presets); sys-admin "Push to all fire departments"
+  (`/admin/departments`). Initial content: 14 categories, 64 items, 5 medication types, 17 compartments.
+- `getOrCreateCompartmentStoreroom` moved to `lib/medical-storeroom.ts` (shared).
+- **Inspection fixes (pre-existing bugs):** finishing the last compartment no longer starts a new empty
+  session (returns to `?session=` with an "Inspection complete" box); Inspections hub ignores expired
+  in-progress sessions; vehicle check "Do inventory" button now saves the check first ("Submit & Inspect
+  Inventory"); a medication marked Present requires a count of 1+ (none = Missing).
+- **Vehicle check ↔ inventory relationship** (`lib/rig-check-status.ts`): each completion screen shows
+  whether the other check was done today and offers it; the inventory session shows an always-visible
+  vehicle-check status strip; "Start Session" goes through today's vehicle check first.
+- Live-tested by Zak on QA Test Department (Engine 32 + BLS 11 built from presets, full vehicle +
+  inventory checks with no assets in the system).
 
 ### 2026-06-29 — PD Contact Log: Standard Address Fields + Mobile Case Number Fix (+ backfilled PD module history)
 
