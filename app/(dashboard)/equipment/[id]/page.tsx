@@ -5,7 +5,6 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
 import EquipmentDetailClient from './EquipmentDetailClient'
 import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
-import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
 import { getMedicalSupplyStatus, type MedicalSupplyStatus } from '@/lib/medical-status'
 
 export default async function EquipmentDetailPage({
@@ -372,26 +371,15 @@ export default async function EquipmentDetailPage({
         backHref={from}
         medicalSupplyTypes={medicalSupplyTypes}
         medicationsByCompartment={medicationsByCompartment}
+        // Medical rows (Use / Restock / Transfer) render inside each compartment card now,
+        // instead of a separate section at the bottom of the page.
+        medicalSection={medicalCompartmentData && medicalCompartmentData.compartmentStorerooms.length > 0 ? {
+          ...medicalCompartmentData,
+          isAdmin,
+          isOfficerOrAbove,
+          myPersonnelId: me.id,
+        } : null}
       />
-      {medicalCompartmentData && medicalCompartmentData.compartmentStorerooms.length > 0 && (
-        <div className="max-w-2xl mt-2">
-          <MedicalCompartmentsSection
-            compartmentStorerooms={medicalCompartmentData.compartmentStorerooms}
-            compInventory={medicalCompartmentData.compInventory}
-            compLots={medicalCompartmentData.compLots}
-            compSupplyTypes={medicalCompartmentData.compSupplyTypes}
-            deptStorerooms={medicalCompartmentData.deptStorerooms}
-            srcInventory={medicalCompartmentData.srcInventory}
-            srcLots={medicalCompartmentData.srcLots}
-            units={medicalCompartmentData.units}
-            personnel={medicalCompartmentData.personnel}
-            apparatusId={medicalCompartmentData.apparatusId}
-            isAdmin={isAdmin}
-            isOfficerOrAbove={isOfficerOrAbove}
-            myPersonnelId={me.id}
-          />
-        </div>
-      )}
       {medicalBagData && (
         <div className="max-w-2xl mt-2">
           <MedicalBagsSection

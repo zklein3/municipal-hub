@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ComponentProps } from 'react'
+import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, moveQuantityToStorage, updateItemQuantity } from '@/app/actions/equipment'
@@ -97,7 +98,9 @@ export default function EquipmentDetailClient({
   backHref,
   medicalSupplyTypes,
   medicationsByCompartment,
+  medicalSection = null,
 }: {
+  medicalSection?: Omit<ComponentProps<typeof MedicalCompartmentsSection>, 'onlyCompartmentId' | 'embedded'> | null
   apparatus: Apparatus
   compartments: Compartment[]
   allItems: Item[]
@@ -590,7 +593,9 @@ export default function EquipmentDetailClient({
                       </div>
                     </div>
                   ))}
-                  {(medicationsByCompartment[c.id] ?? []).map(med => (
+                  {medicalSection && medicalSection.compartmentStorerooms.some(cs => cs.compartment_id === c.id) ? (
+                    <MedicalCompartmentsSection {...medicalSection} onlyCompartmentId={c.id} embedded />
+                  ) : (medicationsByCompartment[c.id] ?? []).map(med => (
                     <div key={med.storeroom_inventory_id} className="flex items-center px-5 py-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

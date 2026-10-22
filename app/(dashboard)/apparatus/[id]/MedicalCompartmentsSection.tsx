@@ -38,7 +38,12 @@ export default function MedicalCompartmentsSection({
   compartmentStorerooms, compInventory, compLots, compSupplyTypes,
   deptStorerooms, srcInventory, srcLots, units, personnel,
   apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
+  onlyCompartmentId, embedded = false,
 }: {
+  // Embedded inside a truck compartment card: show just that compartment's medical rows (with their
+  // Use / Restock / Transfer buttons), no outer card, header or tabs.
+  onlyCompartmentId?: string
+  embedded?: boolean
   compartmentStorerooms: CompStoreroom[]
   compInventory: InventoryRow[]
   compLots: Lot[]
@@ -352,22 +357,29 @@ export default function MedicalCompartmentsSection({
     </div>
   )
 
+  const shownStorerooms = onlyCompartmentId
+    ? compartmentStorerooms.filter(cs => cs.compartment_id === onlyCompartmentId)
+    : compartmentStorerooms
+  if (embedded && !shownStorerooms.some(cs => compInventory.some(i => i.storeroom_id === cs.id))) return null
+
   return (
-    <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-zinc-900">Compartment Medical Supplies</h2>
-        {isAdmin && (
-          <a href="/medical?mode=types" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage →</a>
-        )}
-      </div>
+    <div className={embedded ? 'px-5 py-3' : 'rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5'}>
+      {!embedded && (
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-zinc-900">Compartment Medical Supplies</h2>
+          {isAdmin && (
+            <a href="/medical?mode=types" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage →</a>
+          )}
+        </div>
+      )}
 
       {success && <div className="mb-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
       {error && <div className="mb-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
       {/* Compartment tabs */}
-      {compartmentStorerooms.length > 1 && (
+      {!embedded && shownStorerooms.length > 1 && (
         <div className="flex flex-wrap gap-2 mb-4">
-          {compartmentStorerooms.map(cs => (
+          {shownStorerooms.map(cs => (
             <button key={cs.id} onClick={() => setExpandedStoreroomId(cs.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${expandedStoreroomId === cs.id ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'}`}>
               {cs.compartment_code}{cs.compartment_name ? ` — ${cs.compartment_name}` : ''}
@@ -376,17 +388,19 @@ export default function MedicalCompartmentsSection({
         </div>
       )}
 
-      {compartmentStorerooms.map(cs => {
-        if (compartmentStorerooms.length > 1 && expandedStoreroomId !== cs.id) return null
+      {shownStorerooms.map(cs => {
+        if (!embedded && shownStorerooms.length > 1 && expandedStoreroomId !== cs.id) return null
         const inv = compInventory.filter(i => i.storeroom_id === cs.id)
         return (
           <div key={cs.id}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm font-semibold text-zinc-700">
-                {cs.compartment_code}{cs.compartment_name ? ` — ${cs.compartment_name}` : ''}
-              </span>
-              <span className="text-xs text-zinc-400">{cs.name}</span>
-            </div>
+            {!embedded && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-semibold text-zinc-700">
+                  {cs.compartment_code}{cs.compartment_name ? ` — ${cs.compartment_name}` : ''}
+                </span>
+                <span className="text-xs text-zinc-400">{cs.name}</span>
+              </div>
+            )}
 
             {inv.length === 0 ? (
               <p className="text-sm text-zinc-400 py-4 text-center">
