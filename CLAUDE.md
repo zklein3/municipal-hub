@@ -659,6 +659,11 @@ Most small departments aren't actually set up to handle public records requests 
 
 **Note:** Facebook page now links to the public site (set up 2026-06-09) — public site is getting real outside traffic now, so any future removal should be a deliberate UI change, not a silent drop (residents may have bookmarked/shared links).
 
+### 9c. Pinned from sys-log review (2026-10-22)
+- **Report editability (hose report first)** — PINNED. Goal: make the hose testing report more editable, and carry that same editable pattern to *all* reporting. Existing reports work fine today; no rush.
+- **Printable QR code library** — PINNED. The membership-interest form + QR works. Want a pull-up list of QR codes (filterable by purpose: membership interest, donation, etc.) that can be printed onto mailers/correspondence — a reusable "campaign QR" catalog rather than one-off prints. Builds on `/print/qr` and `/print/qr-batch`.
+- **Inventory + truck-check build-out streamlining (incl. ambulance/station meds)** — ACTIVE planning topic, see the plan file once written.
+
 ### 9b. Burn Permit Reviewer / Feedback Notify Toggles — Reconsider Placement ⬅ PINNED FOR LATER (2026-08-14)
 `department_personnel.burn_permit_reviewer` and `.notify_feedback` (who reviews burn permits / gets notified on public feedback) are currently set per-person on the Personnel Profile page (`app/(dashboard)/personnel/[id]/PersonnelProfileClient.tsx`), not alongside the other public-site-related toggles.
 
