@@ -10,6 +10,7 @@ import {
   assignBagToApparatus, removeBagFromApparatus, updateBagCompartment,
 } from '@/app/actions/medical'
 import HelpText from '@/components/HelpText'
+import { MoveMedicalToItem } from '@/components/CatalogMovePanel'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
@@ -41,8 +42,10 @@ type Tab = 'supplies' | 'storerooms' | 'templates'
 export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory, lots,
   bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled, fixedTab,
+  itemCategories = [],
 }: {
   fixedTab?: Tab
+  itemCategories?: { id: string; category_name: string }[]
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
   stations: Station[]
@@ -397,6 +400,12 @@ export default function MedicalAdminClient({
                   </button>
                 </div>
               </form>
+              {editingSupplyId && (
+                <div className="mt-4">
+                  <MoveMedicalToItem supplyTypeId={editingSupplyId} categories={itemCategories}
+                    onDone={() => { setShowSupplyForm(false); setEditingSupplyId(null) }} />
+                </div>
+              )}
             </div>
           )}
 

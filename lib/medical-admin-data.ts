@@ -12,6 +12,7 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     { data: apparatusTypes },
     { data: bagTemplates },
     { data: bagDeployments },
+    { data: itemCategories },
   ] = await Promise.all([
     adminClient.from('departments').select('module_medical_controlled').eq('id', department_id).single(),
     adminClient.from('medical_supply_types')
@@ -27,6 +28,8 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     adminClient.from('medical_storerooms')
       .select('id, name, apparatus_id, template_id, inventory_mode, compartment_id')
       .eq('department_id', department_id).eq('active', true).not('apparatus_id', 'is', null).eq('container_kind', 'bag'),
+    // For "move to the equipment catalog" (pick its category)
+    adminClient.from('item_categories').select('id, category_name').eq('department_id', department_id).eq('active', true).order('sort_order'),
   ])
 
   const typeName = Object.fromEntries((apparatusTypes ?? []).map(t => [t.id, t.name]))
@@ -83,6 +86,7 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     templateItems: templateItems ?? [],
     bagDeployments: bagDeployments ?? [],
     moduleMedicalControlled: dept?.module_medical_controlled ?? false,
+    itemCategories: itemCategories ?? [],
   }
 }
 

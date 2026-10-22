@@ -1224,13 +1224,16 @@ export default function MedicalStoreClient({
             {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
 
             <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Lot Number</label>
-                  <input type="text" value={receiveForm.lotNumber} placeholder="Optional"
-                    onChange={e => setReceiveForm(f => f ? { ...f, lotNumber: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                </div>
+              {/* Plain supplies (no expiration, not controlled — e.g. a non-rebreather) are just a count. */}
+              <div className={`grid gap-3 ${receiveForm.tracksExpiration || receiveForm.isControlled ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {(receiveForm.tracksExpiration || receiveForm.isControlled) && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-700">Lot Number</label>
+                    <input type="text" value={receiveForm.lotNumber} placeholder="Optional"
+                      onChange={e => setReceiveForm(f => f ? { ...f, lotNumber: e.target.value } : f)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                  </div>
+                )}
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700">
                     Quantity <span className="text-red-500">*</span>

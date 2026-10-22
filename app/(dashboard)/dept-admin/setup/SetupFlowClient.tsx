@@ -190,6 +190,7 @@ export default function SetupFlowClient({
               }))}
               customFieldDefs={customFieldDefs}
               initialSubTab={searchParams.get('sub') ?? undefined}
+              moduleMedical={moduleMedical}
               {...helpProps}
             />
           )}

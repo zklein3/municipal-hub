@@ -16,6 +16,7 @@ import {
 } from '@/app/actions/inspections'
 import { saveCustomFieldDefinitions } from '@/app/actions/assets'
 import HelpPrompt from './HelpPrompt'
+import { MoveItemToMedical } from '@/components/CatalogMovePanel'
 
 type Tab = 'items' | 'categories' | 'assets'
 
@@ -46,7 +47,9 @@ const STEP_TYPES = [
 
 export default function ItemsStep({
   categories, items, assets, templates, steps, departmentId, apparatusOptions, customFieldDefs, initialSubTab, showHelp, helpResetKey,
+  moduleMedical = false,
 }: {
+  moduleMedical?: boolean
   categories: Category[]
   items: Item[]
   assets: Asset[]
@@ -680,6 +683,11 @@ export default function ItemsStep({
                             className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors">Cancel</button>
                         </div>
                       </form>
+                      {moduleMedical && (
+                        <div className="mt-4">
+                          <MoveItemToMedical itemId={item.id} onDone={() => setEditingItemId(null)} />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>
