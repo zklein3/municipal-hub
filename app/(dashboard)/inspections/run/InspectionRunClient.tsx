@@ -467,7 +467,12 @@ export default function InspectionRunClient({
                 <p className="text-sm text-zinc-700 mb-3">Is {med.supply_name} present?</p>
                 <div className="flex gap-3 mb-3">
                   <button
-                    onClick={() => setMedication(med.storeroom_inventory_id, 'present', true)}
+                    onClick={() => {
+                      // The qty box pre-fills with the on-file amount; record it now so leaving it
+                      // as-is (including 0 for never-stocked meds) counts as an answer.
+                      setMedication(med.storeroom_inventory_id, 'present', true)
+                      if (resp?.actual_quantity === undefined) setMedication(med.storeroom_inventory_id, 'actual_quantity', med.current_quantity)
+                    }}
                     className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
                       resp?.present === true
                         ? 'bg-green-600 border-green-600 text-white'
@@ -492,8 +497,11 @@ export default function InspectionRunClient({
                       <label className="text-xs text-zinc-500">Actual qty:</label>
                       <input
                         type="number" min="0"
-                        defaultValue={med.current_quantity}
-                        onChange={e => setMedication(med.storeroom_inventory_id, 'actual_quantity', parseInt(e.target.value))}
+                        defaultValue={resp?.actual_quantity ?? med.current_quantity}
+                        onChange={e => {
+                          const n = parseInt(e.target.value)
+                          setMedication(med.storeroom_inventory_id, 'actual_quantity', Number.isNaN(n) ? undefined : n)
+                        }}
                         className="w-20 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                       />
                       <span className="text-xs text-zinc-500">{med.unit_of_measure}</span>
