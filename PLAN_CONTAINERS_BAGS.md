@@ -57,6 +57,11 @@ bag templates, compartment library). One copy of each form, shared by all place 
 - **C2 One storeroom screen — DONE** (`4fc4e18`): `/medical` stocks (one / "Add all"), edits PAR,
   removes, creates storerooms, plus receive/use/waste/transfer; `?storeroom=` deep link. Setup →
   Medical → Storerooms keeps create/rename/deactivate only. Fixes friction #1, #4, #5.
+- **C2b One Medical page — DONE** (`851b843`): `/medical` switches function with mode buttons —
+  Storerooms (everyone) · Medication Types · Bags (`?mode=types|bags`, medical setup admins). Setup's
+  Medical tab removed; `/dept-admin/medical` and `?tab=medical` redirect. Storeroom rename/deactivate
+  inline. Dept Admin + Inventory cards both "Medical" → `/medical`. Loader: `lib/medical-admin-data.ts`.
+  (MedicalAdminClient's old Storerooms tab is now unreachable dead code — remove during C3.)
 - **C3 One copy of each medication form — NEXT:** Receive / Use / Administer / Waste / Transfer are
   implemented 3× (`MedicalStoreClient` ~2000 lines, `MedicalBagsSection` ~900, `MedicalCompartmentsSection`
   ~800). Extract into shared components used by all three.
