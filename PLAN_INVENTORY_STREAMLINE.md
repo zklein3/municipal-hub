@@ -188,8 +188,12 @@ Med Bag (bag: medications).
      location snapshot ("BLS 11 › PC-2 › Trauma Box › Med Bag"). Bag history follows the bag.
   3. **Tracked items (assets) at any level** — compartment, bag, or nested bag — because departments
      carry equipment in different ways and the system should match their layout.
-  - Still to confirm: when a bag moves to another truck, offer to move the tracked items last
-    confirmed in it (recommended); can a bag sit in a station storeroom (spares) — recommended yes.
+  4. **Where a bag can live:** a truck compartment, another bag, a **station storeroom** (spares), or
+     **assigned to a member — POV bags** (volunteers carrying a med/jump bag in their own vehicle).
+     ⇒ A bag check must also run **on its own, outside a truck inspection** — e.g. a member checks the
+     POV bag assigned to them, or someone checks the spare bags in the storeroom.
+  - Default unless Zak says otherwise: when a bag moves to another truck (or member), offer to move the
+    tracked items last confirmed in it along with it.
 
 ## MILESTONE 3 — Sys-admin catalog management (`/admin/catalog`)
 Edit the master list; **pull** from a department (browse its items and presets, promote definitions to
