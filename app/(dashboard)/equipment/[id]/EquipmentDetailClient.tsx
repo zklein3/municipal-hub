@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, moveQuantityToStorage, updateItemQuantity } from '@/app/actions/equipment'
 import { assignMedicalSupplyToCompartment } from '@/app/actions/medical'
+import { addStandardCompartmentsToApparatus, saveCompartmentAsPreset } from '@/app/actions/presets'
 import { MEDICAL_STATUS_COLORS, MEDICAL_STATUS_LABELS, type MedicalSupplyStatus } from '@/lib/medical-status'
 import HelpText from '@/components/HelpText'
 
@@ -92,6 +93,7 @@ export default function EquipmentDetailClient({
   allApparatus,
   isAdmin,
   isOfficerOrAbove,
+  canManageDeptSetup,
   backHref,
   medicalSupplyTypes,
   medicationsByCompartment,
@@ -103,6 +105,7 @@ export default function EquipmentDetailClient({
   allApparatus: ApparatusOption[]
   isAdmin: boolean
   isOfficerOrAbove: boolean
+  canManageDeptSetup: boolean
   backHref?: string
   medicalSupplyTypes: MedicalSupplyType[]
   medicationsByCompartment: Record<string, CompartmentMedication[]>
@@ -115,6 +118,43 @@ export default function EquipmentDetailClient({
   const [minQty, setMinQty] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Presets: "Add standard compartments" + "Save as preset"
+  const [presetMsg, setPresetMsg] = useState<string | null>(null)
+  const [presetBusy, setPresetBusy] = useState(false)
+  const [presetExists, setPresetExists] = useState<string | null>(null) // compartment id awaiting replace/merge
+  const canAddStandard = (isAdmin || canManageDeptSetup) && !!apparatus.type_name
+
+  async function handleAddStandard() {
+    setPresetBusy(true); setPresetMsg(null); setError(null)
+    const r = await addStandardCompartmentsToApparatus(apparatus.id)
+    setPresetBusy(false)
+    if ('error' in r && r.error) { setError(r.error); return }
+    const results = ('results' in r ? r.results : undefined) ?? []
+    if (results.length === 0) { setPresetMsg(`No presets are set as standard for ${apparatus.type_name}. Tag presets with this type in Setup → Presets.`); return }
+    const created = results.filter(x => x.result?.compartmentCreated).length
+    const items = results.reduce((s, x) => s + (x.result ? x.result.itemsAdded + x.result.itemsReactivated : 0), 0)
+    const meds = results.reduce((s, x) => s + (x.result?.medicationsAdded ?? 0), 0)
+    const failed = results.filter(x => x.error)
+    setPresetMsg(
+      created === 0 && items === 0 && meds === 0
+        ? 'This truck already has all of its standard compartments and items.'
+        : `Added ${created} compartment${created === 1 ? '' : 's'}, ${items} item${items === 1 ? '' : 's'}` +
+          (meds ? `, ${meds} medication${meds === 1 ? '' : 's'} (count stock in with Receive)` : '') + '.' +
+          (failed.length ? ` ${failed.length} failed: ${failed.map(f => f.preset).join(', ')}.` : '')
+    )
+    router.refresh()
+  }
+
+  async function handleSaveAsPreset(compartmentId: string, mode?: 'replace' | 'merge') {
+    setPresetBusy(true); setPresetMsg(null); setError(null)
+    const r = await saveCompartmentAsPreset(compartmentId, undefined, mode)
+    setPresetBusy(false)
+    if (r.error) { setError(r.error); return }
+    if (r.exists) { setPresetExists(compartmentId); return }
+    setPresetExists(null)
+    setPresetMsg('Saved as a preset. Find it in Setup → Presets to tag it with apparatus types or deploy it to other trucks.')
+  }
 
   // Edit quantity state
   const [editingQty, setEditingQty] = useState<string | null>(null)
@@ -284,7 +324,20 @@ export default function EquipmentDetailClient({
         >
           Fuel Log →
         </Link>
+        {canAddStandard && (
+          <button
+            onClick={handleAddStandard}
+            disabled={presetBusy}
+            className="rounded-lg bg-white border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 transition-colors shadow-sm"
+          >
+            {presetBusy ? 'Working...' : `+ Add standard ${apparatus.type_name} compartments`}
+          </button>
+        )}
       </div>
+
+      {presetMsg && (
+        <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{presetMsg}</div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>
@@ -299,6 +352,9 @@ export default function EquipmentDetailClient({
       {compartments.length === 0 ? (
         <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
           No compartments assigned to this apparatus yet.
+          {canAddStandard && (
+            <p className="mt-2 text-zinc-500">Use &quot;Add standard {apparatus.type_name} compartments&quot; above to start from your department&apos;s presets.</p>
+          )}
           {isAdmin && (
             <p className="mt-2">
               <a href={`/apparatus/${apparatus.id}`} className="text-red-600 hover:underline">
@@ -311,6 +367,16 @@ export default function EquipmentDetailClient({
         <div className="flex flex-col gap-4">
           {compartments.map(c => (
             <div key={c.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+              {presetExists === c.id && (
+                <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
+                  <span className="flex-1 min-w-[12rem]">A preset named {c.compartment_name || c.compartment_code} already exists.</span>
+                  <button disabled={presetBusy} onClick={() => handleSaveAsPreset(c.id, 'replace')}
+                    className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">Replace its contents</button>
+                  <button disabled={presetBusy} onClick={() => handleSaveAsPreset(c.id, 'merge')}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">Add what&apos;s missing</button>
+                  <button onClick={() => setPresetExists(null)} className="text-xs text-zinc-500 hover:underline">Cancel</button>
+                </div>
+              )}
               {/* Compartment Header */}
               <div className="flex items-center justify-between px-5 py-3 bg-zinc-50 border-b border-zinc-200">
                 <div className="flex items-center gap-3">
@@ -328,6 +394,15 @@ export default function EquipmentDetailClient({
                   >
                     View →
                   </Link>
+                  {canManageDeptSetup && (
+                    <button
+                      onClick={() => handleSaveAsPreset(c.id)}
+                      disabled={presetBusy}
+                      className="text-xs font-semibold text-zinc-500 hover:text-red-700 disabled:opacity-50"
+                    >
+                      Save as preset
+                    </button>
+                  )}
                   {isOfficerOrAbove && (
                     <button
                       onClick={() => {

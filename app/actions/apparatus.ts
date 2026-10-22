@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { logError } from '@/lib/logger'
+import { addStandardCompartments } from '@/lib/preset-deploy'
 import { revalidatePath } from 'next/cache'
 
 // ─── Create Apparatus (admin only) ───────────────────────────────────────────
@@ -30,7 +31,7 @@ export async function createApparatus(formData: FormData) {
 
   if (!unit_number) return { error: 'Unit number is required.' }
 
-  const { error } = await adminClient.from('apparatus').insert({
+  const { data: newApparatus, error } = await adminClient.from('apparatus').insert({
     department_id: ctx.departmentId,
     unit_number,
     apparatus_name: apparatus_name || null,
@@ -43,14 +44,24 @@ export async function createApparatus(formData: FormData) {
     license_plate: license_plate || null,
     in_service_date: in_service_date || null,
     active: true,
-  })
+  }).select('id').single()
 
   if (error) {
     await logError(error, '/apparatus')
     return { error: error.message }
   }
 
+  // "Add standard compartments for this type" (default on in the new-apparatus forms). Uses the
+  // department's already-approved presets, so manage_apparatus alone is enough. A failure here
+  // doesn't undo the truck — the apparatus page's "Add standard compartments" finishes the job.
+  if (formData.get('add_standard_compartments') === 'true' && apparatus_type_id) {
+    const r = await addStandardCompartments(adminClient, { department_id: ctx.departmentId, apparatus_id: newApparatus.id })
+    const failed = [r.error, ...(r.results ?? []).map(x => x.error)].filter(Boolean)
+    if (failed.length) await logError(`Standard compartments: ${failed.join('; ')}`, '/apparatus', { department_id: ctx.departmentId, metadata: { apparatus_id: newApparatus.id } })
+  }
+
   revalidatePath('/apparatus')
+  revalidatePath('/equipment')
   revalidatePath('/dept-admin/setup')
   return { success: true }
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createApparatus } from '@/app/actions/apparatus'
+import StandardCompartmentsCheckbox from '@/components/StandardCompartmentsCheckbox'
 import HelpPrompt from './HelpPrompt'
 
 interface Station { id: string; station_number: string | null; station_name: string }
@@ -126,6 +127,8 @@ function ApparatusForm({
           </select>
         </div>
       )}
+
+      {!defaults && <StandardCompartmentsCheckbox />}
 
       <button type="submit" disabled={loading}
         className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">

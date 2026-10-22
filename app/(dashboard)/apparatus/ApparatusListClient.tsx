@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createApparatus } from '@/app/actions/apparatus'
+import StandardCompartmentsCheckbox from '@/components/StandardCompartmentsCheckbox'
 import QRScanButton from '@/components/QRScanButton'
 import HelpText from '@/components/HelpText'
 
@@ -219,6 +220,7 @@ export default function ApparatusListClient({
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
               </div>
             </div>
+            <StandardCompartmentsCheckbox />
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 transition-colors">
               {loading ? 'Adding...' : 'Add Apparatus'}

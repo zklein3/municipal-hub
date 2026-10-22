@@ -368,6 +368,7 @@ export default async function EquipmentDetailPage({
         allApparatus={allApparatus}
         isAdmin={isAdmin}
         isOfficerOrAbove={isOfficerOrAbove}
+        canManageDeptSetup={equipmentPermissions.manage_dept_setup}
         backHref={from}
         medicalSupplyTypes={medicalSupplyTypes}
         medicationsByCompartment={medicationsByCompartment}

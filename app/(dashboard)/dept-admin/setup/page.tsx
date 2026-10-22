@@ -168,6 +168,32 @@ export default async function SetupPage() {
     sort_order: medicalCompartmentNameMap[c.compartment_name_id]?.sort_order ?? 999,
   })).sort((a, b) => a.sort_order - b.sort_order)
 
+  // Compartment presets + their contents, and every truck's compartments (deploy targets)
+  const apparatusIds = (apparatusRaw ?? []).map(a => a.id)
+  const [{ data: presets }, { data: truckCompartmentLinks }] = await Promise.all([
+    adminClient.from('compartment_presets')
+      .select('id, name, default_code, description, sort_order, active')
+      .eq('department_id', department_id),
+    apparatusIds.length > 0
+      ? adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', apparatusIds).eq('active', true)
+      : Promise.resolve({ data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }),
+  ])
+  const presetIds = (presets ?? []).map(p => p.id)
+  const [{ data: presetItems }, { data: presetMeds }, { data: presetTypes }] = presetIds.length > 0
+    ? await Promise.all([
+        adminClient.from('compartment_preset_items').select('preset_id, item_id, expected_quantity, minimum_quantity').in('preset_id', presetIds),
+        adminClient.from('compartment_preset_medications').select('preset_id, supply_type_id, par_level').in('preset_id', presetIds),
+        adminClient.from('compartment_preset_types').select('preset_id, apparatus_type_id').in('preset_id', presetIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }]
+  const compartmentNameById = Object.fromEntries((compartmentsRaw ?? []).map(c => [c.id, c]))
+  const truckCompartments = (truckCompartmentLinks ?? []).map(c => ({
+    id: c.id,
+    apparatus_id: c.apparatus_id,
+    code: compartmentNameById[c.compartment_name_id]?.compartment_code ?? '—',
+    name: compartmentNameById[c.compartment_name_id]?.compartment_name ?? null,
+  }))
+
   // Build compartment assignment maps
   const usageMap: Record<string, number> = {}
   const assignmentMap: Record<string, string[]> = {}
@@ -262,6 +288,13 @@ export default async function SetupPage() {
       moduleIso={deptData?.module_iso ?? false}
       customFieldDefs={customFieldDefs}
       medicalSupplyTypes={medicalSupplyTypes ?? []}
+      presetData={{
+        presets: presets ?? [],
+        presetItems: presetItems ?? [],
+        presetMeds: presetMeds ?? [],
+        presetTypes: presetTypes ?? [],
+        truckCompartments,
+      }}
       canManageDeptSetup={canManageDeptSetup}
       canManageMedical={canManageMedical}
       moduleMedical={moduleMedical}

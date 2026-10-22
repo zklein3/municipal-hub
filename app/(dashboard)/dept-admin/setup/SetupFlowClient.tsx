@@ -8,6 +8,7 @@ import ApparatusStep from './ApparatusStep'
 import CompartmentsStep from './CompartmentsStep'
 import ItemsStep from './ItemsStep'
 import InventoryStep from './InventoryStep'
+import PresetsStep from './PresetsStep'
 import MedicalAdminClient from '../medical/MedicalAdminClient'
 import HelpText from '@/components/HelpText'
 
@@ -15,6 +16,7 @@ const DEPT_SETUP_TABS = [
   { id: 'stations',     label: 'Stations'      },
   { id: 'apparatus',    label: 'Apparatus'     },
   { id: 'compartments', label: 'Compartments'  },
+  { id: 'presets',      label: 'Presets'       },
   { id: 'items',        label: 'Items'         },
   { id: 'inventory',    label: 'Inventory'     },
 ]
@@ -40,6 +42,7 @@ export default function SetupFlowClient({
   moduleIso,
   customFieldDefs,
   medicalSupplyTypes,
+  presetData,
   canManageDeptSetup,
   canManageMedical,
   moduleMedical,
@@ -64,6 +67,13 @@ export default function SetupFlowClient({
   moduleIso: boolean
   customFieldDefs: Record<string, { id: string; item_id: string; field_label: string; field_order: number }[]>
   medicalSupplyTypes: { id: string; name: string; category: string; unit_of_measure: string }[]
+  presetData: {
+    presets: { id: string; name: string; default_code: string; description: string | null; sort_order: number | null; active: boolean }[]
+    presetItems: { preset_id: string; item_id: string; expected_quantity: number; minimum_quantity: number | null }[]
+    presetMeds: { preset_id: string; supply_type_id: string; par_level: number | null }[]
+    presetTypes: { preset_id: string; apparatus_type_id: string }[]
+    truckCompartments: { id: string; apparatus_id: string; code: string; name: string | null }[]
+  }
   canManageDeptSetup: boolean
   canManageMedical: boolean
   moduleMedical: boolean
@@ -164,6 +174,22 @@ export default function SetupFlowClient({
               assignmentMap={assignmentMap}
               apparatus={apparatusForCompartments}
               departmentId={departmentId}
+              {...helpProps}
+            />
+          )}
+          {effectiveTab === 'presets' && (
+            <PresetsStep
+              presets={presetData.presets}
+              presetItems={presetData.presetItems}
+              presetMeds={presetData.presetMeds}
+              presetTypes={presetData.presetTypes}
+              apparatusTypes={apparatusTypes}
+              apparatus={apparatus}
+              truckCompartments={presetData.truckCompartments}
+              items={items}
+              categories={categories}
+              medicalSupplyTypes={medicalSupplyTypes}
+              moduleMedical={moduleMedical}
               {...helpProps}
             />
           )}
