@@ -153,12 +153,35 @@ Docs on ship: REFERENCE.md (tables, actions), HISTORY.md, CLAUDE.md resume secti
 
 ---
 
-## MILESTONE 2 — Sys-admin catalog management (`/admin/catalog`)
+## MILESTONE 2 — Containers & bags ("nesting dolls") — decided 2026-10-22, needs its own plan pass
+Driven by testing: medications are rarely loose in a compartment — they live in a bag, and bags live in
+compartments or in other bags. Example: BLS 11 → PC-2 (compartment) → Trauma Box (bag: trauma items) →
+Med Bag (bag: medications).
+- **A bag has its own location:** in a compartment *or* in another bag. A compartment holds its loose
+  contents plus **any number of bags** (removes today's one-bag-per-compartment limit, which exists
+  because a compartment's medication storeroom and a pinned bag are currently the same
+  `medical_storerooms` row).
+- **Bags hold items and medications** — folds in (replaces) `feature/items-in-containers`; its schema
+  (`item_location_standards.storeroom_id`, `medical_storerooms.content_type`) is already live.
+- **Bag templates can contain other bag templates** (Trauma Box includes a Med Bag); deploying the
+  outer bag brings its nested bags. Moving a bag moves everything inside it.
+- **Inspection — drill-in, decided by Zak:** every bag has its own check. In the parent's check (a
+  compartment or a bag), each child bag appears as **one line in the list**; selecting it opens that
+  bag's own check; finishing returns to the parent. (Not a flattened list.)
+- **Starter bags** (Trauma Box, Med Bag, …) join the master catalog and seed like items/presets;
+  compartment presets can carry bags (e.g. ambulance "PC-2 holds a Trauma Box").
+- **Starter "Medications" compartment preset** and medications loose in presets become the rare case:
+  keep the ability, move the starters to bags.
+- Open for the plan pass: claim/complete lifecycle for a bag inside an inspection session
+  (`inspection_session_compartments` has no row type for a bag today), how a bag's check shows on
+  reports, and asset slots inside bags.
+
+## MILESTONE 3 — Sys-admin catalog management (`/admin/catalog`)
 Edit the master list; **pull** from a department (browse its items and presets, promote definitions to
 master); **push** to all or selected departments with a preview of what each receives. Until then,
 Claude maintains master content via SQL while we work each type.
 
-## After milestones 1–2
+## After milestones 1–3
 1. Grow the master list type by type: Engine → BLS Ambulance → Brush/Wildland → Tanker → Ladder/Aerial.
 2. Truck checks by apparatus type (master-list driven, "applies to" types; uses the ledger so new
    checks reach existing departments — today `ensureVehicleCheckItems` only seeds empty departments).
