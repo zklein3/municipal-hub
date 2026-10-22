@@ -3,16 +3,19 @@ import { getCurrentPath } from '@/lib/current-path'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
-import { getOrCreateInspectionSession } from '@/app/actions/inspections'
+import { getOrCreateInspectionSession, getInspectionSessionById } from '@/app/actions/inspections'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import InspectionSessionClient from './InspectionSessionClient'
 
 export default async function InspectionSessionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ session?: string }>
 }) {
   const { id: apparatus_id } = await params
+  const { session: requestedSessionId } = await searchParams
   const adminClient = createAdminClient()
 
   const ctx = await getCurrentDepartmentContext()
@@ -39,7 +42,10 @@ export default async function InspectionSessionPage({
     .limit(1)
   const personnelId = personnelList?.[0]?.personnel_id ?? me.id
 
-  const result = await getOrCreateInspectionSession(apparatus_id)
+  // Coming back from a compartment submit, show that session — even if the submit just completed it —
+  // rather than getOrCreate, which would start a fresh empty session once the last compartment is done.
+  const requested = requestedSessionId ? await getInspectionSessionById(requestedSessionId, apparatus_id) : null
+  const result = requested && !('error' in requested) ? requested : await getOrCreateInspectionSession(apparatus_id)
   if ('error' in result) redirect('/inspections')
 
   return (

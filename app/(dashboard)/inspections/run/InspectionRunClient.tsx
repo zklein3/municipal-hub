@@ -376,7 +376,7 @@ export default function InspectionRunClient({
         setError(result.error)
         setSubmitting(false)
       } else if (inspectionSessionId) {
-        router.replace(`/inspections/apparatus/${apparatus.id}`)
+        router.replace(`/inspections/apparatus/${apparatus.id}?session=${inspectionSessionId}`)
       } else {
         setSubmitted(true)
         setSubmitting(false)

@@ -415,6 +415,24 @@ export async function getOrCreateInspectionSession(apparatus_id: string) {
   return { session, ...(await fetchSessionCompartments(session.id, adminClient, ctx.department_id)) }
 }
 
+// Loads one specific session (any status) for this apparatus in the caller's department. Used after
+// submitting the last compartment: the session auto-completes, so getOrCreateInspectionSession would
+// find no in-progress session and silently start a new empty one instead of showing the finished one.
+export async function getInspectionSessionById(session_id: string, apparatus_id: string) {
+  const adminClient = createAdminClient()
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Department not found.' }
+  const { data } = await adminClient
+    .from('inspection_sessions')
+    .select('*')
+    .eq('id', session_id)
+    .eq('apparatus_id', apparatus_id)
+    .eq('department_id', ctx.department_id)
+  const session = data?.[0]
+  if (!session) return { error: 'Session not found.' }
+  return { session, ...(await fetchSessionCompartments(session.id, adminClient, ctx.department_id)) }
+}
+
 async function fetchSessionCompartments(session_id: string, adminClient: ReturnType<typeof createAdminClient>, department_id?: string) {
   const { data: rows } = await adminClient
     .from('inspection_session_compartments')

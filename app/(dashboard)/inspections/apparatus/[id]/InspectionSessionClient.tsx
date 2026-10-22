@@ -193,6 +193,25 @@ export default function InspectionSessionClient({
         </div>
       )}
 
+      {sessionClosed && (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-semibold text-green-800">✅ Inspection complete</p>
+          <p className="text-xs text-green-700 mt-0.5">
+            {done} of {total} compartment{total !== 1 ? 's' : ''} checked. Results are on the Inspection Report.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button onClick={() => router.push('/inspections')}
+              className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800">
+              Back to Inspections
+            </button>
+            <button onClick={() => router.push('/dashboard')}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+              Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Compartment list */}
       <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white overflow-hidden">
         {compartments.length === 0 && (
