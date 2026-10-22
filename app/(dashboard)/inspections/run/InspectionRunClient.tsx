@@ -585,7 +585,7 @@ export default function InspectionRunClient({
                         <input type="checkbox" checked={correct}
                           onChange={e => setMedication(med.storeroom_inventory_id, 'correct_count', e.target.checked)}
                           className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                        Correct the truck&apos;s count to {counted}
+                        Update the on-file count from {med.current_quantity} to {counted} (what&apos;s actually here)
                       </label>
                       {correct && (
                         <select value={resp?.correction_reason ?? reasons[0]}
@@ -596,7 +596,8 @@ export default function InspectionRunClient({
                       )}
                       {correct && short && (
                         <p className="text-xs text-amber-800">
-                          After you submit this compartment, the inspection screen shows a <span className="font-semibold">Restock from storage</span> button to refill it.
+                          This only fixes the record — it doesn&apos;t refill anything. To bring it back up to PAR ({med.par_level}),
+                          use <span className="font-semibold">Restock from storage</span> on the inspection screen after you submit this compartment.
                         </p>
                       )}
                     </div>
