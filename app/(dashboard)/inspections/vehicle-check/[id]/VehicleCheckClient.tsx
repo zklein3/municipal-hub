@@ -167,7 +167,7 @@ export default function VehicleCheckClient({
     setItemState(prev => ({ ...prev, [id]: { ...prev[id], notes: val } }))
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(thenGoTo?: string) {
     if (!allAnswered) {
       setError(`Please complete all ${totalItems} items before submitting.`)
       return
@@ -194,7 +194,7 @@ export default function VehicleCheckClient({
 
     setSubmitting(false)
     if (res.error) { setError(res.error); return }
-    if (nextPath) { router.push(nextPath); return }
+    if (thenGoTo ?? nextPath) { router.push((thenGoTo ?? nextPath)!); return }
     setSubmitted(true)
     window.scrollTo({ top: 0 })
   }
@@ -458,24 +458,37 @@ export default function VehicleCheckClient({
       <div className="flex flex-col sm:flex-row gap-3">
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => handleSubmit()}
           disabled={submitting || !allAnswered}
           className="flex-1 rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? 'Submitting…' : allAnswered ? 'Submit Vehicle Check' : `${totalItems - answeredItems} items remaining`}
         </button>
 
-        {/* Inventory prompt */}
-        <Link
-          href={`/inspections/apparatus/${apparatus.id}`}
-          className="flex-1 rounded-xl border-2 border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors text-center"
-        >
-          Do inventory on this vehicle?
-        </Link>
+        {/* Save, then go straight to the inventory inspection. Used to be a plain link that left the
+            page without saving the vehicle check. */}
+        {inventory.compartmentCount > 0 && (
+          <button
+            type="button"
+            onClick={() => handleSubmit(`/inspections/apparatus/${apparatus.id}`)}
+            disabled={submitting || !allAnswered}
+            className="flex-1 rounded-xl border-2 border-zinc-300 px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Submit & Inspect Inventory
+          </button>
+        )}
       </div>
 
       <p className="mt-3 text-center text-xs text-zinc-400">
         The inventory check covers compartment contents — a separate process from this vehicle check.
+        {inventory.compartmentCount > 0 && (
+          <>
+            {' '}
+            <Link href={`/inspections/apparatus/${apparatus.id}`} className="underline hover:text-zinc-600">
+              Skip to inventory without saving this check
+            </Link>
+          </>
+        )}
       </p>
     </div>
   )
