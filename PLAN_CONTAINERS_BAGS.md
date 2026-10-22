@@ -42,6 +42,11 @@ each item gets fixed in place during the step that touches that screen:
    expiration even for `tracks_expiration` medications (QA 2026-10-22). **2B:** that path is
    corrections only; adding stock to an expiration-tracked medication always goes through the real
    Receive form (lot #, expiration, received date), opened in place on whatever screen you're on.
+5. **The same storeroom lives on two screens.** Setup ("Equipment") → Medical → Storerooms = which
+   medications it stocks, PAR, quick counts; `/medical` (Inventory → Medical Storeroom card) = Receive,
+   Use, Waste, Transfer, lots, history, CS log. Zak landed on the setup one looking for Receive.
+   **2B:** one storeroom screen with everything (stock it, PAR, receive, use, waste, transfer, lots,
+   history); setup keeps only creating/renaming storerooms.
 
 ## What exists today (verified 2026-10-22)
 - **`medical_storerooms` is the container table**, polymorphic by nullable columns: station storeroom
