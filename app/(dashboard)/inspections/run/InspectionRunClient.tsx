@@ -378,13 +378,20 @@ export default function InspectionRunClient({
         notes: resp?.notes,
         ...(() => {
           const counted = resp?.present === false ? 0 : resp?.actual_quantity
-          const differs = counted !== undefined && counted !== med.current_quantity
-          if (!differs || med.is_controlled || resp?.correct_count === false) return {}
-          const short = (counted ?? 0) < med.current_quantity
-          const refill = short && resp?.refill && med.refill_sources.length > 0
-            ? { refill_from_storeroom_id: resp?.refill_from ?? med.refill_sources[0].storeroom_id, refill_quantity: Math.max(med.par_level - (counted ?? 0), 0) }
+          if (counted === undefined || med.is_controlled) return {}
+          const differs = counted !== med.current_quantity
+          const correct = differs && resp?.correct_count !== false
+          const short = counted < med.current_quantity
+          const correction = correct
+            ? { correct_count: true, correction_reason: resp?.correction_reason ?? (short ? 'Used but not recorded' : 'Found extra') }
             : {}
-          return { correct_count: true, correction_reason: resp?.correction_reason ?? (short ? 'Used but not recorded' : 'Found extra'), ...refill }
+          // Refill to PAR from the count that will be on the books (independent of the correction).
+          const base = differs && !correct ? med.current_quantity : counted
+          const need = Math.max(med.par_level - base, 0)
+          const refill = resp?.refill && need > 0 && med.refill_sources.length > 0
+            ? { refill_from_storeroom_id: resp?.refill_from ?? med.refill_sources[0].storeroom_id, refill_quantity: need }
+            : {}
+          return { ...correction, ...refill }
         })(),
       }
     })
@@ -496,8 +503,12 @@ export default function InspectionRunClient({
 
                 {/* Counted items: just ask how many are here. 0 = missing; any other number = present
                     with that count (a short count then offers the correction below). */}
-                <p className="text-sm text-zinc-700 mb-2">
-                  How many are here? <span className="text-xs text-zinc-400">On file: {med.current_quantity} {med.unit_of_measure}</span>
+                <p className="text-sm text-zinc-700 mb-0.5">How many are here?</p>
+                <p className="text-xs text-zinc-500 mb-2">
+                  Should have <span className="font-semibold">{med.par_level}</span> (PAR) · on file <span className="font-semibold">{med.current_quantity}</span> {med.unit_of_measure}
+                  {med.current_quantity < med.par_level && (
+                    <span className="text-amber-700"> · already {med.par_level - med.current_quantity} short — not restocked yet</span>
+                  )}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <input
@@ -602,39 +613,47 @@ export default function InspectionRunClient({
                           </select>
                         )}
                       </label>
-                      {correct && short && (() => {
-                        const need = Math.max(med.par_level - (counted ?? 0), 0)
-                        if (need === 0) return null
-                        const sources = med.refill_sources
-                        if (sources.length === 0) {
-                          return (
-                            <p className="text-xs text-amber-800">
-                              No storeroom has any in stock right now — it stays flagged as needing restock.
-                            </p>
-                          )
-                        }
+                    </div>
+                  )
+                })()}
+
+                {/* Below PAR (a new shortage, or one left from an earlier check) — restock it right here. */}
+                {(() => {
+                  const counted = resp?.present === false ? 0 : resp?.present === true ? resp.actual_quantity : undefined
+                  if (counted === undefined || med.is_controlled) return null
+                  // A shortage only counts if it'll be recorded — if the inspector unchecked the correction,
+                  // the on-file count (not what they counted) is what stays on the books.
+                  const differs = counted !== med.current_quantity
+                  const base = differs && resp?.correct_count === false ? med.current_quantity : counted
+                  const need = Math.max(med.par_level - base, 0)
+                  if (need === 0) return null
+                  const sources = med.refill_sources
+                  return (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 space-y-1">
+                      <p className="text-xs font-semibold text-amber-800">{need} below PAR ({base} of {med.par_level})</p>
+                      {sources.length === 0 ? (
+                        <p className="text-xs text-amber-800">No storeroom has any in stock right now — it stays flagged as needing restock.</p>
+                      ) : (() => {
                         const from = resp?.refill_from ?? sources[0].storeroom_id
                         const avail = sources.find(s => s.storeroom_id === from)?.available ?? 0
                         const moves = Math.min(need, avail)
-                        return (
-                          <div className="space-y-1">
-                            <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-700">
-                              <input type="checkbox" checked={!!resp?.refill}
-                                onChange={e => setMedication(med.storeroom_inventory_id, 'refill', e.target.checked)}
-                                className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                              <span className="font-semibold">Restock it now from</span>
-                              <select value={from} onChange={e => setMedication(med.storeroom_inventory_id, 'refill_from', e.target.value)}
-                                className="rounded-lg border border-zinc-300 px-2 py-0.5 text-xs">
-                                {sources.map(s => <option key={s.storeroom_id} value={s.storeroom_id}>{s.name} ({s.available})</option>)}
-                              </select>
-                            </label>
-                            <p className="text-xs text-zinc-500">
-                              {resp?.refill
-                                ? `Puts ${moves} back from the storeroom when you submit${moves < need ? ` — only ${avail} available, so it'll still be ${need - moves} short` : ''}.`
-                                : 'Check this if you have it in hand. Otherwise it stays flagged, and Restock from storage on the inspection screen refills everything at once.'}
-                            </p>
-                          </div>
-                        )
+                        return (<>
+                          <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-700">
+                            <input type="checkbox" checked={!!resp?.refill}
+                              onChange={e => setMedication(med.storeroom_inventory_id, 'refill', e.target.checked)}
+                              className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                            <span className="font-semibold">Restock it now from</span>
+                            <select value={from} onChange={e => setMedication(med.storeroom_inventory_id, 'refill_from', e.target.value)}
+                              className="rounded-lg border border-zinc-300 px-2 py-0.5 text-xs">
+                              {sources.map(s => <option key={s.storeroom_id} value={s.storeroom_id}>{s.name} ({s.available})</option>)}
+                            </select>
+                          </label>
+                          <p className="text-xs text-zinc-500">
+                            {resp?.refill
+                              ? `Puts ${moves} back from the storeroom when you submit${moves < need ? ` — only ${avail} available, so it'll still be ${need - moves} short` : ''}.`
+                              : 'Check this if you have it in hand. Otherwise it stays flagged, and Restock from storage on the inspection screen refills everything at once.'}
+                          </p>
+                        </>)
                       })()}
                     </div>
                   )

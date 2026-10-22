@@ -346,14 +346,16 @@ export async function submitInspection(payload: {
 
       // Count corrections the inspector asked for (controlled substances are skipped inside).
       for (const mc of payload.medication_checks) {
-        if (!mc.correct_count) continue
-        const counted = mc.present ? (mc.actual_quantity ?? 0) : 0
-        const r = await correctMedicalCount(adminClient, {
-          department_id: payload.department_id, storeroom_inventory_id: mc.storeroom_inventory_id,
-          counted, reason: mc.correction_reason || 'Inventory check', performed_by: payload.personnel_id,
-        })
-        if (r.error) { await logError(`Count correction failed: ${r.error}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } }); continue }
+        if (mc.correct_count) {
+          const counted = mc.present ? (mc.actual_quantity ?? 0) : 0
+          const r = await correctMedicalCount(adminClient, {
+            department_id: payload.department_id, storeroom_inventory_id: mc.storeroom_inventory_id,
+            counted, reason: mc.correction_reason || 'Inventory check', performed_by: payload.personnel_id,
+          })
+          if (r.error) { await logError(`Count correction failed: ${r.error}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } }); continue }
+        }
 
+        // Refill to PAR — independent of a correction (the item may have been short since an earlier check).
         if (mc.refill_from_storeroom_id && (mc.refill_quantity ?? 0) > 0) {
           const rr = await restockFromStoreroom(mc.refill_from_storeroom_id, [{
             destination_storeroom_id: mc.storeroom_id, supply_type_id: mc.supply_type_id, quantity: mc.refill_quantity!,
