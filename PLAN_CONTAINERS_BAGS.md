@@ -185,6 +185,24 @@ Every `from('medical_storerooms')` site, classified. **Change** = breaks once ba
 | `MedicalAdminClient.tsx:785` `unassignedApparatus` | **one bag per template per truck** | **Change:** allow several (Trauma Box 1 & 2 on one truck) |
 | `MedicalAdminClient.tsx:573,958` location labels | infers from columns | Review: label from kind/location |
 
+## 2A status (2026-10-22): BUILT, build clean, awaiting click-through
+Commit `f719538` on `feature/containers-bags`. Migration applied. Winslow's bags are now "Trauma Box 1"
+(BAG-325F5D3F) and "Trauma Box 2" (BAG-25070419).
+
+### 2A regression checklist (QA Test Department, dev server on this branch)
+1. Medical page: storerooms list shows only station storerooms (no bags/compartment storage).
+2. Receive stock into a storeroom; dispense; waste; transfer storeroom → compartment; CS log print.
+3. Truck inventory (`/equipment/<BLS 11>`): compartment medications (MEDS, TRAUMA) still show and
+   "+ Add Item" → medication still lands in the compartment's loose storage.
+4. Dept Admin → Medical → Bags: deploy the same bag template **twice** to one truck, one of them into a
+   compartment that already has loose medications → two bags ("<Name> 1", "<Name> 2"), loose meds
+   untouched, nothing merged.
+5. Move/unpin a bag between compartments on its truck → only its location changes; its contents stay.
+6. Remove a bag that has stock → blocked with "bag has active stock" (was silently allowed before).
+7. Inspect the compartment holding a bag → its medications appear labeled "<Bag> · <med>"; submit works.
+8. Setup → Presets deploy with medications and "Add standard compartments" still work (M1 regression).
+9. Medical report: location badges Storeroom / Bag / Compartment correct.
+
 ## Data migration (2A)
 SQL drafted in `supabase/containers_2a_container_kind.sql` (not yet applied). Key points:
 - `container_kind` added **nullable**, backfilled, plus a **BEFORE INSERT trigger that derives the kind

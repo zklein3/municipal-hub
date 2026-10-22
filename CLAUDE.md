@@ -152,7 +152,7 @@ prompts, Start Session funnels through the vehicle check, "Do inventory" saves t
 medication Present requires 1+). Details: `PLAN_INVENTORY_STREAMLINE.md`. Docs (REFERENCE/HISTORY/help
 content) for M1 still to write.
 **Next: Milestone 2 — Containers & Bags.** Build plan drafted for review: `PLAN_CONTAINERS_BAGS.md`
-(on branch `feature/containers-bags`). All questions answered. Step 2A started on `feature/containers-bags`: call-site audit DONE (table in the plan), migration DRAFTED (`supabase/containers_2a_container_kind.sql`, not applied). Next: apply migration, then the audited code changes, then full medical regression on QA.
+(on branch `feature/containers-bags`). All questions answered. Step 2A BUILT on `feature/containers-bags` (f719538, local): migration `containers_2a_container_kind` APPLIED to prod (additive; insert trigger keeps `main` correct), audited code changes done, build clean, Winslow bags renamed Trauma Box 1/2 + QR. Next: Zak's medical regression click-through on QA (list in PLAN_CONTAINERS_BAGS.md "2A regression checklist"), then merge 2A, then 2B.
 It **replaces** the parked `feature/items-in-containers` branch below (don't rebase that one).
 
 ### ⬅ RESUME HERE — Container Unification, Steps 6–7 of 7 (afternoon of 2026-08-30)
