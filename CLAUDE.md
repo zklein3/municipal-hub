@@ -152,7 +152,7 @@ prompts, Start Session funnels through the vehicle check, "Do inventory" saves t
 medication Present requires 1+). Details: `PLAN_INVENTORY_STREAMLINE.md`. Docs (REFERENCE/HISTORY/help
 content) for M1 still to write.
 **Next: Milestone 2 — Containers & Bags.** Build plan drafted for review: `PLAN_CONTAINERS_BAGS.md`
-(on branch `feature/containers-bags`). Has 4 open questions for Zak at the bottom. Nothing built.
+(on branch `feature/containers-bags`). All open questions answered; ready to build starting with step 2A. Nothing built.
 It **replaces** the parked `feature/items-in-containers` branch below (don't rebase that one).
 
 ### ⬅ RESUME HERE — Container Unification, Steps 6–7 of 7 (afternoon of 2026-08-30)

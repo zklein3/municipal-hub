@@ -183,13 +183,13 @@ deploying medications (M1), existing truck inspections with no bags.
 - **Controlled substances** are out of scope (separate future module); the move/transfer ledger is built
   so it can carry signatures later.
 
-## Open questions for Zak
-1. **Bags outside the medical module?** Today bags live in the Medical module. An items-only bag (a
-   Trauma Box of tools/supplies) is useful to departments without medical turned on. Recommend: bags
-   become part of base equipment; medications inside bags still require the Medical module.
-2. **"On the truck but not in a compartment"** — allowed as a state (Winslow's Trauma Boxes are like
-   that today), or must every truck bag be placed in a compartment? Recommend: allowed, with a "place in
-   a compartment" prompt.
-3. **Who can move bags and assign POV bags?** Recommend: moving bags = officers (`manage_inventory`);
-   assigning a POV bag to a member = admins/officers; a member can check their own POV bag.
-4. **Instance naming** — auto-numbered "Trauma Box 1, 2…" plus a QR per bag. OK?
+## Decisions on the open questions (Zak, 2026-10-22)
+1. **Bags are base equipment**, not Medical-module-only. Medications inside a bag still require the
+   Medical module (a department without it can build items-only bags).
+2. **A bag may be on a truck without being in a compartment** (Winslow's Trauma Boxes today), shown with
+   a "place in a compartment" prompt.
+3. **Permissions:** moving bags = officers (`manage_inventory`); assigning a POV bag to a member =
+   officers/admins; a member can check their own POV bag.
+4. **Naming:** new instances auto-number ("Trauma Box 1, 2…") with their own QR code, and **can be
+   renamed at any time** — `bag_number` only seeds the default name; the name is freely editable and
+   the QR code doesn't change when renamed.
