@@ -175,7 +175,7 @@ export default function InspectionRunClient({
     const resp = medicationResponses[med.storeroom_inventory_id]
     if (resp?.present === undefined) return false
     if (resp.present === false) return true
-    if (resp.actual_quantity === undefined) return false
+    if (resp.actual_quantity === undefined || resp.actual_quantity < 1) return false // none on hand = Missing
     if (med.tracks_expiration && med.lots.length > 0 && !resp.expiration_status) return false
     return true
   }
@@ -469,9 +469,11 @@ export default function InspectionRunClient({
                   <button
                     onClick={() => {
                       // The qty box pre-fills with the on-file amount; record it now so leaving it
-                      // as-is (including 0 for never-stocked meds) counts as an answer.
+                      // as-is counts as an answer. Present means at least 1 — none on hand is Missing.
                       setMedication(med.storeroom_inventory_id, 'present', true)
-                      if (resp?.actual_quantity === undefined) setMedication(med.storeroom_inventory_id, 'actual_quantity', med.current_quantity)
+                      if (resp?.actual_quantity === undefined && med.current_quantity > 0) {
+                        setMedication(med.storeroom_inventory_id, 'actual_quantity', med.current_quantity)
+                      }
                     }}
                     className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
                       resp?.present === true
@@ -496,8 +498,8 @@ export default function InspectionRunClient({
                     <div className="flex items-center gap-3">
                       <label className="text-xs text-zinc-500">Actual qty:</label>
                       <input
-                        type="number" min="0"
-                        defaultValue={resp?.actual_quantity ?? med.current_quantity}
+                        type="number" min="1"
+                        defaultValue={resp?.actual_quantity ?? (med.current_quantity > 0 ? med.current_quantity : '')}
                         onChange={e => {
                           const n = parseInt(e.target.value)
                           setMedication(med.storeroom_inventory_id, 'actual_quantity', Number.isNaN(n) ? undefined : n)
@@ -506,6 +508,14 @@ export default function InspectionRunClient({
                       />
                       <span className="text-xs text-zinc-500">{med.unit_of_measure}</span>
                     </div>
+                    {resp?.actual_quantity !== undefined && resp.actual_quantity < 1 ? (
+                      <p className="text-xs text-red-600">
+                        None on hand? Mark it <button type="button" className="font-semibold underline"
+                          onClick={() => setMedication(med.storeroom_inventory_id, 'present', false)}>Missing</button> instead.
+                      </p>
+                    ) : resp?.actual_quantity === undefined ? (
+                      <p className="text-xs text-zinc-500">Enter how many are here. If there are none, mark it Missing.</p>
+                    ) : null}
 
                     {med.tracks_expiration && med.lots.length > 0 && (
                       <div>
