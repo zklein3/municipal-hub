@@ -168,8 +168,11 @@ Med Bag (bag: medications).
 - **Inspection — drill-in, decided by Zak:** every bag has its own check. In the parent's check (a
   compartment or a bag), each child bag appears as **one line in the list**; selecting it opens that
   bag's own check; finishing returns to the parent. (Not a flattened list.)
-- **Starter bags** (Trauma Box, Med Bag, …) join the master catalog and seed like items/presets;
-  compartment presets can carry bags (e.g. ambulance "PC-2 holds a Trauma Box").
+- **A compartment holds multiple bags** — side by side, nested, or both (Zak, 2026-10-22).
+- **Starter bags** (Trauma Box, Med Bag, …) join the master catalog and seed like items/presets, so they
+  arrive **in the department's bag list ready to select**. **Starter compartment presets do NOT come
+  with bags pre-placed** (Zak: "I wouldn't nest a bag in a compartment at the onset") — the department
+  picks which bags go where. Presets *may* carry bags if a department sets that up itself.
 - **Starter "Medications" compartment preset** and medications loose in presets become the rare case:
   keep the ability, move the starters to bags.
 - Open for the plan pass: claim/complete lifecycle for a bag inside an inspection session
