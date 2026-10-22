@@ -9,7 +9,6 @@ import CompartmentsStep from './CompartmentsStep'
 import ItemsStep from './ItemsStep'
 import InventoryStep from './InventoryStep'
 import PresetsStep from './PresetsStep'
-import MedicalAdminClient from '../medical/MedicalAdminClient'
 import HelpText from '@/components/HelpText'
 
 const DEPT_SETUP_TABS = [
@@ -44,9 +43,7 @@ export default function SetupFlowClient({
   medicalSupplyTypes,
   presetData,
   canManageDeptSetup,
-  canManageMedical,
   moduleMedical,
-  medicalAdminData,
 }: {
   department: { id: string; name: string }
   stations: any[]
@@ -75,28 +72,12 @@ export default function SetupFlowClient({
     truckCompartments: { id: string; apparatus_id: string; code: string; name: string | null }[]
   }
   canManageDeptSetup: boolean
-  canManageMedical: boolean
   moduleMedical: boolean
-  medicalAdminData: {
-    supplyTypes: any[]
-    storerooms: any[]
-    stations: any[]
-    apparatus: any[]
-    apparatusCompartments: any[]
-    storeroomInventory: any[]
-    lots: any[]
-    bagTemplates: any[]
-    templateItems: any[]
-    bagDeployments: any[]
-    moduleMedicalControlled: boolean
-  }
 }) {
   const searchParams = useSearchParams()
 
-  const TABS = [
-    ...(canManageDeptSetup ? DEPT_SETUP_TABS : []),
-    ...(moduleMedical && canManageMedical ? [{ id: 'medical', label: 'Medical' }] : []),
-  ]
+  // Medical setup (types, storerooms, bags) lives on the Medical page now (/medical, mode buttons).
+  const TABS = canManageDeptSetup ? DEPT_SETUP_TABS : []
 
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') ?? TABS[0]?.id ?? 'stations')
   const effectiveTab = TABS.some(t => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? 'stations')
@@ -109,7 +90,7 @@ export default function SetupFlowClient({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">
-            {TABS.some(t => t.id === 'medical') ? 'Equipment & Medical Setup' : 'Equipment Setup'}
+            Equipment Setup
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">{department.name}</p>
         </div>
@@ -218,22 +199,6 @@ export default function SetupFlowClient({
               allItems={items}
               allCategories={categories}
               medicalSupplyTypes={medicalSupplyTypes}
-            />
-          )}
-          {effectiveTab === 'medical' && (
-            <MedicalAdminClient
-              supplyTypes={medicalAdminData.supplyTypes}
-              storerooms={medicalAdminData.storerooms}
-              stations={medicalAdminData.stations}
-              apparatus={medicalAdminData.apparatus}
-              apparatusCompartments={medicalAdminData.apparatusCompartments}
-              storeroomInventory={medicalAdminData.storeroomInventory}
-              lots={medicalAdminData.lots}
-              bagTemplates={medicalAdminData.bagTemplates}
-              templateItems={medicalAdminData.templateItems}
-              bagDeployments={medicalAdminData.bagDeployments}
-              departmentId={departmentId}
-              moduleMedicalControlled={medicalAdminData.moduleMedicalControlled}
             />
           )}
         </div>

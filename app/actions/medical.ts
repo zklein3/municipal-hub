@@ -92,7 +92,7 @@ export async function createMedicalSupplyType(formData: FormData) {
   }).select('id').single()
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true, id: newRow.id }
 }
 
@@ -118,7 +118,7 @@ export async function updateMedicalSupplyType(formData: FormData) {
   }).eq('id', formData.get('id') as string)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -145,7 +145,7 @@ export async function deleteMedicalSupplyType(id: string) {
 
   const { error: dbErr } = await adminClient.from('medical_supply_types').delete().eq('id', id)
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   revalidatePath('/dept-admin/setup')
   return { success: true }
 }
@@ -165,7 +165,7 @@ export async function createBagTemplate(formData: FormData) {
   }).select('id').single()
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true, id: row.id }
 }
 
@@ -182,7 +182,7 @@ export async function updateBagTemplate(formData: FormData) {
   }).eq('id', formData.get('id') as string)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -196,7 +196,7 @@ export async function addTemplateItem(template_id: string, supply_type_id: strin
   }, { onConflict: 'template_id,supply_type_id' })
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -207,7 +207,7 @@ export async function removeTemplateItem(item_id: string) {
 
   const { error: dbErr } = await adminClient.from('medical_bag_template_items').delete().eq('id', item_id)
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -368,7 +368,7 @@ export async function removeBagFromApparatus(storeroom_id: string) {
     .eq('id', storeroom_id)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -383,7 +383,7 @@ export async function updateBagInventoryMode(storeroom_id: string, mode: 'standa
     .eq('id', storeroom_id)
 
   if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -407,7 +407,7 @@ export async function createMedicalStoreroom(formData: FormData) {
   })
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -427,7 +427,7 @@ export async function updateMedicalStoreroom(formData: FormData) {
   }).eq('id', formData.get('id') as string)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   return { success: true }
 }
 
@@ -444,7 +444,7 @@ export async function assignSupplyToStoreroom(formData: FormData) {
   }, { onConflict: 'storeroom_id,supply_type_id' })
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   revalidatePath('/medical')
   return { success: true }
 }
@@ -459,7 +459,7 @@ export async function updateStoreroomPar(inventory_id: string, par_level: number
     .eq('id', inventory_id)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   revalidatePath('/medical')
   return { success: true }
 }
@@ -1345,7 +1345,7 @@ export async function removeSupplyFromStoreroom(inventory_id: string) {
     .eq('id', inventory_id)
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
-  revalidatePath('/dept-admin/medical')
+  revalidatePath('/medical')
   revalidatePath('/medical')
   return { success: true }
 }

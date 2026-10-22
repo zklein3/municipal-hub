@@ -40,8 +40,9 @@ type Tab = 'supplies' | 'storerooms' | 'templates'
 
 export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory, lots,
-  bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled,
+  bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled, fixedTab,
 }: {
+  fixedTab?: Tab
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
   stations: Station[]
@@ -59,9 +60,11 @@ export default function MedicalAdminClient({
   // Deep links (e.g. from an empty storeroom on /medical): ?medtab=storerooms&storeroom=<id>
   const searchParams = useSearchParams()
   const initialMedTab = searchParams.get('medtab')
-  const [tab, setTab] = useState<Tab>(
+  const [tabState, setTab] = useState<Tab>(
     initialMedTab === 'storerooms' || initialMedTab === 'templates' ? initialMedTab : 'supplies'
   )
+  // Embedded in the Medical page, which owns the mode buttons — show just that one section.
+  const tab = fixedTab ?? tabState
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -215,28 +218,32 @@ export default function MedicalAdminClient({
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Medical</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Supply types, storerooms, and medical inventory configuration</p>
-      </div>
+      {!fixedTab && (<>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-zinc-900">Medical</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Supply types, storerooms, and medical inventory configuration</p>
+        </div>
 
-      <HelpText className="mb-4">
-        Storerooms cover station storage; Bags are apparatus-linked templates. Set a PAR level on each supply so the
-        Medical Supplies report and Inbox Restock tab can flag it before you run out.
-      </HelpText>
+        <HelpText className="mb-4">
+          Storerooms cover station storage; Bags are apparatus-linked templates. Set a PAR level on each supply so the
+          Medical Supplies report and Inbox Restock tab can flag it before you run out.
+        </HelpText>
+      </>)}
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
       {success && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit">
-        {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms'], ['templates', 'Bags']] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {!fixedTab && (
+        <div className="flex gap-1 bg-white rounded-xl border border-zinc-200 p-1 mb-6 w-fit">
+          {([['supplies', 'Supply Types'], ['storerooms', 'Storerooms'], ['templates', 'Bags']] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${tab === key ? 'bg-red-700 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── SUPPLY TYPES TAB ──────────────────────────────────────────── */}
       {tab === 'supplies' && (

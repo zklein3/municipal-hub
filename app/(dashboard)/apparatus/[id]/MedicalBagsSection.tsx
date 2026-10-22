@@ -371,7 +371,7 @@ export default function MedicalBagsSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Medical Bags</h2>
         {isAdmin && (
-          <a href="/dept-admin/medical" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage in Medical →</a>
+          <a href="/medical?mode=bags" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage in Medical →</a>
         )}
       </div>
 
@@ -381,7 +381,7 @@ export default function MedicalBagsSection({
       {bags.length === 0 && (
         <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-6 py-8 text-center text-sm text-zinc-400">
           No bags assigned to this apparatus.
-          {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 font-semibold hover:underline">Assign one in Medical Admin →</a></span>}
+          {isAdmin && <span> <a href="/medical?mode=bags" className="text-red-600 font-semibold hover:underline">Assign one in Medical Admin →</a></span>}
         </div>
       )}
 
@@ -418,7 +418,7 @@ export default function MedicalBagsSection({
             )}
             {inv.length === 0 ? (
               <p className="text-sm text-zinc-400 py-4 text-center">No supplies assigned to this bag.
-                {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 hover:underline">Configure →</a></span>}
+                {isAdmin && <span> <a href="/medical?mode=bags" className="text-red-600 hover:underline">Configure →</a></span>}
               </p>
             ) : (
               <div className="flex flex-col gap-2">

@@ -357,7 +357,7 @@ export default function MedicalCompartmentsSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-base font-semibold text-zinc-900">Compartment Medical Supplies</h2>
         {isAdmin && (
-          <a href="/dept-admin/medical" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage →</a>
+          <a href="/medical?mode=types" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage →</a>
         )}
       </div>
 
@@ -391,7 +391,7 @@ export default function MedicalCompartmentsSection({
             {inv.length === 0 ? (
               <p className="text-sm text-zinc-400 py-4 text-center">
                 No supplies assigned to this compartment.
-                {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 hover:underline">Configure →</a></span>}
+                {isAdmin && <span> <a href="/medical?mode=types" className="text-red-600 hover:underline">Configure →</a></span>}
               </p>
             ) : (
               <div className="flex flex-col gap-2">

@@ -4,8 +4,16 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
 import MedicalStoreClient from './MedicalStoreClient'
+import MedicalModeBar, { type MedicalMode } from './MedicalModeBar'
+import MedicalAdminClient from '../dept-admin/medical/MedicalAdminClient'
+import { getMedicalAdminData } from '@/lib/medical-admin-data'
 
-export default async function MedicalPage() {
+export default async function MedicalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string }>
+}) {
+  const { mode: requestedMode } = await searchParams
   const adminClient = createAdminClient()
 
   const ctx = await getCurrentDepartmentContext()
@@ -22,6 +30,25 @@ export default async function MedicalPage() {
   const isAdmin = medicalPermissions.manage_medical_supply_setup
   const isOfficerOrAbove = medicalPermissions.manage_medical_inventory
   const department_id = ctx.departmentId
+
+  // One Medical page, function switched by mode buttons. Medication Types and Bags are setup modes
+  // (manage_medical_supply_setup); everyone else always gets Storerooms.
+  const mode: MedicalMode = isAdmin && (requestedMode === 'types' || requestedMode === 'bags') ? requestedMode : 'storerooms'
+  if (mode !== 'storerooms') {
+    const data = await getMedicalAdminData(adminClient, department_id)
+    return (
+      <div className="max-w-2xl">
+        <div className="mb-5">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            {mode === 'types' ? 'Your department\'s medication and supply types' : 'Bag templates and where each bag is deployed'}
+          </p>
+        </div>
+        <MedicalModeBar mode={mode} showSetup={isAdmin} />
+        <MedicalAdminClient {...data} departmentId={department_id} fixedTab={mode === 'types' ? 'supplies' : 'templates'} />
+      </div>
+    )
+  }
 
   // Station storerooms (displayed on this page)
   const { data: storerooms } = await adminClient
@@ -219,6 +246,7 @@ export default async function MedicalPage() {
       departmentTimezone={ctx.departmentTimezone}
       catalogTypes={catalogTypes ?? []}
       deptStations={deptStations ?? []}
+      modeBar={<MedicalModeBar mode="storerooms" showSetup={isAdmin} />}
     />
   )
 }

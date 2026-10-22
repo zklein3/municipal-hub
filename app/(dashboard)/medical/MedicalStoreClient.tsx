@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots, updateStoreroomPar, removeSupplyFromStoreroom } from '@/app/actions/medical'
-import { StockMedicationsPanel, NewStoreroomForm } from './StoreroomSetupControls'
+import { StockMedicationsPanel, NewStoreroomForm, EditStoreroomForm } from './StoreroomSetupControls'
 import { formatLocalDate } from '@/lib/format-datetime'
 import { administeredDoseToVolume } from '@/lib/medical-dose'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
@@ -223,8 +223,9 @@ export default function MedicalStoreClient({
   allApparatus, allCompartments,
   isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap, departmentTimezone,
-  catalogTypes, deptStations,
+  catalogTypes, deptStations, modeBar,
 }: {
+  modeBar?: React.ReactNode
   catalogTypes: { id: string; name: string; unit_of_measure: string }[]
   deptStations: { id: string; station_name: string; station_number: string | null }[]
   storerooms: Storeroom[]
@@ -271,6 +272,7 @@ export default function MedicalStoreClient({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showNewStoreroom, setShowNewStoreroom] = useState(false)
+  const [editingStoreroom, setEditingStoreroom] = useState(false)
   const [editingParId, setEditingParId] = useState<string | null>(null)
   const [parDraft, setParDraft] = useState('')
   // Shared across the receive/dispense/waste/wasteExpired modals — only one is ever open
@@ -776,10 +778,11 @@ export default function MedicalStoreClient({
   if (storerooms.length === 0) {
     return (
       <div className="max-w-2xl">
-        <div className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Storeroom</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Track medical supply inventory and expiration</p>
+        <div className="mb-5">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Storerooms, stock, and expiration tracking</p>
         </div>
+        {modeBar}
         {isAdmin ? (
           <NewStoreroomForm stations={deptStations} />
         ) : (
@@ -834,8 +837,8 @@ export default function MedicalStoreClient({
     <div className="max-w-2xl">
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Storeroom</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Track medical supply inventory and expiration</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Storerooms, stock, and expiration tracking</p>
         </div>
         <div className="flex rounded-lg border border-zinc-200 overflow-hidden shrink-0">
           <button onClick={() => setView('inventory')}
@@ -848,6 +851,8 @@ export default function MedicalStoreClient({
           </button>
         </div>
       </div>
+
+      {modeBar}
 
       <HelpText className="mb-4">
         Dispense/Waste both require signatures for controlled substances. Transfer moves stock between this
@@ -999,7 +1004,11 @@ export default function MedicalStoreClient({
         <div className="mb-6"><NewStoreroomForm stations={deptStations} onDone={() => setShowNewStoreroom(false)} /></div>
       )}
 
-      {selectedStoreroom && (
+      {selectedStoreroom && (editingStoreroom && isAdmin ? (
+        <div className="mb-2">
+          <EditStoreroomForm storeroom={selectedStoreroom} stations={deptStations} onDone={() => setEditingStoreroom(false)} />
+        </div>
+      ) : (
         <div className="mb-2 flex items-center justify-between">
           <div>
             <p className="text-base font-semibold text-zinc-900">{selectedStoreroom.name}</p>
@@ -1008,12 +1017,12 @@ export default function MedicalStoreClient({
             )}
           </div>
           {isAdmin && (
-            <a href={`/dept-admin/setup?tab=medical&medtab=storerooms&storeroom=${selectedStoreroomId}`} className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">
-              Rename / deactivate →
-            </a>
+            <button onClick={() => setEditingStoreroom(true)} className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">
+              Rename / deactivate
+            </button>
           )}
         </div>
-      )}
+      ))}
 
       {storeroomInv.length === 0 ? (
         isAdmin ? (

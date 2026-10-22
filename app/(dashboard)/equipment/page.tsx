@@ -123,8 +123,8 @@ export default async function EquipmentPage() {
             className="flex items-center justify-between rounded-xl bg-white border border-zinc-200 shadow-sm px-5 py-4 hover:border-red-300 hover:shadow-md transition-all group"
           >
             <div>
-              <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Medical Storeroom</p>
-              <p className="text-xs text-zinc-400 mt-0.5">Medical supplies, medications, and expiration tracking</p>
+              <p className="text-sm font-semibold text-zinc-900 group-hover:text-red-700 transition-colors">Medical</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Storerooms, stock, expirations, medication types, and bags</p>
             </div>
             <span className="text-xs font-semibold text-red-600 group-hover:text-red-800 shrink-0">View →</span>
           </Link>
