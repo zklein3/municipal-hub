@@ -96,6 +96,21 @@ export default async function InspectionsPage() {
     })
   )
 
+  // Vehicle check done today (department-local date)? "Start Session" funnels through the vehicle
+  // check first unless it's already done.
+  const { data: recentVehicleChecks } = appIds.length > 0
+    ? await adminClient
+        .from('vehicle_inspections')
+        .select('apparatus_id, inspected_at')
+        .in('apparatus_id', appIds)
+        .gte('inspected_at', new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString())
+    : { data: [] }
+  const localDate = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: ctx.departmentTimezone })
+  const today = localDate(new Date().toISOString())
+  const vehicleCheckedToday = new Set(
+    (recentVehicleChecks ?? []).filter(v => localDate(v.inspected_at) === today).map(v => v.apparatus_id)
+  )
+
   // Build apparatus with compartments
   const apparatus = (apparatusRaw ?? []).map((a: { id: string; unit_number: string; apparatus_name: string | null; station_id: string | null; apparatus_type_id: string | null }) => {
     const comps = (compartmentLinks ?? [])
@@ -120,6 +135,7 @@ export default async function InspectionsPage() {
       type_name: a.apparatus_type_id ? typeMap[a.apparatus_type_id] ?? null : null,
       station: a.station_id ? stationMap[a.station_id] ?? null : null,
       compartments: comps,
+      vehicleCheckedToday: vehicleCheckedToday.has(a.id),
       activeSession: sessionByApparatus[a.id]
         ? {
             session_id: sessionByApparatus[a.id].session_id,

@@ -29,6 +29,7 @@ interface Apparatus {
   type_name: string | null
   station: { id: string; station_name: string; station_number: string | null } | null
   compartments: Compartment[]
+  vehicleCheckedToday: boolean
   activeSession: ActiveSession | null
 }
 
@@ -206,10 +207,15 @@ export default function InspectionsClient({ apparatus }: { apparatus: Apparatus[
                           href={`/inspections/vehicle-check/${a.id}`}
                           className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
                         >
-                          Vehicle Check
+                          {a.vehicleCheckedToday ? '✓ Vehicle Check' : 'Vehicle Check'}
                         </Link>
+                        {/* Starting fresh goes through the vehicle check first (it returns to the
+                            inventory session once saved), unless today's check is already done.
+                            Resuming goes straight back into the open session. */}
                         <Link
-                          href={`/inspections/apparatus/${a.id}`}
+                          href={session || a.vehicleCheckedToday
+                            ? `/inspections/apparatus/${a.id}`
+                            : `/inspections/vehicle-check/${a.id}?next=inventory`}
                           className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 transition-colors"
                         >
                           {session ? 'Resume Session' : 'Start Session'}
