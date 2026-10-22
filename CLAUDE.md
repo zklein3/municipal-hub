@@ -144,14 +144,16 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### ⬅ RESUME HERE — Inventory Streamlining, Milestone 1 (2026-10-22)
-Branch **`feature/inventory-presets`** (local, not pushed; `main` untouched and live). Read
-`PLAN_INVENTORY_STREAMLINE.md` — its Status block lists exactly what's built, verified, and left.
-Goal: trucks come with compartments and some items (compartment presets, starter catalog that arrives
-with every department, ledger so department edits are never undone). Next: Zak's live click-through
-on the branch (dev server), then docs, then merge/push when he says so. After that: grow the master
-list type by type (Engine → Ambulance → Brush → Tanker → Aerial) and Milestone 2 (sys-admin catalog UI).
-The container-unification branch below is still parked and now overlaps this work — redo it after.
+### ⬅ RESUME HERE — Inventory Streamlining (2026-10-22)
+**Milestone 1 SHIPPED** to `main` (5a0e0a4, pushed 2026-10-22, live-tested by Zak on QA Test
+Department): compartment presets, starter catalog + seed ledger, "Add standard compartments", plus
+inspection fixes (no empty session after finishing, expired sessions hidden, vehicle check ↔ inventory
+prompts, Start Session funnels through the vehicle check, "Do inventory" saves the check first,
+medication Present requires 1+). Details: `PLAN_INVENTORY_STREAMLINE.md`. Docs (REFERENCE/HISTORY/help
+content) for M1 still to write.
+**Next: Milestone 2 — Containers & Bags.** Build plan drafted for review: `PLAN_CONTAINERS_BAGS.md`
+(on branch `feature/containers-bags`). Has 4 open questions for Zak at the bottom. Nothing built.
+It **replaces** the parked `feature/items-in-containers` branch below (don't rebase that one).
 
 ### ⬅ RESUME HERE — Container Unification, Steps 6–7 of 7 (afternoon of 2026-08-30)
 
