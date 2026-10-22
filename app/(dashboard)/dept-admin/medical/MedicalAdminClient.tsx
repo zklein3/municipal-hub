@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   createMedicalSupplyType, updateMedicalSupplyType, deleteMedicalSupplyType,
   createMedicalStoreroom, updateMedicalStoreroom,
@@ -57,7 +57,12 @@ export default function MedicalAdminClient({
   moduleMedicalControlled: boolean
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('supplies')
+  // Deep links (e.g. from an empty storeroom on /medical): ?medtab=storerooms&storeroom=<id>
+  const searchParams = useSearchParams()
+  const initialMedTab = searchParams.get('medtab')
+  const [tab, setTab] = useState<Tab>(
+    initialMedTab === 'storerooms' || initialMedTab === 'templates' ? initialMedTab : 'supplies'
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -95,7 +100,7 @@ export default function MedicalAdminClient({
   const [bagCompartmentDraft, setBagCompartmentDraft] = useState('')
 
   // Storeroom inventory state
-  const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(null)
+  const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(searchParams.get('storeroom'))
   const [addingSupplyToStoreroom, setAddingSupplyToStoreroom] = useState<string | null>(null)
   const [editingParId, setEditingParId] = useState<string | null>(null)
   const [parDraft, setParDraft] = useState('')
@@ -595,7 +600,7 @@ export default function MedicalAdminClient({
                           {unassigned.length > 0 && (
                             <button onClick={() => setAddingSupplyToStoreroom(addingSupplyToStoreroom === room.id ? null : room.id)}
                               className="text-xs font-semibold text-red-600 hover:text-red-800">
-                              {addingSupplyToStoreroom === room.id ? 'Cancel' : '+ Add Supply Type'}
+                              {addingSupplyToStoreroom === room.id ? 'Cancel' : '+ Stock a Medication Here'}
                             </button>
                           )}
                         </div>

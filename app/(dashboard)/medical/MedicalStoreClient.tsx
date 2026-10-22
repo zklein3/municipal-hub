@@ -994,8 +994,8 @@ export default function MedicalStoreClient({
 
       {storeroomInv.length === 0 ? (
         <div className="mt-4 rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-          No supply types assigned to this storeroom.
-          {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 font-semibold hover:underline">Add supply types →</a></span>}
+          Nothing is stocked in this storeroom yet.
+          {isAdmin && <span> <a href={`/dept-admin/setup?tab=medical&medtab=storerooms&storeroom=${selectedStoreroomId}`} className="text-red-600 font-semibold hover:underline">Choose medications to stock here →</a></span>}
         </div>
       ) : (
         <div className="mt-4 flex flex-col gap-3">
