@@ -68,6 +68,15 @@ export default async function MedicalPage() {
         .in('id', supplyTypeIds)
     : { data: [] }
 
+  // For stocking storerooms and creating new ones right on this page (admins): the department's
+  // full medication catalog and all of its stations.
+  const [{ data: catalogTypes }, { data: deptStations }] = isAdmin
+    ? await Promise.all([
+        adminClient.from('medical_supply_types').select('id, name, unit_of_measure').eq('department_id', department_id).eq('active', true).order('name'),
+        adminClient.from('stations').select('id, station_name, station_number').eq('department_id', department_id).eq('active', true).order('station_number'),
+      ])
+    : [{ data: [] }, { data: [] }]
+
   // Lots (active stock)
   const inventoryIds = (inventory ?? []).map(i => i.id)
   const { data: lots } = inventoryIds.length > 0
@@ -208,6 +217,8 @@ export default async function MedicalPage() {
       personnelMap={personnelMap}
       pendingReorderIds={pendingReorderIds}
       departmentTimezone={ctx.departmentTimezone}
+      catalogTypes={catalogTypes ?? []}
+      deptStations={deptStations ?? []}
     />
   )
 }

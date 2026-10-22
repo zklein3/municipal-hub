@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots } from '@/app/actions/medical'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots, updateStoreroomPar, removeSupplyFromStoreroom } from '@/app/actions/medical'
+import { StockMedicationsPanel, NewStoreroomForm } from './StoreroomSetupControls'
 import { formatLocalDate } from '@/lib/format-datetime'
 import { administeredDoseToVolume } from '@/lib/medical-dose'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
@@ -222,7 +223,10 @@ export default function MedicalStoreClient({
   allApparatus, allCompartments,
   isAdmin, isOfficerOrAbove, myPersonnelId, pendingReorderIds,
   transactions, lotNumberMap, personnelMap, departmentTimezone,
+  catalogTypes, deptStations,
 }: {
+  catalogTypes: { id: string; name: string; unit_of_measure: string }[]
+  deptStations: { id: string; station_name: string; station_number: string | null }[]
   storerooms: Storeroom[]
   inventory: InventoryRow[]
   allTransferStorerooms: Storeroom[]
@@ -246,7 +250,11 @@ export default function MedicalStoreClient({
 }) {
   const router = useRouter()
   const [view, setView] = useState<'inventory' | 'history'>('inventory')
-  const [selectedStoreroomId, setSelectedStoreroomId] = useState<string>(storerooms[0]?.id ?? '')
+  // ?storeroom=<id> (links from Setup and elsewhere) opens that storeroom directly
+  const requestedStoreroom = useSearchParams().get('storeroom')
+  const [selectedStoreroomId, setSelectedStoreroomId] = useState<string>(
+    storerooms.some(s => s.id === requestedStoreroom) ? requestedStoreroom! : (storerooms[0]?.id ?? '')
+  )
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
   const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
   const [concUnitOther, setConcUnitOther] = useState(false)
@@ -262,6 +270,9 @@ export default function MedicalStoreClient({
   const [wasteExpiredForm, setWasteExpiredForm] = useState<WasteExpiredForm | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showNewStoreroom, setShowNewStoreroom] = useState(false)
+  const [editingParId, setEditingParId] = useState<string | null>(null)
+  const [parDraft, setParDraft] = useState('')
   // Shared across the receive/dispense/waste/wasteExpired modals — only one is ever open
   // at a time, so each modal mount gets a fresh pad instance via these refs.
   const signer1PadRef = useRef<SignatureCaptureHandle>(null)
@@ -769,10 +780,13 @@ export default function MedicalStoreClient({
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Medical Storeroom</h1>
           <p className="text-sm text-zinc-500 mt-0.5">Track medical supply inventory and expiration</p>
         </div>
-        <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-          No medical storerooms configured.
-          {isAdmin && <span> <a href="/dept-admin/medical" className="text-red-600 font-semibold hover:underline">Set one up in Dept Admin →</a></span>}
-        </div>
+        {isAdmin ? (
+          <NewStoreroomForm stations={deptStations} />
+        ) : (
+          <div className="rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+            No medical storerooms set up yet.
+          </div>
+        )}
       </div>
     )
   }
@@ -961,9 +975,9 @@ export default function MedicalStoreClient({
       )}
 
       {/* Storeroom selector */}
-      {storerooms.length > 1 && (
+      {(storerooms.length > 1 || isAdmin) && (
         <div className="flex flex-wrap gap-2 mb-6">
-          {storerooms.map(room => (
+          {storerooms.length > 1 && storerooms.map(room => (
             <button key={room.id} onClick={() => setSelectedStoreroomId(room.id)}
               className={`rounded-lg px-4 py-2 text-sm font-semibold border transition-colors ${
                 selectedStoreroomId === room.id
@@ -973,7 +987,16 @@ export default function MedicalStoreClient({
               {room.name}
             </button>
           ))}
+          {isAdmin && (
+            <button onClick={() => setShowNewStoreroom(v => !v)}
+              className="rounded-lg px-4 py-2 text-sm font-semibold border border-dashed border-zinc-300 text-zinc-500 hover:border-red-300 hover:text-red-700">
+              {showNewStoreroom ? 'Cancel' : '+ New storeroom'}
+            </button>
+          )}
         </div>
+      )}
+      {isAdmin && showNewStoreroom && (
+        <div className="mb-6"><NewStoreroomForm stations={deptStations} onDone={() => setShowNewStoreroom(false)} /></div>
       )}
 
       {selectedStoreroom && (
@@ -985,18 +1008,23 @@ export default function MedicalStoreClient({
             )}
           </div>
           {isAdmin && (
-            <a href="/dept-admin/medical" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">
-              Configure →
+            <a href={`/dept-admin/setup?tab=medical&medtab=storerooms&storeroom=${selectedStoreroomId}`} className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">
+              Rename / deactivate →
             </a>
           )}
         </div>
       )}
 
       {storeroomInv.length === 0 ? (
-        <div className="mt-4 rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
-          Nothing is stocked in this storeroom yet.
-          {isAdmin && <span> <a href={`/dept-admin/setup?tab=medical&medtab=storerooms&storeroom=${selectedStoreroomId}`} className="text-red-600 font-semibold hover:underline">Choose medications to stock here →</a></span>}
-        </div>
+        isAdmin ? (
+          <div className="mt-4">
+            <StockMedicationsPanel storeroomId={selectedStoreroomId} stockedTypeIds={new Set()} catalogTypes={catalogTypes} emphasize />
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl bg-white border border-zinc-200 px-6 py-12 text-center text-sm text-zinc-400">
+            Nothing is stocked in this storeroom yet.
+          </div>
+        )
       ) : (
         <div className="mt-4 flex flex-col gap-3">
           {storeroomInv.map(inv => {
@@ -1020,9 +1048,37 @@ export default function MedicalStoreClient({
                         {STATUS_LABELS[status]}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400">
-                      {total} {supply.unit_of_measure} on hand · PAR {inv.par_level}
-                    </p>
+                    {editingParId === inv.id ? (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-zinc-400">{total} {supply.unit_of_measure} on hand · PAR</span>
+                        <input type="number" min="0" value={parDraft} onChange={e => setParDraft(e.target.value)} autoFocus
+                          className="w-16 rounded border border-zinc-300 px-2 py-0.5 text-xs" />
+                        <button disabled={loading} onClick={async () => {
+                          setLoading(true); setError(null)
+                          const r = await updateStoreroomPar(inv.id, parseInt(parDraft) || 0)
+                          setLoading(false)
+                          if (r?.error) { setError(r.error); return }
+                          setEditingParId(null); router.refresh()
+                        }} className="text-xs font-semibold text-red-700 hover:underline">Save</button>
+                        <button onClick={() => setEditingParId(null)} className="text-xs text-zinc-400 hover:underline">Cancel</button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-400">
+                        {total} {supply.unit_of_measure} on hand · {isAdmin ? (
+                          <button onClick={() => { setEditingParId(inv.id); setParDraft(String(inv.par_level)) }}
+                            className="underline decoration-dotted hover:text-zinc-700" title="Change PAR">PAR {inv.par_level}</button>
+                        ) : <>PAR {inv.par_level}</>}
+                        {isAdmin && total === 0 && (
+                          <> · <button disabled={loading} onClick={async () => {
+                            setLoading(true); setError(null)
+                            const r = await removeSupplyFromStoreroom(inv.id)
+                            setLoading(false)
+                            if (r?.error) { setError(r.error); return }
+                            setSuccess(`${supply.name} is no longer stocked here.`); router.refresh()
+                          }} className="underline decoration-dotted hover:text-red-600">Stop stocking here</button></>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap sm:justify-end">
                     <button onClick={() => setExpandedInvId(isExpanded ? null : inv.id)}
@@ -1139,6 +1195,12 @@ export default function MedicalStoreClient({
               </div>
             )
           })}
+        </div>
+      )}
+      {isAdmin && storeroomInv.length > 0 && (
+        <div className="mt-4">
+          <StockMedicationsPanel storeroomId={selectedStoreroomId}
+            stockedTypeIds={new Set(storeroomInv.map(i => i.supply_type_id))} catalogTypes={catalogTypes} />
         </div>
       )}
       </>)}

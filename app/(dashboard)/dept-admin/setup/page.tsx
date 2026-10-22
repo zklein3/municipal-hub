@@ -41,7 +41,8 @@ export default async function SetupPage() {
     ? await adminClient.from('medical_storerooms')
         .select('id, name, station_id, apparatus_id, compartment_id, notes, active')
         .eq('department_id', department_id)
-        .neq('container_kind', 'bag') // bags have their own tab
+        // Station storerooms only: bags have their own tab, compartment medications are managed on the truck screen
+        .eq('container_kind', 'storeroom')
         .order('name')
     : { data: [] }
 
