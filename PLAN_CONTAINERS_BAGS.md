@@ -48,6 +48,23 @@ each item gets fixed in place during the step that touches that screen:
    **2B:** one storeroom screen with everything (stock it, PAR, receive, use, waste, transfer, lots,
    history); setup keeps only creating/renaming storerooms.
 
+## Consolidation track (Zak, 2026-10-22: "configuration of the pages is paramount — do it now")
+Organize around the **places gear lives** (truck, storeroom, bag): each place screen shows what's in it
+and offers every action on the spot; Setup only *defines* things (catalog, medication types, presets,
+bag templates, compartment library). One copy of each form, shared by all place screens.
+- **C1 Navigation — DONE** (`ad0b146`): Dept Admin grouped into 6 areas with sub-menus (`?group=`);
+  Equipment & Medical holds direct cards for Equipment Setup, Compartment Presets, Medical Setup.
+- **C2 One storeroom screen — DONE** (`4fc4e18`): `/medical` stocks (one / "Add all"), edits PAR,
+  removes, creates storerooms, plus receive/use/waste/transfer; `?storeroom=` deep link. Setup →
+  Medical → Storerooms keeps create/rename/deactivate only. Fixes friction #1, #4, #5.
+- **C3 One copy of each medication form — NEXT:** Receive / Use / Administer / Waste / Transfer are
+  implemented 3× (`MedicalStoreClient` ~2000 lines, `MedicalBagsSection` ~900, `MedicalCompartmentsSection`
+  ~800). Extract into shared components used by all three.
+- **C4 One truck screen:** `/equipment/[id]` is the only place to arrange a truck; Setup → Inventory
+  step and `/equipment/[id]/[compartment_id]` fold into it (duplicate place/qty/remove/move forms today).
+- **C5:** bag place screen + 2B–2G build on top.
+- Noticed: "Print CS Log" only appears when the department has a controlled-substance type.
+
 ## What exists today (verified 2026-10-22)
 - **`medical_storerooms` is the container table**, polymorphic by nullable columns: station storeroom
   (`station_id`), bag (`template_id` + `apparatus_id`), compartment storage (`compartment_id`). There is
