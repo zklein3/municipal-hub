@@ -144,6 +144,15 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### ⬅ RESUME HERE — Inventory Streamlining, Milestone 1 (2026-10-22)
+Branch **`feature/inventory-presets`** (local, not pushed; `main` untouched and live). Read
+`PLAN_INVENTORY_STREAMLINE.md` — its Status block lists exactly what's built, verified, and left.
+Goal: trucks come with compartments and some items (compartment presets, starter catalog that arrives
+with every department, ledger so department edits are never undone). Next: Zak's live click-through
+on the branch (dev server), then docs, then merge/push when he says so. After that: grow the master
+list type by type (Engine → Ambulance → Brush → Tanker → Aerial) and Milestone 2 (sys-admin catalog UI).
+The container-unification branch below is still parked and now overlaps this work — redo it after.
+
 ### ⬅ RESUME HERE — Container Unification, Steps 6–7 of 7 (afternoon of 2026-08-30)
 
 Work lives on branch **`feature/items-in-containers`** — 5 commits, local, never pushed.

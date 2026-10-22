@@ -1,6 +1,26 @@
 # Inventory Streamlining — Build Plan
 
-**Status:** planned 2026-10-22, reviewed and approved for build. Nothing built yet.
+**Status (2026-10-22, end of first build session):** Milestone 1 steps 1–8 built on branch
+`feature/inventory-presets` (local, not pushed; `main` untouched). Build clean.
+- Steps 2–4: migrations `add_starter_catalog_master`, `add_compartment_presets` applied to prod DB
+  (additive, harmless to `main`); initial master content seeded (14 categories, 64 items, 5 medication
+  types, 17 compartments, 37 type tags).
+- Step 5: `lib/starter-seed.ts` + `app/actions/starters.ts`; wired into `createDepartment`. Verified by
+  script on QA Test Department: seed twice → no duplicates; deleted item/preset and renamed preset not
+  re-added or duplicated.
+- Step 7: `lib/preset-deploy.ts` + `app/actions/presets.ts`; `getOrCreateCompartmentStoreroom` moved to
+  `lib/medical-storeroom.ts`. Verified by script on QA "Engine 1": add standard compartments (6 created,
+  QR codes 1-PUMP etc.), re-run adds nothing, Trauma + Medications kits into existing D1 (7 items,
+  5 meds at PAR, zero lots).
+- Steps 6/8 UI: Setup → Presets tab (`PresetsStep.tsx`), "Add standard compartments" checkbox on both
+  new-apparatus forms, "+ Add standard <type> compartments" and "Save as preset" on `/equipment/[id]`,
+  sys-admin "Push to all fire departments" on `/admin/departments`.
+- **Not yet done:** live click-through (Zak), verification items 1, 5, 7, 8 in the UI (esp. a full
+  inspection on a freshly built truck), a "needs initial count" indicator for zero-lot medications
+  (today they show the existing zero-stock status), docs (REFERENCE/HISTORY/help content).
+- **QA Test Department now holds seeded starters + a stamped Engine 1** — test data, fine to keep.
+- **Tooling note:** the Supabase MCP auto-declines SQL containing DELETE in this VS Code panel; test
+  with self-rolling-back transactions, or delete via app/server code.
 **Origin:** sys-log feedback note (2026-10-14) — "narrow in the inventory build out and truck check build
 out ... streamlined ... includes medications for the ambulance and the station."
 

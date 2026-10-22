@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createDepartment, toggleDepartment } from '@/app/actions/departments'
 import { setSystemSetting } from '@/app/actions/admin'
+import { pushStartersToAllDepartments } from '@/app/actions/starters'
 
 interface Department {
   id: string
@@ -35,6 +36,24 @@ export default function DepartmentsClient({
       setShowForm(false)
     }
     setLoading(false)
+  }
+
+  const [confirmPush, setConfirmPush] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
+
+  async function handlePush() {
+    setPushing(true)
+    const r = await pushStartersToAllDepartments()
+    setPushing(false)
+    setConfirmPush(false)
+    if (r.error) { setPushMsg(r.error); return }
+    setPushMsg((r.results ?? []).map(x => {
+      if (x.error) return `${x.name}: failed (${x.error})`
+      const s = x.summary
+      if (!s) return `${x.name}: done`
+      return `${x.name}: +${s.presets.created} presets, +${s.items.created} items` + (s.items.adopted ? ` (${s.items.adopted} matched)` : '')
+    }).join(' · ') || 'No active fire departments.')
   }
 
   async function handleToggle(id: string, active: boolean) {
@@ -74,6 +93,30 @@ export default function DepartmentsClient({
               fsEnabled ? 'translate-x-5' : 'translate-x-0'
             }`} />
           </button>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5 pt-5 border-t border-zinc-100">
+          <div>
+            <p className="text-sm font-medium text-zinc-800">Starter Catalog</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Gives every active fire department any starter items and compartment presets it hasn&apos;t received yet.
+              Never changes or re-adds anything a department already edited or removed.
+            </p>
+            {pushMsg && <p className="text-xs text-zinc-600 mt-1">{pushMsg}</p>}
+          </div>
+          {confirmPush ? (
+            <div className="flex shrink-0 gap-2">
+              <button onClick={handlePush} disabled={pushing}
+                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                {pushing ? 'Pushing...' : 'Confirm push'}
+              </button>
+              <button onClick={() => setConfirmPush(false)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600">Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => { setConfirmPush(true); setPushMsg(null) }}
+              className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+              Push to all fire departments
+            </button>
+          )}
         </div>
       </div>
 
