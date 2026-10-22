@@ -174,6 +174,20 @@ export default function InspectionRunClient({
     }))
   }
 
+  // Count-first medical cards: a number decides present (1+) vs missing (0); empty = unanswered.
+  function setMedCount(storeroom_inventory_id: string, n: number | undefined) {
+    const valid = n !== undefined && !Number.isNaN(n) && n >= 0 ? Math.floor(n) : undefined
+    setMedicationResponses(prev => ({
+      ...prev,
+      [storeroom_inventory_id]: {
+        ...prev[storeroom_inventory_id],
+        storeroom_inventory_id,
+        actual_quantity: valid,
+        present: valid === undefined ? undefined : valid > 0,
+      },
+    }))
+  }
+
   function isMedicationComplete(med: MedicationItem): boolean {
     const resp = medicationResponses[med.storeroom_inventory_id]
     if (resp?.present === undefined) return false
@@ -474,58 +488,36 @@ export default function InspectionRunClient({
                   </div>
                 )}
 
-                <p className="text-sm text-zinc-700 mb-3">Is {med.supply_name} present?</p>
-                <div className="flex gap-3 mb-3">
-                  <button
-                    onClick={() => {
-                      // The qty box pre-fills with the on-file amount; record it now so leaving it
-                      // as-is counts as an answer. Present means at least 1 — none on hand is Missing.
-                      setMedication(med.storeroom_inventory_id, 'present', true)
-                      if (resp?.actual_quantity === undefined && med.current_quantity > 0) {
-                        setMedication(med.storeroom_inventory_id, 'actual_quantity', med.current_quantity)
-                      }
-                    }}
-                    className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      resp?.present === true
-                        ? 'bg-green-600 border-green-600 text-white'
-                        : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'
-                    }`}>
-                    ✓ Present
-                  </button>
-                  <button
-                    onClick={() => setMedication(med.storeroom_inventory_id, 'present', false)}
-                    className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                      resp?.present === false
-                        ? 'bg-red-600 border-red-600 text-white'
-                        : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'
-                    }`}>
-                    ✗ Missing
+                {/* Counted items: just ask how many are here. 0 = missing; any other number = present
+                    with that count (a short count then offers the correction below). */}
+                <p className="text-sm text-zinc-700 mb-2">
+                  How many are here? <span className="text-xs text-zinc-400">On file: {med.current_quantity} {med.unit_of_measure}</span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <input
+                    type="number" min="0" inputMode="numeric"
+                    value={resp?.present === false ? 0 : (resp?.actual_quantity ?? '')}
+                    placeholder="Count"
+                    onChange={e => setMedCount(med.storeroom_inventory_id, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                    className={`w-24 rounded-lg border px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 ${
+                      resp?.present === false ? 'border-red-300 bg-red-50' : resp?.present === true ? 'border-green-300 bg-green-50' : 'border-zinc-300'
+                    }`}
+                  />
+                  <span className="text-xs text-zinc-500">{med.unit_of_measure}</span>
+                  {med.current_quantity > 0 && (
+                    <button type="button" onClick={() => setMedCount(med.storeroom_inventory_id, med.current_quantity)}
+                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">
+                      ✓ All {med.current_quantity} here
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setMedCount(med.storeroom_inventory_id, 0)}
+                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">
+                    ✗ None
                   </button>
                 </div>
 
                 {resp?.present === true && (
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <label className="text-xs text-zinc-500">Actual qty:</label>
-                      <input
-                        type="number" min="1"
-                        defaultValue={resp?.actual_quantity ?? (med.current_quantity > 0 ? med.current_quantity : '')}
-                        onChange={e => {
-                          const n = parseInt(e.target.value)
-                          setMedication(med.storeroom_inventory_id, 'actual_quantity', Number.isNaN(n) ? undefined : n)
-                        }}
-                        className="w-20 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                      />
-                      <span className="text-xs text-zinc-500">{med.unit_of_measure}</span>
-                    </div>
-                    {resp?.actual_quantity !== undefined && resp.actual_quantity < 1 ? (
-                      <p className="text-xs text-red-600">
-                        None on hand? Mark it <button type="button" className="font-semibold underline"
-                          onClick={() => setMedication(med.storeroom_inventory_id, 'present', false)}>Missing</button> instead.
-                      </p>
-                    ) : resp?.actual_quantity === undefined ? (
-                      <p className="text-xs text-zinc-500">Enter how many are here. If there are none, mark it Missing.</p>
-                    ) : null}
 
                     {med.tracks_expiration && med.lots.length > 0 && (
                       <div>
@@ -601,6 +593,11 @@ export default function InspectionRunClient({
                           className="rounded-lg border border-zinc-300 px-2 py-1 text-xs">
                           {reasons.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
+                      )}
+                      {correct && short && (
+                        <p className="text-xs text-amber-800">
+                          After you submit this compartment, the inspection screen shows a <span className="font-semibold">Restock from storage</span> button to refill it.
+                        </p>
                       )}
                     </div>
                   )
