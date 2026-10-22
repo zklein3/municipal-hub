@@ -8,6 +8,7 @@ import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { VEHICLE_CHECK_DEFAULTS } from '@/lib/vehicle-check-defaults'
 import { correctMedicalCount } from '@/lib/medical-count-correction'
+import { restockFromStoreroom } from '@/app/actions/restock'
 
 async function getContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -200,6 +201,9 @@ export async function submitInspection(payload: {
     // Inspector chose to make the on-file count match what they counted (Missing counts as 0).
     correct_count?: boolean
     correction_reason?: string
+    // "Restock it now from <storeroom>" — refill the shortage right after correcting the count.
+    refill_from_storeroom_id?: string
+    refill_quantity?: number
   }[]
 }) {
   const adminClient = createAdminClient()
@@ -348,7 +352,15 @@ export async function submitInspection(payload: {
           department_id: payload.department_id, storeroom_inventory_id: mc.storeroom_inventory_id,
           counted, reason: mc.correction_reason || 'Inventory check', performed_by: payload.personnel_id,
         })
-        if (r.error) await logError(`Count correction failed: ${r.error}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } })
+        if (r.error) { await logError(`Count correction failed: ${r.error}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } }); continue }
+
+        if (mc.refill_from_storeroom_id && (mc.refill_quantity ?? 0) > 0) {
+          const rr = await restockFromStoreroom(mc.refill_from_storeroom_id, [{
+            destination_storeroom_id: mc.storeroom_id, supply_type_id: mc.supply_type_id, quantity: mc.refill_quantity!,
+          }], payload.apparatus_id)
+          const failed = rr.error ?? rr.results?.find(x => x.error)?.error
+          if (failed) await logError(`Restock during inspection: ${failed}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } })
+        }
       }
     }
 

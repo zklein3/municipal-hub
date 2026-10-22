@@ -178,6 +178,7 @@ export default async function InspectionRunPage({
     current_quantity: number
     lots: { id: string; lot_number: string | null; expiration_date: string | null; quantity_remaining: number }[]
     status: string
+    refill_sources: { storeroom_id: string; name: string; available: number }[]
   }[] = []
 
   const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
@@ -217,6 +218,26 @@ export default async function InspectionRunPage({
           : Promise.resolve({ data: [] }),
       ])
 
+      // Where each item could be refilled from right now: station storerooms with stock on hand.
+      const { data: srcRooms } = await adminClient.from('medical_storerooms').select('id, name')
+        .eq('department_id', ctx.departmentId).eq('active', true).eq('container_kind', 'storeroom')
+      const srcRoomIds = (srcRooms ?? []).map(r => r.id)
+      const { data: srcInv } = srcRoomIds.length > 0 && supplyTypeIds.length > 0
+        ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id')
+            .in('storeroom_id', srcRoomIds).in('supply_type_id', supplyTypeIds)
+        : { data: [] as { id: string; storeroom_id: string; supply_type_id: string }[] }
+      const { data: srcLots } = (srcInv ?? []).length > 0
+        ? await adminClient.from('medical_stock_lots').select('storeroom_inventory_id, quantity_remaining')
+            .in('storeroom_inventory_id', (srcInv ?? []).map(i => i.id)).eq('active', true).gt('quantity_remaining', 0)
+        : { data: [] as { storeroom_inventory_id: string; quantity_remaining: number }[] }
+      const srcQty = new Map<string, number>()
+      for (const l of srcLots ?? []) srcQty.set(l.storeroom_inventory_id, (srcQty.get(l.storeroom_inventory_id) ?? 0) + l.quantity_remaining)
+      const srcName = Object.fromEntries((srcRooms ?? []).map(r => [r.id, r.name]))
+      const sourcesFor = (supplyTypeId: string) => (srcInv ?? [])
+        .filter(i => i.supply_type_id === supplyTypeId && (srcQty.get(i.id) ?? 0) > 0)
+        .map(i => ({ storeroom_id: i.storeroom_id, name: srcName[i.storeroom_id] ?? 'Storeroom', available: srcQty.get(i.id) ?? 0 }))
+        .sort((a, b) => b.available - a.available)
+
       medicationItems = (invRows ?? []).map(inv => {
         const supply = (supplyTypes ?? []).find(s => s.id === inv.supply_type_id)
         const invLots = (lots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
@@ -234,6 +255,7 @@ export default async function InspectionRunPage({
           current_quantity,
           lots: invLots.map(l => ({ id: l.id, lot_number: l.lot_number, expiration_date: l.expiration_date, quantity_remaining: l.quantity_remaining })),
           status: getMedicalSupplyStatus(current_quantity, inv.par_level, invLots),
+          refill_sources: sourcesFor(inv.supply_type_id),
         }
       })
     }

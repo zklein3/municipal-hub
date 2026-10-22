@@ -73,6 +73,7 @@ interface MedicationItem {
   par_level: number
   tracks_expiration: boolean
   is_controlled: boolean
+  refill_sources: { storeroom_id: string; name: string; available: number }[]
   current_quantity: number
   lots: { id: string; lot_number: string | null; expiration_date: string | null; quantity_remaining: number }[]
   status: string
@@ -88,6 +89,8 @@ type MedicationResponse = {
   notes?: string
   correct_count?: boolean
   correction_reason?: string
+  refill?: boolean
+  refill_from?: string
 }
 
 function lotIsExpiringOrExpired(lot: { expiration_date: string | null }): boolean {
@@ -378,7 +381,10 @@ export default function InspectionRunClient({
           const differs = counted !== undefined && counted !== med.current_quantity
           if (!differs || med.is_controlled || resp?.correct_count === false) return {}
           const short = (counted ?? 0) < med.current_quantity
-          return { correct_count: true, correction_reason: resp?.correction_reason ?? (short ? 'Used but not recorded' : 'Found extra') }
+          const refill = short && resp?.refill && med.refill_sources.length > 0
+            ? { refill_from_storeroom_id: resp?.refill_from ?? med.refill_sources[0].storeroom_id, refill_quantity: Math.max(med.par_level - (counted ?? 0), 0) }
+            : {}
+          return { correct_count: true, correction_reason: resp?.correction_reason ?? (short ? 'Used but not recorded' : 'Found extra'), ...refill }
         })(),
       }
     })
@@ -576,30 +582,60 @@ export default function InspectionRunClient({
                     )
                   }
                   const correct = resp?.correct_count !== false
+                  const diff = Math.abs((counted ?? 0) - med.current_quantity)
                   return (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 space-y-2">
-                      <p className="text-xs font-semibold text-amber-800">
-                        Count is off: on file {med.current_quantity}, you counted {counted}.
+                      <p className="text-sm font-semibold text-amber-800">
+                        {short ? `${diff} missing` : `${diff} extra found`}
+                        <span className="ml-1 text-xs font-normal text-amber-700">(on file {med.current_quantity}, counted {counted})</span>
                       </p>
-                      <label className="flex items-center gap-2 text-xs text-zinc-700">
+                      <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-700">
                         <input type="checkbox" checked={correct}
                           onChange={e => setMedication(med.storeroom_inventory_id, 'correct_count', e.target.checked)}
                           className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
-                        Update the on-file count from {med.current_quantity} to {counted} (what&apos;s actually here)
+                        <span className="font-semibold">{short ? `${diff} missing — needs restock` : `${diff} extra — add to the count`}</span>
+                        {correct && (
+                          <select value={resp?.correction_reason ?? reasons[0]}
+                            onChange={e => setMedication(med.storeroom_inventory_id, 'correction_reason', e.target.value)}
+                            className="rounded-lg border border-zinc-300 px-2 py-0.5 text-xs">
+                            {reasons.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        )}
                       </label>
-                      {correct && (
-                        <select value={resp?.correction_reason ?? reasons[0]}
-                          onChange={e => setMedication(med.storeroom_inventory_id, 'correction_reason', e.target.value)}
-                          className="rounded-lg border border-zinc-300 px-2 py-1 text-xs">
-                          {reasons.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      )}
-                      {correct && short && (
-                        <p className="text-xs text-amber-800">
-                          This only fixes the record — it doesn&apos;t refill anything. To bring it back up to PAR ({med.par_level}),
-                          use <span className="font-semibold">Restock from storage</span> on the inspection screen after you submit this compartment.
-                        </p>
-                      )}
+                      {correct && short && (() => {
+                        const need = Math.max(med.par_level - (counted ?? 0), 0)
+                        if (need === 0) return null
+                        const sources = med.refill_sources
+                        if (sources.length === 0) {
+                          return (
+                            <p className="text-xs text-amber-800">
+                              No storeroom has any in stock right now — it stays flagged as needing restock.
+                            </p>
+                          )
+                        }
+                        const from = resp?.refill_from ?? sources[0].storeroom_id
+                        const avail = sources.find(s => s.storeroom_id === from)?.available ?? 0
+                        const moves = Math.min(need, avail)
+                        return (
+                          <div className="space-y-1">
+                            <label className="flex flex-wrap items-center gap-2 text-xs text-zinc-700">
+                              <input type="checkbox" checked={!!resp?.refill}
+                                onChange={e => setMedication(med.storeroom_inventory_id, 'refill', e.target.checked)}
+                                className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                              <span className="font-semibold">Restock it now from</span>
+                              <select value={from} onChange={e => setMedication(med.storeroom_inventory_id, 'refill_from', e.target.value)}
+                                className="rounded-lg border border-zinc-300 px-2 py-0.5 text-xs">
+                                {sources.map(s => <option key={s.storeroom_id} value={s.storeroom_id}>{s.name} ({s.available})</option>)}
+                              </select>
+                            </label>
+                            <p className="text-xs text-zinc-500">
+                              {resp?.refill
+                                ? `Puts ${moves} back from the storeroom when you submit${moves < need ? ` — only ${avail} available, so it'll still be ${need - moves} short` : ''}.`
+                                : 'Check this if you have it in hand. Otherwise it stays flagged, and Restock from storage on the inspection screen refills everything at once.'}
+                            </p>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })()}
