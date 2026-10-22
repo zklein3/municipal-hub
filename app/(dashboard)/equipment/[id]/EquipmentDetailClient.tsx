@@ -327,6 +327,14 @@ export default function EquipmentDetailClient({
         >
           Fuel Log →
         </Link>
+        {medicalSection && (
+          <Link
+            href={`/medical?mode=restock&apparatus=${apparatus.id}`}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors shadow-sm"
+          >
+            Restock from storage →
+          </Link>
+        )}
         {canAddStandard && (
           <button
             onClick={handleAddStandard}

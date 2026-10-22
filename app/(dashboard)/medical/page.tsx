@@ -5,15 +5,16 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
 import MedicalStoreClient from './MedicalStoreClient'
 import MedicalModeBar, { type MedicalMode } from './MedicalModeBar'
+import RestockClient from './RestockClient'
 import MedicalAdminClient from '../dept-admin/medical/MedicalAdminClient'
 import { getMedicalAdminData } from '@/lib/medical-admin-data'
 
 export default async function MedicalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string }>
+  searchParams: Promise<{ mode?: string; apparatus?: string }>
 }) {
-  const { mode: requestedMode } = await searchParams
+  const { mode: requestedMode, apparatus: restockApparatusId } = await searchParams
   const adminClient = createAdminClient()
 
   const ctx = await getCurrentDepartmentContext()
@@ -30,6 +31,60 @@ export default async function MedicalPage({
   const isAdmin = medicalPermissions.manage_medical_supply_setup
   const isOfficerOrAbove = medicalPermissions.manage_medical_inventory
   const department_id = ctx.departmentId
+
+  // Restock a truck from storage (reached from the truck's "Restock from storage" button).
+  if (requestedMode === 'restock' && restockApparatusId) {
+    const { data: app } = await adminClient.from('apparatus')
+      .select('id, unit_number, apparatus_name, department_id').eq('id', restockApparatusId).single()
+    if (!app || app.department_id !== department_id) redirect('/equipment')
+
+    const [{ data: truckRooms }, { data: srcRooms }] = await Promise.all([
+      adminClient.from('medical_storerooms').select('id, name, container_kind')
+        .eq('apparatus_id', app.id).eq('active', true).in('container_kind', ['compartment_storage', 'bag']),
+      adminClient.from('medical_storerooms').select('id, name')
+        .eq('department_id', department_id).eq('active', true).eq('container_kind', 'storeroom').order('name'),
+    ])
+    const roomIds = [...(truckRooms ?? []), ...(srcRooms ?? [])].map(r => r.id)
+    const { data: inv } = roomIds.length > 0
+      ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', roomIds)
+      : { data: [] as { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[] }
+    const invIds = (inv ?? []).map(i => i.id)
+    const typeIds = [...new Set((inv ?? []).map(i => i.supply_type_id))]
+    const [{ data: lots }, { data: types }] = await Promise.all([
+      invIds.length > 0
+        ? adminClient.from('medical_stock_lots').select('storeroom_inventory_id, quantity_remaining').in('storeroom_inventory_id', invIds).eq('active', true).gt('quantity_remaining', 0)
+        : Promise.resolve({ data: [] as { storeroom_inventory_id: string; quantity_remaining: number }[] }),
+      typeIds.length > 0
+        ? adminClient.from('medical_supply_types').select('id, name, unit_of_measure, is_controlled').in('id', typeIds)
+        : Promise.resolve({ data: [] as { id: string; name: string; unit_of_measure: string; is_controlled: boolean }[] }),
+    ])
+    const onHand = new Map<string, number>()
+    for (const l of lots ?? []) onHand.set(l.storeroom_inventory_id, (onHand.get(l.storeroom_inventory_id) ?? 0) + l.quantity_remaining)
+    const typeById = Object.fromEntries((types ?? []).map(t => [t.id, t]))
+    const truckRoomById = Object.fromEntries((truckRooms ?? []).map(r => [r.id, r]))
+
+    const lines = (inv ?? []).filter(i => truckRoomById[i.storeroom_id] && typeById[i.supply_type_id]).map(i => {
+      const room = truckRoomById[i.storeroom_id]
+      const t = typeById[i.supply_type_id]
+      return {
+        destination_storeroom_id: i.storeroom_id,
+        location: room.container_kind === 'bag' ? `Bag: ${room.name}` : room.name,
+        supply_type_id: i.supply_type_id, supply_name: t.name, unit: t.unit_of_measure, is_controlled: t.is_controlled,
+        on_hand: onHand.get(i.id) ?? 0, par: i.par_level,
+      }
+    })
+    const srcRoomIds = new Set((srcRooms ?? []).map(r => r.id))
+    const availability: Record<string, Record<string, number>> = {}
+    for (const i of inv ?? []) {
+      if (!srcRoomIds.has(i.storeroom_id)) continue
+      ;(availability[i.storeroom_id] ??= {})[i.supply_type_id] = onHand.get(i.id) ?? 0
+    }
+
+    return (
+      <RestockClient apparatus={{ id: app.id, unit_number: app.unit_number, apparatus_name: app.apparatus_name }}
+        lines={lines} storerooms={srcRooms ?? []} availability={availability} canMoveControlled={isOfficerOrAbove} />
+    )
+  }
 
   // One Medical page, function switched by mode buttons. Medication Types and Bags are setup modes
   // (manage_medical_supply_setup); everyone else always gets Storerooms.
