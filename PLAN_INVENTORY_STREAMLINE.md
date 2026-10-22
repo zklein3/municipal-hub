@@ -192,8 +192,18 @@ Med Bag (bag: medications).
      **assigned to a member — POV bags** (volunteers carrying a med/jump bag in their own vehicle).
      ⇒ A bag check must also run **on its own, outside a truck inspection** — e.g. a member checks the
      POV bag assigned to them, or someone checks the spare bags in the storeroom.
-  - Default unless Zak says otherwise: when a bag moves to another truck (or member), offer to move the
-    tracked items last confirmed in it along with it.
+  5. **Moving a bag requires an answer about its contents (Zak, 2026-10-22).** When a bag moves
+     (truck→truck, to/from a member or storeroom), the mover must answer, per category: **did the
+     contents move with the bag, or just the bag?**
+     - **Medications (stock/lots)** — e.g. Aspirin in the Med Bag. "Moved with it" = stock stays with the
+       bag (it's recorded against the bag, so nothing changes but the location). "Just the bag" = the
+       mover says where the stock went (left in the old compartment, returned to a storeroom, …) and it
+       is recorded as **transfer transactions** in the medical ledger (audit trail; matters for
+       controlled substances later).
+     - **Tracked equipment (assets)** — e.g. the AED. "Moved with it" = the assets' truck/location updates
+       with the bag. "Just the bag" = they stay recorded at the old location.
+     - Not optional — the move can't complete until it's answered. Every move is logged (who, when,
+       from, to, and the answer) in the movement log.
 
 ## MILESTONE 3 — Sys-admin catalog management (`/admin/catalog`)
 Edit the master list; **pull** from a department (browse its items and presets, promote definitions to
