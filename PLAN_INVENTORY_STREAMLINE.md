@@ -175,9 +175,21 @@ Med Bag (bag: medications).
   picks which bags go where. Presets *may* carry bags if a department sets that up itself.
 - **Starter "Medications" compartment preset** and medications loose in presets become the rare case:
   keep the ability, move the starters to bags.
-- Open for the plan pass: claim/complete lifecycle for a bag inside an inspection session
-  (`inspection_session_compartments` has no row type for a bag today), how a bag's check shows on
-  reports, and asset slots inside bags.
+- **Technical decisions (Zak, 2026-10-22):**
+  1. **Session lifecycle:** every bag is its own session row under its parent (compartment or bag),
+     claimable on its own. **A parent is not done until its own contents and every bag inside it are
+     done** (roll-up). **Anyone can take over an unfinished check and continue from the last input** —
+     e.g. you start PC-2, I start the Trauma Box and stop; you can pick up the Trauma Box where I left
+     off and finish it. ⇒ **Requires saving answers as you go** (per-item draft responses stored
+     server-side), not only at compartment submit as today. Bonus: survives a locked/lost phone.
+  2. **Reports:** a bag has its own line/identity. In a report it can appear nested under its
+     compartment or broken out on its own; nested entries are **links** — click "Trauma Box" inside the
+     PC-2 report for a date to open that bag's check for that date. Logs record the bag plus a
+     location snapshot ("BLS 11 › PC-2 › Trauma Box › Med Bag"). Bag history follows the bag.
+  3. **Tracked items (assets) at any level** — compartment, bag, or nested bag — because departments
+     carry equipment in different ways and the system should match their layout.
+  - Still to confirm: when a bag moves to another truck, offer to move the tracked items last
+    confirmed in it (recommended); can a bag sit in a station storeroom (spares) — recommended yes.
 
 ## MILESTONE 3 — Sys-admin catalog management (`/admin/catalog`)
 Edit the master list; **pull** from a department (browse its items and presets, promote definitions to
