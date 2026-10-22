@@ -62,6 +62,19 @@ bag templates, compartment library). One copy of each form, shared by all place 
   Medical tab removed; `/dept-admin/medical` and `?tab=medical` redirect. Storeroom rename/deactivate
   inline. Dept Admin + Inventory cards both "Medical" → `/medical`. Loader: `lib/medical-admin-data.ts`.
   (MedicalAdminClient's old Storerooms tab is now unreachable dead code — remove during C3.)
+- **Medical flow on the truck — DONE, live-tested by Zak on QA (2026-10-22):**
+  - Catalog move between lists (`133d65d`): "Wrong list?" on an item's Edit / a medical type's Edit.
+    Non-Rebreather moved equipment → medical Supply with placements, preset and opening count.
+  - Use / Restock / Transfer right on the medical rows inside each truck compartment card (`965bfc9`).
+  - "Restock from storage" one-pass screen (`15679f7`), scoped per compartment (`0a926d9`).
+  - Inventory check: count-first card ("How many are here? Should have N · on file M"), shortage
+    acknowledgment ("1 missing — needs restock" + reason, records the correction), "Restock it now
+    from <storeroom>" whenever below PAR, per-compartment restock badges, whole-truck restock in the
+    completion box (`63991e1`…`8a681d1`).
+- **Friction backlog (deferred by Zak):**
+  6. **Editing PAR on a truck compartment** — PAR for a compartment's medical line can only be set when
+     it's placed (preset / "+ Add Item"); no in-place PAR edit on the truck card yet. "Another time."
+  7. Adding items to compartments/bags is still the old flow — part of C4 (one truck screen).
 - **C3 One copy of each medication form — NEXT:** Receive / Use / Administer / Waste / Transfer are
   implemented 3× (`MedicalStoreClient` ~2000 lines, `MedicalBagsSection` ~900, `MedicalCompartmentsSection`
   ~800). Extract into shared components used by all three.
