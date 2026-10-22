@@ -176,6 +176,32 @@ export default function InspectionSessionClient({
 
   return (
     <div className="space-y-4">
+      {/* Vehicle check status — separate process, but shown here so it's never forgotten.
+          (On completion the green banner below carries the same prompt.) */}
+      {!sessionClosed && (
+        <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-2.5 ${
+          vehicleCheck.doneToday ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'
+        }`}>
+          <p className={`text-sm ${vehicleCheck.doneToday ? 'text-green-800' : 'text-amber-800'}`}>
+            {vehicleCheck.doneToday
+              ? `✓ Vehicle check done today (${vehicleCheck.lastLabel})`
+              : `Vehicle check not done today${vehicleCheck.lastLabel ? ` — last ${vehicleCheck.lastLabel}` : ''}`}
+          </p>
+          {!vehicleCheck.doneToday && (
+            <button
+              onClick={() => router.push(`/inspections/vehicle-check/${apparatus_id}?next=inventory`)}
+              className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800"
+            >
+              Do Vehicle Check
+            </button>
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-zinc-500 -mt-2">
+        Each compartment saves on its own when you submit it — there&apos;s no separate save for the whole inspection.
+      </p>
+
       {/* Progress bar */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
