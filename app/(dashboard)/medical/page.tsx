@@ -12,9 +12,9 @@ import { getMedicalAdminData } from '@/lib/medical-admin-data'
 export default async function MedicalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; apparatus?: string }>
+  searchParams: Promise<{ mode?: string; apparatus?: string; compartment?: string }>
 }) {
-  const { mode: requestedMode, apparatus: restockApparatusId } = await searchParams
+  const { mode: requestedMode, apparatus: restockApparatusId, compartment: restockCompartmentId } = await searchParams
   const adminClient = createAdminClient()
 
   const ctx = await getCurrentDepartmentContext()
@@ -39,7 +39,7 @@ export default async function MedicalPage({
     if (!app || app.department_id !== department_id) redirect('/equipment')
 
     const [{ data: truckRooms }, { data: srcRooms }] = await Promise.all([
-      adminClient.from('medical_storerooms').select('id, name, container_kind')
+      adminClient.from('medical_storerooms').select('id, name, container_kind, compartment_id')
         .eq('apparatus_id', app.id).eq('active', true).in('container_kind', ['compartment_storage', 'bag']),
       adminClient.from('medical_storerooms').select('id, name')
         .eq('department_id', department_id).eq('active', true).eq('container_kind', 'storeroom').order('name'),
@@ -61,7 +61,10 @@ export default async function MedicalPage({
     const onHand = new Map<string, number>()
     for (const l of lots ?? []) onHand.set(l.storeroom_inventory_id, (onHand.get(l.storeroom_inventory_id) ?? 0) + l.quantity_remaining)
     const typeById = Object.fromEntries((types ?? []).map(t => [t.id, t]))
-    const truckRoomById = Object.fromEntries((truckRooms ?? []).map(r => [r.id, r]))
+    // ?compartment= scopes the restock to one compartment (its loose storage and the bags in it).
+    const scopedRooms = (truckRooms ?? []).filter(r => !restockCompartmentId || r.compartment_id === restockCompartmentId)
+    const truckRoomById = Object.fromEntries(scopedRooms.map(r => [r.id, r]))
+    const scopeLabel = restockCompartmentId ? (scopedRooms.find(r => r.container_kind === 'compartment_storage')?.name ?? 'this compartment') : null
 
     const lines = (inv ?? []).filter(i => truckRoomById[i.storeroom_id] && typeById[i.supply_type_id]).map(i => {
       const room = truckRoomById[i.storeroom_id]
@@ -81,7 +84,7 @@ export default async function MedicalPage({
     }
 
     return (
-      <RestockClient apparatus={{ id: app.id, unit_number: app.unit_number, apparatus_name: app.apparatus_name }}
+      <RestockClient apparatus={{ id: app.id, unit_number: app.unit_number, apparatus_name: app.apparatus_name }} scopeLabel={scopeLabel}
         lines={lines} storerooms={srcRooms ?? []} availability={availability} canMoveControlled={isOfficerOrAbove} />
     )
   }

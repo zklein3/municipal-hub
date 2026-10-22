@@ -48,7 +48,7 @@ export default async function InspectionSessionPage({
   const requested = requestedSessionId ? await getInspectionSessionById(requestedSessionId, apparatus_id) : null
   const result = requested && !('error' in requested) ? requested : await getOrCreateInspectionSession(apparatus_id)
   if ('error' in result) redirect('/inspections')
-  const [vehicleCheck, restockCount] = await Promise.all([
+  const [vehicleCheck, restock] = await Promise.all([
     lastVehicleCheck(adminClient, apparatus_id, ctx.departmentTimezone),
     truckRestockCount(adminClient, apparatus_id),
   ])
@@ -74,7 +74,8 @@ export default async function InspectionSessionPage({
         isOfficerOrAdmin={isOfficerOrAdmin}
         departmentTimezone={ctx.departmentTimezone}
         vehicleCheck={vehicleCheck}
-        restockCount={restockCount}
+        restockCount={restock.total}
+        restockByCompartment={restock.byCompartment}
       />
     </div>
   )

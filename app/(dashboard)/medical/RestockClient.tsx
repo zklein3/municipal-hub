@@ -21,8 +21,9 @@ export type RestockLine = {
 }
 
 export default function RestockClient({
-  apparatus, lines, storerooms, availability, canMoveControlled,
+  apparatus, lines, storerooms, availability, canMoveControlled, scopeLabel = null,
 }: {
+  scopeLabel?: string | null
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
   lines: RestockLine[]
   storerooms: { id: string; name: string }[]
@@ -77,8 +78,13 @@ export default function RestockClient({
     <div className="max-w-2xl">
       <div className="mb-5">
         <Link href={`/equipment/${apparatus.id}`} className="text-xs text-zinc-400 hover:text-zinc-600 mb-2 inline-block">← Unit {apparatus.unit_number}</Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Restock {apparatus.unit_number}{apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">Pick the storeroom, check the quantities, and move everything at once.</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">
+          Restock {scopeLabel ?? `${apparatus.unit_number}${apparatus.apparatus_name ? ` — ${apparatus.apparatus_name}` : ''}`}
+        </h1>
+        <p className="text-sm text-zinc-500 mt-0.5">
+          Pick the storeroom, check the quantities, and move everything at once.
+          {scopeLabel && <> <Link href={`/medical?mode=restock&apparatus=${apparatus.id}`} className="text-red-600 hover:underline">Whole truck instead →</Link></>}
+        </p>
       </div>
 
       {result && <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{result} <Link href={`/equipment/${apparatus.id}`} className="font-semibold underline">Back to the truck</Link></div>}

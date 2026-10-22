@@ -42,8 +42,10 @@ export default function InspectionSessionClient({
   departmentTimezone,
   vehicleCheck,
   restockCount = 0,
+  restockByCompartment = {},
 }: {
   restockCount?: number
+  restockByCompartment?: Record<string, number>
   session: Session
   compartments: SessionCompartment[]
   apparatus_id: string
@@ -204,19 +206,6 @@ export default function InspectionSessionClient({
         Each compartment saves on its own when you submit it — there&apos;s no separate save for the whole inspection.
       </p>
 
-      {/* Anything on this truck below PAR (e.g. after a count correction) — restock it from storage. */}
-      {restockCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
-          <p className="text-sm text-amber-800">
-            {restockCount} medical item{restockCount === 1 ? ' is' : 's are'} below PAR on this truck.
-          </p>
-          <button onClick={() => router.push(`/medical?mode=restock&apparatus=${apparatus_id}`)}
-            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
-            Restock from storage →
-          </button>
-        </div>
-      )}
-
       {/* Progress bar */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
@@ -249,6 +238,18 @@ export default function InspectionSessionClient({
                 ? `Vehicle check not done today — last one ${vehicleCheck.lastLabel}. Do it now?`
                 : 'No vehicle check on record for this unit. Do one now?'}
           </p>
+          {/* Whole-truck restock belongs here, at the end — during the inspection it's per compartment. */}
+          {restockCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mt-2">
+              <p className="text-xs text-amber-800">
+                {restockCount} medical item{restockCount === 1 ? ' is' : 's are'} below PAR on this truck.
+              </p>
+              <button onClick={() => router.push(`/medical?mode=restock&apparatus=${apparatus_id}`)}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+                Restock truck from storage →
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-3">
             {!vehicleCheck.doneToday && (
               <button onClick={() => router.push(`/inspections/vehicle-check/${apparatus_id}`)}
@@ -286,6 +287,12 @@ export default function InspectionSessionClient({
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 shrink-0">
                     ⚠ Med Expiring
                   </span>
+                )}
+                {(restockByCompartment[sc.compartment_id] ?? 0) > 0 && (
+                  <button onClick={() => router.push(`/medical?mode=restock&apparatus=${apparatus_id}&compartment=${sc.compartment_id}`)}
+                    className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-200 shrink-0">
+                    {restockByCompartment[sc.compartment_id]} below PAR · Restock
+                  </button>
                 )}
               </p>
               {sc.status === 'in_progress' && sc.claimed_by_name && (
