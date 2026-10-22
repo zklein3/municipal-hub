@@ -144,16 +144,38 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### ⬅ RESUME HERE — Inventory Streamlining (2026-10-22)
-**Milestone 1 SHIPPED** to `main` (5a0e0a4, pushed 2026-10-22, live-tested by Zak on QA Test
-Department): compartment presets, starter catalog + seed ledger, "Add standard compartments", plus
-inspection fixes (no empty session after finishing, expired sessions hidden, vehicle check ↔ inventory
-prompts, Start Session funnels through the vehicle check, "Do inventory" saves the check first,
-medication Present requires 1+). Details: `PLAN_INVENTORY_STREAMLINE.md`. Docs (REFERENCE/HISTORY/help
-content) for M1 still to write.
-**Next: Milestone 2 — Containers & Bags.** Build plan drafted for review: `PLAN_CONTAINERS_BAGS.md`
-(on branch `feature/containers-bags`). All questions answered. Step 2A BUILT on `feature/containers-bags` (f719538, local): migration `containers_2a_container_kind` APPLIED to prod (additive; insert trigger keeps `main` correct), audited code changes done, build clean, Winslow bags renamed Trauma Box 1/2 + QR. Next: Zak's medical regression click-through on QA (list in PLAN_CONTAINERS_BAGS.md "2A regression checklist"), then merge 2A, then 2B.
-It **replaces** the parked `feature/items-in-containers` branch below (don't rebase that one).
+### ⬅ RESUME HERE — Inventory Streamlining (paused end of day 2026-10-22)
+**Branch `feature/containers-bags` — 23 commits ahead of `main`, LOCAL ONLY, not pushed, not live.**
+`git checkout feature/containers-bags` first. Read `PLAN_CONTAINERS_BAGS.md` → "Consolidation track"
+and the friction backlog. Live `main` = 072eea0 (Milestone 1 + its docs).
+
+**What's on the branch (build clean after every commit; most live-tested by Zak on QA Test Department):**
+- **2A containers:** `container_kind` (storeroom | compartment_storage | bag), bags are their own rows
+  (many per compartment, auto-numbered "Trauma Box 1, 2…", BAG-xxxx QR codes); fix: bag removal never
+  detected stock. Migration `containers_2a_container_kind` is **already applied to prod** (insert trigger
+  keeps `main` correct). Winslow's bags already renamed Trauma Box 1/2 in prod.
+- **Navigation:** Dept Admin grouped into 6 areas with sub-menus (`?group=`).
+- **One Medical page** (`/medical`): mode buttons Storerooms · Medication Types · Bags; stock / PAR /
+  rename / new storeroom in place; Setup's Medical tab removed (old links redirect).
+- **Catalog move** between equipment and medical lists ("Wrong list?" on an item's / medical type's Edit);
+  plain supplies receive by count only. Migration `med_check_logs_inventory_set_null` applied to prod.
+- **Truck medical flow:** Use / Restock / Transfer on the medical rows inside each compartment card;
+  "Restock from storage" one-pass screen (`/medical?mode=restock&apparatus=&compartment=`).
+- **Inventory check:** count-first medical cards ("How many are here? Should have N · on file M"),
+  "N missing — needs restock" acknowledgment (records the correction), "Restock it now from <storeroom>"
+  whenever below PAR, per-compartment restock badges, whole-truck restock in the completion box.
+
+**Not click-tested yet:** medical → equipment catalog move, Dept Admin groupings, deploying a bag twice to
+one truck, CS log print (QA has no controlled types).
+
+**Next, in Zak's suggested order:** (1) push this branch to `main` after a final build + quick look at
+Winslow's medical pages; (2) **C4 — one truck screen** (adding items to compartments/bags in place, fold in
+Setup → Inventory step and `/equipment/[id]/[compartment_id]`); (3) C3 shared medication forms; then
+2B–2G (bags hold items/bags, move-a-bag questions, bag drill-in inspections, save-as-you-go, reports,
+starter bags). Deferred: editing PAR on a truck compartment card (friction #6).
+**Tooling:** Supabase MCP silently declines SQL with DELETE or an unscoped UPDATE in this VS Code panel —
+use scoped WHEREs, rollback-tests, or a node script (see memory `feedback_supabase_mcp_delete`).
+The parked `feature/items-in-containers` branch below is superseded — don't rebase it.
 
 ### ⬅ RESUME HERE — Container Unification, Steps 6–7 of 7 (afternoon of 2026-08-30)
 
