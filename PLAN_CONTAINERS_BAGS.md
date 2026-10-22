@@ -158,7 +158,38 @@ Order rationale: 2A is the foundation and the riskiest (it touches the live medi
 first and alone. 2E (autosave) can be built in parallel with 2B–2C if wanted. 2G last so starters match
 the finished bag shape.
 
+## 2A call-site audit (done 2026-10-22, against `main` 072eea0)
+Every `from('medical_storerooms')` site, classified. **Change** = breaks once bags are their own rows
+(a bag can carry `compartment_id`, or have `apparatus_id` null when in a storeroom/POV).
+
+| Site | Today infers | 2A change |
+|---|---|---|
+| `lib/medical-storeroom.ts` getOrCreateCompartmentStoreroom (select + insert) | "the row with this compartment_id" | **Change:** select `container_kind='compartment_storage'` only; insert sets kind |
+| `inspections/run/page.tsx:185` compartment meds | single row by compartment | **Change (interim until 2D):** load storage **and** bags located in the compartment, flatten meds as today; 2D replaces with drill-in |
+| `app/actions/inspections.ts:453` med-expiring badge | rows by compartment | OK in 2A (bags in compartment have `compartment_id`); nested bags handled in 2D |
+| `app/actions/inspections.ts:296` names | by id | OK |
+| `medical.ts` deployBagFromTemplate (pinned path, ~208–290) | pinned bag **merges into** compartment storage | **Change:** always insert a new bag row (`container_kind='bag'`, `compartment_id` set), never merge; drop "compartment already has a different bag" error |
+| `medical.ts` updateBagCompartment (~312–385) | migrates inventory into target storage, retires bag | **Change:** just update the bag's `compartment_id` (same truck); cross-truck moves wait for 2C |
+| `medical.ts` assignBagToApparatus / removeBagFromApparatus / updateBagInventoryMode | bag by id | Review in build; likely OK |
+| `medical.ts` createMedicalStoreroom / updateMedicalStoreroom (~428–460) | station storeroom | **Change:** insert sets `container_kind='storeroom'` |
+| `apparatus/[id]/page.tsx:158`, `equipment/[id]/page.tsx:220` truck bags | `apparatus_id=X AND compartment_id IS NULL` | **Change:** `container_kind='bag' AND apparatus_id=X` (pinned bags would vanish otherwise) |
+| `equipment/[id]/page.tsx:270` compartment storages | `apparatus_id=X AND compartment_id NOT NULL` | **Change:** `container_kind='compartment_storage'` (else pinned bags show as compartment storage) |
+| `apparatus/[id]/page.tsx:163`, `equipment/[id]/page.tsx:222` dept storerooms | `apparatus_id IS NULL` | **Change:** `container_kind='storeroom'` (POV/storeroom bags also have null apparatus) |
+| `medical/page.tsx:28` storerooms | `apparatus_id IS NULL` | **Change:** `container_kind='storeroom'` |
+| `medical/page.tsx:37` all dept containers | all | OK; review labels |
+| `dept-admin/setup/page.tsx:41` storerooms tab, `:76` bag deployments | client filters / `template_id NOT NULL` | **Change:** filter by kind |
+| `reports/medical/page.tsx:65` location badge | infers Storeroom/Bag/Compartment from columns | **Change:** use `container_kind` |
+| `app/actions/presets.ts:250` saveCompartmentAsPreset meds | rows by compartment | **Change:** `compartment_storage` only (a bag's meds belong to the bag) |
+| `app/actions/compartments.ts:140,201` compartment-delete guard | any row by compartment | OK (blocks when storage or bags are there — correct) |
+| `inbox/page.tsx:192,219`, `print/medical-cs-log:52` | names by id / all | OK |
+| `MedicalAdminClient.tsx:785` `unassignedApparatus` | **one bag per template per truck** | **Change:** allow several (Trauma Box 1 & 2 on one truck) |
+| `MedicalAdminClient.tsx:573,958` location labels | infers from columns | Review: label from kind/location |
+
 ## Data migration (2A)
+SQL drafted in `supabase/containers_2a_container_kind.sql` (not yet applied). Key points:
+- `container_kind` added **nullable**, backfilled, plus a **BEFORE INSERT trigger that derives the kind
+  when it isn't supplied** — so `main` (which doesn't know the column) keeps writing correct rows until
+  2A ships. NOT NULL after backfill (trigger guarantees it).
 - `container_kind`: `template_id` not null → `bag`; else `compartment_id` not null → `compartment_storage`;
   else → `storeroom`.
 - Winslow's two "Trauma Box" bags: `apparatus_id` set, no compartment → state "on unit 11, not placed in
