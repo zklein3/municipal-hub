@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/permissions'
 import { revalidatePath } from 'next/cache'
 import { nerisCheckEntityExists } from '@/lib/neris-api'
 import { logError } from '@/lib/logger'
+import { seedDepartmentStarters } from '@/lib/starter-seed'
 
 async function assertSysAdmin(): Promise<string | null> {
   const supabase = await createClient()
@@ -28,11 +29,18 @@ export async function createDepartment(formData: FormData) {
   if (authErr) return { error: authErr }
 
   const adminClient = createAdminClient()
-  const { error } = await adminClient
+  const { data: newDept, error } = await adminClient
     .from('departments')
     .insert({ name, code: code || null, active: true })
+    .select('id')
+    .single()
 
   if (error) { await logError(error.message, '/admin/departments'); return { error: error.message } }
+
+  // New fire departments start with the starter catalog (items, compartment presets). A failure
+  // here doesn't undo the department — "Add missing starters" in Setup finishes the job.
+  const seed = await seedDepartmentStarters(adminClient, newDept.id)
+  if (seed.error) await logError(`Starter seed failed: ${seed.error}`, '/admin/departments', { department_id: newDept.id })
 
   revalidatePath('/admin/departments')
   return { success: true }
