@@ -37,6 +37,11 @@ each item gets fixed in place during the step that touches that screen:
    storeroom management where the storerooms are used), reachable in one step.
 3. Two different buttons share the label "+ Add Supply Type" (create a catalog type vs. stock a
    storeroom). Labels must say what they do.
+4. **Two ways to add stock, one silently skips lot/expiration.** The quick qty edit / "+ Receive" on
+   Setup → Medical → Storerooms (added 2026-08-27 for corrections) created lots with no lot # and no
+   expiration even for `tracks_expiration` medications (QA 2026-10-22). **2B:** that path is
+   corrections only; adding stock to an expiration-tracked medication always goes through the real
+   Receive form (lot #, expiration, received date), opened in place on whatever screen you're on.
 
 ## What exists today (verified 2026-10-22)
 - **`medical_storerooms` is the container table**, polymorphic by nullable columns: station storeroom
