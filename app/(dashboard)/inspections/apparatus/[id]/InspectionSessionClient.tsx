@@ -41,7 +41,9 @@ export default function InspectionSessionClient({
   isOfficerOrAdmin,
   departmentTimezone,
   vehicleCheck,
+  restockCount = 0,
 }: {
+  restockCount?: number
   session: Session
   compartments: SessionCompartment[]
   apparatus_id: string
@@ -201,6 +203,19 @@ export default function InspectionSessionClient({
       <p className="text-xs text-zinc-500 -mt-2">
         Each compartment saves on its own when you submit it — there&apos;s no separate save for the whole inspection.
       </p>
+
+      {/* Anything on this truck below PAR (e.g. after a count correction) — restock it from storage. */}
+      {restockCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+          <p className="text-sm text-amber-800">
+            {restockCount} medical item{restockCount === 1 ? ' is' : 's are'} below PAR on this truck.
+          </p>
+          <button onClick={() => router.push(`/medical?mode=restock&apparatus=${apparatus_id}`)}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+            Restock from storage →
+          </button>
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="flex items-center gap-3">

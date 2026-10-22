@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/permissions'
 import { logError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { VEHICLE_CHECK_DEFAULTS } from '@/lib/vehicle-check-defaults'
+import { correctMedicalCount } from '@/lib/medical-count-correction'
 
 async function getContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -196,6 +197,9 @@ export async function submitInspection(payload: {
     actual_quantity?: number
     expiration_status?: 'confirmed' | 'expiring_soon' | 'expired' | 'not_applicable'
     notes?: string
+    // Inspector chose to make the on-file count match what they counted (Missing counts as 0).
+    correct_count?: boolean
+    correction_reason?: string
   }[]
 }) {
   const adminClient = createAdminClient()
@@ -334,6 +338,17 @@ export async function submitInspection(payload: {
       if (medicationErr) {
         await logError(medicationErr.message, '/inspections/run')
         return { error: medicationErr.message }
+      }
+
+      // Count corrections the inspector asked for (controlled substances are skipped inside).
+      for (const mc of payload.medication_checks) {
+        if (!mc.correct_count) continue
+        const counted = mc.present ? (mc.actual_quantity ?? 0) : 0
+        const r = await correctMedicalCount(adminClient, {
+          department_id: payload.department_id, storeroom_inventory_id: mc.storeroom_inventory_id,
+          counted, reason: mc.correction_reason || 'Inventory check', performed_by: payload.personnel_id,
+        })
+        if (r.error) await logError(`Count correction failed: ${r.error}`, '/inspections/run', { department_id: payload.department_id, metadata: { storeroom_inventory_id: mc.storeroom_inventory_id } })
       }
     }
 

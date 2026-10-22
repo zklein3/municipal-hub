@@ -32,3 +32,20 @@ export async function lastInventoryInspection(adminClient: SupabaseClient, appar
     .order('completed_at', { ascending: false }).limit(1)
   return toStatus(data?.[0]?.completed_at, timeZone)
 }
+
+// How many medical lines on a truck (compartments and bags) are below PAR — drives the
+// "Restock from storage" prompt on the inspection screen.
+export async function truckRestockCount(adminClient: SupabaseClient, apparatus_id: string) {
+  const { data: rooms } = await adminClient.from('medical_storerooms').select('id')
+    .eq('apparatus_id', apparatus_id).eq('active', true).in('container_kind', ['compartment_storage', 'bag'])
+  const roomIds = (rooms ?? []).map(r => r.id)
+  if (roomIds.length === 0) return 0
+  const { data: inv } = await adminClient.from('medical_storeroom_inventory').select('id, par_level').in('storeroom_id', roomIds)
+  const invIds = (inv ?? []).map(i => i.id)
+  if (invIds.length === 0) return 0
+  const { data: lots } = await adminClient.from('medical_stock_lots').select('storeroom_inventory_id, quantity_remaining')
+    .in('storeroom_inventory_id', invIds).eq('active', true).gt('quantity_remaining', 0)
+  const onHand = new Map<string, number>()
+  for (const l of lots ?? []) onHand.set(l.storeroom_inventory_id, (onHand.get(l.storeroom_inventory_id) ?? 0) + l.quantity_remaining)
+  return (inv ?? []).filter(i => i.par_level > 0 && (onHand.get(i.id) ?? 0) < i.par_level).length
+}

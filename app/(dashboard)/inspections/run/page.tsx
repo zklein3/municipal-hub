@@ -174,6 +174,7 @@ export default async function InspectionRunPage({
     unit_of_measure: string
     par_level: number
     tracks_expiration: boolean
+    is_controlled: boolean
     current_quantity: number
     lots: { id: string; lot_number: string | null; expiration_date: string | null; quantity_remaining: number }[]
     status: string
@@ -212,7 +213,7 @@ export default async function InspectionRunPage({
               .order('expiration_date', { ascending: true, nullsFirst: false })
           : Promise.resolve({ data: [] }),
         supplyTypeIds.length > 0
-          ? adminClient.from('medical_supply_types').select('id, name, unit_of_measure, tracks_expiration').in('id', supplyTypeIds)
+          ? adminClient.from('medical_supply_types').select('id, name, unit_of_measure, tracks_expiration, is_controlled').in('id', supplyTypeIds)
           : Promise.resolve({ data: [] }),
       ])
 
@@ -229,6 +230,7 @@ export default async function InspectionRunPage({
           unit_of_measure: supply?.unit_of_measure ?? '',
           par_level: inv.par_level,
           tracks_expiration: supply?.tracks_expiration ?? false,
+          is_controlled: supply?.is_controlled ?? false,
           current_quantity,
           lots: invLots.map(l => ({ id: l.id, lot_number: l.lot_number, expiration_date: l.expiration_date, quantity_remaining: l.quantity_remaining })),
           status: getMedicalSupplyStatus(current_quantity, inv.par_level, invLots),

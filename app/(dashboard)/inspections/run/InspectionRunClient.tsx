@@ -72,6 +72,7 @@ interface MedicationItem {
   unit_of_measure: string
   par_level: number
   tracks_expiration: boolean
+  is_controlled: boolean
   current_quantity: number
   lots: { id: string; lot_number: string | null; expiration_date: string | null; quantity_remaining: number }[]
   status: string
@@ -85,6 +86,8 @@ type MedicationResponse = {
   actual_quantity?: number
   expiration_status?: ExpirationStatus
   notes?: string
+  correct_count?: boolean
+  correction_reason?: string
 }
 
 function lotIsExpiringOrExpired(lot: { expiration_date: string | null }): boolean {
@@ -356,6 +359,13 @@ export default function InspectionRunClient({
         actual_quantity: resp?.actual_quantity,
         expiration_status: resp?.expiration_status,
         notes: resp?.notes,
+        ...(() => {
+          const counted = resp?.present === false ? 0 : resp?.actual_quantity
+          const differs = counted !== undefined && counted !== med.current_quantity
+          if (!differs || med.is_controlled || resp?.correct_count === false) return {}
+          const short = (counted ?? 0) < med.current_quantity
+          return { correct_count: true, correction_reason: resp?.correction_reason ?? (short ? 'Used but not recorded' : 'Found extra') }
+        })(),
       }
     })
 
@@ -556,6 +566,45 @@ export default function InspectionRunClient({
                     </div>
                   </div>
                 )}
+
+                {/* Count doesn't match what's on file (Missing counts as 0) — offer to correct it. */}
+                {(() => {
+                  const counted = resp?.present === false ? 0 : resp?.present === true ? resp.actual_quantity : undefined
+                  if (counted === undefined || counted === med.current_quantity) return null
+                  const short = counted < med.current_quantity
+                  const reasons = short
+                    ? ['Used but not recorded', 'Missing', 'Damaged', 'Expired', 'Other']
+                    : ['Found extra', 'Restocked but not recorded', 'Other']
+                  if (med.is_controlled) {
+                    return (
+                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Count is off: on file {med.current_quantity}, counted {counted}. Controlled substances can&apos;t be
+                        corrected from a check — this discrepancy is recorded for an officer to resolve with Waste/Administer.
+                      </div>
+                    )
+                  }
+                  const correct = resp?.correct_count !== false
+                  return (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 space-y-2">
+                      <p className="text-xs font-semibold text-amber-800">
+                        Count is off: on file {med.current_quantity}, you counted {counted}.
+                      </p>
+                      <label className="flex items-center gap-2 text-xs text-zinc-700">
+                        <input type="checkbox" checked={correct}
+                          onChange={e => setMedication(med.storeroom_inventory_id, 'correct_count', e.target.checked)}
+                          className="rounded border-zinc-300 text-red-600 focus:ring-red-500" />
+                        Correct the truck&apos;s count to {counted}
+                      </label>
+                      {correct && (
+                        <select value={resp?.correction_reason ?? reasons[0]}
+                          onChange={e => setMedication(med.storeroom_inventory_id, 'correction_reason', e.target.value)}
+                          className="rounded-lg border border-zinc-300 px-2 py-1 text-xs">
+                          {reasons.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           )
