@@ -217,9 +217,9 @@ export default async function EquipmentDetailPage({
   }[]> = {}
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
-      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).is('compartment_id', null).order('name'),
+      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
       adminClient.from('medical_bag_templates').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
-      adminClient.from('medical_storerooms').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).is('apparatus_id', null).order('name'),
+      adminClient.from('medical_storerooms').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).eq('container_kind', 'storeroom').order('name'),
       adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', ctx.departmentId).eq('active', true),
     ])
 
@@ -271,7 +271,7 @@ export default async function EquipmentDetailPage({
       .select('id, name, compartment_id')
       .eq('apparatus_id', id)
       .eq('active', true)
-      .not('compartment_id', 'is', null)
+      .eq('container_kind', 'compartment_storage')
       .order('name')
 
     const compStoreroomIds = (compStorerooms ?? []).map((s: any) => s.id)

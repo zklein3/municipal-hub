@@ -1,6 +1,7 @@
 -- Milestone 2, step 2A — make container kind and bag location explicit on medical_storerooms.
--- See PLAN_CONTAINERS_BAGS.md. DRAFT — not yet applied. Additive and safe for `main`:
--- the trigger derives container_kind for inserts from code that doesn't know the column yet.
+-- See PLAN_CONTAINERS_BAGS.md. APPLIED 2026-10-22 as migration `containers_2a_container_kind`.
+-- Additive and safe for `main`: the trigger derives container_kind for inserts from code that
+-- doesn't know the column yet.
 
 alter table medical_storerooms add column container_kind text
   check (container_kind in ('storeroom', 'compartment_storage', 'bag'));
@@ -14,11 +15,10 @@ create index idx_medical_storerooms_assigned on medical_storerooms (assigned_per
 create index idx_medical_storerooms_kind on medical_storerooms (department_id, container_kind);
 
 -- Backfill from today's structural inference.
-update medical_storerooms set container_kind = case
-  when template_id is not null then 'bag'
-  when compartment_id is not null then 'compartment_storage'
-  else 'storeroom'
-end;
+-- (Scoped WHEREs: the Supabase MCP auto-declines an unscoped UPDATE as destructive.)
+update medical_storerooms set container_kind = 'bag' where container_kind is null and template_id is not null;
+update medical_storerooms set container_kind = 'compartment_storage' where container_kind is null and compartment_id is not null;
+update medical_storerooms set container_kind = 'storeroom' where container_kind is null;
 
 -- Keep `main` correct until 2A code ships: derive the kind when an insert doesn't set it.
 create or replace function medical_storerooms_derive_kind() returns trigger language plpgsql as $$

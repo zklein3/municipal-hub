@@ -5,6 +5,12 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { logError } from '@/lib/logger'
 import { getOrCreateCompartmentStoreroom } from '@/lib/medical-storeroom'
+import { randomBytes } from 'node:crypto'
+
+// Bags move between trucks, members and storerooms, so their QR code can't encode a unit number.
+function newBagQrCode() {
+  return `BAG-${randomBytes(4).toString('hex').toUpperCase()}`
+}
 import { revalidatePath } from 'next/cache'
 
 async function getContext() {
@@ -217,48 +223,43 @@ export async function deployBagFromTemplate(data: {
   if (!ctx.department_id) return { error: 'Department not found.' }
   const adminClient = createAdminClient()
 
-  let bagId: string
-
+  // A bag is always its own row (container_kind 'bag'). Placing it in a compartment just sets
+  // compartment_id — it no longer merges into the compartment's loose storage, so a compartment
+  // can hold its loose medications plus any number of bags.
   if (data.compartment_id) {
-    // Pinning to a physical compartment: reuse whatever storeroom already lives there
-    // (e.g. loose medications added via "+ Add Item") rather than creating a second,
-    // colliding storeroom for the same compartment.
-    const room = await getOrCreateCompartmentStoreroom(adminClient, ctx.department_id, data.compartment_id)
-    if ('error' in room) { await logError(room.error, '/apparatus'); return { error: room.error } }
-
-    const { data: existingRoom } = await adminClient
-      .from('medical_storerooms')
-      .select('template_id')
-      .eq('id', room.storeroom_id)
-      .single()
-    if (existingRoom?.template_id && existingRoom.template_id !== data.template_id) {
-      return { error: 'This compartment already has a different bag assigned — remove it first.' }
-    }
-
-    const { error: updateErr } = await adminClient.from('medical_storerooms').update({
-      name: data.name,
-      template_id: data.template_id,
-      inventory_mode: data.inventory_mode,
-      updated_at: new Date().toISOString(),
-    }).eq('id', room.storeroom_id)
-    if (updateErr) { await logError(updateErr.message, '/apparatus'); return { error: updateErr.message } }
-    bagId = room.storeroom_id
-  } else {
-    const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
-      department_id: ctx.department_id,
-      apparatus_id: data.apparatus_id,
-      template_id: data.template_id,
-      inventory_mode: data.inventory_mode,
-      name: data.name,
-      active: true,
-    }).select('id').single()
-    if (bagErr) { await logError(bagErr.message, '/apparatus'); return { error: bagErr.message } }
-    bagId = bag.id
+    const { data: comp } = await adminClient.from('apparatus_compartments')
+      .select('apparatus_id').eq('id', data.compartment_id).single()
+    if (comp?.apparatus_id !== data.apparatus_id) return { error: 'That compartment is not on this apparatus.' }
   }
 
-  // Copy template items with their PAR levels — skip any supply type already assigned to
-  // this storeroom (e.g. a loose item that predates the bag being pinned here) so we don't
-  // collide with the storeroom_id/supply_type_id unique constraint or clobber its PAR.
+  const { data: tmpl } = await adminClient.from('medical_bag_templates')
+    .select('name, department_id').eq('id', data.template_id).single()
+  if (!tmpl || tmpl.department_id !== ctx.department_id) return { error: 'Bag template not found.' }
+
+  // Instances auto-number per template ("Trauma Box 1, 2…"); a custom name is kept as given.
+  const { data: maxRow } = await adminClient.from('medical_storerooms')
+    .select('bag_number').eq('department_id', ctx.department_id).eq('template_id', data.template_id)
+    .order('bag_number', { ascending: false, nullsFirst: false }).limit(1)
+  const bag_number = (maxRow?.[0]?.bag_number ?? 0) + 1
+  const requested = data.name?.trim()
+  const name = !requested || requested === tmpl.name ? `${tmpl.name} ${bag_number}` : requested
+
+  const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
+    department_id: ctx.department_id,
+    apparatus_id: data.apparatus_id,
+    compartment_id: data.compartment_id || null,
+    template_id: data.template_id,
+    inventory_mode: data.inventory_mode,
+    name,
+    bag_number,
+    qr_code: newBagQrCode(),
+    container_kind: 'bag',
+    active: true,
+  }).select('id').single()
+  if (bagErr) { await logError(bagErr.message, '/apparatus'); return { error: bagErr.message } }
+  const bagId: string = bag.id
+
+  // Copy template items with their PAR levels (skip any already present — idempotent).
   const { data: templateItems } = await adminClient
     .from('medical_bag_template_items')
     .select('supply_type_id, par_level')
@@ -306,9 +307,10 @@ export async function assignBagToApparatus(data: {
   })
 }
 
-// Move (or unpin) a deployed bag between compartments on its own apparatus — same merge
-// safety as deployBagFromTemplate: reuses whatever storeroom already lives at the target
-// compartment instead of creating a colliding second one.
+// Place a bag in a different compartment on its own apparatus, or take it out of a compartment
+// (still on the truck). The bag is its own row, so this only changes where it sits — its contents
+// stay with it. Moves between trucks/members/storerooms come in step 2C (with the required
+// "did the contents move too?" questions).
 export async function updateBagCompartment(storeroom_id: string, compartment_id: string | null) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
@@ -316,70 +318,24 @@ export async function updateBagCompartment(storeroom_id: string, compartment_id:
 
   const { data: bag } = await adminClient
     .from('medical_storerooms')
-    .select('id, name, template_id, inventory_mode, apparatus_id, department_id')
+    .select('id, apparatus_id, department_id, container_kind')
     .eq('id', storeroom_id)
     .single()
-  if (!bag) return { error: 'Bag not found.' }
+  if (!bag || bag.container_kind !== 'bag' || bag.department_id !== ctx.department_id) return { error: 'Bag not found.' }
 
-  if (!compartment_id) {
-    const { error: dbErr } = await adminClient.from('medical_storerooms')
-      .update({ compartment_id: null, updated_at: new Date().toISOString() })
-      .eq('id', storeroom_id)
-    if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
-    revalidatePath('/dept-admin/setup')
-    return { success: true }
+  if (compartment_id) {
+    const { data: comp } = await adminClient.from('apparatus_compartments')
+      .select('apparatus_id').eq('id', compartment_id).single()
+    if (comp?.apparatus_id !== bag.apparatus_id) return { error: 'That compartment is not on the same apparatus as this bag.' }
   }
 
-  const room = await getOrCreateCompartmentStoreroom(adminClient, bag.department_id, compartment_id)
-  if ('error' in room) { await logError(room.error, '/apparatus'); return { error: room.error } }
-
-  if (room.storeroom_id === storeroom_id) {
-    revalidatePath('/dept-admin/setup')
-    return { success: true }
-  }
-
-  const { data: targetRoom } = await adminClient
-    .from('medical_storerooms')
-    .select('template_id')
-    .eq('id', room.storeroom_id)
-    .single()
-  if (targetRoom?.template_id && targetRoom.template_id !== bag.template_id) {
-    return { error: 'That compartment already has a different bag assigned — remove it first.' }
-  }
-
-  // Merge this bag's own inventory into the target storeroom, then retire the old row.
-  const { data: myInv } = await adminClient
-    .from('medical_storeroom_inventory')
-    .select('id, supply_type_id, par_level')
-    .eq('storeroom_id', storeroom_id)
-  const { data: targetInv } = await adminClient
-    .from('medical_storeroom_inventory')
-    .select('supply_type_id')
-    .eq('storeroom_id', room.storeroom_id)
-  const targetSupplyTypeIds = new Set((targetInv ?? []).map(i => i.supply_type_id))
-
-  const toMove = (myInv ?? []).filter(i => !targetSupplyTypeIds.has(i.supply_type_id)).map(i => i.id)
-  if (toMove.length > 0) {
-    const { error: moveErr } = await adminClient.from('medical_storeroom_inventory')
-      .update({ storeroom_id: room.storeroom_id })
-      .in('id', toMove)
-    if (moveErr) { await logError(moveErr.message, '/apparatus'); return { error: moveErr.message } }
-  }
-
-  const { error: renameErr } = await adminClient.from('medical_storerooms').update({
-    name: bag.name,
-    template_id: bag.template_id,
-    inventory_mode: bag.inventory_mode,
-    updated_at: new Date().toISOString(),
-  }).eq('id', room.storeroom_id)
-  if (renameErr) { await logError(renameErr.message, '/apparatus'); return { error: renameErr.message } }
-
-  const { error: retireErr } = await adminClient.from('medical_storerooms')
-    .update({ active: false, updated_at: new Date().toISOString() })
+  const { error: dbErr } = await adminClient.from('medical_storerooms')
+    .update({ compartment_id: compartment_id || null, parent_storeroom_id: null, updated_at: new Date().toISOString() })
     .eq('id', storeroom_id)
-  if (retireErr) { await logError(retireErr.message, '/apparatus'); return { error: retireErr.message } }
+  if (dbErr) { await logError(dbErr.message, '/apparatus'); return { error: dbErr.message } }
 
   revalidatePath('/dept-admin/setup')
+  if (bag.apparatus_id) revalidatePath(`/equipment/${bag.apparatus_id}`)
   return { success: true }
 }
 
@@ -388,12 +344,20 @@ export async function removeBagFromApparatus(storeroom_id: string) {
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
   const adminClient = createAdminClient()
 
-  const { data: lots } = await adminClient
-    .from('medical_stock_lots')
-    .select('id')
-    .eq('storeroom_inventory_id', storeroom_id)
-    .gt('quantity_remaining', 0)
-    .limit(1)
+  // Lots hang off the bag's inventory rows, not the bag itself. (This used to compare the lot's
+  // storeroom_inventory_id to the bag id, which never matched — so bags with stock could be removed.)
+  const { data: invRows } = await adminClient
+    .from('medical_storeroom_inventory').select('id').eq('storeroom_id', storeroom_id)
+  const invIds = (invRows ?? []).map(i => i.id)
+  const { data: lots } = invIds.length > 0
+    ? await adminClient
+        .from('medical_stock_lots')
+        .select('id')
+        .in('storeroom_inventory_id', invIds)
+        .eq('active', true)
+        .gt('quantity_remaining', 0)
+        .limit(1)
+    : { data: [] }
 
   if (lots && lots.length > 0)
     return { error: 'Cannot remove — bag has active stock. Waste or transfer stock first.' }
@@ -430,14 +394,16 @@ export async function createMedicalStoreroom(formData: FormData) {
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
   const adminClient = createAdminClient()
 
+  const compartment_id = (formData.get('compartment_id') as string) || null
   const { error: dbErr } = await adminClient.from('medical_storerooms').insert({
     department_id: ctx.department_id,
     station_id: (formData.get('station_id') as string) || null,
     apparatus_id: (formData.get('apparatus_id') as string) || null,
-    compartment_id: (formData.get('compartment_id') as string) || null,
+    compartment_id,
     name: formData.get('name') as string,
     notes: (formData.get('notes') as string) || null,
     active: true,
+    container_kind: compartment_id ? 'compartment_storage' : 'storeroom',
   })
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }

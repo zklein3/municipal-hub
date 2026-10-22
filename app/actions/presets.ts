@@ -248,7 +248,8 @@ export async function saveCompartmentAsPreset(
   }
 
   const { data: rooms } = await adminClient.from('medical_storerooms')
-    .select('id').eq('compartment_id', apparatus_compartment_id).eq('active', true)
+    // Loose compartment medications only — a bag's medications belong to the bag, not the preset.
+    .select('id').eq('compartment_id', apparatus_compartment_id).eq('container_kind', 'compartment_storage').eq('active', true)
   if ((rooms ?? []).length) {
     const { data: inv } = await adminClient.from('medical_storeroom_inventory')
       .select('supply_type_id, par_level').in('storeroom_id', (rooms ?? []).map(r => r.id))

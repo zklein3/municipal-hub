@@ -41,6 +41,7 @@ export default async function SetupPage() {
     ? await adminClient.from('medical_storerooms')
         .select('id, name, station_id, apparatus_id, compartment_id, notes, active')
         .eq('department_id', department_id)
+        .neq('container_kind', 'bag') // bags have their own tab
         .order('name')
     : { data: [] }
 
@@ -78,7 +79,7 @@ export default async function SetupPage() {
           .eq('department_id', department_id)
           .eq('active', true)
           .not('apparatus_id', 'is', null)
-          .not('template_id', 'is', null)
+          .eq('container_kind', 'bag')
       : Promise.resolve({ data: [] }),
   ])
 

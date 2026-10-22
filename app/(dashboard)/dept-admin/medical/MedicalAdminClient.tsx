@@ -782,7 +782,8 @@ export default function MedicalAdminClient({
                 const deployments = bagDeployments.filter(d => d.template_id === tmpl.id)
                 const isExpanded = expandedTemplateId === tmpl.id
                 const unassigned = supplyTypes.filter(s => s.active && !items.some(i => i.supply_type_id === s.id))
-                const unassignedApparatus = apparatus.filter(a => !deployments.some(d => d.apparatus_id === a.id))
+                // Any apparatus can take another copy of this bag (Trauma Box 1, 2… on the same truck).
+                const unassignedApparatus = apparatus
                 return (
                   <div key={tmpl.id} className={`rounded-xl bg-white border border-zinc-200 overflow-hidden ${!tmpl.active ? 'opacity-60' : ''}`}>
                     <div className="flex items-center px-5 py-4 gap-3">
@@ -790,7 +791,7 @@ export default function MedicalAdminClient({
                         <p className="text-sm font-semibold text-zinc-900">{tmpl.name}</p>
                         <p className="text-xs text-zinc-400 mt-0.5">
                           {items.length} supply type{items.length !== 1 ? 's' : ''}
-                          {deployments.length > 0 && <span className="ml-1 text-zinc-500">· On {deployments.length} apparatus</span>}
+                          {deployments.length > 0 && <span className="ml-1 text-zinc-500">· {deployments.length} deployed</span>}
                           {tmpl.description && <span> · {tmpl.description}</span>}
                           {!tmpl.active && <span className="ml-1 text-zinc-400">· Inactive</span>}
                         </p>

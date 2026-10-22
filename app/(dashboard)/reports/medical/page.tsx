@@ -24,12 +24,12 @@ function fmtDate(d: string | null) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-type StoreroomRow = { id: string; name: string; apparatus_id: string | null; compartment_id: string | null }
+type StoreroomRow = { id: string; name: string; apparatus_id: string | null; compartment_id: string | null; container_kind: string }
 
 function locationType(s: StoreroomRow): 'Storeroom' | 'Bag' | 'Compartment' {
-  if (!s.apparatus_id) return 'Storeroom'
-  if (!s.compartment_id) return 'Bag'
-  return 'Compartment'
+  if (s.container_kind === 'bag') return 'Bag'
+  if (s.container_kind === 'compartment_storage') return 'Compartment'
+  return 'Storeroom'
 }
 
 function locationLabel(s: StoreroomRow, unitMap: Record<string, string>): string {
@@ -60,10 +60,10 @@ export default async function MedicalReportsPage({
   const department_id = ctx.departmentId
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
 
-  // Storerooms — include compartment_id to distinguish Storeroom / Bag / Compartment
+  // Storerooms — container_kind distinguishes Storeroom / Bag / Compartment
   const { data: storeroomsRaw } = await adminClient
     .from('medical_storerooms')
-    .select('id, name, apparatus_id, compartment_id')
+    .select('id, name, apparatus_id, compartment_id, container_kind')
     .eq('department_id', department_id)
     .eq('active', true)
   const storerooms: StoreroomRow[] = (storeroomsRaw ?? []).map(s => ({
@@ -71,6 +71,7 @@ export default async function MedicalReportsPage({
     name: s.name,
     apparatus_id: s.apparatus_id ?? null,
     compartment_id: s.compartment_id ?? null,
+    container_kind: s.container_kind,
   }))
   const storeroomIds = storerooms.map(s => s.id)
   const storeroomIndex = Object.fromEntries(storerooms.map(s => [s.id, s]))

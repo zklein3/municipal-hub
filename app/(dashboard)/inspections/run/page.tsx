@@ -181,19 +181,22 @@ export default async function InspectionRunPage({
 
   const { data: deptRow } = await adminClient.from('departments').select('module_medical').eq('id', ctx.departmentId).single()
   if (deptRow?.module_medical) {
+    // The compartment's loose storage plus every bag placed in it. (Interim until bags get their own
+    // drill-in checks — step 2D; until then a bag's medications are listed here, labeled by bag.)
     const { data: roomList } = await adminClient
       .from('medical_storerooms')
-      .select('id')
+      .select('id, name, container_kind')
       .eq('apparatus_id', apparatus_id)
       .eq('compartment_id', compartment_id)
       .eq('active', true)
-    const room = roomList?.[0]
+    const rooms = roomList ?? []
+    const roomById = Object.fromEntries(rooms.map(r => [r.id, r]))
 
-    if (room) {
+    if (rooms.length > 0) {
       const { data: invRows } = await adminClient
         .from('medical_storeroom_inventory')
-        .select('id, supply_type_id, par_level')
-        .eq('storeroom_id', room.id)
+        .select('id, storeroom_id, supply_type_id, par_level')
+        .in('storeroom_id', rooms.map(r => r.id))
 
       const invIds = (invRows ?? []).map(i => i.id)
       const supplyTypeIds = [...new Set((invRows ?? []).map(i => i.supply_type_id))]
@@ -217,11 +220,12 @@ export default async function InspectionRunPage({
         const supply = (supplyTypes ?? []).find(s => s.id === inv.supply_type_id)
         const invLots = (lots ?? []).filter(l => l.storeroom_inventory_id === inv.id)
         const current_quantity = invLots.reduce((sum, l) => sum + l.quantity_remaining, 0)
+        const room = roomById[inv.storeroom_id]
         return {
-          storeroom_id: room.id,
+          storeroom_id: inv.storeroom_id,
           storeroom_inventory_id: inv.id,
           supply_type_id: inv.supply_type_id,
-          supply_name: supply?.name ?? 'Unknown',
+          supply_name: room?.container_kind === 'bag' ? `${room.name} · ${supply?.name ?? 'Unknown'}` : (supply?.name ?? 'Unknown'),
           unit_of_measure: supply?.unit_of_measure ?? '',
           par_level: inv.par_level,
           tracks_expiration: supply?.tracks_expiration ?? false,

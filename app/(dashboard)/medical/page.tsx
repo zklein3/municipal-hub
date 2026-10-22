@@ -29,7 +29,7 @@ export default async function MedicalPage() {
     .select('id, name, station_id, apparatus_id, compartment_id')
     .eq('department_id', department_id)
     .eq('active', true)
-    .is('apparatus_id', null)
+    .eq('container_kind', 'storeroom')
     .order('name')
 
   // All storerooms (station + apparatus bags + compartments) — used for transfer destinations
