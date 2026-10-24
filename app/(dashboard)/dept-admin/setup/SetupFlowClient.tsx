@@ -7,7 +7,6 @@ import StationsStep from './StationsStep'
 import ApparatusStep from './ApparatusStep'
 import CompartmentsStep from './CompartmentsStep'
 import ItemsStep from './ItemsStep'
-import InventoryStep from './InventoryStep'
 import PresetsStep from './PresetsStep'
 import HelpText from '@/components/HelpText'
 
@@ -17,7 +16,6 @@ const DEPT_SETUP_TABS = [
   { id: 'compartments', label: 'Compartments'  },
   { id: 'presets',      label: 'Presets'       },
   { id: 'items',        label: 'Items'         },
-  { id: 'inventory',    label: 'Inventory'     },
 ]
 
 
@@ -192,14 +190,6 @@ export default function SetupFlowClient({
               initialSubTab={searchParams.get('sub') ?? undefined}
               moduleMedical={moduleMedical}
               {...helpProps}
-            />
-          )}
-          {effectiveTab === 'inventory' && (
-            <InventoryStep
-              apparatus={apparatus}
-              allItems={items}
-              allCategories={categories}
-              medicalSupplyTypes={medicalSupplyTypes}
             />
           )}
         </div>

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { dispenseStock, administerStock, wasteStock, transferStock } from '@/app/actions/medical'
+import { dispenseStock, administerStock, wasteStock, transferStock, updateStoreroomPar } from '@/app/actions/medical'
 import { administeredDoseToVolume } from '@/lib/medical-dose'
 import { MEDICAL_STATUS_COLORS, MEDICAL_STATUS_LABELS, getMedicalSupplyStatus } from '@/lib/medical-status'
 import SignatureCapture, { SignatureCaptureHandle } from '../../medical/SignatureCapture'
@@ -60,6 +60,8 @@ export default function MedicalCompartmentsSection({
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [editingParId, setEditingParId] = useState<string | null>(null)
+  const [parDraft, setParDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Shared across the use/waste modals — only one is ever open at a time
   const signer1PadRef = useRef<SignatureCaptureHandle>(null)
@@ -431,7 +433,17 @@ export default function MedicalCompartmentsSection({
                             {supply.is_controlled && <span className="text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
                             <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${STATUS_COLORS[status]}`}>{STATUS_LABELS[status]}</span>
                           </div>
-                          <p className="text-xs text-zinc-400">{total} {supply.unit_of_measure} · PAR {item.par_level}</p>
+                          <p className="text-xs text-zinc-400">
+                            {total} {supply.unit_of_measure} · {editingParId === item.id ? (
+                              <span className="inline-flex items-center gap-1">PAR
+                                <input type="number" min="0" value={parDraft} onChange={e => setParDraft(e.target.value)} autoFocus className="w-14 rounded border border-zinc-300 px-1 py-0.5 text-xs" />
+                                <button onClick={async () => { setLoading(true); const r = await updateStoreroomPar(item.id, parseInt(parDraft) || 0); setLoading(false); if (r?.error) { setError(r.error); return } setEditingParId(null); router.refresh() }} className="font-semibold text-red-700 hover:underline">Save</button>
+                                <button onClick={() => setEditingParId(null)} className="hover:underline">Cancel</button>
+                              </span>
+                            ) : isAdmin ? (
+                              <button onClick={() => { setEditingParId(item.id); setParDraft(String(item.par_level)) }} className="underline decoration-dotted hover:text-zinc-700" title="Change PAR">PAR {item.par_level}</button>
+                            ) : <>PAR {item.par_level}</>}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {lots.length > 0 && (

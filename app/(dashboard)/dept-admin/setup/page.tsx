@@ -12,6 +12,8 @@ export default async function SetupPage({
   const { tab } = await searchParams
   // Medical setup moved to the one Medical page (mode buttons) — keep old links working.
   if (tab === 'medical') redirect('/medical?mode=types')
+  // The Inventory tab was a duplicate of the truck screen — send old links there.
+  if (tab === 'inventory') redirect('/equipment')
 
   const adminClient = createAdminClient()
 
