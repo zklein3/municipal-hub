@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import { logError } from '@/lib/logger'
+import { assignCompartmentQr } from '@/lib/preset-deploy'
 import { revalidatePath } from 'next/cache'
 
 // A sys-admin-flagged account can also have a real department selected (the
@@ -20,6 +21,20 @@ async function verifyAdmin(override_department_id?: string) {
   if (!ctx.isSysAdmin && !(await hasPermission(ctx, 'manage_dept_setup'))) return null
 
   return { me: { id: ctx.personnelId, is_sys_admin: ctx.isSysAdmin }, department_id }
+}
+
+// Every compartment the system creates gets a QR code (<apparatus qr or unit>-<code>), same as preset deploys.
+async function autoQr(adminClient: ReturnType<typeof createAdminClient>, compartment_ids: string[]) {
+  if (compartment_ids.length === 0) return
+  const { data: acs } = await adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id, qr_code').in('id', compartment_ids)
+  for (const ac of acs ?? []) {
+    if (ac.qr_code) continue
+    const [{ data: app }, { data: cn }] = await Promise.all([
+      adminClient.from('apparatus').select('unit_number, qr_code').eq('id', ac.apparatus_id).single(),
+      adminClient.from('compartment_names').select('compartment_code').eq('id', ac.compartment_name_id).single(),
+    ])
+    if (app && cn) await assignCompartmentQr(adminClient, ac.id, `${app.qr_code ?? app.unit_number}-${cn.compartment_code}`)
+  }
 }
 
 // ─── Create Compartment Name ──────────────────────────────────────────────────
@@ -109,16 +124,19 @@ export async function assignCompartmentToApparatus(apparatus_id: string, compart
 
   if (existing?.[0]) return { error: 'This compartment is already assigned to this apparatus.' }
 
-  const { error } = await adminClient.from('apparatus_compartments').insert({
+  const { data: created, error } = await adminClient.from('apparatus_compartments').insert({
     apparatus_id,
     compartment_name_id,
     active: true,
-  })
+  }).select('id').single()
 
   if (error) {
     await logError(error, '/apparatus/[id]')
     return { error: error.message }
   }
+
+  await autoQr(adminClient, [created.id as string])
+  revalidatePath('/equipment')
 
   revalidatePath(`/apparatus/${apparatus_id}`)
   return { success: true }
@@ -189,10 +207,11 @@ export async function bulkSetCompartmentApparatus(
   const toRemove = (existing ?? []).filter(e => !newSet.has(e.apparatus_id))
 
   if (toAdd.length > 0) {
-    const { error } = await adminClient.from('apparatus_compartments').insert(
+    const { data: createdRows, error } = await adminClient.from('apparatus_compartments').insert(
       toAdd.map(apparatus_id => ({ apparatus_id, compartment_name_id, active: true }))
-    )
+    ).select('id')
     if (error) { await logError(error, '/dept-admin/setup'); return { error: error.message } }
+    await autoQr(adminClient, (createdRows ?? []).map(r => r.id as string))
   }
 
   if (toRemove.length > 0) {

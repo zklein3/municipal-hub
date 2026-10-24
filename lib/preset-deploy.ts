@@ -28,7 +28,7 @@ export type DeployResult = {
 
 // apparatus_compartments.qr_code is unique across every department, so try the same
 // `${apparatus qr or unit}-${code}` convention the compartment page suggests, then suffixes.
-async function assignCompartmentQr(adminClient: SupabaseClient, compartment_id: string, base: string) {
+export async function assignCompartmentQr(adminClient: SupabaseClient, compartment_id: string, base: string) {
   const root = base.toUpperCase().replace(/\s+/g, '')
   for (let n = 1; n <= 9; n++) {
     const candidate = n === 1 ? root : `${root}-${n}`
