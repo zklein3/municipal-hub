@@ -388,8 +388,8 @@ export default function InspectionRunClient({
           // Refill to PAR from the count that will be on the books (independent of the correction).
           const base = differs && !correct ? med.current_quantity : counted
           const need = Math.max(med.par_level - base, 0)
-          const refill = resp?.refill && need > 0 && med.refill_sources.length > 0
-            ? { refill_from_storeroom_id: resp?.refill_from ?? med.refill_sources[0].storeroom_id, refill_quantity: need }
+          const refill = resp?.refill && need > 0 && (med.refill_sources ?? []).length > 0
+            ? { refill_from_storeroom_id: resp?.refill_from ?? (med.refill_sources ?? [])[0]?.storeroom_id, refill_quantity: need }
             : {}
           return { ...correction, ...refill }
         })(),
@@ -627,7 +627,7 @@ export default function InspectionRunClient({
                   const base = differs && resp?.correct_count === false ? med.current_quantity : counted
                   const need = Math.max(med.par_level - base, 0)
                   if (need === 0) return null
-                  const sources = med.refill_sources
+                  const sources = med.refill_sources ?? []
                   return (
                     <div className="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 space-y-1">
                       <p className="text-xs font-semibold text-amber-800">{need} below PAR ({base} of {med.par_level})</p>
