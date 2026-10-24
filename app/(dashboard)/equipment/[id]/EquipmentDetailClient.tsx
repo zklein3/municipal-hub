@@ -2,9 +2,10 @@
 
 import { useState, type ComponentProps } from 'react'
 import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
+import { AddCompartmentPanel, CompartmentQrControl, RemoveCompartmentButton } from './TruckCompartmentControls'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, moveQuantityToStorage, updateItemQuantity } from '@/app/actions/equipment'
+import { assignItemToCompartment, removeItemFromCompartment, moveItemToCompartment, moveQuantityToStorage, updateItemQuantity, transferQuantityBetweenCompartments } from '@/app/actions/equipment'
 import { assignMedicalSupplyToCompartment } from '@/app/actions/medical'
 import { addStandardCompartmentsToApparatus, saveCompartmentAsPreset } from '@/app/actions/presets'
 import { MEDICAL_STATUS_COLORS, MEDICAL_STATUS_LABELS, type MedicalSupplyStatus } from '@/lib/medical-status'
@@ -34,6 +35,7 @@ interface Compartment {
   compartment_code: string
   compartment_name: string | null
   sort_order: number
+  qr_code?: string | null
   items: CompartmentItem[]
 }
 
@@ -95,6 +97,8 @@ export default function EquipmentDetailClient({
   isAdmin,
   isOfficerOrAbove,
   canManageDeptSetup,
+  compartmentLibrary = [],
+  presetOptions = [],
   backHref,
   medicalSupplyTypes,
   medicationsByCompartment,
@@ -109,6 +113,8 @@ export default function EquipmentDetailClient({
   isAdmin: boolean
   isOfficerOrAbove: boolean
   canManageDeptSetup: boolean
+  compartmentLibrary?: { id: string; compartment_code: string; compartment_name: string | null }[]
+  presetOptions?: { id: string; name: string; default_code: string }[]
   backHref?: string
   medicalSupplyTypes: MedicalSupplyType[]
   medicationsByCompartment: Record<string, CompartmentMedication[]>
@@ -124,6 +130,7 @@ export default function EquipmentDetailClient({
 
   // Presets: "Add standard compartments" + "Save as preset"
   const [presetMsg, setPresetMsg] = useState<string | null>(null)
+  const [showAddCompartment, setShowAddCompartment] = useState(false)
   const [presetBusy, setPresetBusy] = useState(false)
   const [presetExists, setPresetExists] = useState<string | null>(null) // compartment id awaiting replace/merge
   const canAddStandard = (isAdmin || canManageDeptSetup) && !!apparatus.type_name
@@ -169,6 +176,7 @@ export default function EquipmentDetailClient({
   const [moveApparatusId, setMoveApparatusId] = useState('')
   const [moveCompartmentId, setMoveCompartmentId] = useState('')
   const [moveStorageQty, setMoveStorageQty] = useState('1')
+  const [moveQty, setMoveQty] = useState('1')
   const [moveError, setMoveError] = useState<string | null>(null)
   const [moveLoading, setMoveLoading] = useState(false)
 
@@ -244,6 +252,7 @@ export default function EquipmentDetailClient({
     setMoveApparatusId(apparatus.id)
     setMoveCompartmentId('')
     setMoveStorageQty(String(item.expected_quantity))
+    setMoveQty(String(item.expected_quantity))
     setMoveError(null)
   }
 
@@ -251,7 +260,11 @@ export default function EquipmentDetailClient({
     if (!moveTarget || !moveCompartmentId) return
     setMoveError(null)
     setMoveLoading(true)
-    const result = await moveItemToCompartment(moveTarget.locationId, moveCompartmentId)
+    // Fewer than all → split between compartments; all → move the whole assignment.
+    const qty = parseInt(moveQty) || moveTarget.expectedQuantity
+    const result = qty < moveTarget.expectedQuantity
+      ? await transferQuantityBetweenCompartments(moveTarget.locationId, moveCompartmentId, qty)
+      : await moveItemToCompartment(moveTarget.locationId, moveCompartmentId)
     if (result?.error) setMoveError(result.error)
     else {
       setMoveTarget(null)
@@ -344,7 +357,20 @@ export default function EquipmentDetailClient({
             {presetBusy ? 'Working...' : `+ Add standard ${apparatus.type_name} compartments`}
           </button>
         )}
+        {canManageDeptSetup && (
+          <button
+            onClick={() => setShowAddCompartment(v => !v)}
+            className="rounded-lg bg-white border border-dashed border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 hover:border-red-300 hover:text-red-700 transition-colors"
+          >
+            + Add compartment
+          </button>
+        )}
       </div>
+
+      {showAddCompartment && canManageDeptSetup && (
+        <AddCompartmentPanel apparatusId={apparatus.id} library={compartmentLibrary} presets={presetOptions}
+          onClose={() => setShowAddCompartment(false)} />
+      )}
 
       {presetMsg && (
         <div className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{presetMsg}</div>
@@ -366,18 +392,14 @@ export default function EquipmentDetailClient({
           {canAddStandard && (
             <p className="mt-2 text-zinc-500">Use &quot;Add standard {apparatus.type_name} compartments&quot; above to start from your department&apos;s presets.</p>
           )}
-          {isAdmin && (
-            <p className="mt-2">
-              <a href={`/apparatus/${apparatus.id}`} className="text-red-600 hover:underline">
-                Go to apparatus detail to add compartments →
-              </a>
-            </p>
+          {canManageDeptSetup && (
+            <p className="mt-2 text-zinc-500">Or use &quot;+ Add compartment&quot; to add one at a time.</p>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
           {compartments.map(c => (
-            <div key={c.id} className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden">
+            <div key={c.id} id={`c-${c.id}`} className="rounded-xl bg-white shadow-sm border border-zinc-200 overflow-hidden scroll-mt-24 target:ring-2 target:ring-red-300">
               {presetExists === c.id && (
                 <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
                   <span className="flex-1 min-w-[12rem]">A preset named {c.compartment_name || c.compartment_code} already exists.</span>
@@ -402,8 +424,9 @@ export default function EquipmentDetailClient({
                   <Link
                     href={`/equipment/${apparatus.id}/${c.id}`}
                     className="text-xs font-semibold text-zinc-500 hover:text-red-700"
+                    title="Recent inspections and presence checks for this compartment"
                   >
-                    View →
+                    History →
                   </Link>
                   {canManageDeptSetup && (
                     <button
@@ -427,7 +450,17 @@ export default function EquipmentDetailClient({
                       {assigningTo === c.id ? 'Cancel' : '+ Add Item'}
                     </button>
                   )}
+                  {canManageDeptSetup && (
+                    <RemoveCompartmentButton compartmentId={c.id} apparatusId={apparatus.id}
+                      label={`${apparatus.unit_number} - ${c.compartment_code}`} />
+                  )}
                 </div>
+              </div>
+              <div className="px-5 py-1.5 border-b border-zinc-100 bg-white">
+                <CompartmentQrControl compartmentId={c.id} apparatusId={apparatus.id} qrCode={c.qr_code ?? null}
+                  title={`${c.compartment_code}${c.compartment_name ? ' — ' + c.compartment_name : ''}`}
+                  subtitle={`${apparatus.unit_number}${apparatus.apparatus_name ? ' — ' + apparatus.apparatus_name : ''}`}
+                  canEdit={canManageDeptSetup} />
               </div>
 
               {/* Add Item Form */}
@@ -703,6 +736,15 @@ export default function EquipmentDetailClient({
                     ))}
                 </select>
               </div>
+              {moveTarget.expectedQuantity > 1 && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-500 mb-1">How many (of {moveTarget.expectedQuantity})</label>
+                  <input type="number" min="1" max={moveTarget.expectedQuantity} value={moveQty}
+                    onChange={e => setMoveQty(e.target.value)}
+                    className="w-24 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
+                  <p className="text-xs text-zinc-400 mt-1">Moving fewer than all of them splits it between the two compartments.</p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -717,7 +759,7 @@ export default function EquipmentDetailClient({
                 disabled={!moveCompartmentId || moveLoading}
                 className="flex-1 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
               >
-                {moveLoading ? 'Moving...' : 'Move Item'}
+                {moveLoading ? 'Moving...' : (parseInt(moveQty) || moveTarget.expectedQuantity) < moveTarget.expectedQuantity ? `Move ${parseInt(moveQty)}` : 'Move Item'}
               </button>
             </div>
           </div>

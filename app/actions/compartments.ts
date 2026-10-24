@@ -44,13 +44,13 @@ export async function createCompartmentName(formData: FormData) {
 
   if (existing?.[0]) return { error: `Compartment code ${compartment_code} already exists.` }
 
-  const { error } = await adminClient.from('compartment_names').insert({
+  const { data: created, error } = await adminClient.from('compartment_names').insert({
     department_id: ctx.department_id,
     compartment_code,
     compartment_name: compartment_name || null,
     sort_order: sort_order ? parseInt(sort_order) : null,
     active: true,
-  })
+  }).select('id').single()
 
   if (error) {
     await logError(error, '/dept-admin/setup')
@@ -58,7 +58,7 @@ export async function createCompartmentName(formData: FormData) {
   }
 
   revalidatePath('/dept-admin/setup')
-  return { success: true }
+  return { success: true, id: created.id as string }
 }
 
 // ─── Update Compartment Name ──────────────────────────────────────────────────

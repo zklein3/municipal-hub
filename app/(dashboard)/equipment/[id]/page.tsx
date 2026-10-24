@@ -49,7 +49,7 @@ export default async function EquipmentDetailPage({
   // Fetch compartments for this apparatus
   const { data: compartmentLinks } = await adminClient
     .from('apparatus_compartments')
-    .select('id, compartment_name_id, active')
+    .select('id, compartment_name_id, active, qr_code')
     .eq('apparatus_id', id)
     .eq('active', true)
 
@@ -185,10 +185,25 @@ export default async function EquipmentDetailPage({
         compartment_code: nameData?.compartment_code ?? '—',
         compartment_name: nameData?.compartment_name ?? null,
         sort_order: nameData?.sort_order ?? 999,
+        qr_code: c.qr_code ?? null,
         items,
       }
     })
     .sort((a, b) => a.sort_order - b.sort_order)
+
+  // Adding compartments right on the truck screen: the department's compartment library (names not
+  // already on this truck) and its presets.
+  const canArrange = equipmentPermissions.manage_dept_setup
+  const onTruckNameIds = new Set((compartmentLinks ?? []).map(c => c.compartment_name_id))
+  const [{ data: libraryRaw }, { data: presetRows }] = canArrange
+    ? await Promise.all([
+        adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order')
+          .eq('department_id', ctx.departmentId).eq('active', true).order('sort_order', { ascending: true, nullsFirst: false }),
+        adminClient.from('compartment_presets').select('id, name, default_code')
+          .eq('department_id', ctx.departmentId).eq('active', true).order('name'),
+      ])
+    : [{ data: [] }, { data: [] }]
+  const compartmentLibrary = (libraryRaw ?? []).filter(c => !onTruckNameIds.has(c.id))
 
   const apparatusWithRefs = {
     id: apparatus.id,
@@ -368,6 +383,8 @@ export default async function EquipmentDetailPage({
         isAdmin={isAdmin}
         isOfficerOrAbove={isOfficerOrAbove}
         canManageDeptSetup={equipmentPermissions.manage_dept_setup}
+        compartmentLibrary={compartmentLibrary}
+        presetOptions={presetRows ?? []}
         backHref={from}
         medicalSupplyTypes={medicalSupplyTypes}
         medicationsByCompartment={medicationsByCompartment}
