@@ -147,7 +147,7 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 ### ⬅ RESUME HERE — Inventory Streamlining (2026-10-24)
 **Everything below SHIPPED to `main` and pushed 2026-10-24** (fast-forward of `feature/containers-bags`; keep working on that branch, push as each piece is verified).
 Read `PLAN_CONTAINERS_BAGS.md` → "Consolidation track"
-and the friction backlog. Next build: **C4 — one truck screen**.
+and the friction backlog. **C4 (one truck screen) IN PROGRESS** — pushed 237e484: on `/equipment/[id]` you can now add compartments (library / preset / new), see+print+edit each compartment QR, remove (guarded), and move part of an item; the single-compartment page link is now "History →". NOT yet click-tested. Still to do for C4: add/remove items inline without the old Setup → Inventory tab (retire that tab), edit PAR on a medical line in place, then delete the duplicate pages once nothing links to them.
 
 **What's on the branch (build clean after every commit; most live-tested by Zak on QA Test Department):**
 - **2A containers:** `container_kind` (storeroom | compartment_storage | bag), bags are their own rows
