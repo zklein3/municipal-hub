@@ -144,10 +144,10 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
-### ⬅ RESUME HERE — Inventory Streamlining (paused end of day 2026-10-22)
-**Branch `feature/containers-bags` — 23 commits ahead of `main`, LOCAL ONLY, not pushed, not live.**
-`git checkout feature/containers-bags` first. Read `PLAN_CONTAINERS_BAGS.md` → "Consolidation track"
-and the friction backlog. Live `main` = 072eea0 (Milestone 1 + its docs).
+### ⬅ RESUME HERE — Inventory Streamlining (2026-10-24)
+**Everything below SHIPPED to `main` and pushed 2026-10-24** (fast-forward of `feature/containers-bags`; keep working on that branch, push as each piece is verified).
+Read `PLAN_CONTAINERS_BAGS.md` → "Consolidation track"
+and the friction backlog. Next build: **C4 — one truck screen**.
 
 **What's on the branch (build clean after every commit; most live-tested by Zak on QA Test Department):**
 - **2A containers:** `container_kind` (storeroom | compartment_storage | bag), bags are their own rows
