@@ -10,6 +10,7 @@ import { assignMedicalSupplyToCompartment } from '@/app/actions/medical'
 import { addStandardCompartmentsToApparatus, saveCompartmentAsPreset } from '@/app/actions/presets'
 import { MEDICAL_STATUS_COLORS, MEDICAL_STATUS_LABELS, type MedicalSupplyStatus } from '@/lib/medical-status'
 import HelpText from '@/components/HelpText'
+import CompartmentHistoryPanel from './CompartmentHistoryPanel'
 
 interface Apparatus {
   id: string
@@ -131,6 +132,7 @@ export default function EquipmentDetailClient({
   // Presets: "Add standard compartments" + "Save as preset"
   const [presetMsg, setPresetMsg] = useState<string | null>(null)
   const [showAddCompartment, setShowAddCompartment] = useState(false)
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null)
   const [presetBusy, setPresetBusy] = useState(false)
   const [presetExists, setPresetExists] = useState<string | null>(null) // compartment id awaiting replace/merge
   const canAddStandard = (isAdmin || canManageDeptSetup) && !!apparatus.type_name
@@ -421,13 +423,13 @@ export default function EquipmentDetailClient({
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link
-                    href={`/equipment/${apparatus.id}/${c.id}`}
+                  <button
+                    onClick={() => setHistoryOpenId(historyOpenId === c.id ? null : c.id)}
                     className="text-xs font-semibold text-zinc-500 hover:text-red-700"
                     title="Recent inspections and presence checks for this compartment"
                   >
-                    History →
-                  </Link>
+                    History {historyOpenId === c.id ? '▲' : '▼'}
+                  </button>
                   {canManageDeptSetup && (
                     <button
                       onClick={() => handleSaveAsPreset(c.id)}
@@ -462,6 +464,8 @@ export default function EquipmentDetailClient({
                   subtitle={`${apparatus.unit_number}${apparatus.apparatus_name ? ' — ' + apparatus.apparatus_name : ''}`}
                   canEdit={canManageDeptSetup} />
               </div>
+
+              {historyOpenId === c.id && <CompartmentHistoryPanel compartmentId={c.id} />}
 
               {/* Add Item Form */}
               {assigningTo === c.id && isOfficerOrAbove && (

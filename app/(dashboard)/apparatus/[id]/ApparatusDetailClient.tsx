@@ -660,7 +660,7 @@ export default function ApparatusDetailClient({
                     </div>
                     <div className="flex items-center gap-3">
                       <Link
-                        href={`/equipment/${apparatus.id}/${c.id}`}
+                        href={`/equipment/${apparatus.id}`}
                         className="text-xs font-semibold text-red-600 hover:text-red-800"
                       >
                         View →

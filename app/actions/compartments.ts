@@ -260,3 +260,45 @@ export async function setCompartmentQrCode(compartment_id: string, apparatus_id:
   revalidatePath(`/equipment/${apparatus_id}/${compartment_id}`)
   return { success: true }
 }
+
+// ─── Compartment history (shown inline on the truck screen) ───────────────────
+export type CompartmentHistory = {
+  inspections: { id: string; inspected_at: string; overall_result: string; inspected_by_name: string | null; asset_tag: string }[]
+  presence: { id: string; inspected_at: string; inspected_by_name: string | null; present: boolean; item_name: string }[]
+}
+
+export async function fetchCompartmentHistory(compartment_id: string): Promise<CompartmentHistory | { error: string }> {
+  const ctx = await getCurrentDepartmentContext()
+  if (!ctx?.departmentId) return { error: 'Not signed in' }
+  const adminClient = createAdminClient()
+
+  // Department ownership: the compartment's truck must belong to the caller's department.
+  const { data: acList } = await adminClient.from('apparatus_compartments').select('apparatus_id').eq('id', compartment_id)
+  const apparatus_id = acList?.[0]?.apparatus_id
+  if (!apparatus_id) return { error: 'Compartment not found' }
+  const { data: appList } = await adminClient.from('apparatus').select('department_id').eq('id', apparatus_id)
+  if (appList?.[0]?.department_id !== ctx.departmentId && !ctx.isSysAdmin) return { error: 'Not found' }
+
+  const [{ data: insp }, { data: pres }] = await Promise.all([
+    adminClient.from('item_asset_inspection_logs')
+      .select('id, inspected_at, overall_result, inspected_by_name, asset_id')
+      .eq('compartment_id', compartment_id).order('inspected_at', { ascending: false }).limit(6),
+    adminClient.from('compartment_presence_check_logs')
+      .select('id, inspected_at, inspected_by_name, present, item_id')
+      .eq('compartment_id', compartment_id).order('inspected_at', { ascending: false }).limit(6),
+  ])
+
+  const assetIds = [...new Set((insp ?? []).map(l => l.asset_id).filter(Boolean) as string[])]
+  const itemIds = [...new Set((pres ?? []).map(l => l.item_id).filter(Boolean) as string[])]
+  const [{ data: assets }, { data: items }] = await Promise.all([
+    assetIds.length ? adminClient.from('item_assets').select('id, asset_tag').in('id', assetIds) : Promise.resolve({ data: [] as { id: string; asset_tag: string | null }[] }),
+    itemIds.length ? adminClient.from('items').select('id, item_name').in('id', itemIds) : Promise.resolve({ data: [] as { id: string; item_name: string }[] }),
+  ])
+  const assetMap = Object.fromEntries((assets ?? []).map(a => [a.id, a.asset_tag ?? '—']))
+  const itemMap = Object.fromEntries((items ?? []).map(i => [i.id, i.item_name]))
+
+  return {
+    inspections: (insp ?? []).map(l => ({ id: l.id, inspected_at: l.inspected_at, overall_result: l.overall_result, inspected_by_name: l.inspected_by_name, asset_tag: l.asset_id ? (assetMap[l.asset_id] ?? '—') : '—' })),
+    presence: (pres ?? []).map(l => ({ id: l.id, inspected_at: l.inspected_at, inspected_by_name: l.inspected_by_name, present: !!l.present, item_name: l.item_id ? (itemMap[l.item_id] ?? '—') : '—' })),
+  }
+}
