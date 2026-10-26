@@ -75,7 +75,7 @@ bag templates, compartment library). One copy of each form, shared by all place 
   6. **Editing PAR on a truck compartment** — PAR for a compartment's medical line can only be set when
      it's placed (preset / "+ Add Item"); no in-place PAR edit on the truck card yet. "Another time."
   7. Adding items to compartments/bags is still the old flow — part of C4 (one truck screen).
-- **C3 One copy of each medication form — NEXT:** Receive / Use / Administer / Waste / Transfer are
+- **C3 One copy of each medication form — Use/Administer/Waste DONE 2026-10-26 (`medical/forms/`), Receive/Transfer/Restock still 3x:** Receive / Use / Administer / Waste / Transfer are
   implemented 3× (`MedicalStoreClient` ~2000 lines, `MedicalBagsSection` ~900, `MedicalCompartmentsSection`
   ~800). Extract into shared components used by all three.
 - **C4 One truck screen:** `/equipment/[id]` is the only place to arrange a truck; Setup → Inventory

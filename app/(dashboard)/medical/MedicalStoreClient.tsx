@@ -2,12 +2,14 @@
 
 import { useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { receiveStock, dispenseStock, administerStock, wasteStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots, updateStoreroomPar, removeSupplyFromStoreroom } from '@/app/actions/medical'
+import { receiveStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots, updateStoreroomPar, removeSupplyFromStoreroom } from '@/app/actions/medical'
 import { StockMedicationsPanel, NewStoreroomForm, EditStoreroomForm } from './StoreroomSetupControls'
 import { formatLocalDate } from '@/lib/format-datetime'
-import { administeredDoseToVolume } from '@/lib/medical-dose'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
 import HelpText from '@/components/HelpText'
+import UseModal from './forms/UseModal'
+import AdministerModal from './forms/AdministerModal'
+import WasteModal from './forms/WasteModal'
 
 interface Storeroom { id: string; name: string; station_id: string | null; apparatus_id: string | null; compartment_id?: string | null }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
@@ -58,54 +60,6 @@ interface ReceiveForm {
   volumeUnit: string
   controlNumbers: string[]
   controlNumberStart: string
-}
-
-interface AdministerForm {
-  inventoryId: string
-  unitId: string
-  availableUnits: ControlUnit[]
-  volumePerUnit: number
-  volumeUnit: string
-  concentrationAmount: number | null
-  doseUnit: string | null
-  requiredSignatures: number
-  lotQuantityRemaining: number
-  administeredAmount: string
-  supplyName: string
-  notes: string
-  signer1Id: string
-  signer2Id: string
-}
-
-interface DispenseForm {
-  inventoryId: string
-  supplyName: string
-  unitOfMeasure: string
-  isControlled: boolean
-  requiredSignatures: number
-  lotId: string
-  quantity: string
-  notes: string
-  signer1Id: string
-  signer2Id: string
-}
-
-interface WasteForm {
-  inventoryId: string
-  lotId: string
-  supplyName: string
-  unitOfMeasure: string
-  isControlled: boolean
-  requiredSignatures: number
-  lotNumber: string | null
-  maxQty: number
-  quantity: string
-  wasteReason: string
-  notes: string
-  signer1Id: string
-  signer2Id: string
-  availableUnits: ControlUnit[]
-  selectedUnitIds: string[]
 }
 
 interface AdjustForm {
@@ -262,9 +216,7 @@ export default function MedicalStoreClient({
   const [historyStoreroomId, setHistoryStoreroomId] = useState<string>('all')
   const [historySupplyId, setHistorySupplyId] = useState<string>('all')
   const [historyTxType, setHistoryTxType] = useState<string>('all')
-  const [dispenseForm, setDispenseForm] = useState<DispenseForm | null>(null)
-  const [administerForm, setAdministerForm] = useState<AdministerForm | null>(null)
-  const [wasteForm, setWasteForm] = useState<WasteForm | null>(null)
+  const [modal, setModal] = useState<{ kind: 'use' | 'administer'; invId: string } | { kind: 'waste'; invId: string; lotId: string } | null>(null)
   const [transferForm, setTransferForm] = useState<TransferForm | null>(null)
   const [adjustForm, setAdjustForm] = useState<AdjustForm | null>(null)
   const [editLotForm, setEditLotForm] = useState<EditLotForm | null>(null)
@@ -369,223 +321,6 @@ export default function MedicalStoreClient({
     else {
       setSuccess(`Received ${qty} ${supplyMap[inventory.find(i => i.id === receiveForm.inventoryId)?.supply_type_id ?? '']?.unit_of_measure ?? 'units'} of ${receiveForm.supplyName}.`)
       setReceiveForm(null)
-      router.refresh()
-    }
-    setLoading(false)
-  }
-
-  function openDispense(inv: InventoryRow) {
-    const supply = supplyMap[inv.supply_type_id]
-    if (!supply) return
-    const activeLots = lots.filter(l => l.storeroom_inventory_id === inv.id && l.quantity_remaining > 0)
-    if (activeLots.length === 0) { setError('No stock available to dispense.'); return }
-    const oldestLot = activeLots.sort((a, b) => a.received_date.localeCompare(b.received_date))[0]
-    setError(null)
-    setDispenseForm({
-      inventoryId: inv.id,
-      supplyName: supply.name,
-      unitOfMeasure: supply.unit_of_measure,
-      isControlled: supply.is_controlled,
-      requiredSignatures: supply.required_signatures,
-      lotId: oldestLot.id,
-      quantity: '1',
-      notes: '',
-      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
-      signer2Id: '',
-    })
-  }
-
-  async function handleDispenseSubmit() {
-    if (!dispenseForm) return
-    const qty = parseInt(dispenseForm.quantity)
-    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
-    if (dispenseForm.requiredSignatures >= 1 && !dispenseForm.signer1Id) { setError('Signer 1 is required.'); return }
-    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
-    if (dispenseForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
-    if (dispenseForm.requiredSignatures >= 2 && !dispenseForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
-    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
-    if (dispenseForm.requiredSignatures >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
-
-    setError(null); setLoading(true)
-    const result = await dispenseStock({
-      storeroom_inventory_id: dispenseForm.inventoryId,
-      lot_id: dispenseForm.lotId,
-      quantity: qty,
-      notes: dispenseForm.notes || null,
-      signer_1_id: dispenseForm.signer1Id || null,
-      signer_2_id: dispenseForm.signer2Id || null,
-      signer_1_signature: signer1Signature,
-      signer_2_signature: signer2Signature,
-    })
-    if (result?.error) { setError(result.error) }
-    else {
-      setSuccess(`Dispensed ${qty} ${dispenseForm.unitOfMeasure} of ${dispenseForm.supplyName}.`)
-      setDispenseForm(null)
-      router.refresh()
-    }
-    setLoading(false)
-  }
-
-  function openAdminister(inv: InventoryRow) {
-    const supply = supplyMap[inv.supply_type_id]
-    if (!supply) return
-    const activeLotIds = new Set(
-      lots.filter(l => l.storeroom_inventory_id === inv.id && l.quantity_remaining > 0 && l.volume_per_unit).map(l => l.id)
-    )
-    const availableUnits = units.filter(u => activeLotIds.has(u.lot_id) && u.status === 'available')
-    if (availableUnits.length === 0) {
-      setError('No vials available to administer. Receive stock (with volume per vial set) first.')
-      return
-    }
-    setError(null)
-    setAdministerForm({
-      inventoryId: inv.id,
-      unitId: '',
-      availableUnits,
-      supplyName: supply.name,
-      volumePerUnit: 0,
-      volumeUnit: '',
-      concentrationAmount: null,
-      doseUnit: null,
-      requiredSignatures: supply.required_signatures,
-      lotQuantityRemaining: 0,
-      administeredAmount: '',
-      notes: '',
-      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
-      signer2Id: '',
-    })
-  }
-
-  function selectAdministerUnit(unitId: string) {
-    setAdministerForm(f => {
-      if (!f) return f
-      const unit = f.availableUnits.find(u => u.id === unitId)
-      const lot = unit ? lots.find(l => l.id === unit.lot_id) : null
-      if (!unit || !lot || !lot.volume_per_unit) return { ...f, unitId: '' }
-      const doseUnit = lot.concentration_amount && lot.concentration_unit
-        ? lot.concentration_unit.split('/')[0].trim() || null
-        : null
-      return {
-        ...f,
-        unitId,
-        volumePerUnit: lot.volume_per_unit,
-        volumeUnit: lot.volume_unit ?? '',
-        concentrationAmount: lot.concentration_amount,
-        doseUnit,
-        lotQuantityRemaining: lot.quantity_remaining,
-        administeredAmount: '',
-      }
-    })
-  }
-
-  async function handleAdministerSubmit() {
-    if (!administerForm) return
-    if (!administerForm.unitId) { setError('Select which vial is being administered.'); return }
-    const entered = parseFloat(administerForm.administeredAmount)
-    if (!entered || entered <= 0) { setError('Enter the amount administered.'); return }
-    const administered = Math.round(administeredDoseToVolume(administerForm, entered) * 1000) / 1000
-    if (administered > administerForm.volumePerUnit) {
-      const maxDose = administerForm.doseUnit && administerForm.concentrationAmount
-        ? `${Math.round(administerForm.volumePerUnit * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
-        : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`
-      setError(`Cannot exceed ${maxDose} per vial.`)
-      return
-    }
-    if (administerForm.requiredSignatures >= 1 && !administerForm.signer1Id) { setError('Signer 1 is required.'); return }
-    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
-    if (administerForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
-    if (administerForm.requiredSignatures >= 2 && !administerForm.signer2Id) { setError('A witness is required for controlled substance administration.'); return }
-    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
-    if (administerForm.requiredSignatures >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
-
-    setError(null); setLoading(true)
-    const result = await administerStock({
-      storeroom_inventory_id: administerForm.inventoryId,
-      unit_id: administerForm.unitId,
-      administered_amount: administered,
-      notes: administerForm.notes || null,
-      signer_1_id: administerForm.signer1Id || null,
-      signer_2_id: administerForm.signer2Id || null,
-      signer_1_signature: signer1Signature,
-      signer_2_signature: signer2Signature,
-    })
-    if (result?.error) { setError(result.error) }
-    else {
-      const waste = Math.round((administerForm.volumePerUnit - administered) * 1000) / 1000
-      const givenLabel = administerForm.doseUnit ? `${entered} ${administerForm.doseUnit}` : `${administered} ${administerForm.volumeUnit}`
-      const wasteLabel = administerForm.doseUnit && administerForm.concentrationAmount
-        ? `${Math.round(waste * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
-        : `${waste} ${administerForm.volumeUnit}`
-      setSuccess(`Administered ${givenLabel} of ${administerForm.supplyName} — ${wasteLabel} wasted.`)
-      setAdministerForm(null)
-      router.refresh()
-    }
-    setLoading(false)
-  }
-
-  function openWaste(inv: InventoryRow, lot: Lot) {
-    const supply = supplyMap[inv.supply_type_id]
-    if (!supply) return
-    setError(null)
-    const availableUnits = units.filter(u => u.lot_id === lot.id && u.status === 'available')
-    setWasteForm({
-      inventoryId: inv.id,
-      lotId: lot.id,
-      supplyName: supply.name,
-      unitOfMeasure: supply.unit_of_measure,
-      isControlled: supply.is_controlled,
-      requiredSignatures: supply.required_signatures,
-      lotNumber: lot.lot_number,
-      maxQty: lot.quantity_remaining,
-      quantity: supply.is_controlled ? '0' : String(lot.quantity_remaining),
-      availableUnits,
-      selectedUnitIds: [],
-      wasteReason: 'expired',
-      notes: '',
-      signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '',
-      signer2Id: '',
-    })
-  }
-
-  function toggleWasteUnit(unitId: string) {
-    setWasteForm(f => {
-      if (!f) return f
-      const selected = f.selectedUnitIds.includes(unitId)
-        ? f.selectedUnitIds.filter(id => id !== unitId)
-        : [...f.selectedUnitIds, unitId]
-      return { ...f, selectedUnitIds: selected, quantity: String(selected.length) }
-    })
-  }
-
-  async function handleWasteSubmit() {
-    if (!wasteForm) return
-    const qty = parseInt(wasteForm.quantity)
-    if (!qty || qty < 1) { setError(wasteForm.isControlled ? 'Select which vials are being wasted.' : 'Quantity must be at least 1.'); return }
-    if (qty > wasteForm.maxQty) { setError(`Only ${wasteForm.maxQty} units available.`); return }
-    if (wasteForm.requiredSignatures >= 1 && !wasteForm.signer1Id) { setError('Signer 1 is required.'); return }
-    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
-    if (wasteForm.requiredSignatures >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
-    if (wasteForm.requiredSignatures >= 2 && !wasteForm.signer2Id) { setError('A witness is required for controlled substance waste.'); return }
-    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
-    if (wasteForm.requiredSignatures >= 2 && !signer2Signature) { setError('The witness must sign.'); return }
-
-    setError(null); setLoading(true)
-    const result = await wasteStock({
-      storeroom_inventory_id: wasteForm.inventoryId,
-      lot_id: wasteForm.lotId,
-      quantity: qty,
-      unit_ids: wasteForm.isControlled ? wasteForm.selectedUnitIds : null,
-      waste_reason: wasteForm.wasteReason,
-      notes: wasteForm.notes || null,
-      signer_1_id: wasteForm.signer1Id || null,
-      signer_2_id: wasteForm.signer2Id || null,
-      signer_1_signature: signer1Signature,
-      signer_2_signature: signer2Signature,
-    })
-    if (result?.error) { setError(result.error) }
-    else {
-      setSuccess(`Wasted ${qty} ${wasteForm.unitOfMeasure} of ${wasteForm.supplyName}.`)
-      setWasteForm(null)
       router.refresh()
     }
     setLoading(false)
@@ -1114,13 +849,13 @@ export default function MedicalStoreClient({
                         </button>
                     )}
                     {supply.is_controlled ? (
-                      <button onClick={() => openAdminister(inv)}
+                      <button onClick={() => setModal({ kind: 'administer', invId: inv.id })}
                         disabled={total === 0}
                         className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
                         Administer
                       </button>
                     ) : (
-                      <button onClick={() => openDispense(inv)}
+                      <button onClick={() => setModal({ kind: 'use', invId: inv.id })}
                         disabled={total === 0}
                         className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 disabled:cursor-not-allowed">
                         Use
@@ -1175,7 +910,7 @@ export default function MedicalStoreClient({
                                     </button>
                                   )}
                                   {isOfficerOrAbove && (
-                                    <button onClick={() => openWaste(inv, lot)}
+                                    <button onClick={() => setModal({ kind: 'waste', invId: inv.id, lotId: lot.id })}
                                       className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-center sm:text-left">
                                       Waste
                                     </button>
@@ -1587,121 +1322,6 @@ export default function MedicalStoreClient({
         )
       })()}
 
-      {/* Waste Modal */}
-      {wasteForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
-            <h2 className="text-base font-bold text-zinc-900 mb-1">Log Waste / Disposal</h2>
-            <p className="text-sm text-zinc-500 mb-5">
-              {wasteForm.supplyName}
-              {wasteForm.lotNumber && <span className="ml-1 text-zinc-400">· Lot {wasteForm.lotNumber}</span>}
-              {wasteForm.isControlled && <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
-            </p>
-
-            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Reason <span className="text-red-500">*</span></label>
-                <select value={wasteForm.wasteReason}
-                  onChange={e => setWasteForm(f => f ? { ...f, wasteReason: e.target.value } : f)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                  <option value="expired">Expired</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="contaminated">Contaminated</option>
-                  <option value="recalled">Recalled</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              {wasteForm.isControlled ? (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Vials to Waste <span className="text-red-500">*</span>
-                    <span className="ml-1 text-zinc-400 font-normal">({wasteForm.selectedUnitIds.length} selected)</span>
-                  </label>
-                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 p-2">
-                    {wasteForm.availableUnits.length === 0 && (
-                      <p className="text-xs text-zinc-400 px-1 py-1">No vials on file for this lot.</p>
-                    )}
-                    {wasteForm.availableUnits.map(u => (
-                      <label key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm text-zinc-700 hover:bg-zinc-50 rounded cursor-pointer">
-                        <input type="checkbox" checked={wasteForm.selectedUnitIds.includes(u.id)}
-                          onChange={() => toggleWasteUnit(u.id)} />
-                        {u.control_number}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Quantity to Waste <span className="text-red-500">*</span>
-                    <span className="ml-1 text-zinc-400 font-normal">({wasteForm.maxQty} available)</span>
-                  </label>
-                  <input type="number" min="1" max={wasteForm.maxQty} value={wasteForm.quantity}
-                    onChange={e => setWasteForm(f => f ? { ...f, quantity: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                </div>
-              )}
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
-                <input type="text" value={wasteForm.notes} placeholder="Optional"
-                  onChange={e => setWasteForm(f => f ? { ...f, notes: e.target.value } : f)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-              </div>
-
-              {wasteForm.requiredSignatures >= 1 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Wasted By <span className="text-red-500">*</span></label>
-                  <select value={wasteForm.signer1Id}
-                    onChange={e => setWasteForm(f => f ? { ...f, signer1Id: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    <option value="">Select person...</option>
-                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2">
-                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
-                  </div>
-                </div>
-              )}
-
-              {wasteForm.requiredSignatures >= 2 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Witness <span className="text-red-500">*</span>
-                    <span className="ml-1 text-amber-600 font-normal">(controlled substance)</span>
-                  </label>
-                  <select value={wasteForm.signer2Id}
-                    onChange={e => setWasteForm(f => f ? { ...f, signer2Id: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    <option value="">Select witness...</option>
-                    {personnel
-                      .filter(p => p.id !== wasteForm.signer1Id)
-                      .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2">
-                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleWasteSubmit} disabled={loading}
-                className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
-                {loading ? 'Saving...' : 'Confirm Waste'}
-              </button>
-              <button onClick={() => { setWasteForm(null); setError(null) }}
-                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Edit Lot Modal */}
       {editLotForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
@@ -1832,241 +1452,20 @@ export default function MedicalStoreClient({
         </div>
       )}
 
-      {/* Dispense Modal */}
-      {dispenseForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
-            <h2 className="text-base font-bold text-zinc-900 mb-1">Use / Dispense</h2>
-            <p className="text-sm text-zinc-500 mb-5">
-              {dispenseForm.supplyName}
-              {dispenseForm.isControlled && <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>}
-            </p>
 
-            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
-
-            <div className="flex flex-col gap-3">
-              {/* Lot selector — show all active lots with qty */}
-              {(() => {
-                const activeLots = lots.filter(l => l.storeroom_inventory_id === dispenseForm.inventoryId && l.quantity_remaining > 0)
-                if (activeLots.length > 1) return (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Lot <span className="text-red-500">*</span></label>
-                    <select value={dispenseForm.lotId}
-                      onChange={e => setDispenseForm(f => f ? { ...f, lotId: e.target.value } : f)}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                      {activeLots.sort((a, b) => a.received_date.localeCompare(b.received_date)).map(l => (
-                        <option key={l.id} value={l.id}>
-                          {l.lot_number ? `Lot ${l.lot_number}` : 'No lot #'} — {l.quantity_remaining} {dispenseForm.unitOfMeasure}
-                          {l.expiration_date ? ` · Exp ${fmtDate(l.expiration_date)}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-zinc-400 mt-1">Oldest lot selected by default (FIFO)</p>
-                  </div>
-                )
-                const onlyLot = activeLots[0]
-                return (
-                  <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
-                    {onlyLot.lot_number ? `Lot ${onlyLot.lot_number}` : 'Single active lot'} · {onlyLot.quantity_remaining} {dispenseForm.unitOfMeasure} available
-                    {onlyLot.expiration_date && <span className="ml-1 text-zinc-400">· Exp {fmtDate(onlyLot.expiration_date)}</span>}
-                  </div>
-                )
-              })()}
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Quantity <span className="text-red-500">*</span></label>
-                <input type="number" min="1" value={dispenseForm.quantity}
-                  onChange={e => setDispenseForm(f => f ? { ...f, quantity: e.target.value } : f)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes / Reason</label>
-                <input type="text" value={dispenseForm.notes} placeholder="Optional"
-                  onChange={e => setDispenseForm(f => f ? { ...f, notes: e.target.value } : f)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-              </div>
-
-              {dispenseForm.requiredSignatures >= 1 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Dispensed By <span className="text-red-500">*</span></label>
-                  <select value={dispenseForm.signer1Id}
-                    onChange={e => setDispenseForm(f => f ? { ...f, signer1Id: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    <option value="">Select person...</option>
-                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2">
-                    <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
-                  </div>
-                </div>
-              )}
-
-              {dispenseForm.requiredSignatures >= 2 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Witness / Second Signer <span className="text-red-500">*</span>
-                    <span className="ml-1 text-amber-600 font-normal">(controlled substance)</span>
-                  </label>
-                  <select value={dispenseForm.signer2Id}
-                    onChange={e => setDispenseForm(f => f ? { ...f, signer2Id: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    <option value="">Select witness...</option>
-                    {personnel
-                      .filter(p => p.id !== dispenseForm.signer1Id)
-                      .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2">
-                    <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleDispenseSubmit} disabled={loading}
-                className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
-                {loading ? 'Saving...' : 'Confirm Use'}
-              </button>
-              <button onClick={() => { setDispenseForm(null); setError(null) }}
-                className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {administerForm && (() => {
-        const entryUnit = administerForm.doseUnit ?? administerForm.volumeUnit
-        const maxEntry = administerForm.doseUnit && administerForm.concentrationAmount
-          ? Math.round(administerForm.volumePerUnit * administerForm.concentrationAmount * 1000) / 1000
-          : administerForm.volumePerUnit
-        const entered = administerForm.administeredAmount.trim()
-        const enteredNum = parseFloat(entered)
-        const hasEntry = entered !== '' && !isNaN(enteredNum)
-        const volumeGiven = hasEntry ? administeredDoseToVolume(administerForm, enteredNum) : null
-        const validAmount = !!administerForm.unitId && volumeGiven !== null && enteredNum > 0 && volumeGiven <= administerForm.volumePerUnit + 0.0001
-        const waste = validAmount && volumeGiven !== null ? Math.round((administerForm.volumePerUnit - volumeGiven) * 1000) / 1000 : null
-        const wasteDisplay = waste !== null
-          ? (administerForm.doseUnit && administerForm.concentrationAmount
-              ? `${Math.round(waste * administerForm.concentrationAmount * 1000) / 1000} ${administerForm.doseUnit}`
-              : `${waste} ${administerForm.volumeUnit}`)
-          : `— ${entryUnit}`
-        const amountHint = hasEntry && !validAmount
-          ? (enteredNum <= 0 ? 'Enter an amount greater than 0.' : `Cannot exceed ${maxEntry} ${entryUnit} per vial.`)
-          : null
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-            <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
-              <h2 className="text-base font-bold text-zinc-900 mb-1">Administer</h2>
-              <p className="text-sm text-zinc-500 mb-5">
-                {administerForm.supplyName}
-                <span className="ml-2 text-xs rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-medium">Controlled</span>
-              </p>
-
-              {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
-
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Vial (Control #) <span className="text-red-500">*</span>
-                  </label>
-                  <select value={administerForm.unitId}
-                    onChange={e => selectAdministerUnit(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                    <option value="">Select the vial in hand...</option>
-                    {administerForm.availableUnits.map(u => {
-                      const unitLot = lots.find(l => l.id === u.lot_id)
-                      return (
-                        <option key={u.id} value={u.id}>
-                          {u.control_number}{unitLot?.lot_number ? ` — Lot ${unitLot.lot_number}` : ''}{unitLot?.expiration_date ? ` (Exp ${fmtDate(unitLot.expiration_date)})` : ''}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-
-                {administerForm.unitId && (
-                  <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-2.5 text-sm text-zinc-700">
-                    This vial: {administerForm.doseUnit ? `${maxEntry} ${administerForm.doseUnit} (${administerForm.volumePerUnit} ${administerForm.volumeUnit})` : `${administerForm.volumePerUnit} ${administerForm.volumeUnit}`} · {administerForm.lotQuantityRemaining} vial{administerForm.lotQuantityRemaining === 1 ? '' : 's'} remaining in lot
-                  </div>
-                )}
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">
-                    Amount Administered <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" step="any" min="0" max={maxEntry} value={administerForm.administeredAmount}
-                      disabled={!administerForm.unitId}
-                      onChange={e => setAdministerForm(f => f ? { ...f, administeredAmount: e.target.value } : f)}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-center focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:bg-zinc-50 disabled:text-zinc-400" />
-                    <span className="text-sm text-zinc-500 shrink-0">{entryUnit}</span>
-                  </div>
-                  {amountHint && <p className="mt-1 text-xs text-red-600">{amountHint}</p>}
-                </div>
-
-                <div className={`rounded-lg border px-4 py-2.5 text-sm font-medium ${waste !== null ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-zinc-50 border-zinc-200 text-zinc-400'}`}>
-                  Waste: {wasteDisplay}
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
-                  <input type="text" value={administerForm.notes} placeholder="Optional — e.g. patient/run reference"
-                    onChange={e => setAdministerForm(f => f ? { ...f, notes: e.target.value } : f)}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500" />
-                </div>
-
-                {administerForm.requiredSignatures >= 1 && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">Administered By <span className="text-red-500">*</span></label>
-                    <select value={administerForm.signer1Id}
-                      onChange={e => setAdministerForm(f => f ? { ...f, signer1Id: e.target.value } : f)}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                      <option value="">Select person...</option>
-                      {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <div className="mt-2">
-                      <SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" />
-                    </div>
-                  </div>
-                )}
-
-                {administerForm.requiredSignatures >= 2 && (
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-700">
-                      Witness / Second Signer <span className="text-red-500">*</span>
-                      <span className="ml-1 text-amber-600 font-normal">(controlled substance)</span>
-                    </label>
-                    <select value={administerForm.signer2Id}
-                      onChange={e => setAdministerForm(f => f ? { ...f, signer2Id: e.target.value } : f)}
-                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500">
-                      <option value="">Select witness...</option>
-                      {personnel
-                        .filter(p => p.id !== administerForm.signer1Id)
-                        .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <div className="mt-2">
-                      <SignatureCapture ref={signer2PadRef} label="Witness Signature" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button onClick={handleAdministerSubmit} disabled={loading || !validAmount}
-                  className="flex-1 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-900 disabled:opacity-50">
-                  {loading ? 'Saving...' : 'Confirm Administration'}
-                </button>
-                <button onClick={() => { setAdministerForm(null); setError(null) }}
-                  className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
+      {/* Use / Administer / Waste -- shared forms */}
+      {modal && (() => {
+        const inv = inventory.find(i => i.id === modal.invId)
+        const supply = inv ? supplyMap[inv.supply_type_id] : undefined
+        if (!inv || !supply) return null
+        const done = (msg: string) => { setSuccess(msg); setModal(null); router.refresh() }
+        const common = { inventoryId: inv.id, supply, personnel, myPersonnelId, onClose: () => setModal(null), onDone: done }
+        const invLots = lots.filter(l => l.storeroom_inventory_id === inv.id)
+        if (modal.kind === 'use') return <UseModal {...common} lots={invLots} />
+        if (modal.kind === 'administer') return <AdministerModal {...common} lots={invLots} units={units} />
+        if (modal.kind !== 'waste') return null
+        const lot = lots.find(l => l.id === modal.lotId)
+        return lot ? <WasteModal {...common} lot={lot} units={units} /> : null
       })()}
     </div>
   )
