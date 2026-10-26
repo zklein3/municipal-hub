@@ -1,9 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { receiveStock, updateBagInventoryMode } from '@/app/actions/medical'
-import SignatureCapture, { SignatureCaptureHandle } from '../../medical/SignatureCapture'
+import { updateBagInventoryMode } from '@/app/actions/medical'
 import UseModal from '../../medical/forms/UseModal'
 import AdministerModal from '../../medical/forms/AdministerModal'
 import WasteModal from '../../medical/forms/WasteModal'
@@ -70,50 +69,14 @@ export default function MedicalBagsSection({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [expandedBagId, setExpandedBagId] = useState<string | null>(bags[0]?.id ?? null)
-  // Shared across the use/waste/receive modals — only one is ever open at a time
-  const signer1PadRef = useRef<SignatureCaptureHandle>(null)
-  const signer2PadRef = useRef<SignatureCaptureHandle>(null)
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
 
-  type ReceiveForm = { invId: string; supplyName: string; tracksExp: boolean; requiredSigs: number; lotNumber: string; expirationDate: string; quantity: string; notes: string; signer1Id: string; signer2Id: string }
 
   const [modal, setModal] = useState<{ kind: 'use' | 'administer' | 'restock' | 'transferOut'; invId: string } | { kind: 'waste'; invId: string; lotId: string } | null>(null)
-  const [receiveForm, setReceiveForm] = useState<ReceiveForm | null>(null)
 
   const supplyMap = Object.fromEntries(supplyTypes.map(s => [s.id, s]))
   const lotsFor = (invId: string) => bagLots.filter(l => l.storeroom_inventory_id === invId)
   const totalQty = (invId: string) => lotsFor(invId).reduce((s, l) => s + l.quantity_remaining, 0)
-
-  function openReceive(inv: InventoryRow) {
-    const supply = supplyMap[inv.supply_type_id]; if (!supply) return
-    setError(null)
-    setReceiveForm({ invId: inv.id, supplyName: supply.name, tracksExp: supply.tracks_expiration, requiredSigs: supply.required_signatures, lotNumber: '', expirationDate: '', quantity: '', notes: '', signer1Id: supply.required_signatures >= 1 ? myPersonnelId : '', signer2Id: '' })
-  }
-
-  async function handleReceiveSubmit() {
-    if (!receiveForm) return
-    const qty = parseInt(receiveForm.quantity)
-    if (!qty || qty < 1) { setError('Quantity must be at least 1.'); return }
-    if (receiveForm.tracksExp && !receiveForm.expirationDate) { setError('Expiration date required.'); return }
-    if (receiveForm.requiredSigs >= 1 && !receiveForm.signer1Id) { setError('Signer 1 is required.'); return }
-    const signer1Signature = signer1PadRef.current?.getDataUrl() ?? null
-    if (receiveForm.requiredSigs >= 1 && !signer1Signature) { setError('Signer 1 must sign.'); return }
-    if (receiveForm.requiredSigs >= 2 && !receiveForm.signer2Id) { setError('A second signer is required for controlled substances.'); return }
-    const signer2Signature = signer2PadRef.current?.getDataUrl() ?? null
-    if (receiveForm.requiredSigs >= 2 && !signer2Signature) { setError('The second signer must sign.'); return }
-    setError(null); setLoading(true)
-    const r = await receiveStock({
-      storeroom_inventory_id: receiveForm.invId, lot_number: receiveForm.lotNumber || null, expiration_date: receiveForm.expirationDate || null,
-      quantity_received: qty, notes: receiveForm.notes || null,
-      signer_1_id: receiveForm.signer1Id || null, signer_2_id: receiveForm.signer2Id || null,
-      signer_1_signature: signer1Signature, signer_2_signature: signer2Signature,
-      concentration_amount: null, concentration_unit: null, volume_per_unit: null, volume_unit: null,
-      control_numbers: null,
-    })
-    if (r?.error) setError(r.error)
-    else { setSuccess(`Received ${qty} ${receiveForm.supplyName}.`); setReceiveForm(null); router.refresh() }
-    setLoading(false)
-  }
 
   async function handleModeToggle(bagId: string, currentMode: string | null) {
     const newMode = currentMode === 'standard' ? 'independent' : 'standard'
@@ -290,63 +253,6 @@ export default function MedicalBagsSection({
         const lot = bagLots.find(l => l.id === modal.lotId)
         return lot ? <WasteModal {...common} lot={lot} units={units} /> : null
       })()}
-
-      {/* Receive Modal */}
-      {receiveForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-xl p-6">
-            <h2 className="text-base font-bold text-zinc-900 mb-1">Receive Stock</h2>
-            <p className="text-sm text-zinc-500 mb-5">{receiveForm.supplyName}</p>
-            {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Lot Number</label>
-                  <input type="text" value={receiveForm.lotNumber} placeholder="Optional" onChange={e => setReceiveForm(f => f ? { ...f, lotNumber: e.target.value } : f)} className={inputCls} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Quantity <span className="text-red-500">*</span></label>
-                  <input type="number" min="1" value={receiveForm.quantity} placeholder="0" onChange={e => setReceiveForm(f => f ? { ...f, quantity: e.target.value } : f)} className={`${inputCls} text-center`} />
-                </div>
-              </div>
-              {receiveForm.tracksExp && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Expiration Date <span className="text-red-500">*</span></label>
-                  <input type="date" value={receiveForm.expirationDate} onChange={e => setReceiveForm(f => f ? { ...f, expirationDate: e.target.value } : f)} className={inputCls} />
-                </div>
-              )}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
-                <input type="text" value={receiveForm.notes} placeholder="Optional" onChange={e => setReceiveForm(f => f ? { ...f, notes: e.target.value } : f)} className={inputCls} />
-              </div>
-              {receiveForm.requiredSigs >= 1 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Received By <span className="text-red-500">*</span></label>
-                  <select value={receiveForm.signer1Id} onChange={e => setReceiveForm(f => f ? { ...f, signer1Id: e.target.value } : f)} className={inputCls}>
-                    <option value="">Select...</option>
-                    {personnel.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2"><SignatureCapture ref={signer1PadRef} label="Signer 1 Signature" /></div>
-                </div>
-              )}
-              {receiveForm.requiredSigs >= 2 && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700">Witness <span className="text-red-500">*</span> <span className="text-amber-600 font-normal">(controlled)</span></label>
-                  <select value={receiveForm.signer2Id} onChange={e => setReceiveForm(f => f ? { ...f, signer2Id: e.target.value } : f)} className={inputCls}>
-                    <option value="">Select...</option>
-                    {personnel.filter(p => p.id !== receiveForm.signer1Id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div className="mt-2"><SignatureCapture ref={signer2PadRef} label="Witness Signature" /></div>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleReceiveSubmit} disabled={loading} className="flex-1 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">{loading ? 'Saving...' : 'Confirm Receipt'}</button>
-              <button onClick={() => { setReceiveForm(null); setError(null) }} className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   )
