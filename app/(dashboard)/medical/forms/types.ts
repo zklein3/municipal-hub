@@ -8,6 +8,7 @@ export interface Lot {
   concentration_amount: number | null; concentration_unit: string | null
   volume_per_unit: number | null; volume_unit: string | null
 }
+export interface SrcLot { id: string; storeroom_inventory_id: string; lot_number: string | null; quantity_remaining: number; expiration_date: string | null }
 export interface ControlUnit { id: string; lot_id: string; control_number: string; status: string }
 export interface Personnel { id: string; name: string }
 
