@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { submitInspection } from '@/app/actions/inspections'
+import { submitInspection, claimCompartment } from '@/app/actions/inspections'
 import { moveAssetToApparatus } from '@/app/actions/equipment'
 import QRScanner from '@/components/QRScanner'
 import HelpText from '@/components/HelpText'
@@ -110,7 +110,10 @@ function hasInspection(item: ChecklistItem): boolean {
 export default function InspectionRunClient({
   apparatus, compartment, compartmentId, checklistItems, medicationItems, inspectorName, personnelId, departmentId, presenceOnly,
   inspectionSessionId, sessionCompartmentId, initialSubmittedAssets, initialSelectedAssets,
+  storeroomId, childBags = [],
 }: {
+  storeroomId?: string
+  childBags?: { row_id: string; storeroom_id: string; name: string; status: string }[]
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
   compartment: { code: string; name: string | null }
   compartmentId: string
@@ -255,6 +258,7 @@ export default function InspectionRunClient({
     const result = await submitInspection({
       apparatus_id: apparatus.id,
       compartment_id: compartmentId,
+      storeroom_id: storeroomId,
       personnel_id: personnelId,
       department_id: departmentId,
       inspector_name: inspectorName,
@@ -400,6 +404,7 @@ export default function InspectionRunClient({
       const result = await submitInspection({
         apparatus_id: apparatus.id,
         compartment_id: compartmentId,
+        storeroom_id: storeroomId,
         personnel_id: personnelId,
         department_id: departmentId,
         inspector_name: inspectorName,
@@ -476,6 +481,32 @@ export default function InspectionRunClient({
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>
+      )}
+
+      {childBags.length > 0 && inspectionSessionId && (
+        <div className="mb-4 rounded-xl border border-zinc-200 bg-white p-4">
+          <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">Bags {storeroomId ? 'inside this bag' : 'in this compartment'}</p>
+          <p className="text-xs text-zinc-400 mb-3">Each bag has its own check. Submit this check first — answers here aren&apos;t saved until you submit.</p>
+          <div className="flex flex-col gap-2">
+            {childBags.map(b => (
+              <div key={b.row_id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2">
+                <p className="text-sm font-medium text-zinc-900">🎒 {b.name}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${b.status === 'completed' ? 'bg-green-100 text-green-700' : b.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                    {b.status === 'completed' ? 'Done' : b.status === 'in_progress' ? 'In progress' : 'Not started'}
+                  </span>
+                  <button onClick={async () => {
+                    const r = await claimCompartment(b.row_id)
+                    if (r?.error) { setError(r.error); return }
+                    router.push(`/inspections/run?apparatus_id=${apparatus.id}&compartment_id=${compartmentId}&storeroom_id=${b.storeroom_id}&session_id=${inspectionSessionId}&session_compartment_id=${b.row_id}`)
+                  }} className="text-xs font-semibold text-blue-600 hover:underline">
+                    {b.status === 'completed' ? 'Review' : 'Open'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-4">

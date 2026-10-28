@@ -3,14 +3,15 @@ import { getCurrentPath } from '@/lib/current-path'
 import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getMedicalSupplyStatus } from '@/lib/medical-status'
+import { ensureBagSessionRows } from '@/lib/inspection-bag-rows'
 import InspectionRunClient from './InspectionRunClient'
 
 export default async function InspectionRunPage({
   searchParams,
 }: {
-  searchParams: Promise<{ apparatus_id?: string; compartment_id?: string; mode?: string; session_id?: string; session_compartment_id?: string }>
+  searchParams: Promise<{ apparatus_id?: string; compartment_id?: string; mode?: string; session_id?: string; session_compartment_id?: string; storeroom_id?: string }>
 }) {
-  const { apparatus_id, compartment_id, mode, session_id, session_compartment_id } = await searchParams
+  const { apparatus_id, compartment_id, mode, session_id, session_compartment_id, storeroom_id } = await searchParams
   if (!apparatus_id || !compartment_id) redirect('/inspections')
   const presenceOnly = mode === 'presence'
 
@@ -44,12 +45,20 @@ export default async function InspectionRunPage({
     .eq('id', compLink.compartment_name_id)
   const compName = compNameList?.[0]
 
-  // Fetch items in this compartment
-  const { data: locationStandards } = await adminClient
-    .from('item_location_standards')
-    .select('id, item_id, expected_quantity')
-    .eq('apparatus_compartment_id', compartment_id)
-    .eq('active', true)
+  // A bag check is scoped to that one bag; a compartment check to its loose contents (its bags are
+  // separate lines that drill into their own checks).
+  let bagInfo: { id: string; name: string } | null = null
+  if (storeroom_id) {
+    const { data: bagRow } = await adminClient.from('medical_storerooms')
+      .select('id, name, department_id, container_kind').eq('id', storeroom_id).single()
+    if (!bagRow || bagRow.department_id !== ctx.departmentId || bagRow.container_kind !== 'bag') redirect('/inspections')
+    bagInfo = { id: bagRow.id, name: bagRow.name }
+  }
+
+  // Fetch items in this compartment (or bag)
+  const { data: locationStandards } = await (storeroom_id
+    ? adminClient.from('item_location_standards').select('id, item_id, expected_quantity').eq('storeroom_id', storeroom_id).eq('active', true)
+    : adminClient.from('item_location_standards').select('id, item_id, expected_quantity').eq('apparatus_compartment_id', compartment_id).eq('active', true))
 
   const itemIds = (locationStandards ?? []).map(ls => ls.item_id)
   const { data: itemsRaw } = itemIds.length > 0
@@ -78,18 +87,16 @@ export default async function InspectionRunPage({
   let initialSubmittedAssets: string[] = []
   let initialSelectedAssets: Record<string, string[]> = {}
   if (session_id && assetItemIds.length > 0) {
-    const [{ data: otherLogs }, { data: currentLogs }] = await Promise.all([
-      adminClient
-        .from('item_asset_inspection_logs')
-        .select('asset_id')
-        .eq('inspection_session_id', session_id)
-        .neq('compartment_id', compartment_id),
-      adminClient
-        .from('item_asset_inspection_logs')
-        .select('asset_id')
-        .eq('inspection_session_id', session_id)
-        .eq('compartment_id', compartment_id),
-    ])
+    const base = () => adminClient.from('item_asset_inspection_logs').select('asset_id').eq('inspection_session_id', session_id)
+    const [{ data: otherLogs }, { data: currentLogs }] = await Promise.all(storeroom_id
+      ? [
+          base().or(`storeroom_id.is.null,storeroom_id.neq.${storeroom_id}`),
+          base().eq('storeroom_id', storeroom_id),
+        ]
+      : [
+          base().or(`compartment_id.neq.${compartment_id},storeroom_id.not.is.null`),
+          base().eq('compartment_id', compartment_id).is('storeroom_id', null),
+        ])
     usedAssetIds = new Set((otherLogs ?? []).map(l => l.asset_id))
     initialSubmittedAssets = (currentLogs ?? []).map(l => l.asset_id)
 
@@ -185,12 +192,11 @@ export default async function InspectionRunPage({
   if (deptRow?.module_medical) {
     // The compartment's loose storage plus every bag placed in it. (Interim until bags get their own
     // drill-in checks — step 2D; until then a bag's medications are listed here, labeled by bag.)
-    const { data: roomList } = await adminClient
-      .from('medical_storerooms')
-      .select('id, name, container_kind')
-      .eq('apparatus_id', apparatus_id)
-      .eq('compartment_id', compartment_id)
-      .eq('active', true)
+    const { data: roomList } = await (storeroom_id
+      ? adminClient.from('medical_storerooms').select('id, name, container_kind').eq('id', storeroom_id).eq('active', true)
+      : adminClient.from('medical_storerooms').select('id, name, container_kind')
+          .eq('apparatus_id', apparatus_id).eq('compartment_id', compartment_id)
+          .eq('container_kind', 'compartment_storage').eq('active', true))
     const rooms = roomList ?? []
     const roomById = Object.fromEntries(rooms.map(r => [r.id, r]))
 
@@ -247,7 +253,7 @@ export default async function InspectionRunPage({
           storeroom_id: inv.storeroom_id,
           storeroom_inventory_id: inv.id,
           supply_type_id: inv.supply_type_id,
-          supply_name: room?.container_kind === 'bag' ? `${room.name} · ${supply?.name ?? 'Unknown'}` : (supply?.name ?? 'Unknown'),
+          supply_name: supply?.name ?? 'Unknown',
           unit_of_measure: supply?.unit_of_measure ?? '',
           par_level: inv.par_level,
           tracks_expiration: supply?.tracks_expiration ?? false,
@@ -261,10 +267,31 @@ export default async function InspectionRunPage({
     }
   }
 
+  // Bags that have their own check under this compartment / bag, with their session status.
+  let childBags: { row_id: string; storeroom_id: string; name: string; status: string }[] = []
+  if (session_id) {
+    await ensureBagSessionRows(adminClient, session_id, apparatus_id, ctx.departmentId)
+    const { data: bagList } = await (storeroom_id
+      ? adminClient.from('medical_storerooms').select('id, name').eq('parent_storeroom_id', storeroom_id)
+      : adminClient.from('medical_storerooms').select('id, name').eq('compartment_id', compartment_id).eq('apparatus_id', apparatus_id))
+    const activeBags = (bagList ?? []) as { id: string; name: string }[]
+    if (activeBags.length > 0) {
+      const { data: bagRows } = await adminClient.from('inspection_session_compartments')
+        .select('id, storeroom_id, status').eq('session_id', session_id).in('storeroom_id', activeBags.map(b => b.id))
+      const rowByBag = new Map((bagRows ?? []).map(r => [r.storeroom_id as string, r]))
+      childBags = activeBags.flatMap(b => {
+        const row = rowByBag.get(b.id)
+        return row ? [{ row_id: row.id, storeroom_id: b.id, name: b.name, status: row.status }] : []
+      }).sort((a, b) => a.name.localeCompare(b.name))
+    }
+  }
+
   return (
     <InspectionRunClient
       apparatus={{ id: apparatus.id, unit_number: apparatus.unit_number, apparatus_name: apparatus.apparatus_name }}
-      compartment={{ code: compName?.compartment_code ?? '—', name: compName?.compartment_name ?? null }}
+      compartment={bagInfo ? { code: bagInfo.name, name: 'Bag' } : { code: compName?.compartment_code ?? '—', name: compName?.compartment_name ?? null }}
+      storeroomId={storeroom_id}
+      childBags={childBags}
       compartmentId={compartment_id}
       checklistItems={checklistItems as any}
       medicationItems={medicationItems}

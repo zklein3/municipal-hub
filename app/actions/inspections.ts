@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { ensureBagSessionRows } from '@/lib/inspection-bag-rows'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
@@ -166,6 +167,7 @@ export async function deleteTemplateStep(step_id: string) {
 export async function submitInspection(payload: {
   apparatus_id: string
   compartment_id: string
+  storeroom_id?: string
   personnel_id: string
   department_id: string
   inspector_name: string
@@ -242,6 +244,7 @@ export async function submitInspection(payload: {
           inspected_by_name: payload.inspector_name,
           apparatus_id: payload.apparatus_id || null,
           compartment_id: payload.compartment_id || null,
+          storeroom_id: payload.storeroom_id || null,
           inspection_session_id: payload.inspection_session_id || null,
         })
         .select('id')
@@ -278,6 +281,7 @@ export async function submitInspection(payload: {
         department_id: payload.department_id,
         apparatus_id: payload.apparatus_id,
         compartment_id: payload.compartment_id || null,
+        storeroom_id: payload.storeroom_id || null,
         location_standard_id: pc.location_standard_id || null,
         item_id: pc.item_id,
         inspected_at: now,
@@ -441,6 +445,10 @@ export async function getOrCreateInspectionSession(apparatus_id: string) {
     }
   }
 
+  // One row per bag on this truck (nested under its compartment / parent bag). Idempotent, so it also
+  // picks up bags added after the session started.
+  await ensureBagSessionRows(adminClient, session.id, apparatus_id, ctx.department_id)
+
   return { session, ...(await fetchSessionCompartments(session.id, adminClient, ctx.department_id)) }
 }
 
@@ -468,7 +476,12 @@ async function fetchSessionCompartments(session_id: string, adminClient: ReturnT
     .select('*')
     .eq('session_id', session_id)
 
-  const compartmentIds = (rows ?? []).map(r => r.compartment_id)
+  const compartmentIds = (rows ?? []).map(r => r.compartment_id).filter((id): id is string => !!id)
+  const bagIds = (rows ?? []).map(r => r.storeroom_id).filter((id): id is string => !!id)
+  const { data: bagRows } = bagIds.length > 0
+    ? await adminClient.from('medical_storerooms').select('id, name').in('id', bagIds)
+    : { data: [] as { id: string; name: string }[] }
+  const bagNameById = new Map((bagRows ?? []).map(b => [b.id, b.name]))
   const { data: compLinks } = compartmentIds.length > 0
     ? await adminClient.from('apparatus_compartments').select('id, compartment_name_id').in('id', compartmentIds)
     : { data: [] }
@@ -523,13 +536,14 @@ async function fetchSessionCompartments(session_id: string, adminClient: ReturnT
   }
 
   const compartments = (rows ?? []).map(r => {
-    const link = linkMap.get(r.compartment_id)
+    const link = r.compartment_id ? linkMap.get(r.compartment_id) : undefined
     return {
       ...r,
-      compartment_name: link ? (nameMap.get(link.compartment_name_id) ?? 'Unknown') : 'Unknown',
+      compartment_name: r.storeroom_id ? (bagNameById.get(r.storeroom_id) ?? 'Bag') : link ? (nameMap.get(link.compartment_name_id) ?? 'Unknown') : 'Unknown',
+      is_bag: !!r.storeroom_id,
       claimed_by_name: r.claimed_by ? (personnelMap.get(r.claimed_by) ?? 'Unknown') : null,
       completed_by_name: r.completed_by ? (personnelMap.get(r.completed_by) ?? 'Unknown') : null,
-      medication_expiring: expiringCompartmentIds.has(r.compartment_id),
+      medication_expiring: r.compartment_id ? expiringCompartmentIds.has(r.compartment_id) : false,
     }
   })
 
@@ -678,7 +692,7 @@ export async function getSessionReconciliation(session_id: string, apparatus_id:
     .eq('session_id', session_id)
     .eq('status', 'completed')
 
-  const completedCompIds = (completedComps ?? []).map(c => c.compartment_id)
+  const completedCompIds = (completedComps ?? []).map(c => c.compartment_id).filter((id): id is string => !!id)
   if (completedCompIds.length === 0) return { unaccounted: [] }
 
   // Item types expected in those compartments

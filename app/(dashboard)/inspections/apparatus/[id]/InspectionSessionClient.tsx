@@ -8,7 +8,10 @@ import { formatLocalDateTime } from '@/lib/format-datetime'
 
 interface SessionCompartment {
   id: string
-  compartment_id: string
+  compartment_id: string | null
+  storeroom_id?: string | null
+  parent_row_id?: string | null
+  is_bag?: boolean
   compartment_name: string
   status: 'pending' | 'in_progress' | 'completed'
   claimed_by: string | null
@@ -66,6 +69,31 @@ export default function InspectionSessionClient({
   const [closing, setClosing] = useState(false)
   const [abandonConfirm, setAbandonConfirm] = useState(false)
 
+  // Tree order: each compartment followed by its bags, bags followed by the bags inside them.
+  const childrenOf = new Map<string, SessionCompartment[]>()
+  for (const c of compartments) if (c.parent_row_id) childrenOf.set(c.parent_row_id, [...(childrenOf.get(c.parent_row_id) ?? []), c])
+  const rowById = new Map(compartments.map(c => [c.id, c]))
+  const ordered: { sc: SessionCompartment; depth: number }[] = []
+  const walk = (sc: SessionCompartment, depth: number) => {
+    ordered.push({ sc, depth })
+    for (const child of childrenOf.get(sc.id) ?? []) walk(child, depth + 1)
+  }
+  for (const c of compartments) if (!c.parent_row_id || !rowById.has(c.parent_row_id)) walk(c, 0)
+  // The compartment a bag row ultimately sits in (the run page needs one).
+  const housingCompartmentId = (sc: SessionCompartment): string | null => {
+    let cur: SessionCompartment | undefined = sc
+    for (let i = 0; cur && i < 8; i++) {
+      if (cur.compartment_id) return cur.compartment_id
+      cur = cur.parent_row_id ? rowById.get(cur.parent_row_id) : undefined
+    }
+    return null
+  }
+  const runUrl = (sc: SessionCompartment) =>
+    `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${housingCompartmentId(sc) ?? ''}${sc.storeroom_id ? `&storeroom_id=${sc.storeroom_id}` : ''}&session_id=${session.id}&session_compartment_id=${sc.id}`
+  // A row is only really done when it and every bag inside it are done.
+  const openBagsInside = (sc: SessionCompartment): number =>
+    (childrenOf.get(sc.id) ?? []).reduce((n, c) => n + (c.status === 'completed' ? 0 : 1) + openBagsInside(c), 0)
+
   const done = compartments.filter(c => c.status === 'completed').length
   const total = compartments.length
   const sessionClosed = session.status === 'completed'
@@ -100,9 +128,7 @@ export default function InspectionSessionClient({
       setLoadingId(null)
       return
     }
-    router.push(
-      `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${sc.compartment_id}&session_id=${session.id}&session_compartment_id=${sc.id}`
-    )
+    router.push(runUrl(sc))
   }
 
   async function handleRelease(sc: SessionCompartment) {
@@ -126,9 +152,7 @@ export default function InspectionSessionClient({
         setLoadingId(null)
         return
       }
-      router.push(
-        `/inspections/run?apparatus_id=${apparatus_id}&compartment_id=${sc.compartment_id}&session_id=${session.id}&session_compartment_id=${sc.id}`
-      )
+      router.push(runUrl(sc))
     })
   }
 
@@ -278,17 +302,17 @@ export default function InspectionSessionClient({
             No compartments assigned to this apparatus.
           </div>
         )}
-        {compartments.map(sc => (
-          <div key={sc.id} className="flex items-center justify-between gap-4 px-4 py-3">
+        {ordered.map(({ sc, depth }) => (
+          <div key={sc.id} className="flex items-center justify-between gap-4 px-4 py-3" style={{ paddingLeft: 16 + depth * 20 }}>
             <div className="min-w-0">
               <p className="text-sm font-medium text-zinc-900 truncate flex items-center gap-1.5">
-                {apparatus_unit_number} - {sc.compartment_name}
+                {sc.is_bag ? <>🎒 {sc.compartment_name}</> : <>{apparatus_unit_number} - {sc.compartment_name}</>}
                 {sc.medication_expiring && (
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 shrink-0">
                     ⚠ Med Expiring
                   </span>
                 )}
-                {(restockByCompartment[sc.compartment_id] ?? 0) > 0 && (
+                {sc.compartment_id && (restockByCompartment[sc.compartment_id] ?? 0) > 0 && (
                   <button onClick={() => router.push(`/medical?mode=restock&apparatus=${apparatus_id}&compartment=${sc.compartment_id}`)}
                     className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-200 shrink-0">
                     {restockByCompartment[sc.compartment_id]} below PAR · Restock
@@ -297,6 +321,9 @@ export default function InspectionSessionClient({
               </p>
               {sc.status === 'in_progress' && sc.claimed_by_name && (
                 <p className="text-xs text-amber-600 mt-0.5">In progress — {sc.claimed_by_name}</p>
+              )}
+              {sc.status === 'completed' && openBagsInside(sc) > 0 && (
+                <p className="text-xs text-amber-600 mt-0.5">{openBagsInside(sc)} bag{openBagsInside(sc) !== 1 ? 's' : ''} inside still to check</p>
               )}
               {sc.status === 'completed' && (
                 <p className="text-xs text-green-600 mt-0.5">
