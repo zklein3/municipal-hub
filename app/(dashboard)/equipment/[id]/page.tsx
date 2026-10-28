@@ -293,9 +293,23 @@ export default async function EquipmentDetailPage({
       .map((dp: any) => ({ id: (dp.personnel as any)?.id ?? dp.personnel_id, name: [(dp.personnel as any)?.first_name, (dp.personnel as any)?.last_name].filter(Boolean).join(' ') }))
       .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
+    // Every compartment in the department (any truck) as a place to move a bag to.
+    const { data: deptApparatus } = await adminClient.from('apparatus').select('id, unit_number').eq('department_id', ctx.departmentId).eq('active', true)
+    const unitById = Object.fromEntries((deptApparatus ?? []).map(a => [a.id, a.unit_number]))
+    const { data: deptComps } = (deptApparatus ?? []).length > 0
+      ? await adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', (deptApparatus ?? []).map(a => a.id)).eq('active', true)
+      : { data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }
+    const { data: deptCompNames } = (deptComps ?? []).length > 0
+      ? await adminClient.from('compartment_names').select('id, compartment_code').in('id', [...new Set((deptComps ?? []).map(c => c.compartment_name_id))])
+      : { data: [] as { id: string; compartment_code: string }[] }
+    const codeByNameId = Object.fromEntries((deptCompNames ?? []).map(n => [n.id, n.compartment_code]))
+    const allCompartmentOptions = (deptComps ?? [])
+      .map(c => ({ id: c.id, name: `Unit ${unitById[c.apparatus_id] ?? '?'} — ${codeByNameId[c.compartment_name_id] ?? '—'}` }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+
     medicalBagData = {
       bags: bagsWithLocation, bagEquipment,
-      compartmentOptions: compartments.map(c => ({ id: c.id, name: `${c.compartment_code}${c.compartment_name ? ` — ${c.compartment_name}` : ''}` })), bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
+      compartmentOptions: allCompartmentOptions, bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
       supplyTypes: supplyTypes ?? [], deptStorerooms: deptStorerooms ?? [],
       storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
       units: bagUnits ?? [],

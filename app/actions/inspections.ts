@@ -236,6 +236,9 @@ export async function submitInspection(payload: {
       )
       const overall_result = hasFail ? 'FAIL' : 'PASS'
 
+      // Remember which bag (if any) this asset was last confirmed in, so moving the bag can move it too.
+      await adminClient.from('item_assets').update({ container_id: payload.storeroom_id || null }).eq('id', inspection.asset_id)
+
       const { data: logData, error: dbErr } = await adminClient
         .from('item_asset_inspection_logs')
         .insert({
