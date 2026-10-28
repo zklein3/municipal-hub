@@ -63,6 +63,15 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
       : Promise.resolve({ data: [] as { id: string; template_id: string; child_template_id: string; quantity: number }[] }),
   ])
 
+  // Destinations for "place a bag elsewhere": existing bags (any location) and department members
+  const [{ data: allBagRows }, { data: memberRows }] = await Promise.all([
+    adminClient.from('medical_storerooms').select('id, name, template_id, apparatus_id, parent_storeroom_id, assigned_personnel_id').eq('department_id', department_id).eq('active', true).eq('container_kind', 'bag').order('name'),
+    adminClient.from('department_personnel').select('personnel_id, personnel(first_name, last_name)').eq('department_id', department_id).eq('active', true),
+  ])
+  const members = (memberRows ?? [])
+    .map((m: any) => ({ id: m.personnel_id as string, name: [m.personnel?.first_name, m.personnel?.last_name].filter(Boolean).join(' ') || 'Unnamed' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   const inventoryIds = (storeroomInventory ?? []).map(i => i.id)
   const nameIds = [...new Set((compLinks ?? []).map(c => c.compartment_name_id))]
   const [{ data: lots }, { data: compNames }] = await Promise.all([
@@ -98,6 +107,8 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     templateEquipment: templateEquipment ?? [],
     templateChildren: templateChildren ?? [],
     catalogItems: catalogItems ?? [],
+    allBags: allBagRows ?? [],
+    members,
     bagDeployments: bagDeployments ?? [],
     moduleMedicalControlled: dept?.module_medical_controlled ?? false,
     itemCategories: itemCategories ?? [],

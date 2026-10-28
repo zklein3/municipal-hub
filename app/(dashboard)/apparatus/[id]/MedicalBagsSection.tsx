@@ -9,7 +9,8 @@ import WasteModal from '../../medical/forms/WasteModal'
 import RestockModal from '../../medical/forms/RestockModal'
 import TransferOutModal from '../../medical/forms/TransferOutModal'
 
-interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null }
+interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null }
+interface BagEquipment { id: string; storeroom_id: string; item_name: string; expected_quantity: number }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface Lot {
   id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null
@@ -45,11 +46,12 @@ function getStatus(total: number, par: number, lots: Lot[]): 'expired' | 'expiri
 }
 
 export default function MedicalBagsSection({
-  bags, bagInventory, bagLots, supplyTypes, deptStorerooms,
+  bags, bagEquipment = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
   storeroomInventory, storeroomLots, units, personnel,
   bagTemplates, apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
 }: {
   bags: Bag[]
+  bagEquipment?: BagEquipment[]
   bagInventory: InventoryRow[]
   bagLots: Lot[]
   supplyTypes: SupplyType[]
@@ -123,8 +125,23 @@ export default function MedicalBagsSection({
       {bags.map(bag => {
         if (bags.length > 1 && expandedBagId !== bag.id) return null
         const inv = bagInventory.filter(i => i.storeroom_id === bag.id)
+        const equipment = bagEquipment.filter(e => e.storeroom_id === bag.id)
+        const nestedBags = bags.filter(b => b.location_label === `Inside ${bag.name}`)
         return (
           <div key={bag.id}>
+            {(bag.location_label || equipment.length > 0 || nestedBags.length > 0) && (
+              <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3 text-xs text-zinc-600">
+                {bag.location_label && <p className="font-semibold text-zinc-700">{bag.location_label}</p>}
+                {nestedBags.length > 0 && (
+                  <p className="mt-1">Contains: {nestedBags.map(b => (
+                    <button key={b.id} onClick={() => setExpandedBagId(b.id)} className="mr-2 font-semibold text-blue-600 hover:underline">{b.name}</button>
+                  ))}</p>
+                )}
+                {equipment.length > 0 && (
+                  <p className="mt-1">Equipment: {equipment.map(e => `${e.item_name} ×${e.expected_quantity}`).join(', ')}</p>
+                )}
+              </div>
+            )}
             {bags.length === 1 && (
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 flex-wrap">

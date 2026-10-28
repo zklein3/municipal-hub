@@ -231,13 +231,35 @@ export default async function EquipmentDetailPage({
   }[]> = {}
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
-      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode').eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
+      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode, compartment_id, parent_storeroom_id').eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
       adminClient.from('medical_bag_templates').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
       adminClient.from('medical_storerooms').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).eq('container_kind', 'storeroom').order('name'),
       adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', ctx.departmentId).eq('active', true),
     ])
 
     const bagIds = (bags ?? []).map(b => b.id)
+
+    // Where each bag sits ("In PC-2" / "Inside Trauma Box 1") and its equipment items (2B)
+    const bagNameById = Object.fromEntries((bags ?? []).map(b => [b.id, b.name]))
+    const compCodeById = Object.fromEntries(compartments.map(c => [c.id, c.compartment_code]))
+    const bagsWithLocation = (bags ?? []).map(b => ({
+      ...b,
+      location_label: b.parent_storeroom_id
+        ? `Inside ${bagNameById[b.parent_storeroom_id] ?? 'another bag'}`
+        : b.compartment_id ? `In ${compCodeById[b.compartment_id] ?? 'a compartment'}` : null,
+    }))
+    const { data: bagStandards } = bagIds.length > 0
+      ? await adminClient.from('item_location_standards').select('id, storeroom_id, item_id, expected_quantity').in('storeroom_id', bagIds).eq('active', true)
+      : { data: [] }
+    const bagItemIds = [...new Set((bagStandards ?? []).map(s => s.item_id))]
+    const { data: bagItemRows } = bagItemIds.length > 0
+      ? await adminClient.from('items').select('id, item_name').in('id', bagItemIds)
+      : { data: [] }
+    const bagItemName = Object.fromEntries((bagItemRows ?? []).map(i => [i.id, i.item_name]))
+    const bagEquipment = (bagStandards ?? []).map(s => ({
+      id: s.id, storeroom_id: s.storeroom_id as string, item_name: bagItemName[s.item_id] ?? '—', expected_quantity: s.expected_quantity,
+    }))
+
     const { data: bagInventory } = bagIds.length > 0
       ? await adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', bagIds)
       : { data: [] }
@@ -272,7 +294,7 @@ export default async function EquipmentDetailPage({
       .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
     medicalBagData = {
-      bags: bags ?? [], bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
+      bags: bagsWithLocation, bagEquipment, bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
       supplyTypes: supplyTypes ?? [], deptStorerooms: deptStorerooms ?? [],
       storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
       units: bagUnits ?? [],
@@ -401,6 +423,7 @@ export default async function EquipmentDetailPage({
         <div className="max-w-2xl mt-2">
           <MedicalBagsSection
             bags={medicalBagData.bags}
+            bagEquipment={medicalBagData.bagEquipment}
             bagInventory={medicalBagData.bagInventory}
             bagLots={medicalBagData.bagLots}
             supplyTypes={medicalBagData.supplyTypes}

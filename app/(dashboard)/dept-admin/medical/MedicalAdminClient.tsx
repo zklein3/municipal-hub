@@ -11,6 +11,7 @@ import {
 } from '@/app/actions/medical'
 import HelpText from '@/components/HelpText'
 import { MoveMedicalToItem } from '@/components/CatalogMovePanel'
+import PlaceBagForm from './PlaceBagForm'
 import BagTemplateContents, { type TemplateEquipment, type TemplateChild } from './BagTemplateContents'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -44,7 +45,10 @@ export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory, lots,
   bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled, fixedTab,
   itemCategories = [], templateEquipment = [], templateChildren = [], catalogItems = [],
+  allBags = [], members = [],
 }: {
+  allBags?: { id: string; name: string; template_id?: string | null; apparatus_id?: string | null; parent_storeroom_id?: string | null; assigned_personnel_id?: string | null }[]
+  members?: { id: string; name: string }[]
   fixedTab?: Tab
   templateEquipment?: TemplateEquipment[]
   templateChildren?: TemplateChild[]
@@ -767,6 +771,18 @@ export default function MedicalAdminClient({
                               })}
                             </div>
                           )}
+                          <PlaceBagForm
+                            templateId={tmpl.id}
+                            templateName={tmpl.name}
+                            storerooms={storerooms.filter(s => s.active)}
+                            bags={allBags}
+                            members={members}
+                            placed={allBags.filter(b => b.template_id === tmpl.id && !b.apparatus_id).map(b => ({
+                              id: b.id, name: b.name,
+                              where: b.assigned_personnel_id ? `Assigned to ${members.find(m => m.id === b.assigned_personnel_id)?.name ?? 'a member'}`
+                                : b.parent_storeroom_id ? `In ${storerooms.find(s => s.id === b.parent_storeroom_id)?.name ?? allBags.find(x => x.id === b.parent_storeroom_id)?.name ?? 'a storeroom'}` : '—',
+                            }))}
+                          />
                         </div>
                       )}
                   </div>

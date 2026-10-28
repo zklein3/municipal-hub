@@ -401,6 +401,60 @@ export async function deployBagFromTemplate(data: {
   return { success: true }
 }
 
+// Deploy a bag somewhere other than directly on a truck compartment: in a station storeroom,
+// inside another bag (wherever that bag is), or assigned to a member (POV bag).
+export async function deployBagToPlace(data: {
+  template_id: string
+  name: string
+  inventory_mode: 'standard' | 'independent'
+  destination: { kind: 'storeroom' | 'bag' | 'member'; id: string }
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  if (!ctx.department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+  const { kind, id } = data.destination
+
+  let apparatus_id: string | null = null
+  let parent_storeroom_id: string | null = null
+  let assigned_personnel_id: string | null = null
+
+  if (kind === 'member') {
+    const { data: dp } = await adminClient.from('department_personnel')
+      .select('personnel_id').eq('department_id', ctx.department_id).eq('personnel_id', id).eq('active', true).maybeSingle()
+    if (!dp) return { error: 'Member not found in this department.' }
+    assigned_personnel_id = id
+  } else {
+    const { data: dest } = await adminClient.from('medical_storerooms')
+      .select('id, department_id, container_kind, apparatus_id, active').eq('id', id).single()
+    if (!dest || dest.department_id !== ctx.department_id || !dest.active) return { error: 'Destination not found.' }
+    if (kind === 'storeroom' && dest.container_kind !== 'storeroom') return { error: 'That is not a storeroom.' }
+    if (kind === 'bag' && dest.container_kind !== 'bag') return { error: 'That is not a bag.' }
+    parent_storeroom_id = dest.id
+    apparatus_id = dest.apparatus_id // a bag inside a truck's bag stays on that truck
+  }
+
+  const res = await createBagFromTemplate(adminClient, ctx.department_id, {
+    template_id: data.template_id,
+    name: data.name,
+    apparatus_id,
+    parent_storeroom_id,
+    inventory_mode: data.inventory_mode,
+    depth: 0,
+  })
+  if (res.error) return { error: res.error }
+
+  if (assigned_personnel_id) {
+    const { error: dbErr } = await adminClient.from('medical_storerooms')
+      .update({ assigned_personnel_id }).eq('id', res.id!)
+    if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+  }
+
+  revalidatePath('/medical')
+  if (apparatus_id) revalidatePath(`/equipment/${apparatus_id}`)
+  return { success: true }
+}
+
 export async function assignBagToApparatus(data: {
   template_id: string
   apparatus_id: string
