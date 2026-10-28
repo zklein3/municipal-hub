@@ -540,6 +540,18 @@ export async function moveBag(data: {
 
   const nameOf = (id: string) => (allBags ?? []).find(b => b.id === id)?.name ?? 'a bag'
   const { kind, id } = data.destination
+
+  // "Unit 11 — TRAUMA" for log text, so the move history names the actual compartment.
+  async function compartmentLabel(compartmentId: string | null): Promise<string | null> {
+    if (!compartmentId) return null
+    const { data: c } = await adminClient.from('apparatus_compartments').select('apparatus_id, compartment_name_id').eq('id', compartmentId).single()
+    if (!c) return null
+    const [{ data: a }, { data: n }] = await Promise.all([
+      adminClient.from('apparatus').select('unit_number').eq('id', c.apparatus_id).single(),
+      adminClient.from('compartment_names').select('compartment_code').eq('id', c.compartment_name_id).single(),
+    ])
+    return `Unit ${a?.unit_number ?? '?'} — ${n?.compartment_code ?? '?'}`
+  }
   let newApparatus: string | null = null
   const patch: { compartment_id: string | null; parent_storeroom_id: string | null; assigned_personnel_id: string | null } =
     { compartment_id: null, parent_storeroom_id: null, assigned_personnel_id: null }
@@ -552,7 +564,7 @@ export async function moveBag(data: {
     if (!app || app.department_id !== dept) return { error: 'Compartment not found.' }
     newApparatus = comp.apparatus_id
     patch.compartment_id = comp.id
-    toDescription = `Unit ${app.unit_number} compartment`
+    toDescription = (await compartmentLabel(comp.id)) ?? `Unit ${app.unit_number} compartment`
   } else if (kind === 'bag' || kind === 'storeroom') {
     const { data: dest } = await adminClient.from('medical_storerooms')
       .select('id, name, department_id, container_kind, apparatus_id, active').eq('id', id).single()
@@ -575,7 +587,7 @@ export async function moveBag(data: {
 
   const fromApparatus: string | null = bag.apparatus_id
   const fromDescription = bag.parent_storeroom_id ? `Inside ${nameOf(bag.parent_storeroom_id)}`
-    : bag.compartment_id ? 'A truck compartment' : bag.assigned_personnel_id ? 'Assigned to a member'
+    : bag.compartment_id ? ((await compartmentLabel(bag.compartment_id)) ?? 'A truck compartment') : bag.assigned_personnel_id ? 'Assigned to a member'
     : bag.apparatus_id ? 'On a truck (not pinned)' : 'Unplaced'
 
   // Medications left behind: move every stocked lot in the subtree to the chosen storeroom first,
