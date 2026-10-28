@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { ensureBagSessionRows } from '@/lib/inspection-bag-rows'
+import { claimCompartment } from '@/app/actions/inspections'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import Link from 'next/link'
 
@@ -57,6 +59,49 @@ export default async function ScanPage({
         .eq('department_id', department_id)
         .limit(1)
       if (appData?.[0]) redirect(`/inspections/run?apparatus_id=${compData[0].apparatus_id}&compartment_id=${compData[0].id}`)
+    }
+  }
+
+  // Try bag (qr_code on the bag's container row) — open that bag's own check
+  if (!type || type === 'bag') {
+    const { data: bagData } = await adminClient
+      .from('medical_storerooms')
+      .select('id, name, apparatus_id, compartment_id, parent_storeroom_id, container_kind')
+      .eq('qr_code', code)
+      .eq('department_id', department_id)
+      .eq('container_kind', 'bag')
+      .eq('active', true)
+      .limit(1)
+    const bag = bagData?.[0]
+    if (bag) {
+      if (!bag.apparatus_id) {
+        // Not on a truck (storeroom / POV bag) — standalone bag checks come later; show where it is.
+        return <ScanError message={`${bag.name} isn't on an apparatus, so there's no truck inspection to open. Find it under Medical → Bags.`} />
+      }
+      // Housing compartment: follow the parent chain up to the compartment the outermost bag sits in.
+      let housing: string | null = bag.compartment_id
+      let parent: string | null = bag.parent_storeroom_id
+      for (let i = 0; !housing && parent && i < 8; i++) {
+        const { data: p } = await adminClient.from('medical_storerooms')
+          .select('compartment_id, parent_storeroom_id').eq('id', parent).single()
+        housing = p?.compartment_id ?? null
+        parent = p?.parent_storeroom_id ?? null
+      }
+      const { data: session } = await adminClient.from('inspection_sessions')
+        .select('id').eq('apparatus_id', bag.apparatus_id).eq('department_id', department_id)
+        .eq('status', 'in_progress').gt('expires_at', new Date().toISOString()).limit(1)
+      if (session?.[0] && housing) {
+        await ensureBagSessionRows(adminClient, session[0].id, bag.apparatus_id, department_id)
+        const { data: row } = await adminClient.from('inspection_session_compartments')
+          .select('id').eq('session_id', session[0].id).eq('storeroom_id', bag.id).limit(1)
+        if (row?.[0]) {
+          const claim = await claimCompartment(row[0].id)
+          if (claim?.error) return <ScanError message={claim.error} />
+          redirect(`/inspections/run?apparatus_id=${bag.apparatus_id}&compartment_id=${housing}&storeroom_id=${bag.id}&session_id=${session[0].id}&session_compartment_id=${row[0].id}`)
+        }
+      }
+      // No session running: start one from the truck's inspection page.
+      redirect(`/inspections/apparatus/${bag.apparatus_id}`)
     }
   }
 
