@@ -582,6 +582,57 @@ export async function claimCompartment(session_compartment_id: string) {
   return { success: true }
 }
 
+// ─── Save-as-you-go drafts + take over ────────────────────────────────────────
+// Answers on a run screen are saved here as they're entered, so a locked phone, a drill-in to a bag,
+// or a hand-off to someone else doesn't lose them. Cleared when the row is submitted.
+export async function saveInspectionDraft(session_compartment_id: string, payload: Record<string, unknown>) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authenticated.' }
+
+  // The row must belong to a session in the caller's department and still be open.
+  const { data: row } = await adminClient.from('inspection_session_compartments')
+    .select('id, status, session_id').eq('id', session_compartment_id).single()
+  if (!row || row.status === 'completed') return { success: true }
+  const { data: sess } = await adminClient.from('inspection_sessions')
+    .select('department_id').eq('id', row.session_id).single()
+  if (!sess || sess.department_id !== ctx.department_id) return { error: 'Not authorized.' }
+
+  const { error: dbErr } = await adminClient.from('inspection_draft_responses').upsert({
+    session_row_id: session_compartment_id, payload, updated_by: user.id, updated_at: new Date().toISOString(),
+  }, { onConflict: 'session_row_id' })
+  if (dbErr) { await logError(dbErr.message, '/inspections/run'); return { error: dbErr.message } }
+  return { success: true }
+}
+
+// Anyone on the crew can pick up a check someone else started; they continue from the saved answers.
+export async function takeOverCompartment(session_compartment_id: string) {
+  const supabase = await createClient()
+  const adminClient = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated.' }
+  const ctx = await getContext()
+  if (!ctx?.department_id) return { error: 'Not authenticated.' }
+
+  const { data: row } = await adminClient.from('inspection_session_compartments')
+    .select('status, claimed_by, session_id').eq('id', session_compartment_id).single()
+  if (!row) return { error: 'Not found.' }
+  const { data: sess } = await adminClient.from('inspection_sessions')
+    .select('department_id').eq('id', row.session_id).single()
+  if (!sess || sess.department_id !== ctx.department_id) return { error: 'Not authorized.' }
+  if (row.status !== 'in_progress') return { error: 'This check is not in progress.' }
+
+  const { error: dbErr } = await adminClient.from('inspection_session_compartments')
+    .update({ claimed_by: user.id, claimed_at: new Date().toISOString(), taken_over_from: row.claimed_by })
+    .eq('id', session_compartment_id)
+  if (dbErr) { await logError(dbErr.message, '/inspections/apparatus'); return { error: dbErr.message } }
+  revalidatePath('/inspections', 'layout')
+  return { success: true }
+}
+
 // ─── Reopen Completed Compartment (officer/admin) ─────────────────────────────
 export async function reopenCompartment(session_compartment_id: string) {
   const adminClient = createAdminClient()
@@ -630,6 +681,8 @@ export async function completeCompartmentInSession(session_compartment_id: strin
     .single()
 
   if (fetchErr) { await logError(fetchErr.message, '/inspections/apparatus'); return { error: fetchErr.message } }
+
+  await adminClient.from('inspection_draft_responses').delete().eq('session_row_id', session_compartment_id)
 
   const { data: remaining } = await adminClient
     .from('inspection_session_compartments')

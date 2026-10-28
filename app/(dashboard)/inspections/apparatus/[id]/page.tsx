@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getCurrentPath } from '@/lib/current-path'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
@@ -24,6 +25,7 @@ export default async function InspectionSessionPage({
   if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
   const me = { id: ctx.personnelId }
+  const { data: { user: authUser } } = await (await createClient()).auth.getUser()
 
   const isOfficerOrAdmin = await hasPermission(ctx, 'manage_inspection_sessions')
 
@@ -71,6 +73,7 @@ export default async function InspectionSessionPage({
         apparatus_id={apparatus_id}
         apparatus_unit_number={apparatus.unit_number}
         personnel_id={personnelId}
+        auth_user_id={authUser?.id ?? ''}
         isOfficerOrAdmin={isOfficerOrAdmin}
         departmentTimezone={ctx.departmentTimezone}
         vehicleCheck={vehicleCheck}

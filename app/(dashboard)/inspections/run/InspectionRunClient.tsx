@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { submitInspection, claimCompartment } from '@/app/actions/inspections'
+import { submitInspection, claimCompartment, saveInspectionDraft } from '@/app/actions/inspections'
 import { moveAssetToApparatus } from '@/app/actions/equipment'
 import QRScanner from '@/components/QRScanner'
 import HelpText from '@/components/HelpText'
@@ -110,8 +110,9 @@ function hasInspection(item: ChecklistItem): boolean {
 export default function InspectionRunClient({
   apparatus, compartment, compartmentId, checklistItems, medicationItems, inspectorName, personnelId, departmentId, presenceOnly,
   inspectionSessionId, sessionCompartmentId, initialSubmittedAssets, initialSelectedAssets,
-  storeroomId, childBags = [],
+  storeroomId, childBags = [], initialDraft,
 }: {
+  initialDraft?: Record<string, any> | null
   storeroomId?: string
   childBags?: { row_id: string; storeroom_id: string; name: string; status: string }[]
   apparatus: { id: string; unit_number: string; apparatus_name: string | null }
@@ -131,11 +132,11 @@ export default function InspectionRunClient({
   const router = useRouter()
   const medications = medicationItems ?? []
 
-  const [presenceResponses, setPresenceResponses] = useState<Record<string, PresenceResponse>>({})
-  const [medicationResponses, setMedicationResponses] = useState<Record<string, MedicationResponse>>({})
-  const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>(initialSelectedAssets ?? {})
-  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
-  const [stepResponses, setStepResponses] = useState<Record<string, Record<string, StepResponse>>>({})
+  const [presenceResponses, setPresenceResponses] = useState<Record<string, PresenceResponse>>(initialDraft?.presenceResponses ?? {})
+  const [medicationResponses, setMedicationResponses] = useState<Record<string, MedicationResponse>>(initialDraft?.medicationResponses ?? {})
+  const [selectedAssets, setSelectedAssets] = useState<Record<string, string[]>>(initialDraft?.selectedAssets ?? initialSelectedAssets ?? {})
+  const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>(initialDraft?.selectedTemplates ?? {})
+  const [stepResponses, setStepResponses] = useState<Record<string, Record<string, StepResponse>>>(initialDraft?.stepResponses ?? {})
 
   const [activeScanner, setActiveScanner] = useState<{ locationId: string; slotIndex: number; itemName: string; assets: Asset[] } | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -144,8 +145,8 @@ export default function InspectionRunClient({
   const [confirmedReassigns, setConfirmedReassigns] = useState<string[]>([])
   const [reassigning, setReassigning] = useState(false)
 
-  const [missingSlots, setMissingSlots] = useState<Record<string, boolean[]>>({})
-  const [missingNotes, setMissingNotes] = useState<Record<string, string[]>>({})
+  const [missingSlots, setMissingSlots] = useState<Record<string, boolean[]>>(initialDraft?.missingSlots ?? {})
+  const [missingNotes, setMissingNotes] = useState<Record<string, string[]>>(initialDraft?.missingNotes ?? {})
 
   const [submittedAssets, setSubmittedAssets] = useState<Set<string>>(new Set(initialSubmittedAssets ?? []))
   const [submittingAsset, setSubmittingAsset] = useState<string | null>(null)
@@ -153,6 +154,17 @@ export default function InspectionRunClient({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Save answers to the server as they're entered (debounced) so nothing is lost if the phone locks,
+  // someone else takes over, or you step into a bag's check. Only inside a session.
+  const draftJson = JSON.stringify({ presenceResponses, medicationResponses, selectedAssets, selectedTemplates, stepResponses, missingSlots, missingNotes })
+  const firstDraftRun = useRef(true)
+  useEffect(() => {
+    if (firstDraftRun.current) { firstDraftRun.current = false; return }
+    if (!sessionCompartmentId || submitted) return
+    const t = setTimeout(() => { void saveInspectionDraft(sessionCompartmentId, JSON.parse(draftJson)) }, 1500)
+    return () => clearTimeout(t)
+  }, [draftJson, sessionCompartmentId, submitted])
 
   function isSlotMissing(locationId: string, slotIndex: number) {
     return missingSlots[locationId]?.[slotIndex] ?? false

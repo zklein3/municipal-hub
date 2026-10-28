@@ -286,11 +286,19 @@ export default async function InspectionRunPage({
     }
   }
 
+  let initialDraft: Record<string, unknown> | null = null
+  if (session_compartment_id) {
+    const { data: draft } = await adminClient.from('inspection_draft_responses')
+      .select('payload').eq('session_row_id', session_compartment_id).maybeSingle()
+    initialDraft = (draft?.payload as Record<string, unknown> | undefined) ?? null
+  }
+
   return (
     <InspectionRunClient
       apparatus={{ id: apparatus.id, unit_number: apparatus.unit_number, apparatus_name: apparatus.apparatus_name }}
       compartment={bagInfo ? { code: bagInfo.name, name: 'Bag' } : { code: compName?.compartment_code ?? '—', name: compName?.compartment_name ?? null }}
       storeroomId={storeroom_id}
+      initialDraft={initialDraft}
       childBags={childBags}
       compartmentId={compartment_id}
       checklistItems={checklistItems as any}

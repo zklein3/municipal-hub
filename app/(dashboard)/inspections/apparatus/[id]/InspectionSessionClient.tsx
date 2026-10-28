@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { claimCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, deleteInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
+import { claimCompartment, takeOverCompartment, releaseCompartment, reopenCompartment, closeInspectionSession, deleteInspectionSession, getSessionReconciliation } from '@/app/actions/inspections'
 import { moveAssetsToStorage } from '@/app/actions/equipment'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 
@@ -41,6 +41,7 @@ export default function InspectionSessionClient({
   apparatus_id,
   apparatus_unit_number,
   personnel_id,
+  auth_user_id,
   isOfficerOrAdmin,
   departmentTimezone,
   vehicleCheck,
@@ -54,6 +55,7 @@ export default function InspectionSessionClient({
   apparatus_id: string
   apparatus_unit_number: string
   personnel_id: string
+  auth_user_id: string
   isOfficerOrAdmin: boolean
   departmentTimezone: string
   vehicleCheck: { doneToday: boolean; lastLabel: string | null }
@@ -128,6 +130,15 @@ export default function InspectionSessionClient({
       setLoadingId(null)
       return
     }
+    router.push(runUrl(sc))
+  }
+
+  async function handleTakeOver(sc: SessionCompartment) {
+    if (!window.confirm(`Take over this check from ${sc.claimed_by_name ?? 'the other inspector'}? You'll continue from their saved answers.`)) return
+    setLoadingId(sc.id)
+    setError(null)
+    const res = await takeOverCompartment(sc.id)
+    if (res?.error) { setError(res.error); setLoadingId(null); return }
     router.push(runUrl(sc))
   }
 
@@ -348,13 +359,23 @@ export default function InspectionSessionClient({
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                     In Progress
                   </span>
-                  <button
-                    onClick={() => handleInspect(sc)}
-                    disabled={loadingId === sc.id || isPending}
-                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                  >
-                    {loadingId === sc.id ? 'Opening…' : 'Resume'}
-                  </button>
+                  {sc.claimed_by === auth_user_id || sc.claimed_by === null ? (
+                    <button
+                      onClick={() => handleInspect(sc)}
+                      disabled={loadingId === sc.id || isPending}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                    >
+                      {loadingId === sc.id ? 'Opening…' : 'Resume'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleTakeOver(sc)}
+                      disabled={loadingId === sc.id || isPending}
+                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                    >
+                      Take over
+                    </button>
+                  )}
                   {isOfficerOrAdmin && (
                     <button
                       onClick={() => handleRelease(sc)}
