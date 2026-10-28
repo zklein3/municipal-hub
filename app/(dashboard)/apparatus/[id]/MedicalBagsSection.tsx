@@ -9,7 +9,7 @@ import WasteModal from '../../medical/forms/WasteModal'
 import RestockModal from '../../medical/forms/RestockModal'
 import TransferOutModal from '../../medical/forms/TransferOutModal'
 
-interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null }
+interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null; qr_code?: string | null }
 interface BagEquipment { id: string; storeroom_id: string; item_name: string; expected_quantity: number }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface Lot {
@@ -129,9 +129,13 @@ export default function MedicalBagsSection({
         const nestedBags = bags.filter(b => b.location_label === `Inside ${bag.name}`)
         return (
           <div key={bag.id}>
-            {(bag.location_label || equipment.length > 0 || nestedBags.length > 0) && (
+            {(bag.location_label || equipment.length > 0 || nestedBags.length > 0 || bag.qr_code) && (
               <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3 text-xs text-zinc-600">
                 {bag.location_label && <p className="font-semibold text-zinc-700">{bag.location_label}</p>}
+                {bag.qr_code && (
+                  <a href={`/print/qr?type=bag&code=${encodeURIComponent(bag.qr_code)}&title=${encodeURIComponent(bag.name)}`} target="_blank" rel="noreferrer"
+                    className="mt-1 inline-block font-semibold text-blue-600 hover:underline">Print QR ({bag.qr_code})</a>
+                )}
                 {nestedBags.length > 0 && (
                   <p className="mt-1">Contains: {nestedBags.map(b => (
                     <button key={b.id} onClick={() => setExpandedBagId(b.id)} className="mr-2 font-semibold text-blue-600 hover:underline">{b.name}</button>

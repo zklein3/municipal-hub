@@ -231,7 +231,7 @@ export default async function EquipmentDetailPage({
   }[]> = {}
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
-      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode, compartment_id, parent_storeroom_id').eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
+      adminClient.from('medical_storerooms').select('id, name, template_id, inventory_mode, compartment_id, parent_storeroom_id, qr_code').eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
       adminClient.from('medical_bag_templates').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
       adminClient.from('medical_storerooms').select('id, name').eq('department_id', ctx.departmentId).eq('active', true).eq('container_kind', 'storeroom').order('name'),
       adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)').eq('department_id', ctx.departmentId).eq('active', true),
