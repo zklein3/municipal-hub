@@ -18,6 +18,7 @@ export type StepRow = {
 }
 
 export type InspectionLogRow = {
+  bag_id?: string | null
   id: string
   inspected_at: string
   overall_result: string
@@ -34,6 +35,7 @@ export type InspectionLogRow = {
 }
 
 export type PresenceCheckRow = {
+  bag_id?: string | null
   id: string
   inspected_at: string
   apparatus_id: string
@@ -108,7 +110,7 @@ export default async function InspectionReportPage({
 
   let logsQuery = adminClient
     .from('item_asset_inspection_logs')
-    .select('id, apparatus_id, asset_id, compartment_id, inspected_at, overall_result, inspected_by_name, inspected_by_personnel_id')
+    .select('id, apparatus_id, asset_id, compartment_id, storeroom_id, location_path, inspected_at, overall_result, inspected_by_name, inspected_by_personnel_id')
     .in('apparatus_id', scopeIds)
     .gte('inspected_at', fromTs)
     .lte('inspected_at', toTs)
@@ -208,7 +210,8 @@ export default async function InspectionReportPage({
       overall_result: l.overall_result,
       apparatus_id: l.apparatus_id,
       apparatus_name: apparatusMap[l.apparatus_id] ?? '—',
-      compartment: l.compartment_id ? (compMap[l.compartment_id] ?? '—') : '—',
+      compartment: l.location_path ?? (l.compartment_id ? (compMap[l.compartment_id] ?? '—') : '—'),
+      bag_id: l.storeroom_id ?? null,
       asset_id: l.asset_id ?? '',
       asset_tag: asset?.asset_tag ?? '—',
       item_name: asset ? (itemMap[asset.item_id] ?? '—') : '—',
@@ -222,7 +225,7 @@ export default async function InspectionReportPage({
   // Presence check logs — same apparatus scope, date range, optional filters
   let presenceQuery = adminClient
     .from('compartment_presence_check_logs')
-    .select('id, apparatus_id, compartment_id, item_id, inspected_at, inspected_by_name, inspected_by_personnel_id, present, actual_quantity, notes')
+    .select('id, apparatus_id, compartment_id, storeroom_id, location_path, item_name, item_id, inspected_at, inspected_by_name, inspected_by_personnel_id, present, actual_quantity, notes')
     .in('apparatus_id', scopeIds)
     .gte('inspected_at', fromTs)
     .lte('inspected_at', toTs)
@@ -261,8 +264,9 @@ export default async function InspectionReportPage({
     inspected_at: p.inspected_at,
     apparatus_id: p.apparatus_id,
     apparatus_name: apparatusMap[p.apparatus_id] ?? '—',
-    compartment: p.compartment_id ? (compMap[p.compartment_id] ?? '—') : '—',
-    item_name: itemMap[p.item_id] ?? '—',
+    compartment: p.location_path ?? (p.compartment_id ? (compMap[p.compartment_id] ?? '—') : '—'),
+    bag_id: p.storeroom_id ?? null,
+    item_name: p.item_name ?? itemMap[p.item_id] ?? '—',
     item_id: p.item_id,
     inspector_name: p.inspected_by_name ?? '—',
     inspector_personnel_id: p.inspected_by_personnel_id ?? null,

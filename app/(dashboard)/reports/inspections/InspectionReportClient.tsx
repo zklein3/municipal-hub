@@ -169,6 +169,7 @@ function AssetDrillIn({
                     <span className="text-sm font-medium text-zinc-700 whitespace-nowrap">{formatLocalDateTime(log.inspected_at, departmentTimezone)}</span>
                     <span className="text-sm text-zinc-500">{log.apparatus_name}</span>
                     {log.compartment !== '—' && <span className="text-xs text-zinc-400">{log.compartment}</span>}
+                    {log.bag_id && <a href={`/equipment/bag/${log.bag_id}`} onClick={e => e.stopPropagation()} className="text-xs font-semibold text-blue-600 hover:underline">Bag history →</a>}
                     <span className="text-sm text-zinc-500">{log.inspector_name}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -446,7 +447,7 @@ export default function InspectionReportClient({
                       >
                         <td className="px-4 py-2.5 text-zinc-700 whitespace-nowrap">{formatDate(row.inspected_at)}</td>
                         <td className="px-4 py-2.5 text-zinc-700">{row.apparatus_name}</td>
-                        <td className="px-4 py-2.5 text-zinc-500">{row.compartment}</td>
+                        <td className="px-4 py-2.5 text-zinc-500">{row.compartment}{row.bag_id && <> <a href={`/equipment/bag/${row.bag_id}`} className="text-xs font-semibold text-blue-600 hover:underline">history →</a></>}</td>
                         <td className="px-4 py-2.5 text-zinc-700">{row.item_name}</td>
                         <td className="px-4 py-2.5 text-zinc-500 font-mono text-xs">{row.asset_tag ?? '—'}</td>
                         <td className="px-4 py-2.5 text-zinc-500">{row.inspector_name}</td>
@@ -477,7 +478,7 @@ export default function InspectionReportClient({
                     >
                       <td className="px-4 py-2.5 text-zinc-700 whitespace-nowrap">{formatDate(row.inspected_at)}</td>
                       <td className="px-4 py-2.5 text-zinc-700">{row.apparatus_name}</td>
-                      <td className="px-4 py-2.5 text-zinc-500">{row.compartment}</td>
+                      <td className="px-4 py-2.5 text-zinc-500">{row.compartment}{row.bag_id && <> <a href={`/equipment/bag/${row.bag_id}`} className="text-xs font-semibold text-blue-600 hover:underline">history →</a></>}</td>
                       <td className="px-4 py-2.5 text-zinc-700">{row.item_name}</td>
                       <td className="px-4 py-2.5">
                         <button

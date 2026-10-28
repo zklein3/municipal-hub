@@ -144,6 +144,7 @@ export default function MedicalBagsSection({
                   <a href={`/print/qr?type=bag&code=${encodeURIComponent(bag.qr_code)}&title=${encodeURIComponent(bag.name)}`} target="_blank" rel="noreferrer"
                     className="mt-1 inline-block font-semibold text-blue-600 hover:underline">Print QR ({bag.qr_code})</a>
                 )}
+                <a href={`/equipment/bag/${bag.id}`} className="mt-1 ml-3 inline-block font-semibold text-blue-600 hover:underline">Check history →</a>
                 {nestedBags.length > 0 && (
                   <p className="mt-1">Contains: {nestedBags.map(b => (
                     <button key={b.id} onClick={() => setExpandedBagId(b.id)} className="mr-2 font-semibold text-blue-600 hover:underline">{b.name}</button>

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { ensureBagSessionRows } from '@/lib/inspection-bag-rows'
+import { describeCheckLocation } from '@/lib/inspection-location'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
@@ -219,6 +220,9 @@ export async function submitInspection(payload: {
   const now = new Date().toISOString()
 
   try {
+    const loc = await describeCheckLocation(adminClient, {
+      apparatus_id: payload.apparatus_id || null, compartment_id: payload.compartment_id || null, storeroom_id: payload.storeroom_id || null,
+    })
     for (const inspection of payload.asset_inspections) {
       const stepIds = inspection.responses.map(r => r.step_id)
       const { data: stepData } = await adminClient
@@ -245,6 +249,9 @@ export async function submitInspection(payload: {
           apparatus_id: payload.apparatus_id || null,
           compartment_id: payload.compartment_id || null,
           storeroom_id: payload.storeroom_id || null,
+          apparatus_name: loc.apparatus_name,
+          compartment_name: loc.compartment_name,
+          location_path: loc.location_path,
           inspection_session_id: payload.inspection_session_id || null,
         })
         .select('id')
@@ -277,7 +284,14 @@ export async function submitInspection(payload: {
 
     // Store presence check results
     if (payload.presence_checks.length > 0) {
+      const { data: presenceItems } = await adminClient.from('items').select('id, item_name')
+        .in('id', [...new Set(payload.presence_checks.map(pc => pc.item_id))])
+      const presenceItemName = new Map((presenceItems ?? []).map(i => [i.id, i.item_name]))
       const presenceInserts = payload.presence_checks.map(pc => ({
+        item_name: presenceItemName.get(pc.item_id) ?? null,
+        apparatus_name: loc.apparatus_name,
+        compartment_name: loc.compartment_name,
+        location_path: loc.location_path,
         department_id: payload.department_id,
         apparatus_id: payload.apparatus_id,
         compartment_id: payload.compartment_id || null,
@@ -331,6 +345,7 @@ export async function submitInspection(payload: {
         apparatus_name: apparatusRow?.unit_number ?? null,
         compartment_id: payload.compartment_id,
         compartment_name: compartmentCode,
+        location_path: loc.location_path,
         inspection_session_id: payload.inspection_session_id || null,
         inspected_at: now,
         inspected_by_personnel_id: payload.personnel_id,
