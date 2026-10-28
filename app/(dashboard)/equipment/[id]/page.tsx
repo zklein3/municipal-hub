@@ -294,7 +294,8 @@ export default async function EquipmentDetailPage({
       .sort((a: any, b: any) => a.name.localeCompare(b.name))
 
     medicalBagData = {
-      bags: bagsWithLocation, bagEquipment, bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
+      bags: bagsWithLocation, bagEquipment,
+      compartmentOptions: compartments.map(c => ({ id: c.id, name: `${c.compartment_code}${c.compartment_name ? ` — ${c.compartment_name}` : ''}` })), bagInventory: bagInventory ?? [], bagLots: bagLots ?? [],
       supplyTypes: supplyTypes ?? [], deptStorerooms: deptStorerooms ?? [],
       storeroomInventory: storeroomInventory ?? [], storeroomLots: storeroomLots ?? [],
       units: bagUnits ?? [],
@@ -424,6 +425,7 @@ export default async function EquipmentDetailPage({
           <MedicalBagsSection
             bags={medicalBagData.bags}
             bagEquipment={medicalBagData.bagEquipment}
+            compartmentOptions={medicalBagData.compartmentOptions}
             bagInventory={medicalBagData.bagInventory}
             bagLots={medicalBagData.bagLots}
             supplyTypes={medicalBagData.supplyTypes}

@@ -8,6 +8,7 @@ import AdministerModal from '../../medical/forms/AdministerModal'
 import WasteModal from '../../medical/forms/WasteModal'
 import RestockModal from '../../medical/forms/RestockModal'
 import TransferOutModal from '../../medical/forms/TransferOutModal'
+import MoveBagPanel from './MoveBagPanel'
 
 interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null; qr_code?: string | null }
 interface BagEquipment { id: string; storeroom_id: string; item_name: string; expected_quantity: number }
@@ -46,12 +47,13 @@ function getStatus(total: number, par: number, lots: Lot[]): 'expired' | 'expiri
 }
 
 export default function MedicalBagsSection({
-  bags, bagEquipment = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
+  bags, bagEquipment = [], compartmentOptions = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
   storeroomInventory, storeroomLots, units, personnel,
   bagTemplates, apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
 }: {
   bags: Bag[]
   bagEquipment?: BagEquipment[]
+  compartmentOptions?: { id: string; name: string }[]
   bagInventory: InventoryRow[]
   bagLots: Lot[]
   supplyTypes: SupplyType[]
@@ -129,6 +131,12 @@ export default function MedicalBagsSection({
         const nestedBags = bags.filter(b => b.location_label === `Inside ${bag.name}`)
         return (
           <div key={bag.id}>
+            {isAdmin && (
+              <div className="mb-3">
+                <MoveBagPanel bag={bag} compartments={compartmentOptions} bags={bags.map(b => ({ id: b.id, name: b.name }))}
+                  storerooms={deptStorerooms} members={personnel} />
+              </div>
+            )}
             {(bag.location_label || equipment.length > 0 || nestedBags.length > 0 || bag.qr_code) && (
               <div className="mb-3 rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3 text-xs text-zinc-600">
                 {bag.location_label && <p className="font-semibold text-zinc-700">{bag.location_label}</p>}

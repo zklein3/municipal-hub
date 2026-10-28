@@ -503,6 +503,139 @@ export async function updateBagCompartment(storeroom_id: string, compartment_id:
   return { success: true }
 }
 
+// Move a bag (with any bags nested in it) to a compartment, another bag, a station storeroom, or a
+// member. Two answers are required every time: did the medications go with the bag (if not, where do
+// the stocked lots go?) and did the tracked equipment go with it.
+export async function moveBag(data: {
+  bag_id: string
+  destination: { kind: 'compartment' | 'bag' | 'storeroom' | 'member'; id: string }
+  medsMovedWithBag: boolean | null
+  medsDestinationStoreroomId?: string | null
+  assetsMovedWithBag: boolean | null
+  notes?: string | null
+}) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  if (!ctx.department_id) return { error: 'Department not found.' }
+  if (data.medsMovedWithBag === null || data.assetsMovedWithBag === null)
+    return { error: 'Answer both questions: did the medications move with the bag, and did the tracked equipment?' }
+  if (data.medsMovedWithBag === false && !data.medsDestinationStoreroomId)
+    return { error: 'Choose where the medications go.' }
+  const adminClient = createAdminClient()
+  const dept = ctx.department_id
+
+  const { data: bag } = await adminClient.from('medical_storerooms')
+    .select('id, name, department_id, container_kind, apparatus_id, compartment_id, parent_storeroom_id, assigned_personnel_id, station_id')
+    .eq('id', data.bag_id).single()
+  if (!bag || bag.container_kind !== 'bag' || bag.department_id !== dept) return { error: 'Bag not found.' }
+
+  // Everything that travels: this bag plus bags nested in it, at any depth.
+  const { data: allBags } = await adminClient.from('medical_storerooms')
+    .select('id, name, parent_storeroom_id').eq('department_id', dept).eq('container_kind', 'bag').eq('active', true)
+  const kidsOf = new Map<string, string[]>()
+  for (const b of allBags ?? []) if (b.parent_storeroom_id) kidsOf.set(b.parent_storeroom_id, [...(kidsOf.get(b.parent_storeroom_id) ?? []), b.id])
+  const subtree: string[] = []
+  const queue = [bag.id]
+  while (queue.length) { const cur = queue.pop()!; subtree.push(cur); queue.push(...(kidsOf.get(cur) ?? [])) }
+
+  const nameOf = (id: string) => (allBags ?? []).find(b => b.id === id)?.name ?? 'a bag'
+  const { kind, id } = data.destination
+  let newApparatus: string | null = null
+  const patch: { compartment_id: string | null; parent_storeroom_id: string | null; assigned_personnel_id: string | null } =
+    { compartment_id: null, parent_storeroom_id: null, assigned_personnel_id: null }
+  let toDescription = ''
+
+  if (kind === 'compartment') {
+    const { data: comp } = await adminClient.from('apparatus_compartments').select('id, apparatus_id').eq('id', id).single()
+    if (!comp) return { error: 'Compartment not found.' }
+    const { data: app } = await adminClient.from('apparatus').select('unit_number, department_id').eq('id', comp.apparatus_id).single()
+    if (!app || app.department_id !== dept) return { error: 'Compartment not found.' }
+    newApparatus = comp.apparatus_id
+    patch.compartment_id = comp.id
+    toDescription = `Unit ${app.unit_number} compartment`
+  } else if (kind === 'bag' || kind === 'storeroom') {
+    const { data: dest } = await adminClient.from('medical_storerooms')
+      .select('id, name, department_id, container_kind, apparatus_id, active').eq('id', id).single()
+    if (!dest || dest.department_id !== dept || !dest.active) return { error: 'Destination not found.' }
+    if (kind === 'bag' && dest.container_kind !== 'bag') return { error: 'That is not a bag.' }
+    if (kind === 'storeroom' && dest.container_kind !== 'storeroom') return { error: 'That is not a storeroom.' }
+    if (subtree.includes(dest.id)) return { error: "A bag can't be placed inside itself or a bag within it." }
+    patch.parent_storeroom_id = dest.id
+    newApparatus = kind === 'bag' ? dest.apparatus_id : null
+    toDescription = `${kind === 'bag' ? 'Inside' : 'Storeroom'} ${dest.name}`
+  } else {
+    const { data: dp } = await adminClient.from('department_personnel')
+      .select('personnel_id, personnel(first_name, last_name)')
+      .eq('department_id', dept).eq('personnel_id', id).eq('active', true).maybeSingle()
+    if (!dp) return { error: 'Member not found in this department.' }
+    const p = (dp as any).personnel
+    patch.assigned_personnel_id = id
+    toDescription = `Assigned to ${[p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'member'}`
+  }
+
+  const fromApparatus: string | null = bag.apparatus_id
+  const fromDescription = bag.parent_storeroom_id ? `Inside ${nameOf(bag.parent_storeroom_id)}`
+    : bag.compartment_id ? 'A truck compartment' : bag.assigned_personnel_id ? 'Assigned to a member'
+    : bag.apparatus_id ? 'On a truck (not pinned)' : 'Unplaced'
+
+  // Medications left behind: move every stocked lot in the subtree to the chosen storeroom first,
+  // so a failure leaves the bag where it was.
+  if (data.medsMovedWithBag === false) {
+    const { data: dest } = await adminClient.from('medical_storerooms')
+      .select('id, department_id').eq('id', data.medsDestinationStoreroomId!).single()
+    if (!dest || dest.department_id !== dept) return { error: 'Medication destination not found.' }
+    const { data: inv } = await adminClient.from('medical_storeroom_inventory').select('id').in('storeroom_id', subtree)
+    const invIds = (inv ?? []).map(i => i.id)
+    const { data: lots } = invIds.length > 0
+      ? await adminClient.from('medical_stock_lots').select('id, storeroom_inventory_id, quantity_remaining')
+          .in('storeroom_inventory_id', invIds).eq('active', true).gt('quantity_remaining', 0)
+      : { data: [] }
+    for (const lot of lots ?? []) {
+      const r = await transferStock({
+        source_inventory_id: lot.storeroom_inventory_id, lot_id: lot.id,
+        destination_storeroom_id: dest.id, quantity: lot.quantity_remaining,
+        notes: `Bag "${bag.name}" moved — medications left behind`,
+      })
+      if ('error' in r && r.error) return { error: `Medication transfer failed: ${r.error}` }
+    }
+  }
+
+  const now = new Date().toISOString()
+  const { error: moveErr } = await adminClient.from('medical_storerooms')
+    .update({ ...patch, apparatus_id: newApparatus, updated_at: now }).eq('id', bag.id)
+  if (moveErr) { await logError(moveErr.message, '/medical'); return { error: moveErr.message } }
+
+  // Nested bags travel with it, so their truck follows.
+  const nested = subtree.filter(b => b !== bag.id)
+  if (nested.length > 0) {
+    const { error: nestErr } = await adminClient.from('medical_storerooms')
+      .update({ apparatus_id: newApparatus, updated_at: now }).in('id', nested)
+    if (nestErr) { await logError(nestErr.message, '/medical'); return { error: nestErr.message } }
+  }
+
+  // Tracked equipment last confirmed in these bags: follows the truck, or stays put and is unlinked.
+  if (data.assetsMovedWithBag) {
+    if (newApparatus !== fromApparatus) {
+      await adminClient.from('item_assets').update({ apparatus_id: newApparatus }).in('container_id', subtree)
+    }
+  } else {
+    await adminClient.from('item_assets').update({ container_id: null }).in('container_id', subtree)
+  }
+
+  await adminClient.from('container_movement_log').insert({
+    department_id: dept, bag_id: bag.id, bag_name: bag.name,
+    from_description: fromDescription, to_description: toDescription,
+    from_apparatus_id: fromApparatus, to_apparatus_id: newApparatus,
+    moved_by: ctx.me.id,
+    meds_moved_with_bag: data.medsMovedWithBag, meds_destination_id: data.medsMovedWithBag ? null : data.medsDestinationStoreroomId,
+    assets_moved_with_bag: data.assetsMovedWithBag, notes: data.notes?.trim() || null,
+  })
+
+  revalidatePath('/medical')
+  for (const a of new Set([fromApparatus, newApparatus])) if (a) revalidatePath(`/equipment/${a}`)
+  return { success: true }
+}
+
 export async function removeBagFromApparatus(storeroom_id: string) {
   const ctx = await getContext()
   if (!ctx?.isAdmin) return { error: 'Admins only.' }
