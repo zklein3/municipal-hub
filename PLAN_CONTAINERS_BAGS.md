@@ -203,6 +203,8 @@ also write `item_movement_log` (`from_type`/`to_type` gain `'bag'`, `'storeroom'
 - Optional, department-configured: a compartment preset can carry bag templates
   (`compartment_preset_bags`); deploy creates the bag instances.
 
+> **STATUS 2026-10-28:** 2A–2G are all BUILT and click-tested on QA (branch `feature/containers-bags`, not yet merged to main). Not built from this plan: standalone checks for storeroom/POV bags (`inspection_sessions.root_storeroom_id`, nullable apparatus_id), compartment presets that carry bag templates (`compartment_preset_bags`). See CLAUDE.md resume notes for details.
+
 ## Build steps (each ships on its own; stop and verify after each)
 | # | Step | Shows up as |
 |---|---|---|
