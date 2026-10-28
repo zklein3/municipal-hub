@@ -211,6 +211,160 @@ export async function removeTemplateItem(item_id: string) {
   return { success: true }
 }
 
+// ─── Bag template contents: equipment items + child bags (2B) ────────────────
+
+export async function addTemplateEquipmentItem(template_id: string, item_id: string, expected_qty: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+  const { data: tmpl } = await adminClient.from('medical_bag_templates')
+    .select('department_id').eq('id', template_id).single()
+  if (!tmpl || tmpl.department_id !== ctx.department_id) return { error: 'Bag template not found.' }
+
+  const { error: dbErr } = await adminClient.from('bag_template_items').upsert({
+    template_id, item_id, expected_qty: Math.max(0, Math.floor(expected_qty) || 0),
+  }, { onConflict: 'template_id,item_id' })
+  if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+  revalidatePath('/medical')
+  return { success: true }
+}
+
+export async function removeTemplateEquipmentItem(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('bag_template_items').delete().eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+  revalidatePath('/medical')
+  return { success: true }
+}
+
+export async function addTemplateChild(template_id: string, child_template_id: string, quantity: number) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+  if (template_id === child_template_id) return { error: "A bag can't contain itself." }
+
+  const { data: tmpls } = await adminClient.from('medical_bag_templates')
+    .select('id, department_id').in('id', [template_id, child_template_id])
+  if ((tmpls ?? []).length !== 2 || tmpls!.some(t => t.department_id !== ctx.department_id))
+    return { error: 'Bag template not found.' }
+
+  // Cycle guard: the child must not (directly or deeply) already contain this template.
+  const { data: links } = await adminClient.from('bag_template_children')
+    .select('template_id, child_template_id')
+  const kids = new Map<string, string[]>()
+  for (const l of links ?? []) kids.set(l.template_id, [...(kids.get(l.template_id) ?? []), l.child_template_id])
+  const stack = [child_template_id]
+  const seen = new Set<string>()
+  while (stack.length) {
+    const cur = stack.pop()!
+    if (cur === template_id) return { error: 'That would put a bag inside itself (a loop). Pick a different bag.' }
+    if (seen.has(cur)) continue
+    seen.add(cur)
+    stack.push(...(kids.get(cur) ?? []))
+  }
+
+  const { error: dbErr } = await adminClient.from('bag_template_children').upsert({
+    template_id, child_template_id, quantity: Math.max(1, Math.floor(quantity) || 1),
+  }, { onConflict: 'template_id,child_template_id' })
+  if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+  revalidatePath('/medical')
+  return { success: true }
+}
+
+export async function removeTemplateChild(id: string) {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  const adminClient = createAdminClient()
+  const { error: dbErr } = await adminClient.from('bag_template_children').delete().eq('id', id)
+  if (dbErr) { await logError(dbErr.message, '/medical'); return { error: dbErr.message } }
+  revalidatePath('/medical')
+  return { success: true }
+}
+
+// Creates one bag from a template (medications at PAR, equipment items at expected qty) and,
+// recursively, the bags the template says it contains. Returns the new bag's id.
+async function createBagFromTemplate(
+  adminClient: ReturnType<typeof createAdminClient>,
+  department_id: string,
+  opts: {
+    template_id: string
+    name?: string
+    apparatus_id: string | null
+    compartment_id?: string | null
+    parent_storeroom_id?: string | null
+    inventory_mode: 'standard' | 'independent'
+    depth: number
+  },
+): Promise<{ id?: string; error?: string }> {
+  if (opts.depth > 5) return { error: 'Bag templates are nested too deeply.' }
+
+  const { data: tmpl } = await adminClient.from('medical_bag_templates')
+    .select('name, department_id').eq('id', opts.template_id).single()
+  if (!tmpl || tmpl.department_id !== department_id) return { error: 'Bag template not found.' }
+
+  // Instances auto-number per template ("Trauma Box 1, 2…"); a custom name is kept as given.
+  const { data: maxRow } = await adminClient.from('medical_storerooms')
+    .select('bag_number').eq('department_id', department_id).eq('template_id', opts.template_id)
+    .order('bag_number', { ascending: false, nullsFirst: false }).limit(1)
+  const bag_number = (maxRow?.[0]?.bag_number ?? 0) + 1
+  const requested = opts.name?.trim()
+  const name = !requested || requested === tmpl.name ? `${tmpl.name} ${bag_number}` : requested
+
+  const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
+    department_id,
+    apparatus_id: opts.apparatus_id,
+    compartment_id: opts.compartment_id || null,
+    parent_storeroom_id: opts.parent_storeroom_id || null,
+    template_id: opts.template_id,
+    inventory_mode: opts.inventory_mode,
+    name,
+    bag_number,
+    qr_code: newBagQrCode(),
+    container_kind: 'bag',
+    active: true,
+  }).select('id').single()
+  if (bagErr) { await logError(bagErr.message, '/apparatus'); return { error: bagErr.message } }
+  const bagId: string = bag.id
+
+  const [{ data: medItems }, { data: equipItems }, { data: children }] = await Promise.all([
+    adminClient.from('medical_bag_template_items').select('supply_type_id, par_level').eq('template_id', opts.template_id),
+    adminClient.from('bag_template_items').select('item_id, expected_qty').eq('template_id', opts.template_id),
+    adminClient.from('bag_template_children').select('child_template_id, quantity').eq('template_id', opts.template_id),
+  ])
+
+  if (medItems && medItems.length > 0) {
+    const { error: invErr } = await adminClient.from('medical_storeroom_inventory').insert(
+      medItems.map(i => ({
+        storeroom_id: bagId, supply_type_id: i.supply_type_id,
+        department_id, par_level: i.par_level,
+      })))
+    if (invErr) { await logError(invErr.message, '/apparatus'); return { error: invErr.message } }
+  }
+
+  if (equipItems && equipItems.length > 0) {
+    const { error: stdErr } = await adminClient.from('item_location_standards').insert(
+      equipItems.map(i => ({ storeroom_id: bagId, item_id: i.item_id, expected_quantity: i.expected_qty, active: true })))
+    if (stdErr) { await logError(stdErr.message, '/apparatus'); return { error: stdErr.message } }
+  }
+
+  for (const child of children ?? []) {
+    for (let n = 0; n < child.quantity; n++) {
+      const res = await createBagFromTemplate(adminClient, department_id, {
+        template_id: child.child_template_id,
+        apparatus_id: opts.apparatus_id,
+        parent_storeroom_id: bagId,
+        inventory_mode: opts.inventory_mode,
+        depth: opts.depth + 1,
+      })
+      if (res.error) return { error: res.error }
+    }
+  }
+
+  return { id: bagId }
+}
+
 export async function deployBagFromTemplate(data: {
   apparatus_id: string
   template_id: string
@@ -224,69 +378,25 @@ export async function deployBagFromTemplate(data: {
   const adminClient = createAdminClient()
 
   // A bag is always its own row (container_kind 'bag'). Placing it in a compartment just sets
-  // compartment_id — it no longer merges into the compartment's loose storage, so a compartment
-  // can hold its loose medications plus any number of bags.
+  // compartment_id — a compartment can hold its loose medications plus any number of bags.
   if (data.compartment_id) {
     const { data: comp } = await adminClient.from('apparatus_compartments')
       .select('apparatus_id').eq('id', data.compartment_id).single()
     if (comp?.apparatus_id !== data.apparatus_id) return { error: 'That compartment is not on this apparatus.' }
   }
 
-  const { data: tmpl } = await adminClient.from('medical_bag_templates')
-    .select('name, department_id').eq('id', data.template_id).single()
-  if (!tmpl || tmpl.department_id !== ctx.department_id) return { error: 'Bag template not found.' }
-
-  // Instances auto-number per template ("Trauma Box 1, 2…"); a custom name is kept as given.
-  const { data: maxRow } = await adminClient.from('medical_storerooms')
-    .select('bag_number').eq('department_id', ctx.department_id).eq('template_id', data.template_id)
-    .order('bag_number', { ascending: false, nullsFirst: false }).limit(1)
-  const bag_number = (maxRow?.[0]?.bag_number ?? 0) + 1
-  const requested = data.name?.trim()
-  const name = !requested || requested === tmpl.name ? `${tmpl.name} ${bag_number}` : requested
-
-  const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
-    department_id: ctx.department_id,
-    apparatus_id: data.apparatus_id,
-    compartment_id: data.compartment_id || null,
+  const res = await createBagFromTemplate(adminClient, ctx.department_id, {
     template_id: data.template_id,
+    name: data.name,
+    apparatus_id: data.apparatus_id,
+    compartment_id: data.compartment_id,
     inventory_mode: data.inventory_mode,
-    name,
-    bag_number,
-    qr_code: newBagQrCode(),
-    container_kind: 'bag',
-    active: true,
-  }).select('id').single()
-  if (bagErr) { await logError(bagErr.message, '/apparatus'); return { error: bagErr.message } }
-  const bagId: string = bag.id
-
-  // Copy template items with their PAR levels (skip any already present — idempotent).
-  const { data: templateItems } = await adminClient
-    .from('medical_bag_template_items')
-    .select('supply_type_id, par_level')
-    .eq('template_id', data.template_id)
-
-  if (templateItems && templateItems.length > 0) {
-    const { data: existingInv } = await adminClient
-      .from('medical_storeroom_inventory')
-      .select('supply_type_id')
-      .eq('storeroom_id', bagId)
-    const existingSupplyTypeIds = new Set((existingInv ?? []).map(i => i.supply_type_id))
-
-    const rows = templateItems
-      .filter(item => !existingSupplyTypeIds.has(item.supply_type_id))
-      .map(item => ({
-        storeroom_id: bagId,
-        supply_type_id: item.supply_type_id,
-        department_id: ctx.department_id,
-        par_level: item.par_level,
-      }))
-    if (rows.length > 0) {
-      const { error: invErr } = await adminClient.from('medical_storeroom_inventory').insert(rows)
-      if (invErr) { await logError(invErr.message, '/apparatus'); return { error: invErr.message } }
-    }
-  }
+    depth: 0,
+  })
+  if (res.error) return { error: res.error }
 
   revalidatePath(`/apparatus/${data.apparatus_id}`)
+  revalidatePath(`/equipment/${data.apparatus_id}`)
   revalidatePath('/dept-admin/setup')
   return { success: true }
 }

@@ -11,6 +11,7 @@ import {
 } from '@/app/actions/medical'
 import HelpText from '@/components/HelpText'
 import { MoveMedicalToItem } from '@/components/CatalogMovePanel'
+import BagTemplateContents, { type TemplateEquipment, type TemplateChild } from './BagTemplateContents'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
@@ -42,9 +43,12 @@ type Tab = 'supplies' | 'storerooms' | 'templates'
 export default function MedicalAdminClient({
   supplyTypes, storerooms, stations, apparatus, apparatusCompartments, storeroomInventory, lots,
   bagTemplates, templateItems, bagDeployments, departmentId, moduleMedicalControlled, fixedTab,
-  itemCategories = [],
+  itemCategories = [], templateEquipment = [], templateChildren = [], catalogItems = [],
 }: {
   fixedTab?: Tab
+  templateEquipment?: TemplateEquipment[]
+  templateChildren?: TemplateChild[]
+  catalogItems?: { id: string; item_name: string }[]
   itemCategories?: { id: string; category_name: string }[]
   supplyTypes: SupplyType[]
   storerooms: Storeroom[]
@@ -627,6 +631,13 @@ export default function MedicalAdminClient({
                             })}
                           </div>
                         )}
+                        <BagTemplateContents
+                          templateId={tmpl.id}
+                          equipment={templateEquipment.filter(e => e.template_id === tmpl.id)}
+                          childBags={templateChildren.filter(c => c.template_id === tmpl.id)}
+                          catalogItems={catalogItems}
+                          bagTemplates={bagTemplates}
+                        />
                       </div>
                     )}
 

@@ -40,7 +40,7 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
   const storeroomIds = (storerooms ?? []).map(s => s.id)
   const templateIds = (bagTemplates ?? []).map(t => t.id)
   const apparatusIds = apparatus.map(a => a.id)
-  const [{ data: storeroomInventory }, { data: templateItems }, { data: compLinks }] = await Promise.all([
+  const [{ data: storeroomInventory }, { data: templateItems }, { data: compLinks }, { data: catalogItems }] = await Promise.all([
     storeroomIds.length > 0
       ? adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', storeroomIds)
       : Promise.resolve({ data: [] as { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[] }),
@@ -50,6 +50,17 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     apparatusIds.length > 0
       ? adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', apparatusIds).eq('active', true)
       : Promise.resolve({ data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }),
+    adminClient.from('items').select('id, item_name').eq('department_id', department_id).eq('active', true).order('item_name'),
+  ])
+
+  // Equipment items and child bags a bag template contains (2B)
+  const [{ data: templateEquipment }, { data: templateChildren }] = await Promise.all([
+    templateIds.length > 0
+      ? adminClient.from('bag_template_items').select('id, template_id, item_id, expected_qty').in('template_id', templateIds)
+      : Promise.resolve({ data: [] as { id: string; template_id: string; item_id: string; expected_qty: number }[] }),
+    templateIds.length > 0
+      ? adminClient.from('bag_template_children').select('id, template_id, child_template_id, quantity').in('template_id', templateIds)
+      : Promise.resolve({ data: [] as { id: string; template_id: string; child_template_id: string; quantity: number }[] }),
   ])
 
   const inventoryIds = (storeroomInventory ?? []).map(i => i.id)
@@ -84,6 +95,9 @@ export async function getMedicalAdminData(adminClient: SupabaseClient, departmen
     lots: lots ?? [],
     bagTemplates: bagTemplates ?? [],
     templateItems: templateItems ?? [],
+    templateEquipment: templateEquipment ?? [],
+    templateChildren: templateChildren ?? [],
+    catalogItems: catalogItems ?? [],
     bagDeployments: bagDeployments ?? [],
     moduleMedicalControlled: dept?.module_medical_controlled ?? false,
     itemCategories: itemCategories ?? [],
