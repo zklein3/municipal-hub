@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto'
 type Kind =
   | 'category' | 'item' | 'medication_type'
   | 'compartment' | 'compartment_type' | 'compartment_item' | 'compartment_medication'
+  | 'bag' | 'bag_item' | 'bag_medication' | 'bag_child'
 
 export type StarterSeedSummary = {
   skipped?: string
@@ -32,6 +33,7 @@ export type StarterSeedSummary = {
   presetTypes: number
   presetItems: number
   presetMedications: number
+  bags?: { created: number; adopted: number; contents: number }
   medicationsSkippedNoModule: boolean
 }
 
@@ -312,6 +314,87 @@ export async function seedDepartmentStarters(
         .upsert(rows, { onConflict: 'preset_id,supply_type_id', ignoreDuplicates: true })
       if (error) return { error: `preset medications: ${error.message}` }
       summary.presetMedications += rows.length
+    }
+  }
+
+  // ── Starter bag templates (module_medical only) ─────────────────────────
+  // Bag templates arrive in the department's Bags list only — never pre-placed on a truck.
+  if (withMedical) {
+    summary.bags = { created: 0, adopted: 0, contents: 0 }
+    const [mBagsRes, mBagItemsRes, mBagMedsRes, mBagKidsRes, dBagsRes] = await Promise.all([
+      adminClient.from('starter_bags').select('id, name, description').eq('active', true),
+      adminClient.from('starter_bag_items').select('id, starter_bag_id, starter_item_id, expected_quantity'),
+      adminClient.from('starter_bag_medications').select('id, starter_bag_id, starter_medication_type_id, par_level'),
+      adminClient.from('starter_bag_children').select('id, starter_bag_id, child_starter_bag_id, quantity'),
+      adminClient.from('medical_bag_templates').select('id, name, source_starter_id').eq('department_id', department_id),
+    ])
+    const bagErr = [mBagsRes, mBagItemsRes, mBagMedsRes, mBagKidsRes, dBagsRes].find(r => r.error)?.error
+    if (bagErr) return { error: `bags: ${bagErr.message}` }
+
+    const bags = makeResolver((dBagsRes.data ?? []).map(b => ({ id: b.id, name: b.name })), 'bag')
+    const toInsert: any[] = []
+    const adopt: { id: string; source: string }[] = []
+    for (const m of mBagsRes.data ?? []) {
+      if (seeded('bag', m.id)) continue
+      const existing = bags.byName.get(normalizeName(m.name))
+      if (existing) { adopt.push({ id: existing, source: m.id }); record('bag', m.id, existing); summary.bags.adopted++ }
+      else toInsert.push({ department_id, name: m.name, description: m.description, active: true, source_starter_id: m.id })
+    }
+    if (toInsert.length) {
+      const { data, error } = await adminClient.from('medical_bag_templates').insert(toInsert).select('id, name, source_starter_id')
+      if (error) return { error: `bags: ${error.message}` }
+      for (const r of data ?? []) { bags.add(r.id, r.name); record('bag', r.source_starter_id, r.id); summary.bags.created++ }
+    }
+    await adoptSourceTags('medical_bag_templates', adopt)
+
+    const masterBagName = new Map((mBagsRes.data ?? []).map(b => [b.id, b.name]))
+    const bagFor = (masterId: string) => { const n = masterBagName.get(masterId); return n ? bags.resolve(masterId, n) : null }
+
+    const itemRows: any[] = []
+    for (const bi of mBagItemsRes.data ?? []) {
+      if (seeded('bag_item', bi.id)) continue
+      const template_id = bagFor(bi.starter_bag_id)
+      const itemName = masterItemName.get(bi.starter_item_id)
+      const item_id = itemName ? items.resolve(bi.starter_item_id, itemName) : null
+      if (!template_id || !item_id) continue
+      itemRows.push({ template_id, item_id, expected_qty: bi.expected_quantity })
+      record('bag_item', bi.id, template_id)
+    }
+    if (itemRows.length) {
+      const { error } = await adminClient.from('bag_template_items').upsert(itemRows, { onConflict: 'template_id,item_id', ignoreDuplicates: true })
+      if (error) return { error: `bag items: ${error.message}` }
+      summary.bags.contents += itemRows.length
+    }
+
+    const medRows: any[] = []
+    for (const bm of mBagMedsRes.data ?? []) {
+      if (seeded('bag_medication', bm.id)) continue
+      const template_id = bagFor(bm.starter_bag_id)
+      const medName = masterMedName.get(bm.starter_medication_type_id)
+      const supply_type_id = medName ? meds.resolve(bm.starter_medication_type_id, medName) : null
+      if (!template_id || !supply_type_id) continue
+      medRows.push({ template_id, supply_type_id, par_level: bm.par_level })
+      record('bag_medication', bm.id, template_id)
+    }
+    if (medRows.length) {
+      const { error } = await adminClient.from('medical_bag_template_items').upsert(medRows, { onConflict: 'template_id,supply_type_id', ignoreDuplicates: true })
+      if (error) return { error: `bag medications: ${error.message}` }
+      summary.bags.contents += medRows.length
+    }
+
+    const kidRows: any[] = []
+    for (const bc of mBagKidsRes.data ?? []) {
+      if (seeded('bag_child', bc.id)) continue
+      const template_id = bagFor(bc.starter_bag_id)
+      const child_template_id = bagFor(bc.child_starter_bag_id)
+      if (!template_id || !child_template_id || template_id === child_template_id) continue
+      kidRows.push({ template_id, child_template_id, quantity: bc.quantity })
+      record('bag_child', bc.id, template_id)
+    }
+    if (kidRows.length) {
+      const { error } = await adminClient.from('bag_template_children').upsert(kidRows, { onConflict: 'template_id,child_template_id', ignoreDuplicates: true })
+      if (error) return { error: `bag children: ${error.message}` }
+      summary.bags.contents += kidRows.length
     }
   }
 
