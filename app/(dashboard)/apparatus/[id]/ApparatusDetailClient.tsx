@@ -668,6 +668,14 @@ export default function ApparatusDetailClient({
                       <span className={`text-xs rounded-full px-2 py-0.5 ${c.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-400'}`}>
                         {c.active ? 'Active' : 'Inactive'}
                       </span>
+                      {isAdmin && medicalBagData && c.active && (
+                        <a
+                          href={`/medical?mode=bags&apparatus=${apparatus.id}&compartment=${c.id}`}
+                          className="text-xs font-semibold text-red-600 hover:text-red-800"
+                        >
+                          + Add Bag
+                        </a>
+                      )}
                       {isAdmin && (
                         <button onClick={() => handleRemoveCompartment(c.id)} disabled={compLoading}
                           className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-50">
