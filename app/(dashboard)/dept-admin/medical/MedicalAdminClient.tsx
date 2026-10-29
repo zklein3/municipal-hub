@@ -12,6 +12,7 @@ import {
 import HelpText from '@/components/HelpText'
 import { MoveMedicalToItem } from '@/components/CatalogMovePanel'
 import PlaceBagForm from './PlaceBagForm'
+import RetrofitBagsPanel from './RetrofitBagsPanel'
 import BagTemplateContents, { type TemplateEquipment, type TemplateChild } from './BagTemplateContents'
 
 const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
@@ -497,6 +498,8 @@ export default function MedicalAdminClient({
               + New Bag
             </button>
           </div>
+
+          {bagDeployments.length > 0 && <RetrofitBagsPanel />}
 
           {/* Create / Edit template form */}
           {showTemplateForm && (

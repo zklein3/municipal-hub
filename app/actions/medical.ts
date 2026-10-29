@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
-import { logError } from '@/lib/logger'
+import { logError, logEvent } from '@/lib/logger'
 import { getOrCreateCompartmentStoreroom } from '@/lib/medical-storeroom'
 import { randomBytes } from 'node:crypto'
 
@@ -1668,4 +1668,146 @@ export async function removeSupplyFromStoreroom(inventory_id: string) {
   revalidatePath('/medical')
   revalidatePath('/medical')
   return { success: true }
+}
+
+// ─── Add missing template contents to bags that are already deployed ─────────
+// A bag copies its template's contents when it is deployed, so a bag deployed before the template
+// gained medications / equipment / nested bags never receives them. This adds only what is missing
+// (rows that don't exist yet): it never changes quantities, PAR levels or stock already set. Bags
+// set to 'independent' (a custom loadout on purpose) are left alone.
+
+export type BagRetrofitPlan = {
+  bag_id: string
+  bag_name: string
+  template_name: string
+  apparatus_unit: string | null
+  medications: { supply_type_id: string; name: string; par_level: number }[]
+  equipment: { item_id: string; name: string; expected_qty: number }[]
+  bags: { template_id: string; name: string; count: number }[]
+}
+
+async function computeBagRetrofitPlan(
+  adminClient: ReturnType<typeof createAdminClient>,
+  department_id: string,
+): Promise<{ plans: BagRetrofitPlan[]; skippedIndependent: number; apparatusByBag: Record<string, string | null> }> {
+  const { data: bags } = await adminClient.from('medical_storerooms')
+    .select('id, name, template_id, apparatus_id, inventory_mode')
+    .eq('department_id', department_id).eq('active', true).eq('container_kind', 'bag').not('template_id', 'is', null)
+
+  const eligible = (bags ?? []).filter(b => b.inventory_mode !== 'independent')
+  const skippedIndependent = (bags ?? []).length - eligible.length
+  const apparatusByBag: Record<string, string | null> = Object.fromEntries(eligible.map(b => [b.id, b.apparatus_id as string | null]))
+  if (eligible.length === 0) return { plans: [], skippedIndependent, apparatusByBag }
+
+  const bagIds = eligible.map(b => b.id)
+  const templateIds = [...new Set(eligible.map(b => b.template_id as string))]
+  const apparatusIds = [...new Set(eligible.map(b => b.apparatus_id).filter(Boolean))] as string[]
+
+  const [
+    { data: templates }, { data: tMeds }, { data: tEquip }, { data: tKids },
+    { data: haveMeds }, { data: haveEquip }, { data: haveKids }, { data: apparatusRows },
+  ] = await Promise.all([
+    adminClient.from('medical_bag_templates').select('id, name'),
+    adminClient.from('medical_bag_template_items').select('template_id, supply_type_id, par_level').in('template_id', templateIds),
+    adminClient.from('bag_template_items').select('template_id, item_id, expected_qty').in('template_id', templateIds),
+    adminClient.from('bag_template_children').select('template_id, child_template_id, quantity').in('template_id', templateIds),
+    adminClient.from('medical_storeroom_inventory').select('storeroom_id, supply_type_id').in('storeroom_id', bagIds),
+    // Every standards row counts as "already there", active or not, so nothing deliberately taken out is re-added
+    adminClient.from('item_location_standards').select('storeroom_id, item_id').in('storeroom_id', bagIds),
+    adminClient.from('medical_storerooms').select('parent_storeroom_id, template_id').in('parent_storeroom_id', bagIds).eq('active', true).eq('container_kind', 'bag'),
+    apparatusIds.length > 0
+      ? adminClient.from('apparatus').select('id, unit_number').in('id', apparatusIds)
+      : Promise.resolve({ data: [] as { id: string; unit_number: string }[] }),
+  ])
+
+  const supplyIds = [...new Set((tMeds ?? []).map(m => m.supply_type_id))]
+  const itemIds = [...new Set((tEquip ?? []).map(e => e.item_id))]
+  const [{ data: supplyRows }, { data: itemRows }] = await Promise.all([
+    supplyIds.length > 0 ? adminClient.from('medical_supply_types').select('id, name').in('id', supplyIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    itemIds.length > 0 ? adminClient.from('items').select('id, item_name').in('id', itemIds) : Promise.resolve({ data: [] as { id: string; item_name: string }[] }),
+  ])
+  const templateName = Object.fromEntries((templates ?? []).map(t => [t.id, t.name]))
+  const supplyName = Object.fromEntries((supplyRows ?? []).map(s => [s.id, s.name]))
+  const itemName = Object.fromEntries((itemRows ?? []).map(i => [i.id, i.item_name]))
+  const unitById = Object.fromEntries((apparatusRows ?? []).map(a => [a.id, a.unit_number]))
+
+  const plans: BagRetrofitPlan[] = []
+  for (const bag of eligible) {
+    const tid = bag.template_id as string
+    const medsHave = new Set((haveMeds ?? []).filter(r => r.storeroom_id === bag.id).map(r => r.supply_type_id))
+    const equipHave = new Set((haveEquip ?? []).filter(r => r.storeroom_id === bag.id).map(r => r.item_id))
+    const medications = (tMeds ?? []).filter(m => m.template_id === tid && !medsHave.has(m.supply_type_id))
+      .map(m => ({ supply_type_id: m.supply_type_id, name: supplyName[m.supply_type_id] ?? 'Medication', par_level: m.par_level }))
+    const equipment = (tEquip ?? []).filter(e => e.template_id === tid && !equipHave.has(e.item_id))
+      .map(e => ({ item_id: e.item_id, name: itemName[e.item_id] ?? 'Item', expected_qty: e.expected_qty }))
+    const kids = (tKids ?? []).filter(k => k.template_id === tid).map(k => {
+      const existing = (haveKids ?? []).filter(c => c.parent_storeroom_id === bag.id && c.template_id === k.child_template_id).length
+      return { template_id: k.child_template_id, name: templateName[k.child_template_id] ?? 'Bag', count: Math.max(0, k.quantity - existing) }
+    }).filter(k => k.count > 0)
+    if (medications.length + equipment.length + kids.length === 0) continue
+    plans.push({
+      bag_id: bag.id, bag_name: bag.name, template_name: templateName[tid] ?? 'Bag template',
+      apparatus_unit: bag.apparatus_id ? (unitById[bag.apparatus_id] ?? null) : null,
+      medications, equipment, bags: kids,
+    })
+  }
+  return { plans, skippedIndependent, apparatusByBag }
+}
+
+export async function previewBagRetrofit() {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  if (!ctx.department_id) return { error: 'Department not found.' }
+  const { plans, skippedIndependent } = await computeBagRetrofitPlan(createAdminClient(), ctx.department_id)
+  return { plans, skippedIndependent }
+}
+
+export async function applyBagRetrofit() {
+  const ctx = await getContext()
+  if (!ctx?.isAdmin) return { error: 'Admins only.' }
+  if (!ctx.department_id) return { error: 'Department not found.' }
+  const adminClient = createAdminClient()
+  const department_id = ctx.department_id
+
+  // Recomputed here — never trust a plan sent from the browser
+  const { plans, apparatusByBag } = await computeBagRetrofitPlan(adminClient, department_id)
+
+  let medications = 0, equipment = 0, bagsCreated = 0
+  for (const plan of plans) {
+    if (plan.medications.length > 0) {
+      const { error: invErr } = await adminClient.from('medical_storeroom_inventory').insert(
+        plan.medications.map(m => ({ storeroom_id: plan.bag_id, supply_type_id: m.supply_type_id, department_id, par_level: m.par_level })))
+      if (invErr) { await logError(invErr.message, '/medical', { metadata: { stage: 'bag retrofit', bag_id: plan.bag_id } }); return { error: `${plan.bag_name}: ${invErr.message}` } }
+      medications += plan.medications.length
+    }
+    if (plan.equipment.length > 0) {
+      const { error: stdErr } = await adminClient.from('item_location_standards').insert(
+        plan.equipment.map(e => ({ storeroom_id: plan.bag_id, item_id: e.item_id, expected_quantity: e.expected_qty, active: true })))
+      if (stdErr) { await logError(stdErr.message, '/medical', { metadata: { stage: 'bag retrofit', bag_id: plan.bag_id } }); return { error: `${plan.bag_name}: ${stdErr.message}` } }
+      equipment += plan.equipment.length
+    }
+    for (const kid of plan.bags) {
+      for (let n = 0; n < kid.count; n++) {
+        const res = await createBagFromTemplate(adminClient, department_id, {
+          template_id: kid.template_id,
+          apparatus_id: apparatusByBag[plan.bag_id] ?? null,
+          parent_storeroom_id: plan.bag_id,
+          inventory_mode: 'standard',
+          depth: 1,
+        })
+        if (res.error) return { error: `${plan.bag_name}: ${res.error}` }
+        bagsCreated++
+      }
+    }
+  }
+
+  await logEvent({
+    log_type: 'info', page: '/medical',
+    message: `Bag retrofit: added ${medications} medication row(s), ${equipment} equipment item(s) and ${bagsCreated} nested bag(s) across ${plans.length} deployed bag(s).`,
+    personnel_id: ctx.me.id, department_id,
+  })
+  revalidatePath('/medical')
+  revalidatePath('/equipment/[id]', 'page')
+  revalidatePath('/apparatus/[id]', 'page')
+  return { success: true, bagsUpdated: plans.length, medications, equipment, bagsCreated }
 }
