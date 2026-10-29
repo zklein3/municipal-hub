@@ -726,6 +726,9 @@ export default function MedicalAdminClient({
                               {deployments.map(dep => {
                                 const ap = apparatus.find(a => a.id === dep.apparatus_id)
                                 const isEditingCompartment = editingBagCompartmentId === dep.id
+                                // A bag inside another bag travels with it — it isn't pinned to a compartment itself.
+                                const parentId = allBags.find(b => b.id === dep.id)?.parent_storeroom_id
+                                const parentName = parentId ? allBags.find(b => b.id === parentId)?.name ?? 'another bag' : null
                                 return (
                                   <div key={dep.id} className="bg-zinc-50 rounded-lg border border-zinc-200 px-4 py-2.5">
                                     <div className="flex items-center justify-between gap-3">
@@ -733,19 +736,23 @@ export default function MedicalAdminClient({
                                         <p className="text-sm font-medium text-zinc-900">{dep.name}</p>
                                         <p className="text-xs text-zinc-400">
                                           {ap ? `Unit ${ap.unit_number}${ap.type_name ? ' — ' + ap.type_name : ''}` : '—'}
-                                          {dep.compartment_id
-                                            ? ` · Pinned to ${compartmentLabel(dep.compartment_id) ?? '—'}`
-                                            : ' · Not pinned to a compartment'}
+                                          {parentName
+                                            ? ` · Inside ${parentName}`
+                                            : dep.compartment_id
+                                              ? ` · Pinned to ${compartmentLabel(dep.compartment_id) ?? '—'}`
+                                              : ' · Not pinned to a compartment'}
                                         </p>
                                       </div>
                                       <div className="flex items-center gap-3 shrink-0">
                                         <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${dep.inventory_mode === 'standard' ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-500'}`}>
                                           {dep.inventory_mode === 'standard' ? 'Standard' : 'Independent'}
                                         </span>
-                                        <button onClick={() => { setEditingBagCompartmentId(dep.id); setBagCompartmentDraft(dep.compartment_id ?? '') }}
-                                          disabled={loading} className="text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50">
-                                          {dep.compartment_id ? 'Move' : 'Pin'}
-                                        </button>
+                                        {!parentName && (
+                                          <button onClick={() => { setEditingBagCompartmentId(dep.id); setBagCompartmentDraft(dep.compartment_id ?? '') }}
+                                            disabled={loading} className="text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50">
+                                            {dep.compartment_id ? 'Move' : 'Pin'}
+                                          </button>
+                                        )}
                                         <button onClick={() => wrap(() => removeBagFromApparatus(dep.id))} disabled={loading}
                                           className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50">Remove</button>
                                       </div>
