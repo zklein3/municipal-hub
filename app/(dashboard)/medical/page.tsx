@@ -108,89 +108,38 @@ export default async function MedicalPage({
     )
   }
 
+  // Round 1: everything that only needs the department id, in one trip. Station storerooms are
+  // the 'storeroom'-kind rows of the all-storerooms list, so that list is fetched once and split.
+  const [
+    { data: allDeptStorerooms }, { data: catalogTypes }, { data: deptStations },
+    { data: deptPersonnel }, { data: allApparatusList },
+  ] = await Promise.all([
+    // All storerooms (station + apparatus bags + compartments) — also the transfer destinations
+    adminClient.from('medical_storerooms').select('id, name, station_id, apparatus_id, compartment_id, container_kind')
+      .eq('department_id', department_id).eq('active', true).order('name'),
+    // For stocking storerooms and creating new ones right on this page (admins): the department's
+    // full medication catalog and all of its stations.
+    isAdmin
+      ? adminClient.from('medical_supply_types').select('id, name, unit_of_measure').eq('department_id', department_id).eq('active', true).order('name')
+      : Promise.resolve({ data: [] as { id: string; name: string; unit_of_measure: string }[] }),
+    isAdmin
+      ? adminClient.from('stations').select('id, station_name, station_number').eq('department_id', department_id).eq('active', true).order('station_number')
+      : Promise.resolve({ data: [] as { id: string; station_name: string; station_number: string }[] }),
+    // Personnel for signer dropdowns
+    adminClient.from('department_personnel').select('personnel_id, personnel(id, first_name, last_name)')
+      .eq('department_id', department_id).eq('active', true),
+    // All dept apparatus, for the compartment transfer destination picker
+    adminClient.from('apparatus').select('id, unit_number, apparatus_types(name)')
+      .eq('department_id', department_id).eq('active', true).order('unit_number'),
+  ])
+
   // Station storerooms (displayed on this page)
-  const { data: storerooms } = await adminClient
-    .from('medical_storerooms')
-    .select('id, name, station_id, apparatus_id, compartment_id')
-    .eq('department_id', department_id)
-    .eq('active', true)
-    .eq('container_kind', 'storeroom')
-    .order('name')
-
-  // All storerooms (station + apparatus bags + compartments) — used for transfer destinations
-  const { data: allDeptStorerooms } = await adminClient
-    .from('medical_storerooms')
-    .select('id, name, station_id, apparatus_id, compartment_id')
-    .eq('department_id', department_id)
-    .eq('active', true)
-    .order('name')
-
-  const storeroomIds = (storerooms ?? []).map(s => s.id)
+  const storerooms = (allDeptStorerooms ?? [])
+    .filter(s => s.container_kind === 'storeroom')
+    .map(({ container_kind: _kind, ...rest }) => rest)
+  const storeroomIds = storerooms.map(s => s.id)
+  const storeroomIdSet = new Set(storeroomIds)
   const allStoreroomIds = (allDeptStorerooms ?? []).map(s => s.id)
-
-  // Inventory (supply types per station storeroom — for display)
-  const { data: inventory } = storeroomIds.length > 0
-    ? await adminClient
-        .from('medical_storeroom_inventory')
-        .select('id, storeroom_id, supply_type_id, par_level')
-        .in('storeroom_id', storeroomIds)
-    : { data: [] }
-
-  // All-storeroom inventory — needed to validate transfer destinations (bags + compartments)
-  const { data: allInventory } = allStoreroomIds.length > 0
-    ? await adminClient
-        .from('medical_storeroom_inventory')
-        .select('id, storeroom_id, supply_type_id, par_level')
-        .in('storeroom_id', allStoreroomIds)
-    : { data: [] }
-
-  // Supply types
-  const supplyTypeIds = [...new Set((inventory ?? []).map(i => i.supply_type_id))]
-  const { data: supplyTypes } = supplyTypeIds.length > 0
-    ? await adminClient
-        .from('medical_supply_types')
-        .select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures')
-        .in('id', supplyTypeIds)
-    : { data: [] }
-
-  // For stocking storerooms and creating new ones right on this page (admins): the department's
-  // full medication catalog and all of its stations.
-  const [{ data: catalogTypes }, { data: deptStations }] = isAdmin
-    ? await Promise.all([
-        adminClient.from('medical_supply_types').select('id, name, unit_of_measure').eq('department_id', department_id).eq('active', true).order('name'),
-        adminClient.from('stations').select('id, station_name, station_number').eq('department_id', department_id).eq('active', true).order('station_number'),
-      ])
-    : [{ data: [] }, { data: [] }]
-
-  // Lots (active stock)
-  const inventoryIds = (inventory ?? []).map(i => i.id)
-  const { data: lots } = inventoryIds.length > 0
-    ? await adminClient
-        .from('medical_stock_lots')
-        .select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit')
-        .in('storeroom_inventory_id', inventoryIds)
-        .eq('active', true)
-        .gt('quantity_remaining', 0)
-        .order('expiration_date', { ascending: true, nullsFirst: false })
-    : { data: [] }
-
-  // Control-numbered vials for controlled-substance lots
-  const lotIds = (lots ?? []).map(l => l.id)
-  const { data: units } = lotIds.length > 0
-    ? await adminClient
-        .from('medical_stock_units')
-        .select('id, lot_id, control_number, status')
-        .in('lot_id', lotIds)
-        .eq('status', 'available')
-        .order('created_at', { ascending: true })
-    : { data: [] }
-
-  // Personnel for signer dropdowns
-  const { data: deptPersonnel } = await adminClient
-    .from('department_personnel')
-    .select('personnel_id, personnel(id, first_name, last_name)')
-    .eq('department_id', department_id)
-    .eq('active', true)
 
   const personnel = (deptPersonnel ?? [])
     .map(dp => ({
@@ -199,17 +148,85 @@ export default async function MedicalPage({
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  // Stations for display
-  const stationIds = [...new Set((storerooms ?? []).map(s => s.station_id).filter(Boolean))] as string[]
-  const { data: stations } = stationIds.length > 0
-    ? await adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
-    : { data: [] }
-
+  const allApparatus = (allApparatusList ?? []).map(a => ({
+    id: a.id,
+    unit_number: a.unit_number,
+    type_name: (a.apparatus_types as any)?.name ?? null,
+  }))
+  const allApparatusIds = allApparatus.map(a => a.id)
+  const stationIds = [...new Set(storerooms.map(s => s.station_id).filter(Boolean))] as string[]
   // Apparatus for display (apparatus-linked storerooms — use allDeptStorerooms so bags show unit numbers)
   const apparatusIds = [...new Set((allDeptStorerooms ?? []).map(s => s.apparatus_id).filter(Boolean))] as string[]
-  const { data: apparatusList } = apparatusIds.length > 0
-    ? await adminClient.from('apparatus').select('id, unit_number, apparatus_types(name)').in('id', apparatusIds)
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() // history: last 90 days
+
+  // Round 2: inventory for every storeroom, plus everything else that needs only round 1's ids
+  const loadCompartments = async () => {
+    const { data: compLinks } = allApparatusIds.length > 0
+      ? await adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', allApparatusIds).eq('active', true)
+      : { data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }
+    const compNameIds = [...new Set((compLinks ?? []).map(c => c.compartment_name_id).filter(Boolean))]
+    const { data: compNameRows } = compNameIds.length > 0
+      ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compNameIds)
+      : { data: [] as { id: string; compartment_code: string; compartment_name: string | null; sort_order: number | null }[] }
+    return { compLinks, compNameRows }
+  }
+  const [{ data: allInventory }, { data: stations }, { data: apparatusList }, { compLinks, compNameRows }, { data: transactions }] = await Promise.all([
+    // All-storeroom inventory — also validates transfer destinations (bags + compartments)
+    allStoreroomIds.length > 0
+      ? adminClient.from('medical_storeroom_inventory').select('id, storeroom_id, supply_type_id, par_level').in('storeroom_id', allStoreroomIds)
+      : Promise.resolve({ data: [] as { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[] }),
+    stationIds.length > 0
+      ? adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
+      : Promise.resolve({ data: [] as { id: string; station_name: string; station_number: string }[] }),
+    apparatusIds.length > 0
+      ? adminClient.from('apparatus').select('id, unit_number, apparatus_types(name)').in('id', apparatusIds)
+      : Promise.resolve({ data: [] as { id: string; unit_number: string; apparatus_types: unknown }[] }),
+    loadCompartments(),
+    // Transaction history — last 90 days
+    storeroomIds.length > 0
+      ? adminClient.from('medical_stock_transactions')
+          .select('id, storeroom_id, supply_type_id, supply_type_name, lot_id, transaction_type, quantity, administered_amount, waste_amount, volume_unit, administered_dose, waste_dose, dose_unit, performed_by, signer_1_id, signer_2_id, notes, created_at')
+          .in('storeroom_id', storeroomIds).gte('created_at', since).order('created_at', { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+
+  // Inventory (supply types per station storeroom — for display) is the station slice of allInventory
+  const inventory = (allInventory ?? []).filter(i => storeroomIdSet.has(i.storeroom_id))
+  const inventoryIds = inventory.map(i => i.id)
+  const supplyTypeIds = [...new Set(inventory.map(i => i.supply_type_id))]
+  const txLotIds = [...new Set((transactions ?? []).map((t: any) => t.lot_id).filter(Boolean))] as string[]
+
+  // Round 3: the details of that inventory
+  const [{ data: supplyTypes }, { data: lots }, { data: reorderRequests }, { data: txLots }] = await Promise.all([
+    supplyTypeIds.length > 0
+      ? adminClient.from('medical_supply_types').select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures').in('id', supplyTypeIds)
+      : Promise.resolve({ data: [] as any[] }),
+    // Lots (active stock)
+    inventoryIds.length > 0
+      ? adminClient.from('medical_stock_lots')
+          .select('id, storeroom_inventory_id, lot_number, expiration_date, quantity_received, quantity_remaining, received_date, concentration_amount, concentration_unit, volume_per_unit, volume_unit')
+          .in('storeroom_inventory_id', inventoryIds).eq('active', true).gt('quantity_remaining', 0)
+          .order('expiration_date', { ascending: true, nullsFirst: false })
+      : Promise.resolve({ data: [] as any[] }),
+    // Pending reorder requests for this dept's storerooms
+    inventoryIds.length > 0
+      ? adminClient.from('medical_reorder_requests').select('id, storeroom_inventory_id, status').in('storeroom_inventory_id', inventoryIds).eq('status', 'pending')
+      : Promise.resolve({ data: [] as { id: string; storeroom_inventory_id: string; status: string }[] }),
+    // Lot number lookup for history (include inactive lots referenced in transactions)
+    txLotIds.length > 0
+      ? adminClient.from('medical_stock_lots').select('id, lot_number').in('id', txLotIds)
+      : Promise.resolve({ data: [] as { id: string; lot_number: string | null }[] }),
+  ])
+  const pendingReorderIds = new Set((reorderRequests ?? []).map(r => r.storeroom_inventory_id))
+  const lotNumberMap = Object.fromEntries((txLots ?? []).map(l => [l.id, l.lot_number]))
+
+  // Round 4: control-numbered vials for controlled-substance lots
+  const lotIds = (lots ?? []).map((l: any) => l.id)
+  const { data: units } = lotIds.length > 0
+    ? await adminClient.from('medical_stock_units').select('id, lot_id, control_number, status')
+        .in('lot_id', lotIds).eq('status', 'available').order('created_at', { ascending: true })
     : { data: [] }
+
   const apparatusMap = Object.fromEntries(
     (apparatusList ?? []).map(a => [a.id, {
       unit_number: a.unit_number,
@@ -217,26 +234,6 @@ export default async function MedicalPage({
     }])
   )
 
-  // All dept apparatus + compartments for the compartment transfer destination picker
-  const { data: allApparatusList } = await adminClient
-    .from('apparatus')
-    .select('id, unit_number, apparatus_types(name)')
-    .eq('department_id', department_id)
-    .eq('active', true)
-    .order('unit_number')
-  const allApparatus = (allApparatusList ?? []).map(a => ({
-    id: a.id,
-    unit_number: a.unit_number,
-    type_name: (a.apparatus_types as any)?.name ?? null,
-  }))
-  const allApparatusIds = allApparatus.map(a => a.id)
-  const { data: compLinks } = allApparatusIds.length > 0
-    ? await adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', allApparatusIds).eq('active', true)
-    : { data: [] }
-  const compNameIds = [...new Set((compLinks ?? []).map(c => c.compartment_name_id).filter(Boolean))]
-  const { data: compNameRows } = compNameIds.length > 0
-    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compNameIds)
-    : { data: [] }
   const compNameMap = Object.fromEntries((compNameRows ?? []).map(c => [c.id, c]))
   const allCompartments = (compLinks ?? []).map(c => ({
     id: c.id,
@@ -245,37 +242,6 @@ export default async function MedicalPage({
     compartment_name: compNameMap[c.compartment_name_id]?.compartment_name ?? null,
     sort_order: compNameMap[c.compartment_name_id]?.sort_order ?? 999,
   })).sort((a, b) => a.sort_order - b.sort_order)
-
-  // Pending reorder requests for this dept's storerooms
-  const { data: reorderRequests } = storeroomIds.length > 0
-    ? await adminClient
-        .from('medical_reorder_requests')
-        .select('id, storeroom_inventory_id, status')
-        .in('storeroom_inventory_id',
-          (await adminClient.from('medical_storeroom_inventory').select('id').in('storeroom_id', storeroomIds)).data?.map(i => i.id) ?? []
-        )
-        .eq('status', 'pending')
-    : { data: [] }
-  const pendingReorderIds = new Set((reorderRequests ?? []).map(r => r.storeroom_inventory_id))
-
-  // Transaction history — last 90 days
-  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: transactions } = storeroomIds.length > 0
-    ? await adminClient
-        .from('medical_stock_transactions')
-        .select('id, storeroom_id, supply_type_id, supply_type_name, lot_id, transaction_type, quantity, administered_amount, waste_amount, volume_unit, administered_dose, waste_dose, dose_unit, performed_by, signer_1_id, signer_2_id, notes, created_at')
-        .in('storeroom_id', storeroomIds)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(200)
-    : { data: [] }
-
-  // Lot number lookup for history (include inactive lots referenced in transactions)
-  const txLotIds = [...new Set((transactions ?? []).map(t => t.lot_id).filter(Boolean))] as string[]
-  const { data: txLots } = txLotIds.length > 0
-    ? await adminClient.from('medical_stock_lots').select('id, lot_number').in('id', txLotIds)
-    : { data: [] }
-  const lotNumberMap = Object.fromEntries((txLots ?? []).map(l => [l.id, l.lot_number]))
 
   // Personnel id→name map for history display
   const personnelMap = Object.fromEntries(personnel.map(p => [p.id, p.name]))
