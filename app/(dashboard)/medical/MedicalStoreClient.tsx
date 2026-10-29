@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { receiveStock, transferStock, transferToCompartment, adjustStock, submitReorderRequest, updateStockLot, wasteExpiredLots, updateStoreroomPar, removeSupplyFromStoreroom } from '@/app/actions/medical'
 import { StockMedicationsPanel, NewStoreroomForm, EditStoreroomForm } from './StoreroomSetupControls'
 import { formatLocalDate } from '@/lib/format-datetime'
+import { formatAdministration } from '@/lib/medical-dose'
 import SignatureCapture, { SignatureCaptureHandle } from './SignatureCapture'
 import HelpText from '@/components/HelpText'
 import UseModal from './forms/UseModal'
@@ -33,6 +34,9 @@ interface Transaction {
   quantity: number
   administered_amount: number | null
   waste_amount: number | null
+  administered_dose: number | null
+  waste_dose: number | null
+  dose_unit: string | null
   volume_unit: string | null
   performed_by: string | null
   signer_1_id: string | null
@@ -675,7 +679,7 @@ export default function MedicalStoreClient({
                     <div className="shrink-0 text-right">
                       {tx.transaction_type === 'administered' ? (
                         <p className="text-sm font-bold text-amber-700">
-                          Given {tx.administered_amount} / Waste {tx.waste_amount} {tx.volume_unit ?? ''}
+                          {formatAdministration(tx)}
                         </p>
                       ) : (
                         <p className={`text-base font-bold ${isOut ? 'text-red-600' : 'text-green-700'}`}>

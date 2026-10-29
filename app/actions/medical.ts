@@ -1009,7 +1009,7 @@ export async function administerStock(data: {
 
   const { data: lot } = await adminClient
     .from('medical_stock_lots')
-    .select('quantity_remaining, volume_per_unit, volume_unit, storeroom_inventory_id')
+    .select('quantity_remaining, volume_per_unit, volume_unit, storeroom_inventory_id, concentration_amount, concentration_unit')
     .eq('id', unit.lot_id)
     .single()
   if (!lot) return { error: 'Lot not found.' }
@@ -1039,6 +1039,13 @@ export async function administerStock(data: {
   if (sigsRequired >= 2 && !data.signer_2_signature) return { error: 'The witness must sign.' }
 
   const wasteAmount = Math.round((lot.volume_per_unit - data.administered_amount) * 1000) / 1000
+  // Dose is how this is actually documented (4 mg given / 6 mg wasted), so snapshot it next to the
+  // volume the stock math uses. Only possible when the lot has concentration data.
+  const doseUnit = lot.concentration_amount && lot.concentration_unit
+    ? lot.concentration_unit.split('/')[0].trim() || null
+    : null
+  const administeredDose = doseUnit ? Math.round(data.administered_amount * lot.concentration_amount! * 1000) / 1000 : null
+  const wasteDose = doseUnit ? Math.round(wasteAmount * lot.concentration_amount! * 1000) / 1000 : null
   const now = new Date().toISOString()
   const newQty = lot.quantity_remaining - 1
 
@@ -1059,6 +1066,9 @@ export async function administerStock(data: {
     administered_amount: data.administered_amount,
     waste_amount: wasteAmount,
     volume_unit: lot.volume_unit,
+    dose_unit: doseUnit,
+    administered_dose: administeredDose,
+    waste_dose: wasteDose,
     performed_by: ctx.me.id,
     signer_1_id: data.signer_1_id || null,
     signer_1_at: data.signer_1_id ? now : null,

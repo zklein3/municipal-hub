@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import PrintButton from '../training-signin/PrintButton'
+import { formatAdministration } from '@/lib/medical-dose'
 
 const TX_LABELS: Record<string, string> = {
   received: 'Received',
@@ -75,7 +76,7 @@ export default async function MedicalCSLogPrintPage({
   // Transactions — controlled supplies only, filtered by date + optional storeroom/supply
   let query = adminClient
     .from('medical_stock_transactions')
-    .select('id, storeroom_id, supply_type_id, supply_type_name, lot_id, transaction_type, quantity, administered_amount, waste_amount, volume_unit, performed_by, signer_1_id, signer_1_signature_data, signer_2_id, signer_2_signature_data, notes, created_at')
+    .select('id, storeroom_id, supply_type_id, supply_type_name, lot_id, transaction_type, quantity, administered_amount, waste_amount, volume_unit, administered_dose, waste_dose, dose_unit, performed_by, signer_1_id, signer_1_signature_data, signer_2_id, signer_2_signature_data, notes, created_at')
     .in('storeroom_id', storeroomIds)
     .in('supply_type_id', csTypeIds)
     .gte('created_at', fromDate)
@@ -185,7 +186,7 @@ export default async function MedicalCSLogPrintPage({
                   <td>{TX_LABELS[tx.transaction_type] ?? tx.transaction_type}</td>
                   <td style={{ textAlign: 'center' }}>
                     {tx.transaction_type === 'administered'
-                      ? `Given ${tx.administered_amount} / Waste ${tx.waste_amount} ${tx.volume_unit ?? ''}`
+                      ? formatAdministration(tx)
                       : tx.quantity}
                   </td>
                   <td>{tx.lot_id ? (lotMap[tx.lot_id] ?? 'No lot #') : '—'}</td>
