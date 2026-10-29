@@ -25,31 +25,41 @@ async function getUserContext() {
     redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   }
 
-  const permissions = await getPermissionSnapshot(ctx)
+  const adminClient = createAdminClient()
 
   // Sidebar footer label: the assigned permission group's name if the
   // department admin set one up, falling back to the legacy system_role
   // word otherwise — same "explicit group wins, legacy is just the
   // fallback" convention the resolver itself uses.
-  let permissionGroupName: string | null = null
-  if (ctx.departmentId) {
-    const adminClient = createAdminClient()
+  async function fetchPermissionGroupName(): Promise<string | null> {
+    if (!ctx!.departmentId) return null
     const { data: dp } = await adminClient
       .from('department_personnel')
       .select('permission_group_id')
-      .eq('personnel_id', ctx.personnelId)
-      .eq('department_id', ctx.departmentId)
+      .eq('personnel_id', ctx!.personnelId)
+      .eq('department_id', ctx!.departmentId)
       .eq('active', true)
       .maybeSingle()
-    if (dp?.permission_group_id) {
-      const { data: group } = await adminClient
-        .from('department_permission_groups')
-        .select('name, active')
-        .eq('id', dp.permission_group_id)
-        .maybeSingle()
-      if (group?.active) permissionGroupName = group.name
-    }
+    if (!dp?.permission_group_id) return null
+    const { data: group } = await adminClient
+      .from('department_permission_groups')
+      .select('name, active')
+      .eq('id', dp.permission_group_id)
+      .maybeSingle()
+    return group?.active ? group.name : null
   }
+
+  // The three lookups don't depend on each other, so run them together instead of one after
+  // another. Nav badge counts + module flags come from a single database function (all counts,
+  // every viewer; the layout below decides which ones this viewer may see).
+  const [permissions, permissionGroupName, countsResult] = await Promise.all([
+    getPermissionSnapshot(ctx),
+    fetchPermissionGroupName(),
+    ctx.departmentId
+      ? adminClient.rpc('layout_counts', { p_department: ctx.departmentId, p_personnel: ctx.personnelId })
+      : Promise.resolve({ data: null }),
+  ])
+  const counts = (countsResult.data ?? null) as LayoutCounts | null
 
   return {
     id: ctx.personnelId,
@@ -64,7 +74,15 @@ async function getUserContext() {
     hasMultipleDepartments: ctx.hasMultipleDepartments,
     permissions,
     permissionGroupName,
+    counts,
   }
+}
+
+type LayoutCounts = {
+  public_site_enabled: boolean; module_operations: boolean; module_iso: boolean
+  module_neris: boolean; module_medical: boolean; module_ics: boolean
+  announcements_unread: number; pending_permits: number; pending_requests: number
+  pending_signatures: number; unread_messages: number; medical_alerts: number
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -94,41 +112,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let moduleNeris = false
   let moduleIcs = false
   let pendingSignatureCount = 0
-  if (!viewingSysAdminOverview && user?.department_id && user?.id) {
-    const adminClient = createAdminClient()
-    const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    const [{ data: allIds }, { data: readIds }, { data: pendingPermits }, { data: pendingRequests }, { data: deptFlags }, { count: sigCount }, { count: unreadMsgCount }, { count: medicalAlertCount }] = await Promise.all([
-      adminClient.from('announcements').select('id').eq('department_id', user.department_id),
-      adminClient.from('announcement_reads').select('announcement_id').eq('personnel_id', user.id),
-      permissions?.review_burn_permits
-        ? adminClient.from('burn_permits').select('id').eq('department_id', user.department_id).eq('status', 'pending')
-        : Promise.resolve({ data: [] }),
-      permissions?.manage_public_inbox
-        ? adminClient.from('public_record_requests').select('id').eq('department_id', user.department_id).eq('status', 'pending')
-        : Promise.resolve({ data: [] }),
-      adminClient.from('departments').select('public_site_enabled, module_operations, module_iso, module_neris, module_medical, module_ics').eq('id', user.department_id).single(),
-      adminClient.from('incident_signatures').select('id', { count: 'exact', head: true }).eq('personnel_id', user.id).is('signed_at', null),
-      adminClient.from('system_logs').select('id', { count: 'exact', head: true }).eq('personnel_id', user.id).not('reply_message', 'is', null).is('message_read_at', null),
-      Promise.resolve({ count: 0, data: null, error: null }), // medical alert resolved after deptFlags
-    ])
-    const readSet = new Set((readIds ?? []).map((r: { announcement_id: string }) => r.announcement_id))
-    announcementUnreadCount = (allIds ?? []).filter((a: { id: string }) => !readSet.has(a.id)).length
-    pendingSignatureCount = (sigCount ?? 0) + (unreadMsgCount ?? 0)
-    publicSiteEnabled = (deptFlags as any)?.public_site_enabled ?? false
-    moduleOperations = (deptFlags as any)?.module_operations ?? false
-    moduleIso = (deptFlags as any)?.module_iso ?? false
-    moduleNeris = (deptFlags as any)?.module_neris ?? false
-    moduleIcs = (deptFlags as any)?.module_ics ?? false
-    const moduleMedical = (deptFlags as any)?.module_medical ?? false
+  const counts = user?.counts
+  if (!viewingSysAdminOverview && counts) {
+    announcementUnreadCount = counts.announcements_unread
+    pendingSignatureCount = counts.pending_signatures + counts.unread_messages
+    publicSiteEnabled = counts.public_site_enabled
+    moduleOperations = counts.module_operations
+    moduleIso = counts.module_iso
+    moduleNeris = counts.module_neris
+    moduleIcs = counts.module_ics
 
     // Medical alert badge — only when module is enabled
-    let medicalAlertBadge = 0
-    if (moduleMedical && permissions?.manage_medical_inventory) {
-      const thirtyDaysOutDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      const { count } = await adminClient.from('medical_stock_lots').select('id', { count: 'exact', head: true }).eq('department_id', user.department_id).eq('active', true).gt('quantity_remaining', 0).lte('expiration_date', thirtyDaysOutDate)
-      medicalAlertBadge = count ?? 0
-    }
-    inboxPendingCount = (pendingPermits?.length ?? 0) + (pendingRequests?.length ?? 0) + medicalAlertBadge
+    const medicalAlertBadge = counts.module_medical && permissions?.manage_medical_inventory ? counts.medical_alerts : 0
+    inboxPendingCount =
+      (permissions?.review_burn_permits ? counts.pending_permits : 0) +
+      (permissions?.manage_public_inbox ? counts.pending_requests : 0) +
+      medicalAlertBadge
   }
 
   const opsBadge = announcementUnreadCount > 0 ? announcementUnreadCount : undefined

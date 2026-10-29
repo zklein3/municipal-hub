@@ -38,10 +38,16 @@ async function measure(page, name, go) {
   await go(); await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {})
   const wall = Date.now() - t0
   await page.waitForTimeout(1500) // let trailing log lines land
+  // Browser navigation timing: how long until the server answered vs. until the page was usable
+  const nav = await page.evaluate(() => {
+    const n = performance.getEntriesByType('navigation')[0]
+    return n ? { ttfb: Math.round(n.responseStart), html: Math.round(n.responseEnd), dcl: Math.round(n.domContentLoadedEventEnd), load: Math.round(n.loadEventEnd) } : null
+  })
   const { rows } = readSince(start)
   const total = rows.reduce((s, r) => s + r.ms, 0)
   const top = [...rows].sort((a, b) => b.ms - a.ms).slice(0, 3).map(r => `${r.ms}ms ${r.what.replace('rest/v1/', '')}`).join('; ')
-  console.log(`${name.padEnd(18)} wall ${String(wall).padStart(5)}ms | ${String(rows.length).padStart(3)} requests, ${String(total).padStart(5)}ms summed | slowest: ${top}`)
+  const navStr = nav ? `server ${String(nav.ttfb).padStart(5)}ms, page ready ${String(nav.dcl).padStart(5)}ms, loaded ${String(nav.load).padStart(5)}ms` : 'no nav timing'
+  console.log(`${name.padEnd(18)} ${navStr} | ${String(rows.length).padStart(3)} db requests, ${String(total).padStart(5)}ms summed | idle-wall ${wall}ms | slowest: ${top}`)
 }
 
 const { browser, page } = await launch()
