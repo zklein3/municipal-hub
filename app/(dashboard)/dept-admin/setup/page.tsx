@@ -26,38 +26,32 @@ export default async function SetupPage({
 
   const department_id = ctx.departmentId
 
-  // Fetch department name
-  const { data: deptData } = await adminClient
-    .from('departments')
-    .select('id, name, module_iso, module_medical, module_medical_controlled')
-    .eq('id', department_id)
-    .single()
-  const department = { id: deptData?.id ?? department_id, name: deptData?.name ?? 'Your Department' }
-  const moduleMedical = deptData?.module_medical ?? false
-
-  const { data: medicalSupplyTypesFull } = moduleMedical
-    ? await adminClient
-        .from('medical_supply_types')
-        .select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures, notes, active')
-        .eq('department_id', department_id)
-        .order('category')
-        .order('name')
-    : { data: [] }
-  const medicalSupplyTypes = (medicalSupplyTypesFull ?? []).filter(s => s.active)
-
-  // Parallel fetches for all setup data
+  // Round 1: everything that only needs the department id, in one trip
   const [
+    { data: deptData },
+    { data: medicalSupplyTypesFull },
     { data: stations },
     { data: apparatusRaw },
     { data: apparatusTypes },
     { data: compartmentsRaw },
-    { data: assignmentsRaw },
     { data: apparatusForCompartments },
     { data: categories },
     { data: items },
     { data: deptPersonnelRaw },
     { data: roles },
+    { data: presets },
+    { data: customFieldDefsRaw },
   ] = await Promise.all([
+    adminClient.from('departments')
+      .select('id, name, module_iso, module_medical, module_medical_controlled')
+      .eq('id', department_id)
+      .single(),
+    // Only used when the medical module is on (decided once the department row is back)
+    adminClient.from('medical_supply_types')
+      .select('id, name, category, unit_of_measure, is_controlled, tracks_expiration, required_signatures, notes, active')
+      .eq('department_id', department_id)
+      .order('category')
+      .order('name'),
     adminClient.from('stations')
       .select('id, station_number, station_name, address_line_1, city, state, postal_code, active, notes')
       .eq('department_id', department_id)
@@ -74,9 +68,6 @@ export default async function SetupPage({
       .select('id, compartment_code, compartment_name, sort_order, active')
       .eq('department_id', department_id)
       .order('sort_order', { ascending: true, nullsFirst: false }),
-    adminClient.from('apparatus_compartments')
-      .select('compartment_name_id, apparatus_id')
-      .eq('active', true),
     adminClient.from('apparatus')
       .select('id, unit_number, apparatus_name')
       .eq('department_id', department_id)
@@ -98,7 +89,19 @@ export default async function SetupPage({
       .select('id, name, is_officer, sort_order')
       .eq('active', true)
       .order('sort_order'),
+    // Compartment presets (their contents come in round 2)
+    adminClient.from('compartment_presets')
+      .select('id, name, default_code, description, sort_order, active')
+      .eq('department_id', department_id),
+    adminClient.from('item_custom_field_definitions')
+      .select('id, item_id, field_label, field_order')
+      .eq('department_id', department_id)
+      .order('field_order'),
   ])
+
+  const department = { id: deptData?.id ?? department_id, name: deptData?.name ?? 'Your Department' }
+  const moduleMedical = deptData?.module_medical ?? false
+  const medicalSupplyTypes = moduleMedical ? (medicalSupplyTypesFull ?? []).filter(s => s.active) : []
 
   // Build apparatus with type + station lookups
   const typeMap = Object.fromEntries((apparatusTypes ?? []).map(t => [t.id, t.name]))
@@ -109,25 +112,54 @@ export default async function SetupPage({
     station: a.station_id ? (stationMap[a.station_id] ?? null) : null,
   }))
 
-
-  // Compartment presets + their contents, and every truck's compartments (deploy targets)
+  // Round 2: everything that needs an id list from round 1
   const apparatusIds = (apparatusRaw ?? []).map(a => a.id)
-  const [{ data: presets }, { data: truckCompartmentLinks }] = await Promise.all([
-    adminClient.from('compartment_presets')
-      .select('id, name, default_code, description, sort_order, active')
-      .eq('department_id', department_id),
+  const presetIds = (presets ?? []).map(p => p.id)
+  const personnelIds = (deptPersonnelRaw ?? []).map(dp => dp.personnel_id).filter(Boolean)
+  const assetItemIds = (items ?? []).filter(i => i.tracks_assets).map(i => i.id)
+  const inspectionItemIds = (items ?? []).filter(i => i.requires_inspection).map(i => i.id)
+  const [
+    { data: truckCompartmentLinks },
+    { data: presetItems }, { data: presetMeds }, { data: presetTypes },
+    { data: personnelData },
+    { data: assets },
+    { data: templates },
+  ] = await Promise.all([
+    // Every truck's compartments (deploy targets) — also what the compartment usage counts come from
     apparatusIds.length > 0
       ? adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', apparatusIds).eq('active', true)
       : Promise.resolve({ data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }),
+    presetIds.length > 0
+      ? adminClient.from('compartment_preset_items').select('preset_id, item_id, expected_quantity, minimum_quantity').in('preset_id', presetIds)
+      : Promise.resolve({ data: [] as { preset_id: string; item_id: string; expected_quantity: number; minimum_quantity: number | null }[] }),
+    presetIds.length > 0
+      ? adminClient.from('compartment_preset_medications').select('preset_id, supply_type_id, par_level').in('preset_id', presetIds)
+      : Promise.resolve({ data: [] as { preset_id: string; supply_type_id: string; par_level: number }[] }),
+    presetIds.length > 0
+      ? adminClient.from('compartment_preset_types').select('preset_id, apparatus_type_id').in('preset_id', presetIds)
+      : Promise.resolve({ data: [] as { preset_id: string; apparatus_type_id: string }[] }),
+    // Personnel names
+    personnelIds.length > 0
+      ? adminClient.from('personnel').select('id, first_name, last_name, email, signup_status').in('id', personnelIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string | null; last_name: string | null; email: string | null; signup_status: string | null }[] }),
+    // Assets for tracks_assets items
+    assetItemIds.length > 0
+      ? adminClient.from('item_assets')
+          .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes, apparatus_id, custom_field_values')
+          .eq('department_id', department_id)
+          .in('item_id', assetItemIds)
+          .order('asset_tag')
+      : Promise.resolve({ data: [] as any[] }),
+    // Inspection templates for inspectable items
+    inspectionItemIds.length > 0
+      ? adminClient.from('item_inspection_templates')
+          .select('id, item_id, template_name, template_description, active')
+          .eq('department_id', department_id)
+          .in('item_id', inspectionItemIds)
+          .order('template_name')
+      : Promise.resolve({ data: [] as any[] }),
   ])
-  const presetIds = (presets ?? []).map(p => p.id)
-  const [{ data: presetItems }, { data: presetMeds }, { data: presetTypes }] = presetIds.length > 0
-    ? await Promise.all([
-        adminClient.from('compartment_preset_items').select('preset_id, item_id, expected_quantity, minimum_quantity').in('preset_id', presetIds),
-        adminClient.from('compartment_preset_medications').select('preset_id, supply_type_id, par_level').in('preset_id', presetIds),
-        adminClient.from('compartment_preset_types').select('preset_id, apparatus_type_id').in('preset_id', presetIds),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }]
+
   const compartmentNameById = Object.fromEntries((compartmentsRaw ?? []).map(c => [c.id, c]))
   const truckCompartments = (truckCompartmentLinks ?? []).map(c => ({
     id: c.id,
@@ -136,20 +168,15 @@ export default async function SetupPage({
     name: compartmentNameById[c.compartment_name_id]?.compartment_name ?? null,
   }))
 
-  // Build compartment assignment maps
+  // Compartment assignment maps (which trucks use each compartment name)
   const usageMap: Record<string, number> = {}
   const assignmentMap: Record<string, string[]> = {}
-  for (const a of assignmentsRaw ?? []) {
+  for (const a of truckCompartmentLinks ?? []) {
     usageMap[a.compartment_name_id] = (usageMap[a.compartment_name_id] ?? 0) + 1
     if (!assignmentMap[a.compartment_name_id]) assignmentMap[a.compartment_name_id] = []
     assignmentMap[a.compartment_name_id].push(a.apparatus_id)
   }
 
-  // Fetch personnel names (sequential — needs IDs first)
-  const personnelIds = (deptPersonnelRaw ?? []).map(dp => dp.personnel_id).filter(Boolean)
-  const { data: personnelData } = personnelIds.length > 0
-    ? await adminClient.from('personnel').select('id, first_name, last_name, email, signup_status').in('id', personnelIds)
-    : { data: [] }
   const personnelMap = Object.fromEntries((personnelData ?? []).map(p => [p.id, p]))
   const roleMap = Object.fromEntries((roles ?? []).map(r => [r.id, r]))
   const personnel = (deptPersonnelRaw ?? []).map(dp => ({
@@ -165,22 +192,6 @@ export default async function SetupPage({
     personnel_roles: dp.role_id ? (roleMap[dp.role_id] ?? null) : null,
   }))
 
-  // Fetch assets for tracks_assets items
-  const assetItemIds = (items ?? []).filter(i => i.tracks_assets).map(i => i.id)
-  const [{ data: assets }, { data: customFieldDefsRaw }] = await Promise.all([
-    assetItemIds.length > 0
-      ? adminClient.from('item_assets')
-          .select('id, item_id, asset_tag, serial_number, in_service_date, status, active, notes, apparatus_id, custom_field_values')
-          .eq('department_id', department_id)
-          .in('item_id', assetItemIds)
-          .order('asset_tag')
-      : Promise.resolve({ data: [] }),
-    adminClient.from('item_custom_field_definitions')
-      .select('id, item_id, field_label, field_order')
-      .eq('department_id', department_id)
-      .order('field_order'),
-  ])
-
   // Group custom field defs by item_id
   const customFieldDefs: Record<string, { id: string; item_id: string; field_label: string; field_order: number }[]> = {}
   for (const def of customFieldDefsRaw ?? []) {
@@ -188,17 +199,7 @@ export default async function SetupPage({
     customFieldDefs[def.item_id].push(def)
   }
 
-  // Fetch inspection templates + steps for inspectable items
-  const inspectionItemIds = (items ?? []).filter(i => i.requires_inspection).map(i => i.id)
-  const { data: templates } = inspectionItemIds.length > 0
-    ? await adminClient
-        .from('item_inspection_templates')
-        .select('id, item_id, template_name, template_description, active')
-        .eq('department_id', department_id)
-        .in('item_id', inspectionItemIds)
-        .order('template_name')
-    : { data: [] }
-
+  // Round 3: inspection template steps (need the template ids)
   const templateIds = (templates ?? []).map(t => t.id)
   const { data: steps } = templateIds.length > 0
     ? await adminClient
