@@ -64,6 +64,8 @@ export default function MedicalCompartmentsSection({
   const [loading, setLoading] = useState(false)
   const [editingParId, setEditingParId] = useState<string | null>(null)
   const [parDraft, setParDraft] = useState('')
+  // Show a saved PAR immediately; router.refresh() takes a few seconds to bring the new value back
+  const [parOverrides, setParOverrides] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(compartmentStorerooms[0]?.id ?? null)
@@ -130,7 +132,8 @@ export default function MedicalCompartmentsSection({
               </p>
             ) : (
               <div className="flex flex-col gap-2">
-                {inv.map(item => {
+                {inv.map(rawItem => {
+                  const item = { ...rawItem, par_level: parOverrides[rawItem.id] ?? rawItem.par_level }
                   const supply = supplyMap[item.supply_type_id]
                   if (!supply) return null
                   const lots = lotsFor(item.id)
@@ -156,7 +159,7 @@ export default function MedicalCompartmentsSection({
                             {total} {supply.unit_of_measure} · {editingParId === item.id ? (
                               <span className="inline-flex items-center gap-1">PAR
                                 <input type="number" min="0" value={parDraft} onChange={e => setParDraft(e.target.value)} autoFocus className="w-14 rounded border border-zinc-300 px-1 py-0.5 text-xs" />
-                                <button onClick={async () => { setLoading(true); const r = await updateStoreroomPar(item.id, parseInt(parDraft) || 0); setLoading(false); if (r?.error) { setError(r.error); return } setEditingParId(null); router.refresh() }} className="font-semibold text-red-700 hover:underline">Save</button>
+                                <button onClick={async () => { setLoading(true); const newPar = parseInt(parDraft) || 0; const r = await updateStoreroomPar(item.id, newPar); setLoading(false); if (r?.error) { setError(r.error); return } setParOverrides(o => ({ ...o, [item.id]: newPar })); setEditingParId(null); router.refresh() }} className="font-semibold text-red-700 hover:underline">Save</button>
                                 <button onClick={() => setEditingParId(null)} className="hover:underline">Cancel</button>
                               </span>
                             ) : isAdmin ? (

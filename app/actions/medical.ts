@@ -769,7 +769,8 @@ export async function updateStoreroomPar(inventory_id: string, par_level: number
 
   if (dbErr) { await logError(dbErr.message, '/dept-admin/medical'); return { error: dbErr.message } }
   revalidatePath('/medical')
-  revalidatePath('/medical')
+  revalidatePath('/equipment/[id]', 'page')
+  revalidatePath('/apparatus/[id]', 'page')
   return { success: true }
 }
 
