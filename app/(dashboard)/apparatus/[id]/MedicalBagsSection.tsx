@@ -92,6 +92,27 @@ export default function MedicalBagsSection({
   rawBags.forEach(b => walk(b, 0)) // anything not reached (e.g. a nesting cycle) still gets a tab
 
   const [expandedBagId, setExpandedBagId] = useState<string | null>(bags[0]?.id ?? null)
+
+  // One bag per line; the bags inside it sit on the line(s) beneath, indented, so the outer bag
+  // reads as primary and you can see at a glance what is in the box.
+  const tabCls = (id: string) =>
+    `rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${expandedBagId === id ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'}`
+  const childrenOf = (bag: Bag) => bags.filter(c => c.location_label === `Inside ${bag.name}` && bagDepth[c.id] === bagDepth[bag.id] + 1)
+  function BagTabGroup({ bag, depth }: { bag: Bag; depth: number }) {
+    const kids = childrenOf(bag)
+    return (
+      <div>
+        {depth === 0 && <button onClick={() => setExpandedBagId(bag.id)} className={tabCls(bag.id)}>{bag.name}</button>}
+        {kids.length > 0 && (
+          <div className="mt-2 ml-4 flex flex-wrap items-center gap-2 border-l-2 border-zinc-200 pl-3">
+            <span className="text-xs text-zinc-400">Inside {bag.name}:</span>
+            {kids.map(k => <button key={k.id} onClick={() => setExpandedBagId(k.id)} className={tabCls(k.id)}>{k.name}</button>)}
+          </div>
+        )}
+        {kids.filter(k => childrenOf(k).length > 0).map(k => <BagTabGroup key={k.id} bag={k} depth={depth + 1} />)}
+      </div>
+    )
+  }
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
 
 
@@ -133,13 +154,8 @@ export default function MedicalBagsSection({
 
       {/* Bag tabs */}
       {bags.length > 1 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {bags.map(bag => (
-            <button key={bag.id} onClick={() => setExpandedBagId(bag.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${expandedBagId === bag.id ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'}`}>
-              {bagDepth[bag.id] > 0 ? '↳ ' : ''}{bag.name}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3 mb-4">
+          {bags.filter(b => bagDepth[b.id] === 0).map(root => <BagTabGroup key={root.id} bag={root} depth={0} />)}
         </div>
       )}
 
