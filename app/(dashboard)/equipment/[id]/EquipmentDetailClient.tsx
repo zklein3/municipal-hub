@@ -322,8 +322,11 @@ export default function EquipmentDetailClient({
       </div>
 
       <HelpText className="mb-4">
-        This is a read-only view of what's assigned to this apparatus, by compartment. To actually inspect the
-        items or move them around, use "Inspect Inventory" — this page won't record anything on its own.
+        This is everything assigned to this apparatus, by compartment. Admins can edit it here: the compartments and
+        bags started from premade presets and bag types, but on this truck you can add or remove items, change
+        quantities, rename or remove a compartment, and add a bag with "+ Add Bag". To change the premade versions
+        themselves, use Dept Admin → Setup → Presets (compartments) and Medical → Bags → Manage (bag types). Checking
+        items off is done through "Inspect Inventory" — editing here doesn't record an inspection.
       </HelpText>
 
       {/* Action row */}

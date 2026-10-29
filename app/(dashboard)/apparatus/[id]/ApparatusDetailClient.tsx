@@ -9,6 +9,7 @@ import { upsertApparatusIsoSpecs, savePumpTest, getPumpTestDocUrl } from '@/app/
 import MedicalBagsSection from './MedicalBagsSection'
 import QrPrintLabel from '@/components/QrPrintLabel'
 import BackButton from '@/components/BackButton'
+import HelpText from '@/components/HelpText'
 
 interface Station {
   id: string
@@ -640,6 +641,13 @@ export default function ApparatusDetailClient({
           </div>
         </div>
         {compError && <Alert type="error" message={compError} />}
+
+        <HelpText className="mb-3">
+          The compartments and bags here started from premade presets and bag types, but they are yours to change.
+          Add, remove, or edit what is in a compartment on this truck from "View →" (its Inventory page). Change the
+          premade compartment presets in Dept Admin → Setup → Presets, and the premade bag types in Medical → Bags
+          → Manage. "+ Add Bag" puts a bag in a compartment.
+        </HelpText>
 
         {compartments.length === 0 ? (
           <p className="text-sm text-zinc-400 mb-4">No compartments assigned to this apparatus yet.</p>

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
 import MedicalStoreClient from './MedicalStoreClient'
+import HelpText from '@/components/HelpText'
 import MedicalModeBar, { type MedicalMode } from './MedicalModeBar'
 import RestockClient from './RestockClient'
 import MedicalAdminClient from '../dept-admin/medical/MedicalAdminClient'
@@ -103,6 +104,15 @@ export default async function MedicalPage({
           </p>
         </div>
         <MedicalModeBar mode={mode} showSetup={isAdmin} />
+        {mode === 'bags' && (
+          <HelpText className="mb-4">
+            The bag types here (Trauma Box, Med Bag, and so on) started as premade starters, but they are yours to
+            change. Tap Manage on a bag type to edit its medications, equipment, and any bags nested inside it — for
+            example, remove the Med Bag from the Trauma Box if yours doesn't carry one. Changes apply to bags you add
+            afterwards; use "Bags already deployed" below a bag type to bring bags already on trucks up to date. To put
+            a bag in a truck compartment, tap "+ Add Bag" on the compartment of the apparatus page.
+          </HelpText>
+        )}
         <MedicalAdminClient {...data} departmentId={department_id} fixedTab={mode === 'types' ? 'supplies' : 'templates'} />
       </div>
     )
