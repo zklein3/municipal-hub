@@ -7,6 +7,25 @@ import { logError } from '@/lib/logger'
 import { redirect } from 'next/navigation'
 import { SELECTED_DEPARTMENT_COOKIE, SYS_ADMIN_SENTINEL } from '@/lib/auth-cookies'
 
+// Finds the personnel row for a signed-in auth user. The id comes from the verified session, so this
+// uses the service role, and it retries once: a momentary database hiccup used to be reported as
+// "No personnel record found for this account" (the lookup's error was ignored). failed: true means the
+// lookup itself errored — distinct from a genuinely missing record (personnel: null, failed: false).
+async function findPersonnelByAuthId(authUserId: string) {
+  const admin = createAdminClient()
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { data, error: dbErr } = await admin
+      .from('personnel')
+      .select('signup_status, id, is_sys_admin')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle()
+    if (!dbErr) return { personnel: data, failed: false }
+    await logError(dbErr, '/login', { metadata: { stage: 'personnel lookup', attempt } })
+    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 400))
+  }
+  return { personnel: null, failed: true }
+}
+
 // ─── Sign In ─────────────────────────────────────────────────────────────────
 export async function signIn(formData: FormData) {
   const email = formData.get('email') as string
@@ -25,12 +44,8 @@ export async function signIn(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Authentication failed.' }
 
-  const { data: personnel } = await supabase
-    .from('personnel')
-    .select('signup_status, id, is_sys_admin')
-    .eq('auth_user_id', user.id)
-    .single()
-
+  const { personnel, failed } = await findPersonnelByAuthId(user.id)
+  if (failed) return { error: 'We could not reach the server just now. Please try signing in again.' }
   if (!personnel) {
     await logError('No personnel record found', '/login', { metadata: { email } })
     return { error: 'No personnel record found for this account.' }

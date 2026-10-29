@@ -21,6 +21,17 @@ const PAGES = [
   ['inspections', '/inspections'],
   ['events', '/events'],
   ['personnel', '/personnel'],
+  ['operations', '/operations'],
+  ['incidents', '/incidents'],
+  ['training', '/training'],
+  ['apparatus', '/apparatus'],
+  ['announcements', '/announcements'],
+  ['inbox', '/inbox'],
+  ['reports hub', '/reports'],
+  ['officer hub', '/officer'],
+  ['fuel', '/fuel'],
+  ['iso hub', '/iso'],
+  ['station storage', '/equipment/storage'],
 ]
 const TRUCK = process.env.PERF_TRUCK || 'Engine 1'
 
@@ -54,9 +65,11 @@ const { browser, page } = await launch()
 try {
   await loginToDept(page, process.env.PERF_DEPT || 'QA Test Department')
   for (const [name, path] of PAGES) await measure(page, name, () => page.goto(`${BASE}${path}`))
-  let truckUrl
-  await openTruck(page, TRUCK); truckUrl = page.url()
-  await measure(page, `truck (${TRUCK})`, () => page.goto(truckUrl))
+  if (!process.env.PERF_NO_TRUCK) {
+    let truckUrl
+    await openTruck(page, TRUCK); truckUrl = page.url()
+    await measure(page, `truck (${TRUCK})`, () => page.goto(truckUrl))
+  }
 } finally {
   await browser.close()
 }
