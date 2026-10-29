@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
 import EquipmentDetailClient from './EquipmentDetailClient'
-import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
 import { getMedicalSupplyStatus, type MedicalSupplyStatus } from '@/lib/medical-status'
 
 export default async function EquipmentDetailPage({
@@ -396,6 +395,24 @@ export default async function EquipmentDetailPage({
         backHref={from}
         medicalSupplyTypes={medicalSupplyTypes}
         medicationsByCompartment={medicationsByCompartment}
+        bagSection={medicalBagData ? {
+          bags: medicalBagData.bags,
+          bagEquipment: medicalBagData.bagEquipment,
+          compartmentOptions: medicalBagData.compartmentOptions,
+          bagInventory: medicalBagData.bagInventory,
+          bagLots: medicalBagData.bagLots,
+          supplyTypes: medicalBagData.supplyTypes,
+          deptStorerooms: medicalBagData.deptStorerooms,
+          storeroomInventory: medicalBagData.storeroomInventory,
+          storeroomLots: medicalBagData.storeroomLots,
+          units: medicalBagData.units,
+          personnel: medicalBagData.personnel,
+          bagTemplates: medicalBagData.bagTemplates,
+          apparatusId: medicalBagData.apparatusId,
+          isAdmin,
+          isOfficerOrAbove,
+          myPersonnelId: me.id,
+        } : null}
         // Medical rows (Use / Restock / Transfer) render inside each compartment card now,
         // instead of a separate section at the bottom of the page.
         medicalSection={medicalCompartmentData && medicalCompartmentData.compartmentStorerooms.length > 0 ? {
@@ -405,28 +422,6 @@ export default async function EquipmentDetailPage({
           myPersonnelId: me.id,
         } : null}
       />
-      {medicalBagData && (
-        <div className="max-w-2xl mt-2">
-          <MedicalBagsSection
-            bags={medicalBagData.bags}
-            bagEquipment={medicalBagData.bagEquipment}
-            compartmentOptions={medicalBagData.compartmentOptions}
-            bagInventory={medicalBagData.bagInventory}
-            bagLots={medicalBagData.bagLots}
-            supplyTypes={medicalBagData.supplyTypes}
-            deptStorerooms={medicalBagData.deptStorerooms}
-            storeroomInventory={medicalBagData.storeroomInventory}
-            storeroomLots={medicalBagData.storeroomLots}
-            units={medicalBagData.units}
-            personnel={medicalBagData.personnel}
-            bagTemplates={medicalBagData.bagTemplates}
-            apparatusId={medicalBagData.apparatusId}
-            isAdmin={isAdmin}
-            isOfficerOrAbove={isOfficerOrAbove}
-            myPersonnelId={me.id}
-          />
-        </div>
-      )}
     </div>
   )
 }

@@ -10,7 +10,7 @@ import RestockModal from '../../medical/forms/RestockModal'
 import TransferOutModal from '../../medical/forms/TransferOutModal'
 import MoveBagPanel from './MoveBagPanel'
 
-interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null; qr_code?: string | null }
+interface Bag { id: string; name: string; template_id: string | null; inventory_mode: string | null; location_label?: string | null; qr_code?: string | null; compartment_id?: string | null; parent_storeroom_id?: string | null }
 interface BagEquipment { id: string; storeroom_id: string; item_name: string; expected_quantity: number }
 interface InventoryRow { id: string; storeroom_id: string; supply_type_id: string; par_level: number }
 interface Lot {
@@ -47,11 +47,16 @@ function getStatus(total: number, par: number, lots: Lot[]): 'expired' | 'expiri
 }
 
 export default function MedicalBagsSection({
-  bags: rawBags, bagEquipment = [], compartmentOptions = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
+  bags: allBags, scope, embedded = false, bagEquipment = [], compartmentOptions = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
   storeroomInventory, storeroomLots, units, personnel,
   bagTemplates, apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
 }: {
   bags: Bag[]
+  // Show only the bags inside one compartment (a bag belongs to the compartment its outermost bag is in,
+  // so nested bags travel with their box), or only the bags that aren't in any compartment.
+  scope?: 'unpinned' | { compartmentId: string }
+  // Rendered inside a compartment card instead of as its own card.
+  embedded?: boolean
   bagEquipment?: BagEquipment[]
   compartmentOptions?: { id: string; name: string }[]
   bagInventory: InventoryRow[]
@@ -72,6 +77,18 @@ export default function MedicalBagsSection({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const byId = Object.fromEntries(allBags.map(b => [b.id, b]))
+  const rootOf = (b: Bag): Bag => {
+    let cur = b
+    const seen = new Set<string>()
+    while (cur.parent_storeroom_id && byId[cur.parent_storeroom_id] && !seen.has(cur.id)) { seen.add(cur.id); cur = byId[cur.parent_storeroom_id] }
+    return cur
+  }
+  const rawBags = !scope ? allBags : allBags.filter(b => {
+    const root = rootOf(b)
+    return scope === 'unpinned' ? !root.compartment_id : root.compartment_id === scope.compartmentId
+  })
 
   // Tab order is the nesting tree: a bag first, then the bags inside it (marked ↳), so the outer
   // bag reads as the primary one. A bag nested inside a bag we don't have is treated as top level.
@@ -133,14 +150,24 @@ export default function MedicalBagsSection({
 
   const inputCls = "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
 
+  // Nothing to show in this scope (e.g. a compartment with no bags). The "no bags on this truck" card
+  // is only for the unscoped view or the truck-level section when the truck truly has none.
+  if (scope && rawBags.length === 0 && !(scope === 'unpinned' && allBags.length === 0)) return null
+
   return (
-    <div className="rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-zinc-900">Medical Bags</h2>
-        {isAdmin && (
-          <a href="/medical?mode=bags" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage in Medical →</a>
-        )}
-      </div>
+    <div className={embedded ? 'px-5 py-3 border-t border-zinc-100 bg-zinc-50/50' : 'rounded-xl bg-white shadow-sm border border-zinc-200 p-5 mb-5'}>
+      {embedded ? (
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Bags in this compartment</p>
+      ) : (
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-zinc-900">
+            {scope === 'unpinned' && allBags.length > rawBags.length ? 'Bags not in a compartment' : 'Medical Bags'}
+          </h2>
+          {isAdmin && (
+            <a href="/medical?mode=bags" className="text-xs font-semibold text-zinc-400 hover:text-zinc-700">Manage in Medical →</a>
+          )}
+        </div>
+      )}
 
       {success && <div className="mb-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 border border-green-200">{success}</div>}
       {error && <div className="mb-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200">{error}</div>}

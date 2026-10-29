@@ -2,6 +2,7 @@
 
 import { useState, type ComponentProps } from 'react'
 import MedicalCompartmentsSection from '@/app/(dashboard)/apparatus/[id]/MedicalCompartmentsSection'
+import MedicalBagsSection from '@/app/(dashboard)/apparatus/[id]/MedicalBagsSection'
 import { AddCompartmentPanel, CompartmentQrControl, RemoveCompartmentButton } from './TruckCompartmentControls'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -104,8 +105,11 @@ export default function EquipmentDetailClient({
   medicalSupplyTypes,
   medicationsByCompartment,
   medicalSection = null,
+  bagSection = null,
 }: {
   medicalSection?: Omit<ComponentProps<typeof MedicalCompartmentsSection>, 'onlyCompartmentId' | 'embedded'> | null
+  // Bags sit inside the compartment they're pinned to; only bags not in any compartment get their own section below.
+  bagSection?: Omit<ComponentProps<typeof MedicalBagsSection>, 'scope' | 'embedded'> | null
   apparatus: Apparatus
   compartments: Compartment[]
   allItems: Item[]
@@ -524,7 +528,7 @@ export default function EquipmentDetailClient({
 
               {/* Item List */}
               {c.items.length === 0 && (medicationsByCompartment[c.id] ?? []).length === 0 ? (
-                <div className="px-5 py-4 text-sm text-zinc-400">No items assigned to this compartment.</div>
+                !bagSection?.bags.some(b => b.compartment_id === c.id) && <div className="px-5 py-4 text-sm text-zinc-400">No items assigned to this compartment.</div>
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {c.items.map(item => (
@@ -660,8 +664,16 @@ export default function EquipmentDetailClient({
                   ))}
                 </div>
               )}
+              {bagSection && <MedicalBagsSection {...bagSection} scope={{ compartmentId: c.id }} embedded />}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Bags that aren't in any compartment */}
+      {bagSection && (
+        <div className="max-w-2xl mt-4">
+          <MedicalBagsSection {...bagSection} scope="unpinned" />
         </div>
       )}
 
