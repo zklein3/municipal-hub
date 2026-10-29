@@ -9,7 +9,7 @@ const BASE_URL = 'https://municipal-hub.com'
 type BatchType = 'asset' | 'compartment' | 'apparatus'
 
 // Normalized shape all three sources map into for rendering.
-type CardItem = { id: string; code: string; primary: string; secondary: string | null }
+type CardItem = { id: string; code: string; primary: string; secondary: string | null; kind?: BatchType | 'bag' }
 
 type Format = 'sheet' | 'avery5163' | 'avery5164' | 'avery5160'
 
@@ -90,7 +90,7 @@ function QrCard({ item, type, groupLabel, qrSize, cardStyle, isRow }: {
   item: CardItem; type: BatchType; groupLabel: string; qrSize: number
   cardStyle: React.CSSProperties; isRow: boolean
 }) {
-  const qrValue = `${BASE_URL}/scan?type=${type}&code=${encodeURIComponent(item.code)}`
+  const qrValue = `${BASE_URL}/scan?type=${item.kind ?? type}&code=${encodeURIComponent(item.code)}`
   const tagSize = isRow ? '11px' : '13px'
   const metaSize = isRow ? '9px' : '10px'
   return (
@@ -141,10 +141,14 @@ function BatchContent() {
         .then(r => r.json())
         .then(data => {
           if (data.error) { setError(data.error); return }
-          setItems(data.compartments.map((c: { id: string; qr_code: string; compartment_code: string; compartment_name: string }) => ({
+          const comps: CardItem[] = data.compartments.map((c: { id: string; qr_code: string; compartment_code: string; compartment_name: string }) => ({
             id: c.id, code: c.qr_code, primary: c.compartment_code, secondary: c.compartment_name || null,
-          })))
-          setGroupLabel(`${data.unit_number} — Compartments`)
+          }))
+          const bags: CardItem[] = (data.bags ?? []).map((b: { id: string; qr_code: string; name: string; compartment_code: string }) => ({
+            id: b.id, code: b.qr_code, primary: b.name, secondary: b.compartment_code ? `in ${b.compartment_code}` : null, kind: 'bag' as const,
+          }))
+          setItems([...comps, ...bags])
+          setGroupLabel(`${data.unit_number} — Compartments & Bags`)
         })
         .catch(() => setError('Failed to load compartments.'))
         .finally(() => setLoading(false))

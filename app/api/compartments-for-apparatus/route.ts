@@ -59,5 +59,27 @@ export async function GET(req: NextRequest) {
     })
     .sort((a, b) => a.compartment_code.localeCompare(b.compartment_code))
 
-  return NextResponse.json({ unit_number: apparatus.unit_number, compartments })
+  // Bags pinned to one of this truck's compartments (nested bags included) print on the same sheet.
+  const compartmentIds = (comps ?? []).map(c => c.id)
+  const { data: bagRows } = compartmentIds.length
+    ? await admin
+        .from('medical_storerooms')
+        .select('id, name, qr_code, compartment_id, bag_number')
+        .eq('department_id', ctx.departmentId)
+        .eq('container_kind', 'bag')
+        .eq('active', true)
+        .not('qr_code', 'is', null)
+        .in('compartment_id', compartmentIds)
+    : { data: [] }
+  const codeByCompartment = new Map(compartments.map(c => [c.id, c.compartment_code]))
+  const bags = (bagRows ?? [])
+    .map(b => ({
+      id: b.id,
+      qr_code: b.qr_code as string,
+      name: b.name as string,
+      compartment_code: codeByCompartment.get(b.compartment_id) ?? '',
+    }))
+    .sort((a, b) => a.compartment_code.localeCompare(b.compartment_code) || a.name.localeCompare(b.name))
+
+  return NextResponse.json({ unit_number: apparatus.unit_number, compartments, bags })
 }

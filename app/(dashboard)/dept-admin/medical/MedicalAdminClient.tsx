@@ -113,6 +113,13 @@ export default function MedicalAdminClient({
   const [editingBagCompartmentId, setEditingBagCompartmentId] = useState<string | null>(null)
   const [bagCompartmentDraft, setBagCompartmentDraft] = useState('')
 
+  // Arrived from a truck compartment's "+ Add Bag": ?apparatus=<id>&compartment=<id> pre-selects where the bag goes.
+  const quickApparatus = apparatus.find(a => a.id === searchParams.get('apparatus'))
+  const quickCompartment = apparatusCompartments.find(c => c.id === searchParams.get('compartment') && c.apparatus_id === quickApparatus?.id)
+  const quickTarget = quickApparatus && quickCompartment ? { apparatus: quickApparatus, compartment: quickCompartment } : null
+  const [quickTemplateId, setQuickTemplateId] = useState('')
+  const [quickName, setQuickName] = useState('')
+
   // Storeroom inventory state
   const [expandedStoreroomId, setExpandedStoreroomId] = useState<string | null>(searchParams.get('storeroom'))
 
@@ -541,6 +548,40 @@ export default function MedicalAdminClient({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {quickTarget && (
+            <div className="mb-6 rounded-xl bg-red-50 border border-red-200 p-5 flex flex-col gap-3">
+              <div>
+                <p className="text-sm font-semibold text-zinc-900">
+                  Add a bag to {quickTarget.apparatus.unit_number} — {quickTarget.compartment.compartment_code}
+                  {quickTarget.compartment.compartment_name ? ` (${quickTarget.compartment.compartment_name})` : ''}
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5">Pick the bag type. It will be placed in this compartment.</p>
+              </div>
+              <select value={quickTemplateId} onChange={e => { setQuickTemplateId(e.target.value); setQuickName(bagTemplates.find(t => t.id === e.target.value)?.name ?? '') }} className={inputCls}>
+                <option value="">Select a bag type...</option>
+                {bagTemplates.filter(t => t.active).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              {quickTemplateId && (
+                <input type="text" value={quickName} onChange={e => setQuickName(e.target.value)} className={inputCls} placeholder="Bag name" />
+              )}
+              <div className="flex items-center gap-3">
+                <button disabled={loading || !quickTemplateId} onClick={async () => {
+                  const r = await wrap(() => assignBagToApparatus({
+                    template_id: quickTemplateId,
+                    apparatus_id: quickTarget.apparatus.id,
+                    name: quickName || bagTemplates.find(t => t.id === quickTemplateId)?.name || 'Bag',
+                    inventory_mode: 'standard',
+                    compartment_id: quickTarget.compartment.id,
+                  }))
+                  if (!r?.error) router.push(`/equipment/${quickTarget.apparatus.id}`)
+                }} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                  {loading ? 'Adding...' : 'Add bag and return to truck'}
+                </button>
+                <a href={`/equipment/${quickTarget.apparatus.id}`} className="text-xs text-zinc-500 hover:text-zinc-700">Cancel — back to truck</a>
+              </div>
             </div>
           )}
 

@@ -456,6 +456,14 @@ export default function EquipmentDetailClient({
                       {assigningTo === c.id ? 'Cancel' : '+ Add Item'}
                     </button>
                   )}
+                  {bagSection && canManageDeptSetup && (
+                    <a
+                      href={`/medical?mode=bags&apparatus=${apparatus.id}&compartment=${c.id}`}
+                      className="text-xs font-semibold text-red-600 hover:text-red-800"
+                    >
+                      + Add Bag
+                    </a>
+                  )}
                   {canManageDeptSetup && (
                     <RemoveCompartmentButton compartmentId={c.id} apparatusId={apparatus.id}
                       label={`${apparatus.unit_number} - ${c.compartment_code}`} />
