@@ -47,7 +47,7 @@ function getStatus(total: number, par: number, lots: Lot[]): 'expired' | 'expiri
 }
 
 export default function MedicalBagsSection({
-  bags, bagEquipment = [], compartmentOptions = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
+  bags: rawBags, bagEquipment = [], compartmentOptions = [], bagInventory, bagLots, supplyTypes, deptStorerooms,
   storeroomInventory, storeroomLots, units, personnel,
   bagTemplates, apparatusId, isAdmin, isOfficerOrAbove, myPersonnelId,
 }: {
@@ -72,6 +72,25 @@ export default function MedicalBagsSection({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // Tab order is the nesting tree: a bag first, then the bags inside it (marked ↳), so the outer
+  // bag reads as the primary one. A bag nested inside a bag we don't have is treated as top level.
+  const bagDepth: Record<string, number> = {}
+  const bags: Bag[] = []
+  const nameSet = new Set(rawBags.map(b => b.name))
+  const byName = (a: Bag, b: Bag) => a.name.localeCompare(b.name, undefined, { numeric: true })
+  const walk = (bag: Bag, depth: number) => {
+    if (bagDepth[bag.id] !== undefined) return
+    bagDepth[bag.id] = depth
+    bags.push(bag)
+    rawBags.filter(c => c.location_label === `Inside ${bag.name}`).sort(byName).forEach(c => walk(c, depth + 1))
+  }
+  rawBags
+    .filter(b => !(b.location_label?.startsWith('Inside ') && nameSet.has(b.location_label.slice('Inside '.length))))
+    .sort(byName)
+    .forEach(b => walk(b, 0))
+  rawBags.forEach(b => walk(b, 0)) // anything not reached (e.g. a nesting cycle) still gets a tab
+
   const [expandedBagId, setExpandedBagId] = useState<string | null>(bags[0]?.id ?? null)
   const [expandedInvId, setExpandedInvId] = useState<string | null>(null)
 
@@ -118,7 +137,7 @@ export default function MedicalBagsSection({
           {bags.map(bag => (
             <button key={bag.id} onClick={() => setExpandedBagId(bag.id)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors ${expandedBagId === bag.id ? 'bg-red-700 text-white border-red-700' : 'bg-white text-zinc-600 border-zinc-200 hover:border-red-300'}`}>
-              {bag.name}
+              {bagDepth[bag.id] > 0 ? '↳ ' : ''}{bag.name}
             </button>
           ))}
         </div>
