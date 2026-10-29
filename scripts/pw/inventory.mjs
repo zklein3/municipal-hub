@@ -19,7 +19,7 @@ export async function openTruck(page, unitText) {
 }
 
 // The medical row (PAR button's container) for a medication name on the truck screen.
-function medRow(page, medName) {
+export function medRow(page, medName) {
   // .last() = innermost matching card (outer compartment containers match too)
   return page.locator('div.rounded-xl')
     .filter({ has: page.getByText(medName, { exact: true }) })
