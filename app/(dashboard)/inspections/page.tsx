@@ -12,7 +12,7 @@ export default async function InspectionsPage() {
   if (ctx.hasMultipleDepartments && !ctx.departmentId) redirect(`/select-department?next=${encodeURIComponent(await getCurrentPath())}`)
   if (!ctx.departmentId) redirect('/dashboard')
 
-  // Fetch all active apparatus for this department
+  // Round 1: all active apparatus for this department
   const { data: apparatusRaw } = await adminClient
     .from('apparatus')
     .select('id, unit_number, apparatus_name, station_id, apparatus_type_id')
@@ -20,67 +20,65 @@ export default async function InspectionsPage() {
     .eq('active', true)
     .order('unit_number')
 
-  // Fetch station names
+  const appIds = (apparatusRaw ?? []).map(a => a.id)
   const stationIds = (apparatusRaw ?? []).map((a: { station_id: string | null }) => a.station_id).filter(Boolean)
-  const { data: stations } = stationIds.length > 0
-    ? await adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
-    : { data: [] }
-  const stationMap = Object.fromEntries((stations ?? []).map((s: { id: string; station_name: string; station_number: string | null }) => [s.id, s]))
-
-  // Fetch apparatus types
   const typeIds = (apparatusRaw ?? []).map((a: { apparatus_type_id: string | null }) => a.apparatus_type_id).filter(Boolean)
-  const { data: apparatusTypes } = typeIds.length > 0
-    ? await adminClient.from('apparatus_types').select('id, name').in('id', typeIds)
-    : { data: [] }
+
+  // Round 2: everything that needs only the apparatus ids, in one trip
+  const [{ data: stations }, { data: apparatusTypes }, { data: compartmentLinks }, { data: activeSessions }, { data: recentVehicleChecks }] = await Promise.all([
+    stationIds.length > 0
+      ? adminClient.from('stations').select('id, station_name, station_number').in('id', stationIds)
+      : Promise.resolve({ data: [] as { id: string; station_name: string; station_number: string | null }[] }),
+    typeIds.length > 0
+      ? adminClient.from('apparatus_types').select('id, name').in('id', typeIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    appIds.length > 0
+      ? adminClient.from('apparatus_compartments').select('id, apparatus_id, compartment_name_id').in('apparatus_id', appIds).eq('active', true)
+      : Promise.resolve({ data: [] as { id: string; apparatus_id: string; compartment_name_id: string }[] }),
+    // Any in-progress sessions for this department's apparatus
+    appIds.length > 0
+      ? adminClient.from('inspection_sessions')
+          .select('id, apparatus_id')
+          .eq('department_id', ctx.departmentId)
+          .eq('status', 'in_progress')
+          // An expired session is only marked 'expired' when someone next opens it; don't offer
+          // "Resume" for one that's already past its window.
+          .gt('expires_at', new Date().toISOString())
+          .in('apparatus_id', appIds)
+      : Promise.resolve({ data: [] as { id: string; apparatus_id: string }[] }),
+    // Vehicle check done today (department-local date)? "Start Session" funnels through the vehicle
+    // check first unless it's already done.
+    appIds.length > 0
+      ? adminClient.from('vehicle_inspections')
+          .select('apparatus_id, inspected_at')
+          .in('apparatus_id', appIds)
+          .gte('inspected_at', new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString())
+      : Promise.resolve({ data: [] as { apparatus_id: string; inspected_at: string }[] }),
+  ])
+  const stationMap = Object.fromEntries((stations ?? []).map((s: { id: string; station_name: string; station_number: string | null }) => [s.id, s]))
   const typeMap = Object.fromEntries((apparatusTypes ?? []).map((t: { id: string; name: string }) => [t.id, t.name]))
 
-  // Fetch compartments with item counts
-  const appIds = (apparatusRaw ?? []).map(a => a.id)
-  const { data: compartmentLinks } = appIds.length > 0
-    ? await adminClient
-        .from('apparatus_compartments')
-        .select('id, apparatus_id, compartment_name_id')
-        .in('apparatus_id', appIds)
-        .eq('active', true)
-    : { data: [] }
-
+  // Round 3: compartment names, item counts per compartment, and the compartments of active sessions
   const compNameIds = (compartmentLinks ?? []).map(c => c.compartment_name_id).filter(Boolean)
-  const { data: compNames } = compNameIds.length > 0
-    ? await adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compNameIds)
-    : { data: [] }
-  const compNameMap = Object.fromEntries((compNames ?? []).map(c => [c.id, c]))
-
-  // Count items per compartment
   const compIds = (compartmentLinks ?? []).map(c => c.id)
-  const { data: locationStandards } = compIds.length > 0
-    ? await adminClient.from('item_location_standards').select('apparatus_compartment_id').in('apparatus_compartment_id', compIds).eq('active', true)
-    : { data: [] }
+  const activeSessionIds = (activeSessions ?? []).map(s => s.id)
+  const [{ data: compNames }, { data: locationStandards }, { data: sessionCompartments }] = await Promise.all([
+    compNameIds.length > 0
+      ? adminClient.from('compartment_names').select('id, compartment_code, compartment_name, sort_order').in('id', compNameIds)
+      : Promise.resolve({ data: [] as { id: string; compartment_code: string; compartment_name: string | null; sort_order: number | null }[] }),
+    compIds.length > 0
+      ? adminClient.from('item_location_standards').select('apparatus_compartment_id').in('apparatus_compartment_id', compIds).eq('active', true)
+      : Promise.resolve({ data: [] as { apparatus_compartment_id: string }[] }),
+    activeSessionIds.length > 0
+      ? adminClient.from('inspection_session_compartments').select('session_id, compartment_id, status').in('session_id', activeSessionIds)
+      : Promise.resolve({ data: [] as { session_id: string; compartment_id: string; status: string }[] }),
+  ])
+  const compNameMap = Object.fromEntries((compNames ?? []).map(c => [c.id, c]))
 
   const itemCountByComp = (locationStandards ?? []).reduce<Record<string, number>>((acc, ls) => {
     acc[ls.apparatus_compartment_id] = (acc[ls.apparatus_compartment_id] ?? 0) + 1
     return acc
   }, {})
-
-  // Fetch any in-progress sessions for this department's apparatus
-  const { data: activeSessions } = appIds.length > 0
-    ? await adminClient
-        .from('inspection_sessions')
-        .select('id, apparatus_id')
-        .eq('department_id', ctx.departmentId)
-        .eq('status', 'in_progress')
-        // An expired session is only marked 'expired' when someone next opens it; don't offer
-        // "Resume" for one that's already past its window.
-        .gt('expires_at', new Date().toISOString())
-        .in('apparatus_id', appIds)
-    : { data: [] }
-
-  const activeSessionIds = (activeSessions ?? []).map(s => s.id)
-  const { data: sessionCompartments } = activeSessionIds.length > 0
-    ? await adminClient
-        .from('inspection_session_compartments')
-        .select('session_id, compartment_id, status')
-        .in('session_id', activeSessionIds)
-    : { data: [] }
 
   const sessionByApparatus = Object.fromEntries(
     (activeSessions ?? []).map(s => {
@@ -96,15 +94,6 @@ export default async function InspectionsPage() {
     })
   )
 
-  // Vehicle check done today (department-local date)? "Start Session" funnels through the vehicle
-  // check first unless it's already done.
-  const { data: recentVehicleChecks } = appIds.length > 0
-    ? await adminClient
-        .from('vehicle_inspections')
-        .select('apparatus_id, inspected_at')
-        .in('apparatus_id', appIds)
-        .gte('inspected_at', new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString())
-    : { data: [] }
   const localDate = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: ctx.departmentTimezone })
   const today = localDate(new Date().toISOString())
   const vehicleCheckedToday = new Set(

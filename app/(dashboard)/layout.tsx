@@ -16,7 +16,7 @@ import PWAInstallButton from '@/components/PWAInstallButton'
 import PendingSignatureSync from '@/components/PendingSignatureSync'
 import { getDeptTheme, getDeptBrandName } from '@/lib/department-theme'
 import { isFireOps7Card, parseSalamanderCard, unescapeDebugRaw } from '@/lib/salamander'
-import { computeNavBadges, type LayoutCounts } from '@/lib/nav-badges'
+import { computeNavBadges, getLayoutCounts } from '@/lib/nav-badges'
 import LiveNavBadgesProvider from '@/components/LiveNavBadges'
 
 async function getUserContext() {
@@ -39,11 +39,9 @@ async function getUserContext() {
   // the layout below decides which ones this viewer may see).
   const [permissions, countsResult] = await Promise.all([
     getPermissionSnapshot(ctx),
-    ctx.departmentId
-      ? adminClient.rpc('layout_counts', { p_department: ctx.departmentId, p_personnel: ctx.personnelId })
-      : Promise.resolve({ data: null }),
+    ctx.departmentId ? getLayoutCounts(ctx.departmentId, ctx.personnelId) : Promise.resolve(null),
   ])
-  const counts = (countsResult.data ?? null) as LayoutCounts | null
+  const counts = countsResult
 
   return {
     id: ctx.personnelId,

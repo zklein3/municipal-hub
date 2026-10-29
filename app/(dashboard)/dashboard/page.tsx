@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { getPermissionSnapshot } from '@/lib/permissions'
+import { getLayoutCounts } from '@/lib/nav-badges'
 import SysAdminDashboard from './SysAdminDashboard'
 import DashboardAnnouncementBanner from './DashboardAnnouncementBanner'
 import HubCard from '@/components/HubCard'
@@ -24,21 +25,6 @@ async function getUnreadAnnouncements(departmentId: string, personnelId: string)
   ])
   const readSet = new Set((reads ?? []).map(r => r.announcement_id))
   return (announcements ?? []).filter(a => !readSet.has(a.id))
-}
-
-async function getPendingInboxCounts(departmentId: string) {
-  const adminClient = createAdminClient()
-  const [{ count: permits }, { count: records }] = await Promise.all([
-    adminClient.from('burn_permits')
-      .select('id', { count: 'exact', head: true })
-      .eq('department_id', departmentId)
-      .eq('status', 'pending'),
-    adminClient.from('public_record_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('department_id', departmentId)
-      .eq('status', 'pending'),
-  ])
-  return { permits: permits ?? 0, records: records ?? 0 }
 }
 
 async function getDashboardData(departmentId: string, personnelId: string) {
@@ -73,16 +59,24 @@ async function getDashboardData(departmentId: string, personnelId: string) {
   const seriesMap = Object.fromEntries((seriesRows.data ?? []).map(s => [s.id, s]))
   const deptSeriesIds = (seriesRows.data ?? []).map(s => s.id)
 
-  const { data: instanceData } = deptSeriesIds.length > 0
-    ? await adminClient.from('event_instances')
-      .select('id, series_id, event_date, start_time, location, status, title_override')
-      .in('series_id', deptSeriesIds)
-      .gte('event_date', today)
-      .lte('event_date', next365str)
-      .neq('status', 'cancelled')
-      .order('event_date', { ascending: true })
-      .limit(50)
-    : { data: [] }
+  // Round 2: event instances, and attendance for every fetched training event (the de-duplication
+  // against instances shown below happens afterwards, so this doesn't have to wait for them)
+  const allTrainingEventIds = (trainingEvents.data ?? []).map(e => e.id)
+  const [{ data: instanceData }, { data: myTrainingAttendance }] = await Promise.all([
+    deptSeriesIds.length > 0
+      ? adminClient.from('event_instances')
+          .select('id, series_id, event_date, start_time, location, status, title_override')
+          .in('series_id', deptSeriesIds)
+          .gte('event_date', today)
+          .lte('event_date', next365str)
+          .neq('status', 'cancelled')
+          .order('event_date', { ascending: true })
+          .limit(50)
+      : Promise.resolve({ data: [] as { id: string; series_id: string; event_date: string; start_time: string | null; location: string | null; status: string; title_override: string | null }[] }),
+    allTrainingEventIds.length > 0
+      ? adminClient.from('training_event_attendance').select('event_id, status').eq('personnel_id', personnelId).in('event_id', allTrainingEventIds)
+      : Promise.resolve({ data: [] as { event_id: string; status: string }[] }),
+  ])
 
   const deptInstances = (instanceData ?? [])
     .filter(i => {
@@ -105,10 +99,6 @@ async function getDashboardData(departmentId: string, personnelId: string) {
     e => !e.event_instance_id || !shownInstanceIds.has(e.event_instance_id)
   )
 
-  const trainingEventIds = standaloneTrainingEvents.map(e => e.id)
-  const { data: myTrainingAttendance } = trainingEventIds.length > 0
-    ? await adminClient.from('training_event_attendance').select('event_id, status').eq('personnel_id', personnelId).in('event_id', trainingEventIds)
-    : { data: [] }
   const myTrainingAttendanceMap = Object.fromEntries((myTrainingAttendance ?? []).map(a => [a.event_id, a.status]))
 
   return {
@@ -170,27 +160,24 @@ export default async function DashboardPage() {
 
   if (!ctx.departmentId) redirect('/login')
 
-  // Fetch dept info separately
-  const { data: deptData } = await adminClient
-    .from('departments')
-    .select('name, public_slug, public_site_enabled')
-    .eq('id', ctx.departmentId)
-    .single()
-
   const departmentId = ctx.departmentId
+  const dashboardPermissions = await getPermissionSnapshot(ctx) // comes with the context — no query
+  const isAdmin = dashboardPermissions.access_dept_admin_hub
+  const isOfficerOrAbove = dashboardPermissions.access_officer_hub || isAdmin
+
+  // One round: the department row, the dashboard's own data, unread announcements, and the pending
+  // inbox counts (shared with the sidebar's layout_counts call — no separate queries for them).
+  const [{ data: deptData }, data, unreadAnnouncements, layoutCounts] = await Promise.all([
+    adminClient.from('departments').select('name, public_slug, public_site_enabled').eq('id', departmentId).single(),
+    getDashboardData(departmentId, ctx.personnelId),
+    getUnreadAnnouncements(departmentId, ctx.personnelId),
+    isOfficerOrAbove ? getLayoutCounts(departmentId, ctx.personnelId) : Promise.resolve(null),
+  ])
+  const pendingInbox = { permits: layoutCounts?.pending_permits ?? 0, records: layoutCounts?.pending_requests ?? 0 }
   const departmentName = deptData?.name ?? 'Your Department'
   const publicSiteUrl = deptData?.public_site_enabled && deptData?.public_slug
     ? `/dept/${deptData.public_slug}`
     : null
-  const dashboardPermissions = await getPermissionSnapshot(ctx)
-  const isAdmin = dashboardPermissions.access_dept_admin_hub
-  const isOfficerOrAbove = dashboardPermissions.access_officer_hub || isAdmin
-
-  const [data, unreadAnnouncements, pendingInbox] = await Promise.all([
-    getDashboardData(departmentId, ctx.personnelId),
-    getUnreadAnnouncements(departmentId, ctx.personnelId),
-    isOfficerOrAbove ? getPendingInboxCounts(departmentId) : Promise.resolve({ permits: 0, records: 0 }),
-  ])
 
   const greeting = () => {
     const hour = new Date().getHours()

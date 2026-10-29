@@ -1,3 +1,5 @@
+import { cache } from 'react'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { PermissionSnapshot } from '@/lib/permissions'
 
 // Raw counts returned by the layout_counts() database function.
@@ -22,3 +24,10 @@ export function computeNavBadges(counts: LayoutCounts, permissions: PermissionSn
     pendingSignatures: counts.pending_signatures + counts.unread_messages,
   }
 }
+
+// The layout_counts() database call, shared within one request: the layout (sidebar badges) and any
+// page that shows the same numbers (e.g. the dashboard's pending-inbox card) get one call between them.
+export const getLayoutCounts = cache(async (departmentId: string, personnelId: string): Promise<LayoutCounts | null> => {
+  const { data } = await createAdminClient().rpc('layout_counts', { p_department: departmentId, p_personnel: personnelId })
+  return (data ?? null) as LayoutCounts | null
+})
