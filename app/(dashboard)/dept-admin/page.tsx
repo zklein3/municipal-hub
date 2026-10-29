@@ -89,8 +89,8 @@ export default async function DeptAdminPage({
     ...(publicSiteEnabled && perms.manage_public_site ? [{ group: 'department' as const, title: 'Public Site', description: 'Public info, QR codes, burn permits, and records inbox', href: '/dept-admin/public-inbox' }] : []),
 
     // Setup is one page with tabs; these go straight to the right tab.
-    ...(perms.manage_dept_setup ? [{ group: 'equipment' as const, title: 'Equipment Setup', description: 'Stations, apparatus, compartments, and the equipment item catalog', href: '/dept-admin/setup' }] : []),
-    ...(perms.manage_dept_setup ? [{ group: 'equipment' as const, title: 'Compartment Presets', description: 'Ready-made compartments and the standard set for each apparatus type', href: '/dept-admin/setup?tab=presets' }] : []),
+    ...(perms.manage_dept_setup ? [{ group: 'equipment' as const, title: 'Apparatus & Equipment', description: 'Stations, apparatus, compartments, the item catalog, and the starter library', href: '/dept-admin/setup' }] : []),
+    ...(perms.manage_dept_setup ? [{ group: 'equipment' as const, title: 'Equipment Presets', description: 'Ready-made compartments and the standard equipment for each apparatus type', href: '/dept-admin/setup?tab=presets' }] : []),
     ...(moduleMedical && perms.manage_medical_supply_setup ? [{ group: 'equipment' as const, title: 'Medical', description: 'Storerooms, stock, medication types, and bags — one page', href: '/medical' }] : []),
     ...(perms.manage_inspection_settings ? [{ group: 'equipment' as const, title: 'Inspections', description: 'Vehicle check items and inspection session settings', href: '/dept-admin/inspections' }] : []),
     ...(moduleFuelStorage && perms.manage_fuel_storage ? [{ group: 'equipment' as const, title: 'Fuel Tanks', description: 'Manage on-site storage tanks and fuel deliveries', href: '/dept-admin/fuel-tanks' }] : []),

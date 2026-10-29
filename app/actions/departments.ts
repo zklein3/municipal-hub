@@ -38,7 +38,7 @@ export async function createDepartment(formData: FormData) {
   if (error) { await logError(error.message, '/admin/departments'); return { error: error.message } }
 
   // New fire departments start with the starter catalog (items, compartment presets). A failure
-  // here doesn't undo the department — "Add missing starters" in Setup finishes the job.
+  // here doesn't undo the department — "Load starter library" in Apparatus & Equipment → Items finishes the job.
   const seed = await seedDepartmentStarters(adminClient, newDept.id)
   if (seed.error) await logError(`Starter seed failed: ${seed.error}`, '/admin/departments', { department_id: newDept.id })
 

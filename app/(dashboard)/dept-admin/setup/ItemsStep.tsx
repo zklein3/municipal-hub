@@ -16,6 +16,7 @@ import {
 } from '@/app/actions/inspections'
 import { saveCustomFieldDefinitions } from '@/app/actions/assets'
 import HelpPrompt from './HelpPrompt'
+import StarterLibraryBanner from './StarterLibraryBanner'
 import { MoveItemToMedical } from '@/components/CatalogMovePanel'
 
 type Tab = 'items' | 'categories' | 'assets'
@@ -534,6 +535,8 @@ export default function ItemsStep({
           </p>
         </div>
       </div>
+
+      <StarterLibraryBanner />
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 bg-zinc-100 rounded-lg p-1 overflow-x-auto">

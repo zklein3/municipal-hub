@@ -13,7 +13,6 @@ import {
   setPresetTypes,
   deployPresetToApparatus,
 } from '@/app/actions/presets'
-import { addMissingStarters } from '@/app/actions/starters'
 import HelpPrompt from './HelpPrompt'
 
 interface Preset {
@@ -97,30 +96,14 @@ export default function PresetsStep({
     if (r) setShowForm(false)
   }
 
-  async function handleAddMissing() {
-    await run(() => addMissingStarters(), r => {
-      const s = (r as Awaited<ReturnType<typeof addMissingStarters>>).summary
-      if (!s) return 'Done.'
-      if (s.skipped) return s.skipped
-      const added = s.presets.created + s.items.created + s.categories.created + s.medicationTypes.created
-      if (added === 0 && s.presetItems === 0 && s.presetMedications === 0) return 'You already have every starter preset and item.'
-      return `Added ${s.presets.created} presets, ${s.items.created} items, ${s.categories.created} categories` +
-        (s.medicationTypes.created ? `, ${s.medicationTypes.created} medication types` : '') +
-        (s.items.adopted ? ` (matched ${s.items.adopted} items you already had)` : '') + '.'
-    })
-  }
-
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div>
-          <h2 className="text-lg font-bold text-zinc-900">Compartment Presets</h2>
-          <p className="text-sm text-zinc-500">{presets.filter(p => p.active).length} active</p>
+          <h2 className="text-lg font-bold text-zinc-900">Equipment Presets</h2>
+          <p className="text-sm text-zinc-500">Ready-made compartments and what goes in them · {presets.filter(p => p.active).length} active</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={handleAddMissing} disabled={loading} className={smallBtn}>
-            Add missing starters
-          </button>
           <button
             onClick={() => { setShowForm(!showForm); setPanel(null); setError(null); setSuccess(null) }}
             className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors"
@@ -180,7 +163,7 @@ export default function PresetsStep({
 
       {presets.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">
-          No presets yet. Use &quot;Add missing starters&quot; to load the standard set, or create your own.
+          No presets yet. Load the starter library from the Items tab, or create your own.
         </div>
       ) : visible.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-sm text-zinc-400">

@@ -118,10 +118,10 @@ export const HELP_TOPICS: HelpTopic[] = [
   {
     id: 'compartment-presets',
     category: 'Equipment & Inventory',
-    question: 'What are compartment presets?',
-    answer: 'A preset is a ready-made compartment — like Pump Panel or Airway — with the items and medications that belong in it. Your department starts with a standard set you can rename, change, or delete, and you can make your own or save a truck\'s compartment as one. Deploy puts a preset on a truck, either as a new compartment or into one it already has; it only adds what\'s missing and never changes quantities already set. Use "Add missing starters" to pick up new standard presets and items.',
+    question: 'What are equipment presets?',
+    answer: 'A preset is a ready-made compartment — like Pump Panel or Airway — with the items and medications that belong in it. Your department starts with a standard set you can rename, change, or delete, and you can make your own or save a truck\'s compartment as one. Deploy puts a preset on a truck, either as a new compartment or into one it already has; it only adds what\'s missing and never changes quantities already set. Use "Load starter library" on the Items tab to pick up new standard presets and items.',
     href: '/dept-admin/setup?tab=presets',
-    linkLabel: 'Go to Presets',
+    linkLabel: 'Go to Equipment Presets',
     minRole: 'admin',
   },
   {

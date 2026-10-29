@@ -14,8 +14,8 @@ const DEPT_SETUP_TABS = [
   { id: 'stations',     label: 'Stations'      },
   { id: 'apparatus',    label: 'Apparatus'     },
   { id: 'compartments', label: 'Compartments'  },
-  { id: 'presets',      label: 'Presets'       },
   { id: 'items',        label: 'Items'         },
+  { id: 'presets',      label: 'Equipment Presets' },
 ]
 
 
@@ -88,7 +88,7 @@ export default function SetupFlowClient({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">
-            Equipment Setup
+            Apparatus &amp; Equipment
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">{department.name}</p>
         </div>
@@ -96,7 +96,7 @@ export default function SetupFlowClient({
 
       <HelpText className="mb-4">
         Set these up roughly in order: Stations, then Apparatus (assigned to a station), then Compartments (on an
-        apparatus), then Items — each step depends on the one before it existing first.
+        apparatus), then Items (load the starter library here), then Equipment Presets — each step depends on the one before it existing first.
       </HelpText>
 
       {/* Tabs — mobile: horizontal scroll, desktop: left rail */}

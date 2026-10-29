@@ -138,7 +138,7 @@ export function MoveMedicalToItem({
     const r = await moveMedicalToItemCatalog(supplyTypeId, { category_id: categoryId || null })
     setBusy(false)
     if (r.error) { setError(r.error); return }
-    setDone('Moved to the equipment catalog. Find it under Equipment Setup → Items.')
+    setDone('Moved to the equipment catalog. Find it under Apparatus & Equipment → Items.')
     router.refresh()
     onDone?.()
   }
