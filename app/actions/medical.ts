@@ -304,13 +304,13 @@ async function createBagFromTemplate(
     .select('name, department_id').eq('id', opts.template_id).single()
   if (!tmpl || tmpl.department_id !== department_id) return { error: 'Bag template not found.' }
 
-  // Instances auto-number per template ("Trauma Box 1, 2…"); a custom name is kept as given.
+  // Instances auto-number per template ("Trauma Box - 1, - 2…"); a custom name is kept as given.
   const { data: maxRow } = await adminClient.from('medical_storerooms')
     .select('bag_number').eq('department_id', department_id).eq('template_id', opts.template_id)
     .order('bag_number', { ascending: false, nullsFirst: false }).limit(1)
   const bag_number = (maxRow?.[0]?.bag_number ?? 0) + 1
   const requested = opts.name?.trim()
-  const name = !requested || requested === tmpl.name ? `${tmpl.name} ${bag_number}` : requested
+  const name = !requested || requested === tmpl.name ? `${tmpl.name} - ${bag_number}` : requested
 
   const { data: bag, error: bagErr } = await adminClient.from('medical_storerooms').insert({
     department_id,
