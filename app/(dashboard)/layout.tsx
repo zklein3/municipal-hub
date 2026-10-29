@@ -29,34 +29,16 @@ async function getUserContext() {
 
   const adminClient = createAdminClient()
 
-  // Sidebar footer label: the assigned permission group's name if the
-  // department admin set one up, falling back to the legacy system_role
-  // word otherwise — same "explicit group wins, legacy is just the
-  // fallback" convention the resolver itself uses.
-  async function fetchPermissionGroupName(): Promise<string | null> {
-    if (!ctx!.departmentId) return null
-    const { data: dp } = await adminClient
-      .from('department_personnel')
-      .select('permission_group_id')
-      .eq('personnel_id', ctx!.personnelId)
-      .eq('department_id', ctx!.departmentId)
-      .eq('active', true)
-      .maybeSingle()
-    if (!dp?.permission_group_id) return null
-    const { data: group } = await adminClient
-      .from('department_permission_groups')
-      .select('name, active')
-      .eq('id', dp.permission_group_id)
-      .maybeSingle()
-    return group?.active ? group.name : null
-  }
+  // Sidebar footer label: the assigned permission group's name if the department admin set one up,
+  // falling back to the legacy system_role word otherwise — same "explicit group wins, legacy is just
+  // the fallback" convention the resolver itself uses. (Comes with the context; no extra lookup.)
+  const permissionGroupName = ctx.permissionGroup?.active ? ctx.permissionGroup.name : null
 
-  // The three lookups don't depend on each other, so run them together instead of one after
-  // another. Nav badge counts + module flags come from a single database function (all counts,
-  // every viewer; the layout below decides which ones this viewer may see).
-  const [permissions, permissionGroupName, countsResult] = await Promise.all([
+  // The permission snapshot and the nav counts don't depend on each other, so run them together.
+  // Nav badge counts + module flags come from a single database function (all counts, every viewer;
+  // the layout below decides which ones this viewer may see).
+  const [permissions, countsResult] = await Promise.all([
     getPermissionSnapshot(ctx),
-    fetchPermissionGroupName(),
     ctx.departmentId
       ? adminClient.rpc('layout_counts', { p_department: ctx.departmentId, p_personnel: ctx.personnelId })
       : Promise.resolve({ data: null }),

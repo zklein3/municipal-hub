@@ -20,6 +20,19 @@ export type CurrentDepartmentContext = {
   // sys admin) but the SELECTED_DEPARTMENT_COOKIE doesn't resolve to a valid
   // choice yet — caller should send them to /select-department.
   selectionPending: boolean
+  // The viewer's permission group in the selected department, already loaded with the context (so
+  // getPermissionSnapshot needs no query of its own). null = no group assigned; undefined = not
+  // pre-loaded (callers that build a context by hand), in which case the snapshot looks it up.
+  permissionGroup?: { name: string; active: boolean; permissions: Record<string, boolean> } | null
+}
+
+type ContextRows = {
+  personnel: { id: string; first_name: string; last_name: string; is_sys_admin: boolean | null }
+  memberships: {
+    system_role: string | null; department_id: string; department_name: string | null
+    department_type: string | null; timezone: string | null; permission_group_id: string | null
+    group_name: string | null; group_active: boolean | null; group_permissions: Record<string, boolean> | null
+  }[]
 }
 
 /**
@@ -50,26 +63,21 @@ export const getCurrentDepartmentContext = cache(async (): Promise<CurrentDepart
   const user = session?.user
   if (!user) return null
 
-  const adminClient = createAdminClient()
-  const { data: meList } = await adminClient
-    .from('personnel')
-    .select('id, first_name, last_name, is_sys_admin')
-    .eq('auth_user_id', user.id)
-  const me = meList?.[0]
+  // One round trip: the personnel row plus every active department membership (with the department's
+  // name/type/timezone and the permission group) — this used to be personnel, then memberships,
+  // then (in getPermissionSnapshot) the permission group, one after another on every page.
+  const { data: ctxRows } = await createAdminClient().rpc('get_current_context', { p_auth_user_id: user.id })
+  const rows = ctxRows as ContextRows | null
+  const me = rows?.personnel
   if (!me) return null
-
-  const { data: deptList } = await adminClient
-    .from('department_personnel')
-    .select('system_role, department_id, departments(name, department_type, timezone)')
-    .eq('personnel_id', me.id)
-    .eq('active', true)
+  const deptList = rows?.memberships ?? []
 
   const isSysAdmin = me.is_sys_admin ?? false
   // Sys admin gets an extra "viewing option" alongside their real department
   // memberships, picked via /select-department like any other department.
   const totalOptions = (deptList?.length ?? 0) + (isSysAdmin ? 1 : 0)
 
-  let dept = deptList?.[0]
+  let dept: (typeof deptList)[number] | undefined = deptList[0]
   let selectionPending = false
   let viewingAsSysAdmin = isSysAdmin && (deptList?.length ?? 0) === 0
 
@@ -94,11 +102,14 @@ export const getCurrentDepartmentContext = cache(async (): Promise<CurrentDepart
     lastName: me.last_name,
     isSysAdmin,
     departmentId: viewingAsSysAdmin ? null : dept?.department_id ?? null,
-    departmentName: (dept?.departments as any)?.name ?? null,
-    departmentType: (dept?.departments as any)?.department_type ?? 'fire',
-    departmentTimezone: (dept?.departments as any)?.timezone ?? DEFAULT_TIMEZONE,
+    departmentName: dept?.department_name ?? null,
+    departmentType: dept?.department_type ?? 'fire',
+    departmentTimezone: dept?.timezone ?? DEFAULT_TIMEZONE,
     systemRole: dept?.system_role ?? null,
     hasMultipleDepartments: totalOptions > 1,
     selectionPending,
+    permissionGroup: dept?.permission_group_id && dept.group_name != null
+      ? { name: dept.group_name, active: !!dept.group_active, permissions: dept.group_permissions ?? {} }
+      : null,
   }
 })

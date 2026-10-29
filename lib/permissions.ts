@@ -41,20 +41,24 @@ export const getPermissionSnapshot = cache(async (ctx: CurrentDepartmentContext)
   const legacy = legacySnapshot(ctx.systemRole)
   if (!ctx.departmentId) return legacy
 
-  const adminClient = createAdminClient()
-  const { data } = await adminClient
-    .from('department_personnel')
-    .select('permission_group_id, department_permission_groups(permissions, active)')
-    .eq('personnel_id', ctx.personnelId)
-    .eq('department_id', ctx.departmentId)
-    .eq('active', true)
-    .maybeSingle()
-
-  // Cast through any, same convention as lib/current-department.ts's nested
-  // `departments(...)` select — the untyped Supabase client can't infer this
-  // is a to-one relationship from department_personnel.permission_group_id.
-  const group = (data?.department_permission_groups as any) as
-    { permissions: Record<string, boolean>; active: boolean } | null
+  // The context normally carries the group already (loaded with it in one trip); a context built by
+  // hand (hasPermissionForDepartment) doesn't, so look it up in that case.
+  let group: { permissions: Record<string, boolean>; active: boolean } | null
+  if (ctx.permissionGroup !== undefined) {
+    group = ctx.permissionGroup
+  } else {
+    const adminClient = createAdminClient()
+    const { data } = await adminClient
+      .from('department_personnel')
+      .select('permission_group_id, department_permission_groups(permissions, active)')
+      .eq('personnel_id', ctx.personnelId)
+      .eq('department_id', ctx.departmentId)
+      .eq('active', true)
+      .maybeSingle()
+    // Cast through any, same convention as lib/current-department.ts — the untyped Supabase client
+    // can't infer this is a to-one relationship from department_personnel.permission_group_id.
+    group = ((data?.department_permission_groups as any) ?? null) as { permissions: Record<string, boolean>; active: boolean } | null
+  }
   if (!group?.active) return legacy
 
   // Per-key merge: an explicit value in the group's stored permissions wins;
