@@ -16,6 +16,8 @@ import PWAInstallButton from '@/components/PWAInstallButton'
 import PendingSignatureSync from '@/components/PendingSignatureSync'
 import { getDeptTheme, getDeptBrandName } from '@/lib/department-theme'
 import { isFireOps7Card, parseSalamanderCard, unescapeDebugRaw } from '@/lib/salamander'
+import { computeNavBadges, type LayoutCounts } from '@/lib/nav-badges'
+import LiveNavBadgesProvider from '@/components/LiveNavBadges'
 
 async function getUserContext() {
   const ctx = await getCurrentDepartmentContext()
@@ -78,13 +80,6 @@ async function getUserContext() {
   }
 }
 
-type LayoutCounts = {
-  public_site_enabled: boolean; module_operations: boolean; module_iso: boolean
-  module_neris: boolean; module_medical: boolean; module_ics: boolean
-  announcements_unread: number; pending_permits: number; pending_requests: number
-  pending_signatures: number; unread_messages: number; medical_alerts: number
-}
-
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getUserContext()
   const isSysAdmin = user?.is_sys_admin ?? false
@@ -114,20 +109,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let pendingSignatureCount = 0
   const counts = user?.counts
   if (!viewingSysAdminOverview && counts) {
-    announcementUnreadCount = counts.announcements_unread
-    pendingSignatureCount = counts.pending_signatures + counts.unread_messages
     publicSiteEnabled = counts.public_site_enabled
     moduleOperations = counts.module_operations
     moduleIso = counts.module_iso
     moduleNeris = counts.module_neris
     moduleIcs = counts.module_ics
-
-    // Medical alert badge — only when module is enabled
-    const medicalAlertBadge = counts.module_medical && permissions?.manage_medical_inventory ? counts.medical_alerts : 0
-    inboxPendingCount =
-      (permissions?.review_burn_permits ? counts.pending_permits : 0) +
-      (permissions?.manage_public_inbox ? counts.pending_requests : 0) +
-      medicalAlertBadge
+    const badges = computeNavBadges(counts, permissions)
+    announcementUnreadCount = badges.announcementUnread
+    pendingSignatureCount = badges.pendingSignatures
+    inboxPendingCount = badges.inboxPending
   }
 
   const opsBadge = announcementUnreadCount > 0 ? announcementUnreadCount : undefined
@@ -214,6 +204,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
+    <LiveNavBadgesProvider enabled={!viewingSysAdminOverview && !!user?.counts} initialKey={`${opsBadge ?? 0}-${inboxBadge ?? 0}`}>
     <div className="flex min-h-screen bg-zinc-100">
       <aside className={`hidden md:flex w-64 ${theme.sidebarBg} text-white flex-col shrink-0 print:hidden`}>
         <SidebarContent navGroups={navGroups} adminNavItems={adminNavItems} adminLabel={adminLabel} userInfo={userInfo} theme={theme} brandName={brandName} />
@@ -224,6 +215,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         {children}
       </main>
     </div>
+    </LiveNavBadgesProvider>
   )
 }
 

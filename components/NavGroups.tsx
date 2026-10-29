@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getDeptTheme, type DeptTheme } from '@/lib/department-theme'
+import { useLiveBadges } from '@/components/LiveNavBadges'
 
 export type NavItem = { href: string; label: string; badge?: number }
 export type NavGroup = { label?: string; items: NavItem[] }
@@ -23,6 +24,9 @@ export default function NavGroups({
 }) {
   const pathname = usePathname()
   const t = theme ?? getDeptTheme('fire')
+  // Newer numbers from the background check win over the ones rendered with the page
+  const live = useLiveBadges()
+  const badgeOf = (item: NavItem) => live[item.href] ?? item.badge
 
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const open = new Set<string>()
@@ -58,9 +62,9 @@ export default function NavGroups({
               }`}
             >
               <span>{item.label}</span>
-              {item.badge != null && item.badge > 0 && (
+              {badgeOf(item) != null && badgeOf(item)! > 0 && (
                 <span className="ml-2 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs font-bold text-white leading-none">
-                  {item.badge > 99 ? '99+' : item.badge}
+                  {badgeOf(item)! > 99 ? '99+' : badgeOf(item)}
                 </span>
               )}
             </Link>
@@ -69,7 +73,7 @@ export default function NavGroups({
 
         const open = openGroups.has(group.label)
         const hasActive = group.items.some(item => isActive(pathname, item.href))
-        const groupBadge = group.items.reduce((sum, item) => sum + (item.badge ?? 0), 0)
+        const groupBadge = group.items.reduce((sum, item) => sum + (badgeOf(item) ?? 0), 0)
 
         return (
           <div key={group.label}>
@@ -108,9 +112,9 @@ export default function NavGroups({
                     }`}
                   >
                     <span>{item.label}</span>
-                    {item.badge != null && item.badge > 0 && (
+                    {badgeOf(item) != null && badgeOf(item)! > 0 && (
                       <span className="ml-2 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs font-bold text-white leading-none">
-                        {item.badge > 99 ? '99+' : item.badge}
+                        {badgeOf(item)! > 99 ? '99+' : badgeOf(item)}
                       </span>
                     )}
                   </Link>
