@@ -144,6 +144,12 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 
 ## IMMEDIATE NEXT — Resume Here Next Session
 
+### ⏭ QUEUED (decided 2026-10-29): Site-wide latency / "did it save?" plan
+Not blocking the inventory work; do it after the current project list. Screens feel slow after a save, so users think edits didn't take (PAR edit looked like a revert; the save was fine, the refresh took ~3s in dev). Auth is already fixed (`getCurrentDepartmentContext` + permission snapshot are per-request `cache()`d). Remaining causes, from reading code (not yet profiled): (1) `(dashboard)/layout.tsx` makes 15 Supabase calls (nav badge counts) and re-runs on every `router.refresh()`; (2) heavy pages — `equipment/[id]` 42 queries incl. per-row loops (~line 360), `dept-admin/setup` 22, dashboard 11; (3) no `unstable_cache`/`use cache` anywhere, so rarely-changing data is re-read each request; (4) no saving state / instant update on edit forms.
+**Plan, in order:** 1) add timing to layout + 5 slowest pages, measure dev AND production; 2) collapse/cache layout badge counts (30–60s, tag-invalidated); 3) `lib/data/` cached lookups for rarely-changing data (settings, items, supply types, permission groups), edit actions clear the tag; 4) batch the per-row query loops starting with the truck screen; 5) standard "Saving…" + optimistic update for edit forms (PAR edit already does this: `parOverrides` in `MedicalCompartmentsSection.tsx`).
+
+**Playwright test helpers (2026-10-29):** `scripts/pw/` — `session.mjs` (`loginToDept`; env `PW_EMAIL`/`PW_PASS`, ask Zak for the password each session, never store it), `inventory.mjs` (page helpers), `test-par-edit.mjs` (example test). New tests = a few lines calling the helpers. PAR in-place edit "reverts" item is FIXED (committed d7b616a).
+
 ### ⬅ RESUME HERE — Inventory Streamlining (2026-10-24)
 **Everything below SHIPPED to `main` and pushed 2026-10-24** (fast-forward of `feature/containers-bags`; keep working on that branch, push as each piece is verified).
 Read `PLAN_CONTAINERS_BAGS.md` → "Consolidation track"
