@@ -197,6 +197,23 @@ export default function ApparatusDetailClient({
     setCompLoading(false)
   }
 
+  const bagProps = medicalBagData ? {
+    bags: medicalBagData.bags,
+    bagInventory: medicalBagData.bagInventory,
+    bagLots: medicalBagData.bagLots,
+    supplyTypes: medicalBagData.supplyTypes,
+    deptStorerooms: medicalBagData.deptStorerooms,
+    storeroomInventory: medicalBagData.storeroomInventory,
+    storeroomLots: medicalBagData.storeroomLots,
+    units: medicalBagData.units,
+    personnel: medicalBagData.personnel,
+    bagTemplates: medicalBagData.bagTemplates,
+    apparatusId: medicalBagData.apparatusId,
+    isAdmin,
+    isOfficerOrAbove,
+    myPersonnelId,
+  } : null
+
   const assignedNameIds = new Set(compartments.map(c => c.compartment_name?.id).filter(Boolean))
   const availableCompartments = compartmentNames.filter(cn => !assignedNameIds.has(cn.id))
 
@@ -387,25 +404,8 @@ export default function ApparatusDetailClient({
         )}
       </div>
 
-      {/* Medical Bags */}
-      {medicalBagData && (
-        <MedicalBagsSection
-          bags={medicalBagData.bags}
-          bagInventory={medicalBagData.bagInventory}
-          bagLots={medicalBagData.bagLots}
-          supplyTypes={medicalBagData.supplyTypes}
-          deptStorerooms={medicalBagData.deptStorerooms}
-          storeroomInventory={medicalBagData.storeroomInventory}
-          storeroomLots={medicalBagData.storeroomLots}
-          units={medicalBagData.units}
-          personnel={medicalBagData.personnel}
-          bagTemplates={medicalBagData.bagTemplates}
-          apparatusId={medicalBagData.apparatusId}
-          isAdmin={isAdmin}
-          isOfficerOrAbove={isOfficerOrAbove}
-          myPersonnelId={myPersonnelId}
-        />
-      )}
+      {/* Medical bags not pinned to a compartment (pinned ones show inside their compartment below) */}
+      {bagProps && <MedicalBagsSection {...bagProps} scope="unpinned" />}
 
       {/* ISO Specs */}
       {isOfficerOrAbove && (
@@ -684,6 +684,7 @@ export default function ApparatusDetailClient({
                       )}
                     </div>
                   </div>
+                  {bagProps && <MedicalBagsSection {...bagProps} scope={{ compartmentId: c.id }} embedded />}
                   {c.items.length > 0 && (
                     <div className="border-t border-zinc-100 px-4 py-2 flex flex-col gap-1.5">
                       {c.items.map((item, i) => (

@@ -135,7 +135,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   const moduleMedical = modRow?.module_medical ?? false
 
   let medicalBagData: {
-    bags: { id: string; name: string; template_id: string | null; inventory_mode: string | null }[]
+    bags: { id: string; name: string; template_id: string | null; inventory_mode: string | null; qr_code: string | null; compartment_id: string | null; parent_storeroom_id: string | null }[]
     bagInventory: { id: string; storeroom_id: string; supply_type_id: string; par_level: number }[]
     bagLots: {
       id: string; storeroom_inventory_id: string; lot_number: string | null; expiration_date: string | null
@@ -156,7 +156,7 @@ export default async function ApparatusDetailPage({ params }: { params: Promise<
   if (moduleMedical) {
     const [{ data: bags }, { data: bagTemplates }, { data: deptStorerooms }, { data: deptPersonnel }] = await Promise.all([
       adminClient.from('medical_storerooms')
-        .select('id, name, template_id, inventory_mode')
+        .select('id, name, template_id, inventory_mode, qr_code, compartment_id, parent_storeroom_id')
         .eq('apparatus_id', id).eq('active', true).eq('container_kind', 'bag').order('name'),
       adminClient.from('medical_bag_templates')
         .select('id, name').eq('department_id', ctx.departmentId).eq('active', true).order('name'),
