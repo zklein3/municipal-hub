@@ -99,6 +99,7 @@ Claude can drive the actual app in a real headless browser — log in, click thr
 - `NATIVE.md` — Capacitor/Android/iOS app architecture and build workflow
 - `ANDROID_HANDOFF.md` — handoff protocol between Claude Code and the Android Studio agent; point the Android Studio agent at this file
 - `STRATEGY.md` — business strategy & platform expansion notes (MuniOps parent brand, dept type toggle, multi-dept login, ICS module spec, forms-as-product). Forward-looking, not yet built.
+- `DB_IO_RULES.md` — **read before any rework/QA/perf session.** What causes the Supabase Disk IO warning (scripted logins from our own testing) and the rules to avoid it: Playwright only on request, one login per run, check the dashboard IO graph.
 
 ---
 
