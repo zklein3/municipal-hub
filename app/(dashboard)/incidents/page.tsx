@@ -5,7 +5,11 @@ import { getCurrentDepartmentContext } from '@/lib/current-department'
 import { hasPermission } from '@/lib/permissions'
 import IncidentsClient from './IncidentsClient'
 
-export default async function IncidentsPage() {
+const RANGE_MONTHS: Record<string, number | null> = { '1m': 1, '3m': 3, '6m': 6, '12m': 12, '24m': 24, all: null }
+
+export default async function IncidentsPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+  const { range: rangeParam } = await searchParams
+  const range = rangeParam && rangeParam in RANGE_MONTHS ? rangeParam : '6m'
   const adminClient = createAdminClient()
 
   const ctx = await getCurrentDepartmentContext()
@@ -22,16 +26,18 @@ export default async function IncidentsPage() {
   const department_id = ctx.departmentId
   const isOfficerOrAbove = await hasPermission(ctx, 'manage_incidents')
 
-  // Last 6 months of incidents
-  const since = new Date()
-  since.setMonth(since.getMonth() - 6)
-
-  const { data: incidents } = await adminClient
+  const months = RANGE_MONTHS[range]
+  let query = adminClient
     .from('incidents')
     .select('id, incident_number, cad_number, incident_date, incident_type, fire_subtype, address, city, state, zip, status, neris_reported, created_by, created_at')
     .eq('department_id', department_id)
-    .gte('incident_date', since.toISOString().split('T')[0])
     .order('incident_date', { ascending: false })
+  if (months) {
+    const since = new Date()
+    since.setMonth(since.getMonth() - months)
+    query = query.gte('incident_date', since.toISOString().split('T')[0])
+  }
+  const { data: incidents } = await query
 
   // Creator names
   const creatorIds = [...new Set((incidents ?? []).map(i => i.created_by).filter(Boolean))]
@@ -54,6 +60,7 @@ export default async function IncidentsPage() {
   return (
     <IncidentsClient
       incidents={(incidents ?? []).map(i => ({ ...i, creator_name: creatorMap[i.created_by] ?? '—' }))}
+      range={range}
       isOfficerOrAbove={isOfficerOrAbove}
       myPersonnelId={me.id}
       myAttendanceMap={myAttendanceMap}

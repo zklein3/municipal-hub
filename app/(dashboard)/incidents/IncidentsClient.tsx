@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import HelpText from '@/components/HelpText'
 
 type Incident = {
@@ -58,16 +59,25 @@ function withinLogWindow(incident_date: string) {
   return new Date() <= windowClose
 }
 
+const RANGE_OPTIONS: [string, string][] = [
+  ['1m', 'Last month'], ['3m', 'Last 3 months'], ['6m', 'Last 6 months'],
+  ['12m', 'Last 12 months'], ['24m', 'Last 24 months'], ['all', 'All incidents'],
+]
+
 export default function IncidentsClient({
   incidents,
+  range,
   isOfficerOrAbove,
   myAttendanceMap = {},
 }: {
   incidents: Incident[]
+  range: string
   isOfficerOrAbove: boolean
   myPersonnelId: string
   myAttendanceMap?: Record<string, string>
 }) {
+  const router = useRouter()
+  const rangeLabel = RANGE_OPTIONS.find(([v]) => v === range)?.[1] ?? 'Last 6 months'
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -94,7 +104,7 @@ export default function IncidentsClient({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Incidents</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Last 6 months</p>
+          <p className="text-sm text-zinc-500 mt-0.5">{rangeLabel}</p>
         </div>
         <Link href="/incidents/new" className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 transition-colors">
           + New Incident
@@ -102,8 +112,8 @@ export default function IncidentsClient({
       </div>
 
       <HelpText className="mb-4">
-        Shows the last 6 months only — for older incidents or filtered searches, use Run Report under Reports
-        instead.
+        Use the date range dropdown to show more or fewer incidents, up to All incidents. The default is the
+        last 6 months. For printable lists, use Run Report under Reports.
       </HelpText>
 
       {isOfficerOrAbove && pendingCount > 0 && (
@@ -129,6 +139,13 @@ export default function IncidentsClient({
           onChange={e => setSearch(e.target.value)}
           className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 w-64"
         />
+        <select
+          value={range}
+          onChange={e => router.push(e.target.value === '6m' ? '/incidents' : `/incidents?range=${e.target.value}`)}
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        >
+          {RANGE_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
         <select
           value={typeFilter}
           onChange={e => setTypeFilter(e.target.value)}
